@@ -496,6 +496,98 @@ describe('StorePromotionCampaignService', () => {
         expect(harness.softDeletePromotion).not.toHaveBeenCalled();
     });
 
+    it('changes unissued coupon eligibility while preserving discount and all other conditions', async () => {
+        const promotion = couponPromotion();
+        const harness = createHarness({ promotions: [promotion] });
+        await expect(harness.service.setCouponCustomerEligibility(ctx, promotion.id, 'NEW')).resolves.toEqual(
+            {
+                id: promotion.id,
+                customerEligibility: 'NEW',
+            },
+        );
+        expect(harness.updatePromotion).toHaveBeenCalledExactlyOnceWith(ctx, {
+            id: promotion.id,
+            conditions: [
+                ...promotion.conditions.map(condition => ({
+                    code: condition.code,
+                    arguments: condition.args,
+                })),
+                operationInput('store_customer_order_history', { audience: 'NEW' }),
+            ],
+            actions: promotion.actions.map(action => ({ code: action.code, arguments: action.args })),
+        });
+    });
+
+    it('refuses to change eligibility after any customer has claimed the coupon', async () => {
+        const promotion = couponPromotion();
+        const harness = createHarness({ promotions: [promotion], issuedCount: 1 });
+        await expect(harness.service.setCouponCustomerEligibility(ctx, promotion.id, 'NEW')).rejects.toThrow(
+            '已经发放',
+        );
+        expect(harness.updatePromotion).not.toHaveBeenCalled();
+    });
+
+    it('keeps eligibility changes within the coupon owner channel', async () => {
+        const promotion = couponPromotion();
+        const harness = createHarness({
+            promotions: [promotion],
+            initialConfig: new StoreCouponCampaignConfig({
+                promotionId: promotion.id,
+                channelId: 'other-store',
+            }),
+        });
+        await expect(harness.service.setCouponCustomerEligibility(ctx, promotion.id, 'NEW')).rejects.toThrow(
+            '其他店铺',
+        );
+        expect(harness.updatePromotion).not.toHaveBeenCalled();
+    });
+
+    it('does not modify archived coupons or accept unknown eligibility values', async () => {
+        const promotion = couponPromotion();
+        const harness = createHarness({
+            promotions: [promotion],
+            initialConfig: new StoreCouponCampaignConfig({
+                promotionId: promotion.id,
+                channelId: ctx.channelId,
+                archivedAt: new Date(),
+            }),
+        });
+        await expect(harness.service.setCouponCustomerEligibility(ctx, promotion.id, 'NEW')).rejects.toThrow(
+            '已归档',
+        );
+        await expect(
+            harness.service.setCouponCustomerEligibility(ctx, promotion.id, 'UNKNOWN' as 'NEW'),
+        ).rejects.toThrow('客户资格');
+        expect(harness.updatePromotion).not.toHaveBeenCalled();
+    });
+
+    it('treats the current eligibility as an idempotent read even after issuance', async () => {
+        const promotion = couponPromotion();
+        const harness = createHarness({ promotions: [promotion], issuedCount: 1 });
+        await expect(harness.service.setCouponCustomerEligibility(ctx, promotion.id, 'ALL')).resolves.toEqual(
+            {
+                id: promotion.id,
+                customerEligibility: 'ALL',
+            },
+        );
+        expect(harness.updatePromotion).not.toHaveBeenCalled();
+    });
+
+    it('removes the old audience condition when an unissued campaign returns to all customers', async () => {
+        const promotion = couponPromotion();
+        promotion.conditions.push({
+            code: 'store_customer_order_history',
+            args: [{ name: 'audience', value: 'NEW' }],
+        });
+        const harness = createHarness({ promotions: [promotion] });
+        await harness.service.setCouponCustomerEligibility(ctx, promotion.id, 'ALL');
+        expect(harness.updatePromotion.mock.calls[0][1].conditions).toEqual(
+            promotion.conditions
+                .filter(condition => condition.code !== 'store_customer_order_history')
+                .map(condition => ({ code: condition.code, arguments: condition.args })),
+        );
+    });
+
     it('changes only the owned coupon appearance and exposes the saved theme', async () => {
         const promotion = couponPromotion();
         const harness = createHarness({ promotions: [promotion] });

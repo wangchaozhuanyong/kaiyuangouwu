@@ -50,7 +50,7 @@ import {
 import { idListArg, numberArg, stringArg } from './promotion-operation-args';
 import { parseFlashSaleVariantRules } from './store-commerce-promotion-actions';
 import { lockCouponCampaign } from './store-coupon-campaign-lock';
-import { couponAudience, couponCustomerEligible } from './store-coupon-eligibility';
+import { CouponAudience, couponAudience, couponCustomerEligible } from './store-coupon-eligibility';
 
 @Injectable()
 export class StorePromotionCampaignService {
@@ -518,6 +518,41 @@ export class StorePromotionCampaignService {
             ]);
         }
         return { id: result.id, name: result.name };
+    }
+
+    async setCouponCustomerEligibility(ctx: RequestContext, id: ID, audience: CouponAudience) {
+        if (!['ALL', 'NEW', 'RETURNING'].includes(audience))
+            throw new UserInputError('客户资格必须为全部客户、新客或老客');
+        const existing = await this.promotionService.findOne(ctx, id);
+        if (!existing || !this.toCouponView(existing)) throw new UserInputError('找不到该优惠券活动');
+        const config = await this.lockOwnedCampaign(ctx, existing);
+        const promotion = await this.promotionService.findOne(ctx, id);
+        if (!promotion || !this.toCouponView(promotion)) throw new UserInputError('找不到该优惠券活动');
+        if (config.archivedAt) throw new UserInputError('已归档活动不能修改客户资格');
+        if (couponAudience(promotion) === audience) return { id, customerEligibility: audience };
+        const issued = await this.connection
+            .getRepository(ctx, CustomerCoupon)
+            .count({ where: { channelId: ctx.channelId, promotionId: id } });
+        if (issued > 0) throw new UserInputError('该优惠券已经发放，不能修改客户资格；请保留客户已领取券');
+        const conditions = promotion.conditions
+            .filter(condition => condition.code !== 'store_customer_order_history')
+            .map(condition => ({ code: condition.code, arguments: condition.args }));
+        if (audience !== 'ALL') conditions.push(operation('store_customer_order_history', { audience }));
+        const result = await this.promotionService.updatePromotion(ctx, {
+            id,
+            conditions,
+            // The native service derives priority from both conditions and actions.
+            actions: promotion.actions.map(action => ({ code: action.code, arguments: action.args })),
+        });
+        if (isGraphQlErrorResult(result)) throw new UserInputError(result.message);
+        await this.eventBus?.publish(
+            new StorefrontDataChangedEvent(ctx, ['content'], {
+                channelIds: [ctx.channelId],
+                entityType: 'StoreCouponCampaign',
+                entityIds: [id],
+            }),
+        );
+        return { id: result.id, customerEligibility: audience };
     }
 
     async stopCouponIssuance(ctx: RequestContext, id: ID): Promise<StoreCouponCampaignView> {

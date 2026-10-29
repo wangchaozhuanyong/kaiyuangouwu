@@ -491,6 +491,11 @@ export const adminApiExtensions = gql`
         allowImageReplacement: Boolean
     }
 
+    type StoreCouponCustomerEligibilityResult {
+        id: ID!
+        customerEligibility: StoreCouponCustomerEligibility!
+    }
+
     type StoreCouponCampaign {
         customerEligibility: StoreCouponCustomerEligibility!
         id: ID!
@@ -1085,6 +1090,11 @@ export const adminApiExtensions = gql`
         previewStorefrontPromotionPage(input: UpdateStorefrontPromotionDraftInput!): String!
         createStoreCouponCampaign(input: CreateStoreCouponCampaignInput!): StoreCouponCampaign!
         setStoreCouponAppearance(id: ID!, theme: StoreCouponAppearanceTheme): StoreCouponCampaign!
+        setStoreCouponCustomerEligibility(
+            id: ID!
+            eligibility: StoreCouponCustomerEligibility!
+            password: String!
+        ): StoreCouponCustomerEligibilityResult!
         repairStoreCouponCampaign(campaignId: ID!, fingerprint: String!, password: String!): JSON!
         repairStoreCouponClosure(campaignId: ID!, fingerprint: String!, password: String!): JSON!
         createStoreFlashSale(input: CreateStoreFlashSaleInput!): StoreFlashSale!

@@ -26,6 +26,7 @@ import {
 import { AdminPromotionManagementService } from './admin-promotion-management.service';
 import { StoreCouponClosureRepairService } from './store-coupon-closure-repair.service';
 import { couponCollectionsForVariant } from './store-coupon-collections';
+import { CouponAudience } from './store-coupon-eligibility';
 import { StoreCouponLifecycleService } from './store-coupon-lifecycle.service';
 import { StoreCouponRepairService } from './store-coupon-repair.service';
 import { StorePromotionCampaignService } from './store-promotion-campaign.service';
@@ -144,6 +145,21 @@ export class StorePromotionCampaignAdminResolver {
     ) {
         return this.cartCommands.runTransaction(ctx, () =>
             this.campaignService.setCouponAppearance(ctx, id, theme),
+        );
+    }
+
+    @Transaction('manual')
+    @Mutation()
+    @Allow(Permission.UpdatePromotion)
+    async setStoreCouponCustomerEligibility(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: ID,
+        @Args('eligibility') eligibility: CouponAudience,
+        @Args('password') password: string,
+    ) {
+        await this.passwordService.assertCurrentPassword(ctx, password);
+        return this.cartCommands.runTransaction(ctx, () =>
+            this.campaignService.setCouponCustomerEligibility(ctx, id, eligibility),
         );
     }
 

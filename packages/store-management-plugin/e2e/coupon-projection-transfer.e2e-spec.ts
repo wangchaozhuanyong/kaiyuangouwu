@@ -20,7 +20,7 @@ import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin'
 import { StoreDomain, StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentBlock, StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
-import { createTestEnvironment } from '@vendure/testing';
+import { createTestEnvironment, SimpleGraphQLClient } from '@vendure/testing';
 import gql from 'graphql-tag';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -282,7 +282,76 @@ beforeAll(async () => {
 }, TEST_SETUP_TIMEOUT_MS);
 afterAll(() => server.destroy());
 
-describe('managed coupon projection transfer', () => {
+describe('managed coupon administration and projection transfer', () => {
+    it('changes unissued coupon eligibility through the password-protected managed entry', async () => {
+        const created = await adminClient.query(CREATE_COUPON, {
+            input: {
+                name: '客户资格修改验收券',
+                kind: 'ORDER_FIXED',
+                minimumSpend: 10_000,
+                discountAmount: 1_000,
+                issueLimit: 10,
+                validityDays: 7,
+            },
+        });
+        const id = created.createStoreCouponCampaign.id;
+        const mutation = gql`
+            mutation CouponE2ESetEligibility(
+                $id: ID!
+                $eligibility: StoreCouponCustomerEligibility!
+                $password: String!
+            ) {
+                setStoreCouponCustomerEligibility(id: $id, eligibility: $eligibility, password: $password) {
+                    id
+                    customerEligibility
+                }
+            }
+        `;
+        await expect(
+            adminClient.query(mutation, { id, eligibility: 'NEW', password: 'incorrect-password' }),
+        ).rejects.toThrow();
+        const saved = await adminClient.query(mutation, {
+            id,
+            eligibility: 'NEW',
+            password: SUPER_ADMIN_USER_PASSWORD,
+        });
+        expect(saved.setStoreCouponCustomerEligibility).toEqual({ id, customerEligibility: 'NEW' });
+        const anonymous = new SimpleGraphQLClient(config, (shopClient as any).apiUrl);
+        anonymous.setChannelToken(fixtureChannelToken);
+        const offers = gql`
+            query EligibilityCampaigns {
+                activeStorefrontCoupons {
+                    id
+                    customerEligibility
+                    claimable
+                }
+            }
+        `;
+        const guestOffers = await anonymous.query(offers);
+        expect(
+            guestOffers.activeStorefrontCoupons.find((coupon: { id: string }) => coupon.id === id),
+        ).toBeUndefined();
+        const customer = new SimpleGraphQLClient(config, (shopClient as any).apiUrl);
+        customer.setChannelToken(fixtureChannelToken);
+        await customer.query(REGISTER, {
+            input: {
+                emailAddress: 'coupon-eligibility-e2e@example.com',
+                firstName: 'Eligibility',
+                lastName: 'Tester',
+                password: 'CouponEligibility123!',
+            },
+        });
+        await customer.asUserWithCredentials('coupon-eligibility-e2e@example.com', 'CouponEligibility123!');
+        const active = await customer.query(offers);
+        expect(
+            active.activeStorefrontCoupons.find((coupon: { id: string }) => coupon.id === id),
+        ).toMatchObject({ id, customerEligibility: 'NEW', claimable: true });
+        await customer.query(CLAIM, { campaignId: id });
+        await expect(
+            adminClient.query(mutation, { id, eligibility: 'ALL', password: SUPER_ADMIN_USER_PASSWORD }),
+        ).rejects.toThrow('已经发放');
+    });
+
     it('preserves a managed coupon across a stock-history projection replacement', async () => {
         const fixture = await managedProjectionFixture('managed-transfer');
         const input = fixture.purchaseInput('managed-stock-purchase-success');
