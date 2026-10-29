@@ -44,6 +44,7 @@ import { StorefrontMediaManifestService } from './performance/storefront-media-m
 import { StorefrontPublicCacheService } from './performance/storefront-public-cache.service';
 import {
     preservePublicMediaPreviews,
+    publicHomeMediaProductIds,
     publicMediaAssetIdentity,
     publicMediaPreviewGroups,
     publicMediaPreviewPlan,
@@ -622,10 +623,17 @@ export class StorefrontPublicPageService {
             ) => Promise<MediaDescriptor[]>;
         },
     ) {
-        const media = document?.existing ?? publicPageMedia(page);
-        if (!media.length) return media;
         const providers = this.previewProviders();
-        if (!providers) return media;
+        if (!providers) return document?.existing ?? publicPageMedia(page);
+        const deadline = document?.deadline ?? Date.now() + (prepare ? 2_000 : 250);
+        const originalPage = page;
+        page = await this.homeMediaProducts(ctx, host, page, deadline, preparation);
+        const productsDeferred = preparation?.deferred === true;
+        const media =
+            page === originalPage
+                ? (document?.existing ?? publicPageMedia(page))
+                : preservePublicMediaPreviews(publicPageMedia(page), document?.existing ?? [], host);
+        if (!media.length) return media;
         const { reader, manifest } = providers;
         const request = page.request;
         const route: PrimaryStorefrontMediaRoute | undefined =
@@ -734,11 +742,12 @@ export class StorefrontPublicPageService {
                 path => Promise.resolve(available.get(path) ?? reader.readPublicInlinePreview(path, 512)),
                 // Ordinary public/preview reads keep 250ms; only queue-owned workers use 2s.
                 // The HTML response has its own bounded continuation; SSI remains cache-only.
-                document ? Math.max(0, document.deadline - Date.now()) : prepare ? 2_000 : 250,
+                Math.max(0, deadline - Date.now()),
                 preparation,
                 logoUrl,
                 assetLimit,
             );
+            if (preparation && productsDeferred) preparation.deferred = true;
             const result = [
                 ...populated,
                 ...media.filter(item => !eligible.has(publicMediaAssetIdentity(item, host)?.key)),
@@ -747,6 +756,61 @@ export class StorefrontPublicPageService {
             return document ? safeDocumentMedia(result) : result;
         };
         return document ? document.run(load, safeDocumentMedia(media)) : load();
+    }
+
+    /** Enrich only media projection; the public product list and its ordering stay unchanged. */
+    private async homeMediaProducts(
+        ctx: RequestContext,
+        host: string,
+        page: StorefrontPageData,
+        deadline: number,
+        preparation?: { deferred: boolean },
+    ) {
+        const products = (page.products ?? []) as Array<{ id: string }>;
+        const known = [
+            ...products,
+            ...(page.bestSellers?.catalog.items ?? []),
+            ...(page.bestSellers?.pinnedProducts ?? []),
+        ] as Array<{ id: string }>;
+        const missing = publicHomeMediaProductIds(page).filter(
+            id => !known.some(product => String(product.id) === id),
+        );
+        if (!missing.length || Date.now() >= deadline) return page;
+        const selected: Array<NonNullable<Awaited<ReturnType<PublicProductSummaryReader['byId']>>>> = [];
+        let completed = 0;
+        let reader: PublicProductSummaryReader;
+        try {
+            reader = this.moduleRef.get<PublicProductSummaryReader>(PUBLIC_PRODUCT_SUMMARY_READER, {
+                strict: false,
+            });
+            if (typeof reader?.byId !== 'function') return page;
+        } catch {
+            if (preparation) preparation.deferred = true;
+            return page;
+        }
+        const pending = [...missing];
+        const consume = async () => {
+            while (pending.length && Date.now() < deadline) {
+                const id = pending.shift();
+                if (!id) return;
+                const load = () => reader.byId(ctx, id);
+                try {
+                    const product = await ((page.config as { accessMode?: string }).accessMode === 'PREVIEW'
+                        ? this.cache.loadUncached(load)
+                        : this.cache.readThrough(ctx, `home-media-product:${host}:${id}`, 30_000, load));
+                    if (product && String(product.id) === id) selected.push(product);
+                    completed++;
+                } catch {
+                    /* Optional artwork keeps the same finite media preparation budget. */
+                }
+            }
+        };
+        await publicSectionWithinBudget(
+            Promise.all([consume(), consume()]),
+            Math.max(0, deadline - Date.now()),
+        ).catch(() => undefined);
+        if (preparation && completed < missing.length) preparation.deferred = true;
+        return selected.length ? { ...page, products: [...products, ...selected] } : page;
     }
 
     private previewProviders() {
