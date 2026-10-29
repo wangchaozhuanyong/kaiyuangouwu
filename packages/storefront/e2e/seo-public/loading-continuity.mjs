@@ -962,6 +962,15 @@ try {
                     () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))),
                 );
                 await expect(page).toHaveURL(/id=synthetic-a-product-3/u);
+                await expect
+                    .poll(() =>
+                        page.evaluate(() =>
+                            window.__continuity.samples.some(
+                                frame => frame.product === 'synthetic-a Synthetic product 3',
+                            ),
+                        ),
+                    )
+                    .toBe(true);
                 const frames = await readSince(page, 'race');
                 const firstC = frames.findIndex(frame => frame.product === 'synthetic-a Synthetic product 3');
                 assert.ok(firstC >= 0, 'C must become visible');

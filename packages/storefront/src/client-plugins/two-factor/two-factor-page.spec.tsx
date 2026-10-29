@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActiveCustomer } from '../../types';
 import type { TwoFactorAccount } from './types';
 
+import { generateTotp } from './totp';
 import { TwoFactorPage } from './two-factor-page';
 
 const storageState = vi.hoisted(() => ({
@@ -70,6 +71,124 @@ describe('TwoFactorPage', () => {
         act(() => root.unmount());
         document.body.innerHTML = '';
         vi.clearAllMocks();
+        vi.unstubAllGlobals();
+    });
+
+    it.each(['zh', 'en'] as const)('reveals, copies and clears the pasted secret in %s', async language => {
+        const secret = 'JBSWY3DPEHPK3PXP';
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        const onNotify = vi.fn();
+        vi.stubGlobal('navigator', { clipboard: { readText: vi.fn().mockResolvedValue(secret), writeText } });
+        await act(async () => {
+            root.render(
+                <TwoFactorPage
+                    customer={null}
+                    language={language}
+                    onBack={vi.fn()}
+                    onSignIn={vi.fn()}
+                    onNotify={onNotify}
+                />,
+            );
+            await Promise.resolve();
+        });
+        const input = container.querySelector<HTMLInputElement>('#storefront-two-factor-secret');
+        if (!input?.parentElement) throw new Error('Missing secret input');
+        const buttons = input.parentElement.querySelectorAll<HTMLButtonElement>('button');
+        const [paste, clear, copySecret, reveal] = buttons;
+        expect(input.type).toBe('password');
+        expect(reveal.disabled).toBe(true);
+        expect(copySecret.disabled).toBe(true);
+        expect(clear.disabled).toBe(true);
+        await act(async () => {
+            paste.click();
+            await Promise.resolve();
+        });
+        expect(input.value).toBe(secret);
+        act(() => reveal.click());
+        expect(input.type).toBe('text');
+        expect(reveal.getAttribute('aria-pressed')).toBe('true');
+        act(() => reveal.click());
+        expect(input.type).toBe('password');
+        await act(async () => {
+            copySecret.click();
+            await Promise.resolve();
+        });
+        expect(writeText).toHaveBeenLastCalledWith(secret);
+        expect(onNotify).toHaveBeenLastCalledWith(language === 'zh' ? '密钥已复制' : 'Secret copied');
+        await act(async () => {
+            input.form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            await Promise.resolve();
+        });
+        expect(container.querySelector('.two-factor-query-result')?.textContent).toContain('123 456');
+        const copyCode = container.querySelector<HTMLButtonElement>('.two-factor-query-result button');
+        await act(async () => {
+            copyCode?.click();
+            await Promise.resolve();
+        });
+        expect(writeText).toHaveBeenLastCalledWith('123456');
+        expect(onNotify).toHaveBeenLastCalledWith(language === 'zh' ? '动态码已复制' : 'Code copied');
+        act(() => {
+            reveal.click();
+            clear.click();
+        });
+        expect(input.value).toBe('');
+        expect(input.type).toBe('password');
+        expect(container.querySelector('.two-factor-query-result')).toBeNull();
+        expect(document.activeElement).toBe(input);
+        expect(clear.disabled).toBe(true);
+    });
+
+    it('reports clipboard failure and prevents an in-flight code from returning after clearing', async () => {
+        const onNotify = vi.fn();
+        vi.stubGlobal('navigator', {
+            clipboard: {
+                readText: vi.fn().mockResolvedValue('JBSWY3DPEHPK3PXP'),
+                writeText: vi.fn().mockRejectedValue(new Error('Permission denied')),
+            },
+        });
+        await act(async () => {
+            root.render(
+                <TwoFactorPage
+                    customer={null}
+                    language="zh"
+                    onBack={vi.fn()}
+                    onSignIn={vi.fn()}
+                    onNotify={onNotify}
+                />,
+            );
+            await Promise.resolve();
+        });
+        const input = container.querySelector<HTMLInputElement>('#storefront-two-factor-secret');
+        if (!input?.parentElement) throw new Error('Missing secret input');
+        const [paste, clear, copySecret] = input.parentElement.querySelectorAll<HTMLButtonElement>('button');
+        await act(async () => {
+            paste.click();
+            await Promise.resolve();
+        });
+        await act(async () => {
+            copySecret.click();
+            await Promise.resolve();
+        });
+        expect(onNotify).toHaveBeenLastCalledWith('复制失败，请手动复制');
+        let finishGeneration!: (code: string) => void;
+        vi.mocked(generateTotp).mockImplementationOnce(
+            () =>
+                new Promise(resolve => {
+                    finishGeneration = resolve;
+                }),
+        );
+        await act(async () => {
+            input.form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            await Promise.resolve();
+        });
+        act(() => clear.click());
+        await act(async () => {
+            finishGeneration('654321');
+            await Promise.resolve();
+        });
+        expect(input.value).toBe('');
+        expect(container.querySelector('.two-factor-query-result')).toBeNull();
+        expect(container.querySelector('[role="alert"]')).toBeNull();
     });
 
     it('allows a temporary account when persistent storage is unavailable', async () => {
