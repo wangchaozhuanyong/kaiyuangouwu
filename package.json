@@ -105,7 +105,7 @@
         "@babel/core": "7.29.7",
         "@babel/plugin-transform-modules-systemjs": "7.29.8",
         "@grpc/grpc-js": "1.14.5",
-        "@graphql-tools/executor-legacy-ws": "1.1.35",
+        "@graphql-tools/executor-legacy-ws": "1.1.36",
         "@graphql-tools/utils": "12.0.2",
         "@hono/node-server": "1.19.17",
         "@isaacs/brace-expansion": "5.0.1",
@@ -162,7 +162,7 @@
         "qs": "6.16.1",
         "rollup": "4.62.4",
         "serialize-javascript": "7.1.0",
-        "seroval": "1.6.3",
+        "seroval": "1.6.8",
         "sharp": "0.35.5",
         "sigstore": "4.1.1",
         "shell-quote": "1.11.0",
@@ -224,6 +224,7 @@
         }
     },
     "patchedDependencies": {
+        "graphql-scalars@1.26.0": "patches/graphql-scalars@1.26.0.patch",
         "husky@4.3.8": "patches/husky@4.3.8.patch",
         "zod@3.25.76": "patches/zod@3.25.76.patch",
         "brace-expansion@5.0.12": "patches/brace-expansion@5.0.12.patch",

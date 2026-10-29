@@ -73,7 +73,25 @@ export const SPRINTF_PATCH = Object.freeze({
         'package.json': 'f7ed5a0dc9b4c939e92be6acdf3bd83abc3d7e5def9c1307f3c9f53bd7cb2f8c',
     }),
 });
-const VERIFIED_PATCHES = Object.freeze([BRACES_PATCH, HTTP_CACHE_PATCH, ZOD_COMPATIBILITY_PATCH]);
+// Backport upstream 210fd24 without changing the installed scalar API major.
+export const PHONE_NUMBER_PATCH = Object.freeze({
+    advisory: 'https://github.com/advisories/GHSA-x8rm-f576-gq67',
+    package: 'graphql-scalars',
+    version: '1.26.0',
+    path: 'patches/graphql-scalars@1.26.0.patch',
+    sha256: '0f0707f5543e9fb0c50e55a408871c78b6d4440a6916caf0da49a7974f2b2398',
+    files: Object.freeze({
+        'cjs/scalars/PhoneNumber.js': '650193ef1aada707db81a18dc042b83a3b7b7604ecc8b698436136d428e5a20d',
+        'esm/scalars/PhoneNumber.js': '7cc967f130d6b7363bef52cafb5b5936014ba75c16737632192f7cfc8388124b',
+        'package.json': '8bc9342d4251ddc72b981490262a5b465a0ef7d9b2d69e7a1518c400b43e4458',
+    }),
+});
+const VERIFIED_PATCHES = Object.freeze([
+    BRACES_PATCH,
+    HTTP_CACHE_PATCH,
+    ZOD_COMPATIBILITY_PATCH,
+    PHONE_NUMBER_PATCH,
+]);
 
 function installedPackagePaths(root, name) {
     const pending = [path.join(root, 'node_modules')];
@@ -220,6 +238,39 @@ export function verifyHttpCachePatch(root, options) {
     return verifyInstalledPatch(root, HTTP_CACHE_PATCH, assertCacheReuseGuard, options);
 }
 
+export function assertPhoneNumberGuard({ GraphQLPhoneNumber: scalar }) {
+    for (const value of ['+41791234567', '079 123 45 67', '+1 (123) 456-7890']) {
+        for (const method of ['parseValue', 'serialize']) {
+            if (scalar[method](value) !== value) throw new Error('PhoneNumber compatibility failed');
+        }
+        if (scalar.parseLiteral({ kind: 'StringValue', value }) !== value) {
+            throw new Error('PhoneNumber literal compatibility failed');
+        }
+    }
+    const invalid = '1'.repeat(40) + 'x';
+    for (const run of [
+        () => scalar.parseValue(invalid),
+        () => scalar.serialize(invalid),
+        () => scalar.parseLiteral({ kind: 'StringValue', value: invalid }),
+    ]) {
+        let rejected = false;
+        const started = performance.now();
+        try {
+            run();
+        } catch (error) {
+            if (!/Invalid phone number/u.test(error?.message ?? '')) throw error;
+            rejected = true;
+        }
+        if (!rejected || performance.now() - started > 1000) {
+            throw new Error('PhoneNumber bounded parsing failed');
+        }
+    }
+}
+
+export function verifyPhoneNumberPatch(root, options) {
+    return verifyInstalledPatch(root, PHONE_NUMBER_PATCH, assertPhoneNumberGuard, options);
+}
+
 function assertSprintfPrecisionGuard({ sprintf, vsprintf }) {
     for (const [type, method] of [
         ['e', 'toExponential'],
@@ -292,6 +343,10 @@ export function verifyReportPatches(auditReport, root, options) {
         if (patch === ZOD_COMPATIBILITY_PATCH) {
             const proof = verifyZodCompatibilityPatch(root, options, installedPackagePaths);
             if (proof) verified.push(proof);
+            continue;
+        }
+        if (patch === PHONE_NUMBER_PATCH) {
+            verified.push(verifyPhoneNumberPatch(root, options));
             continue;
         }
         verified.push(
