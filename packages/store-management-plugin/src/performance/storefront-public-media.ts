@@ -44,6 +44,23 @@ const productCover = (item: Data) =>
         ]),
     ].find((source): source is string => typeof source === 'string' && Boolean(source.trim()));
 
+/** Published first-module selections may live outside the default recommendation page. */
+export function publicHomeMediaProductIds(page: Pick<StorefrontPageData, 'request' | 'content'>) {
+    if (page.request?.kind !== 'home') return [];
+    const block = records(record(page.content).blocks).find(
+        item => item.enabled !== false && ['CATEGORY_AD', 'FEATURED_COLLECTION'].includes(String(item.type)),
+    );
+    const settings = record(block?.settings);
+    const selected = [settings.selectedProductIds, settings.pinnedProductIds].find(
+        value => Array.isArray(value) && value.some(id => typeof id === 'string' && Boolean(id.trim())),
+    );
+    return Array.isArray(selected)
+        ? [
+              ...new Set(selected.flatMap(id => (typeof id === 'string' && id.trim() ? [id.trim()] : []))),
+          ].slice(0, 12)
+        : [];
+}
+
 /** Only a published phone binding that an existing layout consumes may join public media. */
 export function publicHeroMobileImage(block: unknown, origin: string): string | undefined {
     const content = record(block);
@@ -432,15 +449,7 @@ export function publicPageMedia(
     const firstProductBlock = blocks.find(block =>
         ['CATEGORY_AD', 'FEATURED_COLLECTION'].includes(String(block.type)),
     );
-    const productSettings = record(firstProductBlock?.settings);
-    const selected = [productSettings.selectedProductIds, productSettings.pinnedProductIds].find(
-        value => Array.isArray(value) && value.some(id => typeof id === 'string' && Boolean(id.trim())),
-    );
-    const ids = Array.isArray(selected)
-        ? selected
-              .filter((id): id is string => typeof id === 'string' && Boolean(id.trim()))
-              .map(id => id.trim())
-        : [];
+    const ids = publicHomeMediaProductIds(page);
     const products = !firstProductBlock
         ? []
         : ids.length
@@ -449,7 +458,7 @@ export function publicPageMedia(
                     const item = pool.find(candidate => String(candidate.id) === id);
                     return item ? [item] : [];
                 })
-                .slice(0, 4)
+                .slice(0, 12)
           : pool.slice(0, 4);
     const best = page.bestSellers;
     const pinned = records(best?.pinnedProducts).filter(

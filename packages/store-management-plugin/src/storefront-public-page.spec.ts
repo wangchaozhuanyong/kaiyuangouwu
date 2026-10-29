@@ -435,6 +435,171 @@ describe('public page inline artwork', () => {
         });
         return { ...h, read, authorize };
     }
+    it.each([7, 18])(
+        'prepares a bounded first module outside the default home catalog (%s configured)',
+        async count => {
+            const h = artworkHarness();
+            const configured = Array.from({ length: count }, (_, i) => `selected-${i}`);
+            const selected = configured.slice(0, 12);
+            h.content.mockResolvedValue({
+                blocks: [
+                    { type: 'HERO', imageUrl: '/assets/preview/hero.webp' },
+                    {
+                        type: 'FEATURED_COLLECTION',
+                        enabled: false,
+                        settings: { selectedProductIds: ['hidden'] },
+                    },
+                    {
+                        type: 'FEATURED_COLLECTION',
+                        enabled: true,
+                        settings: { selectedProductIds: configured },
+                    },
+                ],
+            });
+            const original = h.modules.get.getMockImplementation();
+            if (!original) throw new Error('Missing public media fixture');
+            const byId = vi.fn((_ctx: unknown, id: string) =>
+                Promise.resolve({
+                    id,
+                    featuredAsset: { preview: `/assets/preview/${id}.webp` },
+                    variants: [],
+                }),
+            );
+            h.modules.get.mockImplementation(token =>
+                token === PUBLIC_PRODUCT_SUMMARY_READER
+                    ? { list: vi.fn().mockResolvedValue({ items: [] }), byId }
+                    : original(token),
+            );
+            const page = await h.service.read(h.ctx, 'a.test');
+            expect(page.products).toEqual([]);
+            for (const id of selected)
+                expect(page.media).toContainEqual(
+                    expect.objectContaining({
+                        identity: `/assets/preview/${id}.webp`,
+                        kind: 'card',
+                        placeholder: { inlineData: 'data:image/webp;base64,AAAA' },
+                    }),
+                );
+            expect(byId).toHaveBeenCalledTimes(selected.length);
+            expect(
+                page.media.reduce((bytes, item) => bytes + (item.placeholder?.inlineData.length ?? 0), 0),
+            ).toBeLessThanOrEqual(8192);
+            expect(h.read.mock.calls.every(call => call[1] === 512)).toBe(true);
+            await h.service.read(h.ctx, 'a.test', { kind: 'home' }, { refresh: true });
+            expect(byId).toHaveBeenCalledTimes(selected.length);
+        },
+    );
+    it('keeps selected-product reads within the existing media deadline and concurrency', async () => {
+        vi.useFakeTimers();
+        const h = artworkHarness();
+        h.content.mockResolvedValue({
+            blocks: [
+                { type: 'FEATURED_COLLECTION', settings: { selectedProductIds: ['one', 'two', 'three'] } },
+            ],
+        });
+        const byId = vi.fn(() => new Promise(() => undefined));
+        const original = h.modules.get.getMockImplementation();
+        if (!original) throw new Error('Missing public media fixture');
+        h.modules.get.mockImplementation(token =>
+            token === PUBLIC_PRODUCT_SUMMARY_READER
+                ? { list: vi.fn().mockResolvedValue({ items: [] }), byId }
+                : original(token),
+        );
+        const start = Date.now();
+        const pending = h.service.read(h.ctx, 'a.test');
+        await vi.advanceTimersByTimeAsync(251);
+        const page = await pending;
+        expect(Date.now() - start).toBe(251);
+        expect(byId).toHaveBeenCalledTimes(2);
+        expect(page.products).toEqual([]);
+        expect(page.media).toEqual([]);
+    });
+    it('does not cache an incomplete selected-product lookup after other previews finish', async () => {
+        const h = artworkHarness();
+        h.content.mockResolvedValue({
+            blocks: [
+                { type: 'HERO', imageUrl: '/assets/preview/hero.webp' },
+                { type: 'FEATURED_COLLECTION', settings: { selectedProductIds: ['selected'] } },
+            ],
+        });
+        const byId = vi
+            .fn()
+            .mockRejectedValueOnce(new Error('Temporary product read failure'))
+            .mockResolvedValue({
+                id: 'selected',
+                featuredAsset: { preview: '/assets/preview/selected.webp' },
+                variants: [],
+            });
+        const original = h.modules.get.getMockImplementation();
+        if (!original) throw new Error('Missing public media fixture');
+        h.modules.get.mockImplementation(token =>
+            token === PUBLIC_PRODUCT_SUMMARY_READER
+                ? { list: vi.fn().mockResolvedValue({ items: [] }), byId }
+                : original(token),
+        );
+        const first = await h.service.read(h.ctx, 'a.test');
+        expect(first.media.some(item => item.placeholder)).toBe(true);
+        expect(first.media.some(item => item.identity.includes('selected.webp'))).toBe(false);
+        const next = await h.service.read(h.ctx, 'a.test');
+        expect(byId).toHaveBeenCalledTimes(2);
+        expect(
+            next.media.some(
+                item => item.kind === 'card' && item.identity.includes('selected.webp') && item.placeholder,
+            ),
+        ).toBe(true);
+    });
+    it('isolates selected media by store and refreshes its identity after publication', async () => {
+        const h = artworkHarness();
+        h.content.mockResolvedValue({
+            blocks: [
+                {
+                    type: 'FEATURED_COLLECTION',
+                    settings: { selectedProductIds: ['selected', 'unavailable'] },
+                },
+            ],
+        });
+        let version = 'one';
+        const byId = vi.fn((ctx: { channelId: string }, id: string) =>
+            Promise.resolve(
+                id === 'unavailable'
+                    ? null
+                    : {
+                          id,
+                          featuredAsset: {
+                              preview: `/assets/preview/${ctx.channelId}-selected.webp?v=${version}`,
+                          },
+                          variants: [],
+                      },
+            ),
+        );
+        const original = h.modules.get.getMockImplementation();
+        if (!original) throw new Error('Missing public media fixture');
+        h.modules.get.mockImplementation(token =>
+            token === PUBLIC_PRODUCT_SUMMARY_READER
+                ? { list: vi.fn().mockResolvedValue({ items: [] }), byId }
+                : original(token),
+        );
+        const first = await h.service.read(h.ctx, 'a.test');
+        expect(
+            first.media.some(item => item.identity.includes('a-selected.webp?v=one') && item.placeholder),
+        ).toBe(true);
+        const other = {
+            ...setup().ctx,
+            channelId: 'b',
+            channel: { ...setup().ctx.channel, id: 'b', code: 'b' },
+        };
+        const second = await h.service.read(other as never, 'b.test');
+        expect(second.media.every(item => !item.identity.includes('a-selected'))).toBe(true);
+        expect(second.media.some(item => item.identity.includes('b-selected') && item.placeholder)).toBe(
+            true,
+        );
+        version = 'two';
+        await h.cache.invalidate('a');
+        h.authorize.mockResolvedValue(false);
+        const revised = await h.service.read(h.ctx, 'a.test');
+        expect(revised.media.every(item => item.version !== 'one' && !item.placeholder)).toBe(true);
+        expect(byId).toHaveBeenCalledTimes(6);
+    });
     it('reads one guarded manifest per media phase and starts fresh after a revision change', async () => {
         const images = Array.from({ length: 8 }, (_, index) => `hero-${index}.webp`);
         const h = artworkHarness(false, images);
