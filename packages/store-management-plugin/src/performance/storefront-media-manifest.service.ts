@@ -49,11 +49,20 @@ export class StorefrontMediaManifestService {
         private readonly promotion: StorefrontPromotionService,
     ) {}
 
-    async isPublic(ctx: RequestContext, host: string, path: string): Promise<boolean> {
+    async isPublic(
+        ctx: RequestContext,
+        host: string,
+        path: string,
+        readManifest: () => Promise<StorefrontMediaManifest> = () => this.get(ctx, host),
+    ): Promise<boolean> {
         // Generated cache files and private asset stores never become public by filename inference.
         if (!/^(?:preview|source)\//u.test(path) || path.split('/').some(part => part === '..')) return false;
-        const manifest = await this.get(ctx, host);
-        return manifest.paths.includes(path);
+        const manifest = await readManifest();
+        return (
+            manifest.channelId === String(ctx.channelId) &&
+            manifest.host === host &&
+            manifest.paths.includes(path)
+        );
     }
 
     get(ctx: RequestContext, host: string): Promise<StorefrontMediaManifest> {

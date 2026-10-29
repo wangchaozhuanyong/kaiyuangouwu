@@ -435,6 +435,43 @@ describe('public page inline artwork', () => {
         });
         return { ...h, read, authorize };
     }
+    it('reads one guarded manifest per media phase and starts fresh after a revision change', async () => {
+        const images = Array.from({ length: 8 }, (_, index) => `hero-${index}.webp`);
+        const h = artworkHarness(false, images);
+        const manifest = new StorefrontMediaManifestService(h.cache, {} as never, {} as never, {} as never);
+        const paths = images.map(image => `preview/${image}`);
+        const build = vi
+            .spyOn(manifest as unknown as { build(): Promise<unknown> }, 'build')
+            .mockResolvedValue({ channelId: 'a', host: 'a.test', paths, uses: [] });
+        const get = vi.spyOn(manifest, 'get');
+        const original = h.modules.get.getMockImplementation();
+        if (!original) throw new Error('Expected media provider fixture');
+        h.modules.get.mockImplementation(token =>
+            token === StorefrontMediaManifestService ? manifest : original(token),
+        );
+        const first = await h.service.read(h.ctx, 'a.test');
+        expect(first.media.every(item => item.placeholder)).toBe(true);
+        expect(get).toHaveBeenCalledOnce();
+        expect(h.read).toHaveBeenCalledTimes(8);
+        build.mockResolvedValue({ channelId: 'a', host: 'a.test', paths: [], uses: [] });
+        await h.cache.invalidate('a');
+        const revised = await h.service.read(h.ctx, 'a.test');
+        expect(revised.media.every(item => !item.placeholder)).toBe(true);
+        expect(get).toHaveBeenCalledTimes(2);
+        expect(h.read).toHaveBeenCalledTimes(8);
+        // Publication can also change after the first image, while the phase is
+        // still using its captured manifest. The owning page must retry it.
+        build.mockResolvedValue({ channelId: 'a', host: 'a.test', paths, uses: [] });
+        await h.cache.invalidate('a');
+        h.read.mockImplementationOnce(async () => {
+            build.mockResolvedValue({ channelId: 'a', host: 'a.test', paths: [], uses: [] });
+            await h.cache.invalidate('a');
+            return 'data:image/webp;base64,AAAA';
+        });
+        const changedDuringRead = await h.service.read(h.ctx, 'a.test');
+        expect(changedDuringRead.media.every(item => !item.placeholder)).toBe(true);
+        expect(get).toHaveBeenCalledTimes(4);
+    });
     it('times real document reads without adding diagnostics to shared or rendered data', async () => {
         const h = artworkHarness();
         const read = () =>
