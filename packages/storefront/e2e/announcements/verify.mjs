@@ -49,14 +49,8 @@ try {
                     false,
                 );
                 await page.screenshot({ path: `${output}/${label}-detail.png`, fullPage: true });
-                if (width === 1440)
-                    await page
-                        .getByRole('button', {
-                            name: zh ? '返回全部公告' : 'Back to announcements',
-                            exact: true,
-                        })
-                        .click();
-                else await page.locator('.subpage-header button').click();
+                assert.equal(await page.locator('.page-back-button:visible').count(), 1);
+                await page.locator('.subpage-header .page-back-button').click();
                 await rows.first().filter({ hasText: /25/ }).waitFor();
                 report.cases.push({
                     label,
@@ -70,6 +64,13 @@ try {
                     ],
                 });
             }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${base}?id=27&page=3&signedIn=1`);
+    await page.locator('.announcement-article h1').filter({ hasText: '27' }).waitFor();
+    assert.equal(await page.locator('.page-back-button:visible').count(), 1);
+    await page.locator('.subpage-header .page-back-button').click();
+    await page.locator('.notification-list > button').first().filter({ hasText: '25' }).waitFor();
+    report.cases.push({ label: 'signed-in-desktop-single-return-preserves-page', status: 'pass' });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${base}?view=account&lang=zh&skin=classic`);
     const grid = page.locator('.account-service-grid');

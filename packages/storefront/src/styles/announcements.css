@@ -1,4 +1,18 @@
 /* Announcement pages share the site page shell, notification rows and skin tokens. */
+@media (min-width: 1024px) {
+    /* A nested announcement needs its one page-header return even in the account shell. */
+    .desktop-account-layout .page.subpage.announcements-page.is-detail > .subpage-header {
+        display: flex;
+        justify-content: flex-start;
+    }
+    .desktop-account-layout
+        .announcements-page.is-detail
+        > .subpage-header
+        > :is(button:first-child, strong) {
+        display: flex;
+    }
+}
+
 .announcement-list-heading,
 .announcement-pagination {
     display: flex;

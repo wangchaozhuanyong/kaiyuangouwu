@@ -12,7 +12,6 @@ import { ChevronLeft, ChevronRight, ExternalLink, Megaphone } from 'lucide-react
 
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { formatBusinessDate } from '../business-time';
-import { PageBackButton } from '../components/common/page-back-button';
 import { languageCodeFor } from '../i18n';
 import { resolveQueryLoadState, storefrontInitialQueryError } from '../loading-state';
 import { usePageReadiness } from '../page-readiness';
@@ -115,19 +114,9 @@ export function AnnouncementsPage({
             title={id ? (isZh ? '公告详情' : 'Announcement details') : isZh ? '系统公告' : 'Announcements'}
             language={language}
             onBack={back}
-            className="announcements-page"
+            className={`announcements-page${id ? ' is-detail' : ''}`}
         >
             <SubpageBody>
-                {id ? (
-                    <div className="hidden lg:block">
-                        <PageBackButton
-                            label={isZh ? '返回全部公告' : 'Back to announcements'}
-                            onClick={back}
-                        >
-                            {isZh ? '返回全部公告' : 'Back to announcements'}
-                        </PageBackButton>
-                    </div>
-                ) : null}
                 {id ? (
                     detail ? (
                         <article className="announcement-article">

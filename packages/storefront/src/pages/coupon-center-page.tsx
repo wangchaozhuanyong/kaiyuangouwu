@@ -495,25 +495,46 @@ export function CouponCenterPage() {
                 >
                     <div className="coupon-center-guide-copy">
                         <h2>{isZh ? '使用说明' : 'Using your coupons'}</h2>
-                        <p>
-                            {isZh
-                                ? '请查看券面的使用门槛、适用范围和有效期。'
-                                : 'Check the minimum spend, eligible items and validity on each coupon.'}
-                        </p>
-                        <p>
-                            {isZh
-                                ? '可用优惠及折扣明细可在购物车查看，最终应付金额以结算页为准。'
-                                : 'Review available coupons and savings in your cart. Checkout confirms the final amount.'}
-                        </p>
+                        <ol className="coupon-center-guide-steps">
+                            <li>
+                                <span className="coupon-center-guide-number" aria-hidden="true">
+                                    01
+                                </span>
+                                <div>
+                                    <h3>{isZh ? '查看使用条件' : 'Check the conditions'}</h3>
+                                    <p>
+                                        {isZh
+                                            ? '留意券面的使用门槛、适用范围和有效期。'
+                                            : 'Check the minimum spend, eligible items and validity on each coupon.'}
+                                    </p>
+                                </div>
+                            </li>
+                            <li>
+                                <span className="coupon-center-guide-number" aria-hidden="true">
+                                    02
+                                </span>
+                                <div>
+                                    <h3>{isZh ? '结算前核对优惠' : 'Review your savings'}</h3>
+                                    <p>
+                                        {isZh
+                                            ? '在购物车查看折扣明细，最终应付金额以结算页为准。'
+                                            : 'Review discounts in your cart. Checkout confirms the final amount.'}
+                                    </p>
+                                </div>
+                            </li>
+                        </ol>
                     </div>
-                    <button
-                        className="coupon-center-cart-link"
-                        type="button"
-                        onClick={() => navigateTo({ name: 'cart' })}
-                    >
-                        <span>{isZh ? '查看购物车和优惠明细' : 'View cart and discount details'}</span>
-                        <ArrowRight aria-hidden="true" />
-                    </button>
+                    <div className="coupon-center-cart-action">
+                        <p>{isZh ? '可用优惠与折扣明细' : 'Available coupons and savings'}</p>
+                        <button
+                            className="coupon-center-cart-link"
+                            type="button"
+                            onClick={() => navigateTo({ name: 'cart' })}
+                        >
+                            <span>{isZh ? '查看购物车' : 'View cart'}</span>
+                            <ArrowRight aria-hidden="true" />
+                        </button>
+                    </div>
                 </section>
             </SubpageBody>
         </Subpage>
