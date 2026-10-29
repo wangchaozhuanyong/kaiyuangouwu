@@ -52,6 +52,25 @@ describe('public HTML optional route script hints', () => {
         '<html><head><script type="module" src="/assets/index-12345678.js"></script></head>' +
         '<body><div id="root"></div></body></html>';
     const payload = () => syntheticPage(fixtureStores[0], 'en', 'home');
+    it('discovers CSS before inline commerce styles without changing cascade or fetch credentials', () => {
+        const stylesheet = '<link rel="stylesheet" crossorigin="anonymous" href="/assets/common-123.css">';
+        const html = assemblePublicHtml(
+            shell.replace('</head>', stylesheet + '</head>'),
+            payload(),
+            '<style data-href="storefront-home-showcase">.hero {height: 200px}</style><main>Ready</main>',
+        );
+        const dom = load(html);
+        const hint = dom('head link[rel="preload"][as="style"]');
+        expect(hint).toHaveLength(1);
+        expect(hint.attr('href')).toBe('/assets/common-123.css');
+        expect(hint.attr('crossorigin')).toBe('anonymous');
+        expect(html.indexOf('as="style"')).toBeLessThan(html.indexOf('data-href="storefront-home-showcase"'));
+        expect(html.indexOf('data-href="storefront-home-showcase"')).toBeLessThan(
+            html.indexOf('rel="stylesheet"'),
+        );
+        expect(dom('head link[rel="stylesheet"]')).toHaveLength(1);
+        expect(dom('style[data-href="storefront-home-showcase"]')).toHaveLength(1);
+    });
     const hints = (html: string) => {
         const dom = load(html);
         return dom('head link[rel="modulepreload"]')
@@ -178,7 +197,7 @@ describe('public HTML optional route script hints', () => {
 describe.runIf(process.env.SEO_HTML_ARTIFACT_SMOKE === '1')(
     'public HTML service with the actual storefront build',
     () => {
-        const project = path.resolve(process.cwd(), '../..');
+        const project = path.resolve(__dirname, '../../../..');
         const artifact = path.join(project, 'packages/storefront/dist');
         const scenarios: string[] = [];
         const service = new StorefrontSeoHtmlService();
@@ -280,9 +299,12 @@ describe.runIf(process.env.SEO_HTML_ARTIFACT_SMOKE === '1')(
                         if (kind === 'home') {
                             expect(dom('head style[data-href="storefront-home-showcase"]')).toHaveLength(1);
                             expect(dom('#root style[data-href="storefront-home-showcase"]')).toHaveLength(0);
-                            expect(html.indexOf('data-href="storefront-home-showcase"')).toBeLessThan(
-                                html.indexOf('href="/assets/index-'),
-                            );
+                            const headResources = dom('head').children().toArray();
+                            expect(
+                                headResources.indexOf(
+                                    dom('head style[data-href="storefront-home-showcase"]')[0],
+                                ),
+                            ).toBeLessThan(headResources.indexOf(dom('head link[rel="stylesheet"]')[0]));
                             const routeScripts = (await readdir(path.join(artifact, 'assets'))).filter(file =>
                                 /^(?:catalog-route-pages|home-page)-[\w-]{8}\.js$/u.test(file),
                             );

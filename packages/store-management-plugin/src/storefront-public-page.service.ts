@@ -714,12 +714,17 @@ export class StorefrontPublicPageService {
                     : item;
             });
         const load = async () => {
+            // This phase belongs to one page scope/generation, which its owner
+            // rechecks before returning or caching. Reuse only this phase's read;
+            // a document continuation or publication retry must read afresh.
+            let phaseManifest: ReturnType<StorefrontMediaManifestService['get']> | undefined;
+            const readManifest = () => (phaseManifest ??= manifest.get(ctx, host));
             const populated = await publicMediaWithPreviews(
                 ordered,
                 host,
                 async path => {
                     try {
-                        const allowed = await manifest.isPublic(ctx, host, path);
+                        const allowed = await manifest.isPublic(ctx, host, path, readManifest);
                         (allowed ? authorized : rejected).add(path);
                         return allowed;
                     } catch (error) {

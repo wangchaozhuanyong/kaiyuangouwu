@@ -144,6 +144,27 @@ export function assemblePublicHtml(
         if (commonStyle.length) commonStyle.before(commerceStyles);
         else document('head').append(commerceStyles);
     }
+    // Discover render-blocking CSS before the large inline commerce resource,
+    // without moving its stylesheet and changing the server/client cascade.
+    const styleHints: string[] = [];
+    const hintedStyles = new Set(
+        document('head link[rel="preload"][as="style"]')
+            .map((_index, element) => document(element).attr('href'))
+            .get(),
+    );
+    document('head link[rel="stylesheet"]').each((_index, element) => {
+        const stylesheet = document(element);
+        const href = stylesheet.attr('href');
+        if (!href || !/^\/assets\/[\w-]+\.css$/u.test(href) || hintedStyles.has(href)) return;
+        const hint = document('<link rel="preload" as="style">').attr('href', href);
+        for (const attribute of ['crossorigin', 'integrity', 'referrerpolicy', 'media']) {
+            const value = stylesheet.attr(attribute);
+            if (value !== undefined) hint.attr(attribute, value);
+        }
+        styleHints.push(document.html(hint));
+        hintedStyles.add(href);
+    });
+    document('head').prepend(styleHints.join(''));
     document('head').append(
         document('style[data-href="storefront-business-services"], style[data-href="storefront-support"]'),
     );

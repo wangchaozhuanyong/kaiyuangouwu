@@ -179,8 +179,12 @@ describe('one public SEO policy', () => {
         const dom = load(html);
         expect(dom('#root style')).toHaveLength(0);
         expect(dom('head style')).toHaveLength(3);
-        const commonIndex = html.indexOf('href="/assets/index-test.css"');
-        const routeIndex = html.indexOf('href="/assets/public-route-test.css"');
+        const commonIndex = html.indexOf(
+            dom.html(dom('link[rel="stylesheet"][href="/assets/index-test.css"]')),
+        );
+        const routeIndex = html.indexOf(
+            dom.html(dom('link[rel="stylesheet"][href="/assets/public-route-test.css"]')),
+        );
         expect(html.indexOf('data-href="storefront-service-entries"')).toBeLessThan(commonIndex);
         expect(html.indexOf('data-href="storefront-business-services"')).toBeGreaterThan(routeIndex);
         expect(html.indexOf('data-href="storefront-support"')).toBeGreaterThan(routeIndex);
@@ -199,7 +203,7 @@ describe('one public SEO policy', () => {
         expect(dom('head style[data-href="storefront-home-showcase"]')).toHaveLength(1);
         expect(dom('#root style')).toHaveLength(0);
         expect(html.indexOf('data-href="storefront-home-showcase"')).toBeLessThan(
-            html.indexOf('href="/assets/index-test.css"'),
+            html.indexOf(dom.html(dom('link[rel="stylesheet"][href="/assets/index-test.css"]'))),
         );
         expect(dom('#root main').text()).toBe('Home');
         expect(dom('script[type="module"]')).toHaveLength(1);

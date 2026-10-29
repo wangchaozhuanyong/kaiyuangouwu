@@ -163,6 +163,20 @@ function assembleFixtureHtml(page, body, htmlTemplate) {
         if (commonStyle.length) commonStyle.before(commerceStyles);
         else document('head').append(commerceStyles);
     }
+    // Match production discovery while preserving the same stylesheet cascade.
+    const styleHints = [];
+    document('head link[rel="stylesheet"]').each((_index, element) => {
+        const stylesheet = document(element);
+        const href = stylesheet.attr('href');
+        if (!href || !/^\/assets\/[\w-]+\.css$/u.test(href)) return;
+        const hint = document('<link rel="preload" as="style">').attr('href', href);
+        for (const attribute of ['crossorigin', 'integrity', 'referrerpolicy', 'media']) {
+            const value = stylesheet.attr(attribute);
+            if (value !== undefined) hint.attr(attribute, value);
+        }
+        styleHints.push(document.html(hint));
+    });
+    document('head').prepend(styleHints.join(''));
     document('head').append(
         document('style[data-href="storefront-business-services"], style[data-href="storefront-support"]'),
     );

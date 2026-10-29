@@ -91,6 +91,18 @@ function harness() {
     };
 }
 describe('public media manifest', () => {
+    it('rejects another scope even when a caller supplies a shared phase read', async () => {
+        const { service } = harness();
+        const read = vi
+            .fn()
+            .mockResolvedValue({ channelId: 'b', host: 'a.test', paths: ['preview/hero.webp'], uses: [] });
+        expect(await service.isPublic(ctx, 'a.test', 'preview/hero.webp', read)).toBe(false);
+        read.mockResolvedValue({ channelId: 'a', host: 'b.test', paths: ['preview/hero.webp'], uses: [] });
+        expect(await service.isPublic(ctx, 'a.test', 'preview/hero.webp', read)).toBe(false);
+        read.mockClear();
+        expect(await service.isPublic(ctx, 'a.test', '../private/hero.webp', read)).toBe(false);
+        expect(read).not.toHaveBeenCalled();
+    });
     it.each(['a', 'b'])(
         'uses the same poster authorization mechanism for store %s and revokes disabled programs',
         async channelId => {
