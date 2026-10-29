@@ -779,3 +779,73 @@ void test('approved braces backport verifies all installed copies and preserves 
         await rm(root, { recursive: true, force: true });
     }
 });
+
+void test('PhoneNumber backport verifies both entries and rejects altered or unregistered copies', async () => {
+    const { cp, mkdir } = await import('node:fs/promises');
+    const { pathToFileURL } = await import('node:url');
+    const { PHONE_NUMBER_PATCH, assertPhoneNumberGuard, verifyPhoneNumberPatch, isVerifiedFinding } =
+        await import('./production-runtime-audit.mjs');
+    const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+    const scratch = path.join(repositoryRoot, 'tmp');
+    await mkdir(scratch, { recursive: true });
+    const root = await mkdtemp(path.join(scratch, 'phone-number-backport-'));
+    const installed = path.join(repositoryRoot, 'node_modules/graphql-scalars');
+    const copy = path.join(root, 'node_modules/graphql-scalars');
+    const registration = JSON.stringify({
+        patchedDependencies: { 'graphql-scalars@1.26.0': PHONE_NUMBER_PATCH.path },
+    });
+    try {
+        await mkdir(path.join(root, 'patches'), { recursive: true });
+        await cp(installed, copy, { recursive: true });
+        await cp(
+            path.join(repositoryRoot, PHONE_NUMBER_PATCH.path),
+            path.join(root, PHONE_NUMBER_PATCH.path),
+        );
+        await writeFile(path.join(root, 'package.json'), registration);
+        await writeFile(path.join(root, 'bun.lock'), registration);
+        const proof = verifyPhoneNumberPatch(root);
+        assertPhoneNumberGuard(await import(pathToFileURL(path.join(copy, 'esm/index.js')).href));
+        const finding = { url: PHONE_NUMBER_PATCH.advisory, severity: 'high', version: '1.26.0' };
+        assert.equal(isVerifiedFinding('graphql-scalars', finding, [proof]), true);
+        assert.equal(isVerifiedFinding('graphql-scalars', finding, []), false);
+        assert.equal(isVerifiedFinding('graphql-scalars', { ...finding, url: 'unrelated' }, [proof]), false);
+        assert.equal(isVerifiedFinding('graphql-scalars', { ...finding, version: '1.25.0' }, [proof]), false);
+        for (const entry of ['cjs/scalars/PhoneNumber.js', 'esm/scalars/PhoneNumber.js']) {
+            await writeFile(path.join(copy, entry), '// altered scalar');
+            assert.throws(() => verifyPhoneNumberPatch(root), /fingerprint mismatch/u);
+            await cp(path.join(installed, entry), path.join(copy, entry));
+        }
+        await writeFile(path.join(root, 'bun.lock'), '{}');
+        assert.throws(() => verifyPhoneNumberPatch(root), /frozen lockfile/u);
+        await writeFile(path.join(root, 'bun.lock'), registration);
+        await writeFile(path.join(root, 'package.json'), '{}');
+        assert.throws(() => verifyPhoneNumberPatch(root), /registration/u);
+        await writeFile(path.join(root, 'package.json'), registration);
+        await writeFile(path.join(root, PHONE_NUMBER_PATCH.path), '// altered patch');
+        assert.throws(() => verifyPhoneNumberPatch(root), /source fingerprint mismatch/u);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
+void test('patched Seroval rejects forged array lengths and preserves ordinary router values', async () => {
+    const { createRequire } = await import('node:module');
+    const load = createRequire(import.meta.url);
+    for (const api of [load('seroval'), await import('seroval')]) {
+        const value = {
+            list: [1, 2],
+            set: new Set(['one']),
+            map: new Map([['key', 'value']]),
+            date: new Date(0),
+        };
+        assert.deepEqual(api.fromJSON(api.toJSON(value)), value);
+        const forged = api.toJSON([1]);
+        forged.t.a = { length: 100_000_000 };
+        assert.throws(
+            () => api.fromJSON(forged),
+            error =>
+                error instanceof api.SerovalDeserializationError &&
+                error.cause instanceof api.SerovalMalformedNodeError,
+        );
+    }
+});
