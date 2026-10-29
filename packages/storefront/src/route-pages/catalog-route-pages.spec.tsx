@@ -17,9 +17,11 @@ import { ProductRoutePage } from './catalog-detail-route-pages';
 import { HomeRoutePage } from './catalog-route-pages';
 
 let homeInputs: ReturnType<typeof HomePageContext.useValue> | undefined;
+let couponFrames: unknown[] = [];
 function HomeReadProbe() {
     const value = HomePageContext.useValue();
     homeInputs = value;
+    couponFrames.push(value.coupons);
     return (
         <div>
             <output>{String(Boolean(value.managedContentLoading))}</output>
@@ -448,7 +450,7 @@ describe('product detail read states', () => {
     });
 });
 
-it('defers late scoped coupons to the next visit while keeping reads and account isolation', () => {
+it('shows late scoped coupons during the same visit while keeping empty results and account isolation', () => {
     const client = new QueryClient();
     const host = document.createElement('div');
     const root = createRoot(host);
@@ -494,7 +496,7 @@ it('defers late scoped coupons to the next visit while keeping reads and account
             );
         });
         show('initial');
-        expect(homeInputs?.coupons).toEqual([]);
+        expect(homeInputs?.coupons).toEqual([coupon]);
         expect(
             client.getQueryData(
                 storefrontQueryKeys.couponCampaigns(storefrontQueryKeys.market(value.market), 'en', null),
@@ -566,7 +568,7 @@ it('defers late scoped coupons to the next visit while keeping reads and account
             );
         });
         show('next-visit');
-        expect(homeInputs?.coupons).toEqual([]);
+        expect(homeInputs?.coupons).toEqual([coupon]);
         show('next-visit-with-current-customer');
         expect(homeInputs?.coupons).toEqual([coupon]);
     } finally {
@@ -613,6 +615,7 @@ it.each([
             customer: customerId ? { id: customerId } : null,
         } as unknown as StorefrontContextValue;
         try {
+            couponFrames = [];
             act(() =>
                 root.render(
                     <QueryClientProvider client={client}>
@@ -622,8 +625,9 @@ it.each([
                     </QueryClientProvider>,
                 ),
             );
-            expect(homeInputs?.coupons).toEqual(visible ? [coupon] : []);
-            if (customerId || languageCode !== 'en')
+            expect(couponFrames[0]).toEqual(visible ? [coupon] : []);
+            expect(homeInputs?.coupons).toEqual([]);
+            if (customerId || languageCode !== 'en' || audience === 'unknown')
                 expect(
                     client.getQueryData(
                         storefrontQueryKeys.couponCampaigns(
@@ -633,6 +637,21 @@ it.each([
                         ),
                     ),
                 ).toBeUndefined();
+            Object.assign(value, { customerLoadState: 'ready' });
+            act(() => {
+                client.setQueryData(
+                    storefrontQueryKeys.couponCampaigns(storefrontQueryKeys.market(market), 'en', customerId),
+                    [coupon],
+                );
+                root.render(
+                    <QueryClientProvider client={client}>
+                        <StorefrontContext.Provider value={{ ...value }}>
+                            <HomeRoutePage />
+                        </StorefrontContext.Provider>
+                    </QueryClientProvider>,
+                );
+            });
+            expect(homeInputs?.coupons).toEqual([coupon]);
         } finally {
             act(() => root.unmount());
             client.clear();

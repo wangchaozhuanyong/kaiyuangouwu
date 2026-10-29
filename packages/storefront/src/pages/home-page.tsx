@@ -1541,17 +1541,6 @@ function FeaturedCollectionSection({
             const detailHeight = Math.max(
                 ...details.slice(0, columns).map(item => item.getBoundingClientRect().height),
             );
-            const geometry = `${width}:${columns}:${detailHeight}`;
-            // Already painted SSR columns own the initial geometry. Re-align only
-            // after a real container or copy-size change, never solely for hydration.
-            if (
-                adoptedGeometry.current === undefined &&
-                mosaic.closest('[data-public-rendered="1"]') &&
-                !document.documentElement.hasAttribute('data-storefront-app-owned')
-            )
-                adoptedGeometry.current = geometry;
-            if (adoptedGeometry.current === geometry) return;
-            adoptedGeometry.current = '';
             const mediaWidth =
                 width - parseFloat(layout.columnGap) - (columns - 1) * parseFloat(grid.columnGap);
             const leadWidth =
@@ -1564,7 +1553,20 @@ function FeaturedCollectionSection({
                 return;
             }
             const leading = mosaic.firstElementChild;
-            if (leading && Math.abs(leading.getBoundingClientRect().width - leadWidth) > 0.1) {
+            const aligned = leading && Math.abs(leading.getBoundingClientRect().width - leadWidth) <= 0.1;
+            const geometry = `${width}:${columns}:${detailHeight}`;
+            // Preserve an already aligned SSR layout. The fallback CSS ratio is
+            // not a measured result and must not freeze a visible image-edge gap.
+            if (
+                adoptedGeometry.current === undefined &&
+                aligned &&
+                mosaic.closest('[data-public-rendered="1"]') &&
+                !document.documentElement.hasAttribute('data-storefront-app-owned')
+            )
+                adoptedGeometry.current = geometry;
+            if (adoptedGeometry.current === geometry) return;
+            adoptedGeometry.current = '';
+            if (leading && !aligned) {
                 mosaic.style.gridTemplateColumns = `minmax(0, ${leadWidth}px) minmax(0, 1fr)`;
             }
         };

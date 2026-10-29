@@ -3,7 +3,7 @@ import type { StorefrontAuthSettings } from './types';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { AuthOverlayLoading } from './auth-overlay-surface';
+import { AuthOverlayLoading } from './auth-overlay-loading';
 
 const settings: StorefrontAuthSettings = {
     emailPasswordEnabled: true,

@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { authOverlayLoginRoute } from './auth-overlay';
 import { authOverlayForNavigation, readAuthOverlay } from './auth-overlay-navigation';
-import {
-    authOverlayLoginRoute,
-    withAuthOverlay,
-    withoutAuthOverlay,
-} from './auth-overlay-navigation-actions';
+import { withAuthOverlay, withoutAuthOverlay } from './auth-overlay-navigation-actions';
 import { normalizeRouteSearch, routeFromRouterLocation, routeHref } from './storefront-router';
 
 describe('authentication overlay navigation targets', () => {

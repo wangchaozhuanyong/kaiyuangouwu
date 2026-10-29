@@ -7,16 +7,23 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 
 import { authVisualStyle } from '../../storefront-content-plugin/src/shared/auth-visual';
 
-import { applyAuthOverlayNavigation, authOverlayLoginRoute } from './auth-overlay-navigation-actions';
-import { AuthOverlayLoading } from './auth-overlay-surface';
+import { AuthOverlayLoading } from './auth-overlay-loading';
+import { applyAuthOverlayNavigation } from './auth-overlay-navigation-actions';
 import { AuthPresentationContext } from './auth-presentation';
 import { findAuthVisualContent } from './auth-visual-content';
 import { LazyForgotPasswordPage, LazyLoginPage, LazyRegisterPage } from './lazy-auth-pages';
 import { Overlay } from './overlay-host';
-import { isCheckoutRoute, routeFromHash, routeHref } from './storefront-router';
+import { isCheckoutRoute, routeFromHash, routeHref, type RouteState } from './storefront-router';
 import { useStorefront } from './StorefrontContext';
 
 import './styles/auth-overlay.css';
+
+export function authOverlayLoginRoute(request: AuthOverlayRequest): RouteState {
+    const target = request.target;
+    return target && isCheckoutRoute(target.name)
+        ? { name: 'login', returnTo: target.name, id: target.id, quantity: target.quantity }
+        : { name: 'login' };
+}
 
 /** The background route stays mounted; only the authentication form changes. */
 export function AuthenticationOverlay({ request }: { request: AuthOverlayRequest }) {

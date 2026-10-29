@@ -3,7 +3,6 @@ import { lazyRouteComponent } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
 import { importHomePage } from '../catalog-page-imports';
-import { claimableCouponCampaigns } from '../coupon-campaign-eligibility';
 import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
 import { usePageReadiness, usePageRouteCommit } from '../page-readiness';
@@ -41,7 +40,7 @@ export function HomeRoutePage() {
             runtime.customerLoadState === 'ready' &&
             runtime.contentBlocks.some(block => block.type === 'COUPONS' && block.enabled),
         initialData:
-            runtime.customer || !matchingSnapshot
+            runtime.customer || !matchingSnapshot || initialPage?.couponAudience !== 'anonymous'
                 ? undefined
                 : (initialPage?.couponCampaigns as StorefrontCouponCampaign[] | undefined),
         initialDataUpdatedAt: initialPage?.generatedAt,
@@ -62,23 +61,21 @@ export function HomeRoutePage() {
             owner: initialPage ? null : (runtime.customer?.id ?? null),
             scope: couponScope,
             coupons,
-            admitted: claimableCouponCampaigns(coupons, initialRenderTime).length > 0,
         };
     });
     const couponOwnerChanged =
         runtime.customerLoadState !== 'loading' && (runtime.customer?.id ?? null) !== couponVisit.owner;
     const [couponVisitCommitted, setCouponVisitCommitted] = useState(false);
     useEffect(() => setCouponVisitCommitted(true), []);
-    // A late read still updates the scoped Query cache for the next visit. Only
-    // an admitted first-frame section may follow updates during this visit.
-    const visitCoupons =
-        !couponVisit.admitted || couponOwnerChanged || couponVisit.scope !== couponScope
-            ? []
-            : couponVisitCommitted &&
-                runtime.customerLoadState === 'ready' &&
-                campaignsQuery.data !== undefined
-              ? runtime.activeCoupons
-              : couponVisit.coupons;
+    // Preserve the exact snapshot for adoption, then follow the current account's
+    // scoped read, including an empty result. An unknown first frame is not a veto.
+    const visitCoupons = couponVisitCommitted
+        ? runtime.customerLoadState === 'ready'
+            ? (campaignsQuery.data ?? [])
+            : []
+        : couponOwnerChanged || couponVisit.scope !== couponScope
+          ? []
+          : couponVisit.coupons;
     const { language, configQuery, contentQuery, productsQuery } = runtime;
     usePageReadiness(
         contentQuery.isPending,
