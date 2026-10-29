@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
+import { readFileSync } from 'node:fs';
 import { act, StrictMode } from 'react';
 import { hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
@@ -9,6 +10,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import {
     publicPageRequestFromUrl,
     publicPageRequestKey,
+    publicPageRouteHref,
     serializeStorefrontPageData,
     STOREFRONT_PAGE_DATA_ELEMENT_ID,
 } from '../../storefront-content-plugin/src/shared/public-page-data';
@@ -61,6 +63,14 @@ type Scenario = {
 };
 
 const scenarios: Scenario[] = [
+    ...(process.env.REAL_HYDRATION_FIXTURE
+        ? [
+              {
+                  name: 'the captured public category',
+                  href: '/zh/category?collectionId=49&childId=86&sort=recommended&fulfillment=all',
+              },
+          ]
+        : []),
     {
         name: 'an explicit child category and non-default filters',
         href: '/zh/category?collectionId=2&childId=42&sort=price-desc&fulfillment=digital&inStockOnly=true&minPrice=20&maxPrice=200&page=2',
@@ -96,6 +106,17 @@ function requestHref(input: RequestInfo | URL): string {
 }
 
 function fixture(scenario: Scenario): PublicPageData {
+    if (scenario.name === 'the captured public category') {
+        const fixturePath = process.env.REAL_HYDRATION_FIXTURE;
+        if (!fixturePath) throw new Error('Expected public fixture path');
+        const captured = JSON.parse(readFileSync(fixturePath, 'utf8')) as PublicPageData;
+        const replay = JSON.parse(
+            JSON.stringify(captured).replaceAll(`https://${captured.scope.host}`, window.location.origin),
+        ) as PublicPageData;
+        replay.scope.host = window.location.host;
+        replay.generatedAt = Date.now();
+        return replay;
+    }
     const page: PublicPageData = syntheticPage(fixtureStores[0], 'zh_Hans', 'catalog', {
         host: window.location.host,
         generatedAt: Date.now() - (scenario.stale ? 45_000 : 0),
@@ -109,7 +130,9 @@ function fixture(scenario: Scenario): PublicPageData {
         !page.catalog
     )
         throw new Error('Incomplete synthetic category fixture');
-    page.route = scenario.href;
+    // The public API emits the canonical effective collection, not the browser's
+    // parent/child URL. Using the browser URL here previously hid real #418 failures.
+    page.route = publicPageRouteHref(request);
     page.request = request;
     page.requestKey = publicPageRequestKey(request);
     page.collections[0].id = '2';

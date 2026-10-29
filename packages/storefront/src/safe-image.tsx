@@ -771,7 +771,7 @@ function SafeImageSource({
                     )}
                 {!failed && loadingFallback && !hasPreview ? (
                     loadingFallback
-                ) : !failed && hasPreview && !retainedPreview ? (
+                ) : hasPreview && (!failed || hasInlinePreview) && !retainedPreview ? (
                     <>
                         {!previewReady && (
                             <span className="safe-image-preview-loading" aria-hidden="true">

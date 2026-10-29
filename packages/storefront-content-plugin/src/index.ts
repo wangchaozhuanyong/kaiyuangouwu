@@ -27,9 +27,11 @@ export type {
 export {
     STOREFRONT_IMAGE_SIZES,
     boundedMediaPreviews,
+    catalogCardImageSizes,
     mediaDescriptor,
     normalizeStorefrontAssetUrl,
     responsiveImageSources,
+    storefrontResponsiveImagePresets,
     storefrontWebpUrl,
     validInlineImagePreview,
 } from './shared/responsive-image';

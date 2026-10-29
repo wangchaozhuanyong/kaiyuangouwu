@@ -41,6 +41,7 @@ import {
     storefrontPlaceholderData,
     storefrontQueryKeys,
 } from '../query-client';
+import { STOREFRONT_IMAGE_SIZES } from '../responsive-image';
 import { SafeImage } from '../safe-image';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { goBackInStorefront } from '../storefront-navigation-history';
@@ -814,6 +815,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                                         key={product.id}
                                         priority={index === 0}
                                         eager={index < 5}
+                                        imageSizes={STOREFRONT_IMAGE_SIZES.searchCard}
                                         responsiveRow
                                         appearance="plain"
                                         product={product}

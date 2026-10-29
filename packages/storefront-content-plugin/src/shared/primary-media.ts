@@ -1,8 +1,10 @@
+import type { StorefrontImageKind } from './responsive-image';
+
 import { STOREFRONT_CLIENT_PLUGINS_CODE } from '../client-plugin-manifest';
 
 import { authOriginalImageUrl, primaryAuthVisualContent } from './auth-visual-utils';
 import { storefrontNavigationCollections, type PublicNavigationCollection } from './public-page-data';
-import { STOREFRONT_IMAGE_SIZES, type StorefrontImageKind } from './responsive-image';
+import { STOREFRONT_IMAGE_SIZES } from './storefront-image-layouts';
 
 export type PrimaryStorefrontMediaRoute =
     'home' | 'services' | 'support' | 'login' | 'register' | 'forgot-password' | 'catalog' | 'product';
@@ -37,7 +39,7 @@ const source = (value: unknown) => (typeof value === 'string' ? value.trim() : '
 export { primaryAuthVisualContent } from './auth-visual-utils';
 
 /** Pure selection of the image the existing layout actually displays; never fetches route data. */
-export function primaryStorefrontMedia(
+export function primaryStorefrontNavigationMedia(
     input: PrimaryStorefrontMediaInput,
 ): PrimaryStorefrontMediaCandidate[] {
     const blocks = input.blocks?.filter(block => block.enabled !== false) ?? [];
@@ -82,19 +84,35 @@ export function primaryStorefrontMedia(
               ]
             : [];
     }
-    const product = input.route === 'product' ? input.product : input.catalogItems?.[0];
-    const productImage =
+    const productImage = input.route === 'product' ? firstProductImage(input.product) : '';
+    return productImage ? [{ source: productImage, kind: 'detail' }] : [];
+}
+
+function firstProductImage(product: ProductMedia | null | undefined): string {
+    return (
         source(product?.featuredAsset?.preview) ||
         source(
             product?.variants?.find(variant => source(variant.featuredAsset?.preview))?.featuredAsset
                 ?.preview,
-        );
+        )
+    );
+}
+
+/** Catalog preloads belong to the exact server read, never speculative navigation. */
+export function primaryStorefrontMedia(
+    input: PrimaryStorefrontMediaInput,
+): PrimaryStorefrontMediaCandidate[] {
+    if (input.route !== 'catalog') return primaryStorefrontNavigationMedia(input);
+    const productImage = firstProductImage(input.catalogItems?.[0]);
     if (!productImage) return [];
-    if (input.route === 'product') return [{ source: productImage, kind: 'detail' }];
     const navigation = storefrontNavigationCollections([...(input.collections ?? [])]);
     const primary =
         input.primaryCollectionId !== 'all'
-            ? navigation.find(item => item.id === input.primaryCollectionId)
+            ? navigation.find(
+                  item =>
+                      item.id === input.primaryCollectionId ||
+                      item.children?.some(child => child.id === input.primaryCollectionId),
+              )
             : undefined;
     const hasSidebar = input.catalogPath !== '/search' && (primary?.children?.length ?? 0) > 0;
     return [
@@ -107,7 +125,10 @@ export function primaryStorefrontMedia(
         {
             source: productImage,
             kind: 'card',
-            sizes: STOREFRONT_IMAGE_SIZES.desktopCatalogCard,
+            sizes:
+                input.catalogPath === '/search'
+                    ? STOREFRONT_IMAGE_SIZES.searchCard
+                    : STOREFRONT_IMAGE_SIZES.desktopCatalogCard,
             media: '(min-width: 1024px)',
         },
     ];

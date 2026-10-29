@@ -158,7 +158,7 @@ export class StorefrontMediaJobsService implements OnApplicationBootstrap, OnApp
             if (!manifest.paths.includes(plan.path)) continue;
             try {
                 if ('inline' in plan) {
-                    if (!validInlineImagePreview(await this.assets.readPublicInlinePreview(plan.path)))
+                    if (!validInlineImagePreview(await this.assets.readPublicInlinePreview(plan.path, 512)))
                         throw new Error('Public inline media preparation is unavailable');
                 } else await this.assets.preparePublicDerivative(plan.path, plan.preset, plan.quality);
                 prepared++;

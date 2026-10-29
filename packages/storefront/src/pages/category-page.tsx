@@ -32,7 +32,7 @@ import { PageReadinessError, usePageLoadingState, usePageReadiness } from '../pa
 import { priceSortActionLabel } from '../price-sort-label';
 import { productAvailability } from '../product-availability';
 import { storefrontQueryKeys } from '../query-client';
-import { STOREFRONT_IMAGE_SIZES } from '../responsive-image';
+import { catalogCardImageSizes, STOREFRONT_IMAGE_SIZES } from '../responsive-image';
 import { CategoryPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
@@ -844,12 +844,7 @@ export function CategoryPage() {
                                         responsiveRow
                                         eager={index < 5}
                                         priority={index === 0}
-                                        imageSizes={
-                                            '(min-width: 1024px) 220px, ' +
-                                            (hasChildCategories
-                                                ? STOREFRONT_IMAGE_SIZES.categorySidebarRow
-                                                : STOREFRONT_IMAGE_SIZES.productRow)
-                                        }
+                                        imageSizes={catalogCardImageSizes(hasChildCategories)}
                                         product={product}
                                         market={market}
                                         locale={locale}

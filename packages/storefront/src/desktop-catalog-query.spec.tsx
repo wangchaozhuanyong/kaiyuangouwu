@@ -19,6 +19,15 @@ describe('desktop catalog navigation', () => {
         { id: 'second-category', children: [{ id: 'second-child' }] },
     ] as CollectionSummary[];
 
+    it('renders canonical child-only snapshots like parent/child browser links', () => {
+        const canonical = { name: 'category' as const, collectionId: 'second-child', page: 2 };
+        const explicit = { ...canonical, collectionId: 'second-category', childId: 'second-child' };
+        const resolved = resolveCategoryRoute(canonical, categories);
+        expect(resolved).toEqual(explicit);
+        expect(catalogInputFromRoute(resolved)).toEqual(catalogInputFromRoute(canonical));
+        expect(resolveCategoryRoute(explicit, categories)).toBe(explicit);
+    });
+
     it.each([undefined, 'all'])(
         'defaults an unspecified category to the first navigation item (%s)',
         collectionId => {

@@ -143,11 +143,88 @@ export function preservePublicMediaPreviews(
     );
 }
 
-/** Preserve the first eight assets; only the configured, already-projected header logo may join them. */
+/** One page-owned ordering, shared by ordinary reads and the document continuation. */
+export function publicMediaPreviewPlan(
+    page: StorefrontPageData,
+    media: readonly MediaDescriptor[],
+    primary: readonly MediaDescriptor[],
+) {
+    const host = page.scope.host;
+    const kind = page.request?.kind;
+    const productPool =
+        kind === 'catalog'
+            ? records(record(page.catalog).items).slice(0, 12)
+            : [
+                  ...records(page.products),
+                  ...records(record(record(page.bestSellers).catalog).items),
+                  ...records(record(page.bestSellers).pinnedProducts),
+              ];
+    if ((kind !== 'catalog' && kind !== 'home') || !productPool.length) {
+        const keys = new Set(primary.map(item => publicMediaAssetIdentity(item, host)?.key));
+        return {
+            media: [
+                ...media.filter(item => keys.has(publicMediaAssetIdentity(item, host)?.key)),
+                ...media.filter(item => !keys.has(publicMediaAssetIdentity(item, host)?.key)),
+            ],
+            assetLimit: 8,
+        };
+    }
+    const preferred: MediaDescriptor[] = [];
+    const add = (candidate: MediaDescriptor) => {
+        const key = publicMediaAssetIdentity(candidate, host)?.key;
+        const match =
+            key &&
+            media.find(
+                item => item.kind === candidate.kind && publicMediaAssetIdentity(item, host)?.key === key,
+            );
+        if (match && !preferred.includes(match)) preferred.push(match);
+    };
+    primary.forEach(add);
+    if (kind === 'catalog' || kind === 'home') {
+        const products = productPool;
+        const covers = new Set(
+            products.flatMap(item => {
+                const source = productCover(item);
+                const key = source && publicMediaAssetIdentity(mediaDescriptor(source, 'card'), host)?.key;
+                return key ? [key] : [];
+            }),
+        );
+        // Homepage projection already orders the published first product modules.
+        const cards =
+            kind === 'catalog'
+                ? products.flatMap(item => {
+                      const source = productCover(item);
+                      return source ? [mediaDescriptor(source, 'card')] : [];
+                  })
+                : media
+                      .filter(
+                          item =>
+                              item.kind === 'card' &&
+                              covers.has(publicMediaAssetIdentity(item, host)?.key ?? ''),
+                      )
+                      .slice(0, 12);
+        cards.forEach(add);
+        const logo = record(page.config).logoUrl;
+        if (typeof logo === 'string') add(mediaDescriptor(logo, 'thumbnail'));
+    }
+    const ordered = [...preferred, ...media.filter(item => !preferred.includes(item))];
+    return {
+        media: ordered,
+        // Only current primary/card/logo assets add reads. Other hints may reuse
+        // already-prepared pixels, but cannot displace products or grow the read set.
+        assetLimit:
+            kind === 'catalog' || kind === 'home'
+                ? new Set(preferred.map(item => publicMediaAssetIdentity(item, host)?.key)).size
+                : 8,
+    };
+}
+
+/** The default eight-asset behavior remains available to existing callers. */
 export function publicMediaPreviewGroups(
     media: readonly MediaDescriptor[],
     host: string,
     logoUrl?: string | null,
+    assetLimit = 8,
 ) {
     const groups = new Map<string, { path: string; indexes: number[] }>();
     media.forEach((item, index) => {
@@ -155,7 +232,8 @@ export function publicMediaPreviewGroups(
         if (!identity) return;
         const existing = groups.get(identity.key);
         if (existing) existing.indexes.push(index);
-        else if (groups.size < 8) groups.set(identity.key, { path: identity.path, indexes: [index] });
+        else if (groups.size < Math.min(15, assetLimit))
+            groups.set(identity.key, { path: identity.path, indexes: [index] });
     });
     const logo =
         typeof logoUrl === 'string' && logoUrl.trim()
@@ -185,9 +263,10 @@ export async function publicMediaWithPreviews(
     budgetMs = 250,
     preparation?: { deferred: boolean },
     logoUrl?: string | null,
+    assetLimit = 8,
 ): Promise<MediaDescriptor[]> {
     if (preparation) preparation.deferred = false;
-    const groups = publicMediaPreviewGroups(media, host, logoUrl);
+    const groups = publicMediaPreviewGroups(media, host, logoUrl, assetLimit);
     if (!groups.size) return boundedAssetPreviews(media, host);
     const pending = [...groups.values()];
     const resolved = new Map<number, string>();
