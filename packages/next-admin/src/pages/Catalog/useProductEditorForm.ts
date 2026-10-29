@@ -355,6 +355,7 @@ export function useProductEditorForm() {
                 productExtensionFields,
                 workspaceVariants,
                 variantExtensionFields,
+                collectionsData?.collections.items,
             );
             const recovery = hasRecovery ? takeCreatedProductDraft(editorScope, p.id) : undefined;
             const previous = hydratedEditor.current;
@@ -405,6 +406,7 @@ export function useProductEditorForm() {
         productExtensionFields,
         variantExtensionFields,
         workspaceVariants,
+        collectionsData,
         initialVariant,
         editorIdentity,
         editorScope,
@@ -508,6 +510,7 @@ export function useProductEditorForm() {
             productExtensionFields,
             workspaceVariants,
             variantExtensionFields,
+            collectionsData?.collections.items,
         );
     }, [
         catalogChannelsData?.activeChannel.id,
@@ -518,6 +521,7 @@ export function useProductEditorForm() {
         workspaceVariants,
         productExtensionFields,
         variantExtensionFields,
+        collectionsData,
     ]);
     const baselineEditorSnapshot = useMemo(
         () => (baselineEditorDraft ? serializeProductEditor(baselineEditorDraft) : null),
@@ -827,8 +831,24 @@ export function useProductEditorForm() {
             setErrorMessage,
             setFormErrors,
             setSaving,
-            showError: message => showError(message, '商品未保存'),
+            showError: message =>
+                showError(
+                    message,
+                    message.startsWith('商品已保存') || message.startsWith('部分内容已保存')
+                        ? '商品已保存，后续操作未完成'
+                        : '商品未保存',
+                ),
             showNotice,
+            showPending: message => {
+                setErrorMessage('');
+                setNotification('');
+                publishAdminFeedback({
+                    id: `product-editor-category-pending-${feedbackId}`,
+                    kind: 'info',
+                    title: '分类更新中',
+                    message,
+                });
+            },
             onProductCreated: () => {
                 if (!isCreateMode || initializedEditorIdentity.current !== editorIdentity) return;
                 const nextVariant = {

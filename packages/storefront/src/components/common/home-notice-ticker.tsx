@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { type HomeNoticeItem } from '../../pages/home-page';
 import { type StorefrontLanguage } from '../../types';
@@ -14,7 +14,7 @@ interface HomeNoticeTickerProps {
     onAll: () => void;
 }
 
-/** One measured pass per notice; pauses preserve the current reading position. */
+/** Stationary previews rotate as whole notices; pauses preserve the current notice's hold. */
 export function HomeNoticeTicker({
     items,
     language,
@@ -27,10 +27,8 @@ export function HomeNoticeTicker({
 }: HomeNoticeTickerProps) {
     const [index, setIndex] = useState(0);
     const [cycle, setCycle] = useState(0);
-    const [distance, setDistance] = useState<number | null>(null);
     const [hovered, setHovered] = useState(false);
     const [focused, setFocused] = useState(false);
-    const viewport = useRef<HTMLSpanElement>(null);
     const text = useRef<HTMLSpanElement>(null);
     const region = useRef<HTMLDivElement>(null);
     const animation = useRef<Animation | null>(null);
@@ -68,44 +66,13 @@ export function HomeNoticeTicker({
         };
     }, []);
 
-    useLayoutEffect(() => {
-        const frame = viewport.current;
-        const line = text.current;
-        if (!frame || !line) {
-            setDistance(0);
-            return;
-        }
-        let active = true;
-        const measure = () => {
-            if (active) setDistance(Math.max(0, line.scrollWidth - frame.clientWidth));
-        };
-        measure();
-        const observer = new ResizeObserver(measure);
-        observer.observe(frame);
-        observer.observe(line);
-        void document.fonts?.ready.then(measure);
-        return () => {
-            active = false;
-            observer.disconnect();
-        };
-    }, [item?.id, title, content, language]);
-
     useEffect(() => {
         const line = text.current;
-        if (!line || distance === null || reducedMotion || (!distance && items.length < 2)) return;
-        const duration = distance > 0 ? 1500 + (distance / 28) * 1000 + 2000 : holdSeconds * 1000;
-        const end = `translateX(${-distance}px)`;
-        const playback = line.animate(
-            distance > 0
-                ? [
-                      { transform: 'translateX(0)', offset: 0 },
-                      { transform: 'translateX(0)', offset: 1500 / duration },
-                      { transform: end, offset: 1 - 2000 / duration },
-                      { transform: end, offset: 1 },
-                  ]
-                : [{ transform: 'translateX(0)' }, { transform: 'translateX(0)' }],
-            { duration, easing: 'linear', fill: 'forwards' },
-        );
+        if (!line || reducedMotion || items.length < 2) return;
+        const playback = line.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(0)' }], {
+            duration: holdSeconds * 1000,
+            fill: 'forwards',
+        });
         animation.current = playback;
         if (pauseRef.current) playback.pause();
         playback.onfinish = () => {
@@ -117,7 +84,7 @@ export function HomeNoticeTicker({
             playback.cancel();
             animation.current = null;
         };
-    }, [item?.id, title, content, language, distance, holdSeconds, items.length, reducedMotion, cycle]);
+    }, [item?.id, title, content, language, holdSeconds, items.length, reducedMotion, cycle]);
 
     useEffect(() => {
         const playback = animation.current;
@@ -146,7 +113,7 @@ export function HomeNoticeTicker({
                 aria-label={isZh ? `查看公告全文：${title}` : `Read full notice: ${title}`}
                 onClick={() => onOpen(item.id)}
             >
-                <span ref={viewport} className="notice-strip-content">
+                <span className="notice-strip-content">
                     <span ref={text} className="notice-strip-track">
                         <strong className="notice-strip-title">{title}</strong>
                         {content && ` · ${content}`}

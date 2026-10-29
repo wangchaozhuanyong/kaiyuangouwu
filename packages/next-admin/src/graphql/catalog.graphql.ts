@@ -358,6 +358,17 @@ export const GET_COLLECTION_ASSIGNMENT_DETAIL = gql`
     }
 `;
 
+export const GET_PRODUCT_COLLECTION_MEMBERSHIP = gql`
+    query GetProductCollectionMembership($id: ID!) {
+        product(id: $id) {
+            id
+            collections {
+                id
+            }
+        }
+    }
+`;
+
 export const UPDATE_COLLECTION_ASSIGNMENT = gql`
     mutation UpdateCollectionAssignment($input: UpdateCollectionInput!) {
         updateCollection(input: $input) {

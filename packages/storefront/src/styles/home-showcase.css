@@ -658,6 +658,7 @@
 }
 
 @media (max-width: 1023px) {
+    .home-page .notice-strip,
     .hero-carousel,
     .quick-grid,
     .quick-grid.is-color-marketplace {

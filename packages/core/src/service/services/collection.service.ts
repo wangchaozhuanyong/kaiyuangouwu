@@ -149,6 +149,7 @@ export class CollectionService implements OnModuleInit {
                 }
                 Logger.verbose(`Processing ${collectionIds.length} Collections`);
                 let completed = 0;
+                const failedCollectionIds: ID[] = [];
                 for (const collectionId of collectionIds) {
                     if (job.state === JobState.CANCELLED) {
                         throw new Error(`Job was cancelled`);
@@ -177,6 +178,7 @@ export class CollectionService implements OnModuleInit {
                                     `the collection "${translatedCollection.name}" (id: ${collection.id})`,
                             );
                             Logger.error(e.message);
+                            failedCollectionIds.push(collection.id);
                             continue;
                         }
                         job.setProgress(Math.ceil((completed / collectionIds.length) * 100));
@@ -189,6 +191,11 @@ export class CollectionService implements OnModuleInit {
                             });
                         }
                     }
+                }
+                if (failedCollectionIds.length) {
+                    throw new Error(
+                        `Failed to apply collection filters for: ${failedCollectionIds.join(', ')}`,
+                    );
                 }
                 return { processedCollections: completed };
             },
@@ -790,6 +797,8 @@ export class CollectionService implements OnModuleInit {
             .getRepository(ProductVariant)
             .createQueryBuilder('productVariant')
             .select('productVariant.id', 'id')
+            // Translation joins can match the same variant more than once, especially with manual OR rules.
+            .distinct(true)
             .setFindOptions({ loadEagerRelations: false });
 
         // If there are no filters, we need to ensure that the query returns no results
@@ -867,6 +876,7 @@ export class CollectionService implements OnModuleInit {
             });
         } catch (e: any) {
             Logger.error(e);
+            throw e;
         }
 
         if (applyToChangedVariantsOnly) {

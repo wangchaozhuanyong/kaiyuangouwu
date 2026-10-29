@@ -194,6 +194,7 @@ function fixture(): SaveInput {
             setSaving: vi.fn(),
             showError: vi.fn(),
             showNotice: vi.fn(),
+            showPending: vi.fn(),
         },
     };
 }
