@@ -81,7 +81,7 @@ export function mergePublicHotRoutes(previous: PublicHotRoute[], recent: PublicH
         .slice(0, PUBLIC_PAGE_HOT_ROUTE_LIMIT);
 }
 
-/** Queue-owned assembly only; SSI never waits for queued assembly or the hot-route registry. */
+/** Background assembly in the cache owner; SSI never waits for its scheduling or registry. */
 @Injectable()
 export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, OnApplicationShutdown {
     private queue?: JobQueue<WarmJob>;
@@ -106,8 +106,11 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
             name: 'storefront-public-page-warm',
             process: job => this.process(job.data),
         });
-        if (this.processContext.isWorker) {
-            await this.enqueue('*').catch(() => this.failed());
+        if (this.processContext.isWorker || !this.publicCache.sharedVersions) {
+            const initial = this.enqueue('*').catch(() => this.failed());
+            // A process-local cache cannot receive the worker's snapshots. Seed the
+            // serving API's existing cache too, without delaying its listen/startup.
+            if (this.processContext.isWorker) await initial;
             this.timer = setInterval(() => {
                 void this.enqueue('*').catch(() => this.failed());
             }, 20_000);
@@ -169,14 +172,21 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
     }
 
     private async enqueue(channelId: string) {
-        // The deployed topology has one worker. APIs only record routes; they never schedule jobs.
-        // Keep each channel queued until completion, including time waiting behind another store.
-        if (!this.processContext.isWorker || !this.queue || this.queued.has(channelId)) return;
+        // Shared generations use the existing worker queue. With process-local
+        // generations each API must fill its own cache; it never creates a DB job.
+        // Keep each channel owned until completion, including a local scan's children.
+        if (
+            (!this.processContext.isWorker && this.publicCache.sharedVersions) ||
+            !this.queue ||
+            this.queued.has(channelId)
+        )
+            return;
         if (this.queued.size >= CHANNEL_LIMIT + 1) return;
         this.queued.add(channelId);
         try {
             // The periodic scan retries failures. Independent queue retries would outlive this ownership.
-            await this.queue.add({ channelId }, { retries: 0 });
+            if (this.processContext.isWorker) await this.queue.add({ channelId }, { retries: 0 });
+            else await this.process({ channelId });
         } catch (error) {
             this.queued.delete(channelId);
             throw error;
