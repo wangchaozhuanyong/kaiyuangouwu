@@ -73,7 +73,9 @@
                     var reserve = document.createElement('style');
                     reserve.textContent =
                         selector +
-                        '::after{content:"";display:block;height:calc(' +
+                        '{overflow-anchor:none}' +
+                        selector +
+                        '::after{content:"";display:block;flex-shrink:0;height:calc(' +
                         Math.ceil(entry.scrollY) +
                         'px + 100vh)}';
                     document.head.appendChild(reserve);

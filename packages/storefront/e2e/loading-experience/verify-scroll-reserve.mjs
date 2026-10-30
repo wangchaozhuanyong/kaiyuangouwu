@@ -66,7 +66,14 @@ try {
         row.style.height = '1200px';
         row.style.minHeight = '1200px';
     });
+    await p.evaluate(() => {
+        for (const style of document.querySelectorAll('style')) style.remove();
+    });
     await p.evaluate(source);
+    await p.addStyleTag({
+        content:
+            '.category-results{display:flex;flex-direction:column;height:616px;overflow-y:auto}.partial{flex-shrink:0}',
+    });
     await p.evaluate(() => {
         const list = document.querySelector('.category-results');
         list.style.height = '616px';
@@ -78,6 +85,26 @@ try {
     const styled = await p.locator('.category-results').evaluate(element => element.scrollTop);
     await fs.writeFile(q + '/styled-transition.json', JSON.stringify({ styled }));
     assert.equal(styled, 320, 'Styles arriving before React must not invalidate the restored position');
+    await p.evaluate(() => document.dispatchEvent(new Event('pointerdown')));
+    await p.goto('http://reserve.test/zh/category');
+    await p.evaluate(() => {
+        history.replaceState({ __TSR_key: 'e' }, '');
+        const list = document.querySelector('.category-results');
+        list.innerHTML = [
+            '<div style="height:200px;flex-shrink:0">First row</div>',
+            '<div style="height:1000px;flex-shrink:0">Second row</div>',
+            '<div style="height:1000px;flex-shrink:0">Third row</div>',
+        ].join('');
+    });
+    await p.evaluate(source);
+    await p.waitForTimeout(150);
+    await p.evaluate(() => {
+        document.querySelector('.category-results').firstElementChild.style.height = '27px';
+    });
+    await p.waitForTimeout(150);
+    const anchored = await p.locator('.category-results').evaluate(element => element.scrollTop);
+    await fs.writeFile(q + '/scroll-anchor.json', JSON.stringify({ anchored }));
+    assert.equal(anchored, 320, 'Native scroll anchoring must not override an unfinished restoration');
     await p.evaluate(() => document.dispatchEvent(new Event('pointerdown')));
 } finally {
     await browser.close();
