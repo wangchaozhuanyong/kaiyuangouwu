@@ -36,6 +36,7 @@ import { seedPublicPage, type PublicPageData } from './storefront-page-data';
 import { StorefrontPageFrame } from './storefront-page-frame';
 import { routeFromRouterLocation, routeHref, type RouteState } from './storefront-router';
 import { EmptyState, Subpage } from './storefront-ui/page-shell';
+import { StorefrontTrafficNotice } from './storefront-ui/storefront-traffic-notice';
 import {
     contentNumberSetting,
     contentStringArraySetting,
@@ -450,6 +451,11 @@ function SnapshotShell({ page }: { page: PublicPageData }) {
                         onBack={idle}
                     >
                         <StorefrontPageFrame
+                            consent={
+                                <Suspense>
+                                    <StorefrontTrafficNotice language={language} />
+                                </Suspense>
+                            }
                             routeName={route.name}
                             language={language}
                             desktop={false}

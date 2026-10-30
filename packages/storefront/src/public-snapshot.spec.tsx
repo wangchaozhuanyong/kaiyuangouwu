@@ -579,10 +579,13 @@ describe('anonymous shared public component server render', () => {
             expect(html).toContain(`>${fixtureValue(page.config.description)}</p>`);
             expect(html).not.toContain('aria-label="服务与政策"');
             expect(html).not.toContain('aria-label="Service and policies"');
-            expect(html).not.toContain('隐私政策');
-            expect(html).not.toContain('使用条款');
-            expect(html).not.toContain('Privacy Policy');
-            expect(html).not.toContain('Terms of use');
+            expect(html).toContain('class="traffic-consent-banner"');
+            expect(html).toContain(`href="/${languageCode === 'zh_Hans' ? 'zh' : 'en'}/legal?id=privacy"`);
+            const footerHtml = html.replace(/<aside class="traffic-consent-banner"[\s\S]*?<\/aside>/gu, '');
+            expect(footerHtml).not.toContain('隐私政策');
+            expect(footerHtml).not.toContain('使用条款');
+            expect(footerHtml).not.toContain('Privacy Policy');
+            expect(footerHtml).not.toContain('Terms of use');
         },
     );
 

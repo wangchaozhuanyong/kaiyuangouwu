@@ -289,7 +289,7 @@ describe('catalog rendering boundary', () => {
             document.removeEventListener('storefront:app-owned', owned);
         }
     });
-    it('requests neither deferred module before readiness and idle, and hides update UI on sensitive routes', async () => {
+    it('renders the privacy notice before idle while deferring update UI on sensitive routes', async () => {
         vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading');
         vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
         let idle: IdleRequestCallback | undefined;
@@ -303,12 +303,18 @@ describe('catalog rendering boundary', () => {
         vi.stubGlobal('cancelIdleCallback', vi.fn());
         render();
         expect(deferredModules.updates).toBe(0);
-        expect(deferredModules.privacy).toBe(0);
+        await act(async () => {
+            await vi.dynamicImportSettled();
+        });
+        expect(element.textContent).toContain('DEFERRED_PRIVACY');
         act(() => {
             document.dispatchEvent(new Event('storefront:page-ready'));
         });
         expect(deferredModules.updates).toBe(0);
-        expect(deferredModules.privacy).toBe(0);
+        await act(async () => {
+            await vi.dynamicImportSettled();
+        });
+        expect(element.textContent).toContain('DEFERRED_PRIVACY');
         await act(async () => {
             idle?.({ didTimeout: false, timeRemaining: () => 50 });
             await Promise.resolve();
