@@ -1373,6 +1373,39 @@ function inspectRepositoryState(sourceSha, readGit = readRepositoryGit) {
     }
 }
 
+// The updater intentionally pauses image dependencies. Waiting here is read-only;
+// an absent/inactive updater never turns an actual dependency failure into a retry.
+function waitForImageUpdate({
+    inspect = inspectImageServices,
+    readUpdate = () =>
+        readCommand('systemctl', [
+            'show',
+            'vendure-image-signature-update.service',
+            '-p',
+            'ActiveState',
+            '--value',
+        ]),
+    now = Date.now,
+    sleep = () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000),
+} = {}) {
+    let state = inspect();
+    if (state.ready) return state;
+    const deadline = now() + 180_000;
+    let settlingUntil;
+    while (!state.ready && now() < deadline) {
+        const update = readUpdate();
+        if (update.status !== 'ok') return state;
+        const updating = ['active', 'activating', 'deactivating', 'reloading'].includes(update.output.trim());
+        if (!updating) {
+            if (settlingUntil === undefined) return state;
+            if (now() >= settlingUntil) return state;
+        } else settlingUntil = now() + 15_000;
+        sleep();
+        state = inspect();
+    }
+    return state;
+}
+
 function inspectImageServices(
     run = readCommand,
     socketExists = file => {
@@ -2970,7 +3003,7 @@ function runLocked(environment = process.env) {
         const plan = inspectProductionReleases();
         assertStorefrontInspectionRevision(plan.markerSha, request.sourceSha);
         if (existsSync(path.join(plan.currentRuntime, 'deploy/image-worker/server.cjs'))) {
-            const imageServices = inspectImageServices();
+            const imageServices = waitForImageUpdate();
             process.stdout.write(`PRODUCTION_IMAGE_SERVICES ${JSON.stringify(imageServices)}\n`);
             assert.ok(
                 imageServices.ready,
@@ -3197,6 +3230,7 @@ module.exports = {
     inspectFileBackupRetention,
     inspectIcloudRelay,
     inspectImageServices,
+    waitForImageUpdate,
     applyAptListsCleanup,
     applySnapCacheCleanup,
     applyAptMetadataCleanup,
