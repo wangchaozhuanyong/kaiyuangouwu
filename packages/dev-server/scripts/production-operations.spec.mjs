@@ -3148,3 +3148,28 @@ void test('public document failures use the fixed API stdout and copy only bound
     symlinkSync(f.file, link);
     assert.deepEqual(orderErrorSummary.summarizePublicDocumentFailures(link), { status: 'symlink-refused' });
 });
+
+void test('preflight waits only for a running signature update and keeps real image failures blocking', () => {
+    for (const scenario of ['update', 'unhealthy', 'stuck', 'healthy']) {
+        let elapsed = 0;
+        let probes = 0;
+        const inspect = () => ({ ready: scenario === 'healthy' || (scenario === 'update' && probes >= 3) });
+        const result = operations.waitForImageUpdate({
+            inspect,
+            readUpdate: () => ({
+                status: 'ok',
+                output: scenario === 'unhealthy' ? 'inactive' : 'activating',
+            }),
+            now: () => elapsed,
+            sleep: () => {
+                elapsed += 60_000;
+                probes++;
+            },
+        });
+        assert.equal(result.ready, ['healthy', 'update'].includes(scenario), scenario);
+        if (scenario === 'unhealthy' || scenario === 'healthy') assert.equal(probes, 0);
+        assert.ok(elapsed <= 180_000);
+    }
+    const source = readFileSync(path.join(repositoryRoot, 'deploy/production-operations.cjs'), 'utf8');
+    assert.match(source, /const imageServices = waitForImageUpdate\(\)/u);
+});
