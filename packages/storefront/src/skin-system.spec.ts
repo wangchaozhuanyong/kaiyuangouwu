@@ -621,8 +621,6 @@ describe('storefront skin system', () => {
             'storefront-ui/page-shell.tsx',
             'pages/search-page.tsx',
             'auth-pages.tsx',
-            'pages/logistics-page.tsx',
-            'order-pages.tsx',
         ]) {
             const source = readFileSync(path.join(__dirname, returnOwner), 'utf8');
             expect(source, returnOwner).toContain('<PageBackButton');
@@ -630,6 +628,12 @@ describe('storefront skin system', () => {
             if (returnOwner !== 'storefront-ui/page-shell.tsx') {
                 expect(source, returnOwner).not.toMatch(/<ArrowLeft\b/u);
             }
+        }
+        for (const page of ['pages/logistics-page.tsx', 'order-pages.tsx', 'pages/announcements-page.tsx']) {
+            const source = readFileSync(path.join(__dirname, page), 'utf8');
+            expect(source, page).toMatch(/<Sub(?:Header|page)\b/u);
+            expect(source, page).toContain('backLabel=');
+            expect(source, page).not.toMatch(/<PageBackButton\b|<ArrowLeft\b/u);
         }
         const visit = (directory: string) => {
             for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -673,7 +677,7 @@ describe('storefront skin system', () => {
             /\.desktop-store-layout \.page\.subpage > \.subpage-header\s*\{[^}]*height:\s*auto;/,
         );
         expect(stylesheet('./styles/subpage-content.css')).toMatch(
-            /\.desktop-store-layout \.subpage-header > strong\s*\{[^}]*font-size:\s*var\(--type-topbar-size\);[^}]*line-height:\s*var\(--type-topbar-leading\);/,
+            /\.subpage-header > strong\s*\{[^}]*font-size:\s*var\(--type-topbar-size\);[^}]*line-height:\s*var\(--type-topbar-leading\);/,
         );
         expect(stylesheet('./pages/product-detail-page.tsx')).not.toContain('desktop-product-toolbar');
         expect(stylesheet('./styles/subpage-content.css')).toMatch(

@@ -114,6 +114,7 @@ export function AnnouncementsPage({
             title={id ? (isZh ? '公告详情' : 'Announcement details') : isZh ? '系统公告' : 'Announcements'}
             language={language}
             onBack={back}
+            backLabel={id ? (isZh ? '返回上一层' : 'Back') : undefined}
             className={`announcements-page${id ? ' is-detail' : ''}`}
         >
             <SubpageBody>

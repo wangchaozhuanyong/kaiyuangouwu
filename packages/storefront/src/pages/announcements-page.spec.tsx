@@ -128,8 +128,8 @@ describe('all announcements and detail navigation', () => {
         expect(view.props.route).toMatchObject({ name: 'announcements', page: 3, id: '25' });
         expect(view.host.querySelector('.announcement-body')?.textContent).toBe('Body 25');
         expect(view.host.querySelectorAll('.page-back-button')).toHaveLength(1);
-        expect(view.host.querySelector('.subpage-header .page-back-button')).toBe(view.button('返回'));
-        await view.click('返回');
+        expect(view.host.querySelector('.subpage-header .page-back-button')).toBe(view.button('返回上一层'));
+        await view.click('返回上一层');
         expect(view.props.onReturnToRoute).toHaveBeenLastCalledWith({ name: 'announcements', page: 3 });
         expect(view.props.route.page).toBe(3);
         expect(view.props.route.id).toBeUndefined();
@@ -146,7 +146,8 @@ describe('all announcements and detail navigation', () => {
         expect(view.host.querySelectorAll('.page-back-button')).toHaveLength(1);
         await view.click('前往相关页面');
         expect(view.props.onContentTarget).toHaveBeenCalledWith('URL', '/support');
-        await view.click('返回');
+        expect(view.host.querySelectorAll('.page-back-button')).toHaveLength(1);
+        await view.click('返回上一层');
         expect(view.props.onReturnToRoute).toHaveBeenLastCalledWith({ name: 'announcements', page: 2 });
         expect(view.props.route).toMatchObject({ name: 'announcements', page: 2 });
         expect(view.list).toHaveBeenLastCalledWith({ skip: 12, take: 12 }, expect.any(AbortSignal));

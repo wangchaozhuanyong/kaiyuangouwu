@@ -625,7 +625,55 @@ export function MailQueryPage({
             <SubHeader
                 title={isZh ? '邮箱查询服务' : 'Email lookup'}
                 language={language}
-                onBack={handleBackClick}
+                onBack={result ? handleBackToQueryForm : handleBackClick}
+                backLabel={isZh ? '返回上一层' : 'Back'}
+                action={
+                    result ? (
+                        <div className="mail-live-controls">
+                            <span>{isZh ? '实时收信' : 'Live updates'}</span>
+                            <label className="switch-toggle">
+                                <input
+                                    type="checkbox"
+                                    id="liveUpdatesToggle"
+                                    aria-label={isZh ? '实时收信' : 'Live updates'}
+                                    checked={liveEnabled}
+                                    disabled={result.targetType === 'MANAGED'}
+                                    onChange={e => setLiveEnabled(e.target.checked)}
+                                />
+                                <span className="slider"></span>
+                            </label>
+                            <span className="mail-stream-status type-meta" role="status">
+                                {result.targetType === 'MANAGED'
+                                    ? isZh
+                                        ? '请手动刷新收件结果'
+                                        : 'Refresh mail results manually'
+                                    : streamStatus === 'live'
+                                      ? isZh
+                                          ? '已连接'
+                                          : 'Connected'
+                                      : streamStatus === 'connecting'
+                                        ? isZh
+                                            ? '连接中'
+                                            : 'Connecting'
+                                        : streamStatus === 'reconnecting'
+                                          ? isZh
+                                              ? '正在重连'
+                                              : 'Reconnecting'
+                                          : streamStatus === 'unavailable'
+                                            ? isZh
+                                                ? '实时收信不可用，请手动刷新结果'
+                                                : 'Live updates unavailable. Refresh results manually.'
+                                            : streamStatus === 'denied'
+                                              ? isZh
+                                                  ? '授权已失效'
+                                                  : 'Access expired'
+                                              : isZh
+                                                ? '已暂停'
+                                                : 'Paused'}
+                            </span>
+                        </div>
+                    ) : undefined
+                }
             />
             <div className="subpage-body mail-query-layout">
                 <div className="mail-query-workspace">
@@ -825,60 +873,6 @@ export function MailQueryPage({
                     ) : (
                         /* Results View */
                         <section className="result-section" id="resultSection">
-                            <div className="result-nav-bar">
-                                <button
-                                    type="button"
-                                    className="back-query-btn"
-                                    id="backQueryBtn"
-                                    onClick={handleBackToQueryForm}
-                                >
-                                    <span>←</span> {isZh ? '重新查询' : 'New Query'}
-                                </button>
-                                <div className="mail-live-controls">
-                                    <span>{isZh ? '实时收信' : 'Live updates'}</span>
-                                    <label className="switch-toggle">
-                                        <input
-                                            type="checkbox"
-                                            id="liveUpdatesToggle"
-                                            aria-label={isZh ? '实时收信' : 'Live updates'}
-                                            checked={liveEnabled}
-                                            disabled={result.targetType === 'MANAGED'}
-                                            onChange={e => setLiveEnabled(e.target.checked)}
-                                        />
-                                        <span className="slider"></span>
-                                    </label>
-                                    <span className="mail-stream-status type-meta" role="status">
-                                        {result.targetType === 'MANAGED'
-                                            ? isZh
-                                                ? '请手动刷新收件结果'
-                                                : 'Refresh mail results manually'
-                                            : streamStatus === 'live'
-                                              ? isZh
-                                                  ? '已连接'
-                                                  : 'Connected'
-                                              : streamStatus === 'connecting'
-                                                ? isZh
-                                                    ? '连接中'
-                                                    : 'Connecting'
-                                                : streamStatus === 'reconnecting'
-                                                  ? isZh
-                                                      ? '正在重连'
-                                                      : 'Reconnecting'
-                                                  : streamStatus === 'unavailable'
-                                                    ? isZh
-                                                        ? '实时收信不可用，请手动刷新结果'
-                                                        : 'Live updates unavailable. Refresh results manually.'
-                                                    : streamStatus === 'denied'
-                                                      ? isZh
-                                                          ? '授权已失效'
-                                                          : 'Access expired'
-                                                      : isZh
-                                                        ? '已暂停'
-                                                        : 'Paused'}
-                                    </span>
-                                </div>
-                            </div>
-
                             {/* Summary Card */}
                             <div className="result-summary-card">
                                 <div className="summary-header">

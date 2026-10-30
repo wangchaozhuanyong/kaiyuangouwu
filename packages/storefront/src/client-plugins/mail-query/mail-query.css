@@ -490,41 +490,6 @@
     animation: mailQueryFadeIn 0.25s ease;
 }
 
-.mail-query-page .result-nav-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 16px;
-}
-
-.mail-query-page .back-query-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--soft);
-    border: 0;
-    color: var(--text);
-    font-size: var(--type-label-size);
-    line-height: var(--type-label-leading);
-    font-weight: var(--font-weight-semibold);
-    padding: 8px 14px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    box-shadow: var(--skin-card-shadow);
-    transition:
-        color var(--experience-motion-fast) var(--experience-ease-standard),
-        background-color var(--experience-motion-fast) var(--experience-ease-standard),
-        border-color var(--experience-motion-fast) var(--experience-ease-standard),
-        box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
-        opacity var(--experience-motion-standard) var(--experience-ease-standard),
-        transform var(--experience-motion-standard) var(--experience-ease-standard);
-}
-
-.mail-query-page .back-query-btn:hover {
-    border-color: var(--primary);
-    color: var(--primary-ink);
-}
-
 .mail-query-page .mail-live-controls {
     flex-wrap: wrap;
     display: flex;
@@ -1018,18 +983,10 @@
     }
 
     .mail-query-page
-        :is(
-            .back-query-btn,
-            .refresh-now-btn,
-            .otp-copy-btn,
-            .toggle-body-btn,
-            .empty-autorefresh-btn,
-            .msg-action-btn
-        ) {
+        :is(.refresh-now-btn, .otp-copy-btn, .toggle-body-btn, .empty-autorefresh-btn, .msg-action-btn) {
         min-height: var(--experience-control-min);
     }
 
-    .mail-query-page .result-nav-bar,
     .mail-query-page .summary-header {
         flex-wrap: wrap;
         gap: 12px;
@@ -1055,4 +1012,12 @@
 .mail-query-page .mail-stream-status {
     color: var(--text-secondary);
     max-width: 28ch;
+}
+
+@media (max-width: 1023px) {
+    .mail-query-page .subpage-header-actions:not(:empty) {
+        grid-column: 1 / -1;
+        justify-self: end;
+        min-height: 0;
+    }
 }

@@ -148,7 +148,7 @@ describe('MailQueryPage', () => {
 
         // Back button action
         const backBtn = container.querySelector<HTMLButtonElement>(
-            '.subpage-header button[aria-label="返回"]',
+            '.subpage-header button[aria-label="返回上一层"]',
         );
         expect(backBtn).not.toBeNull();
         act(() => {
@@ -158,6 +158,7 @@ describe('MailQueryPage', () => {
     });
 
     it('executes query and displays results with OTP code and copy button', async () => {
+        const onBack = vi.fn();
         const mockQueryMails = vi.fn().mockResolvedValue({
             success: true,
             message: null,
@@ -192,6 +193,7 @@ describe('MailQueryPage', () => {
         act(() => {
             root.render(
                 <MailQueryPage
+                    onBack={onBack}
                     api={mockApi as unknown as ShopApi}
                     marketCode="my-malaysia"
                     brandingName="大马通"
@@ -239,6 +241,16 @@ describe('MailQueryPage', () => {
         const stored = localStorage.getItem('icloud_relay_recent_queries:my-malaysia:guest');
         expect(stored).not.toBeNull();
         expect(stored).toContain('BUY-ABCD-1234');
+        expect(container.querySelectorAll('.page-back-button')).toHaveLength(1);
+        expect(container.querySelector('#backQueryBtn')).toBeNull();
+        const back = container.querySelector<HTMLButtonElement>('.page-back-button');
+        if (!back) throw new Error('Back button missing');
+        act(() => back.click());
+        expect(container.querySelector('#codeInput')).not.toBeNull();
+        expect(container.querySelector('#resultSection')).toBeNull();
+        expect(onBack).not.toHaveBeenCalled();
+        act(() => back.click());
+        expect(onBack).toHaveBeenCalledOnce();
     });
 
     it('queries workspace buyer codes without changing their case and keeps HTML links usable', async () => {
@@ -443,7 +455,7 @@ describe('MailQueryPage', () => {
             queryBtn?.click();
             await Promise.resolve();
         });
-        act(() => container.querySelector<HTMLButtonElement>('#backQueryBtn')?.click());
+        act(() => container.querySelector<HTMLButtonElement>('.subpage-header .page-back-button')?.click());
         expect(container.querySelector('#codeInput')?.getAttribute('aria-invalid')).toBeNull();
         expect(container.querySelector('.input-wrapper.has-error')).toBeNull();
     });
@@ -678,7 +690,7 @@ describe('MailQueryPage', () => {
         });
         const oldSignal = queryMails.mock.calls[3][1] as AbortSignal;
         act(() => {
-            container.querySelector<HTMLButtonElement>('#backQueryBtn')?.click();
+            container.querySelector<HTMLButtonElement>('.subpage-header .page-back-button')?.click();
         });
         expect(oldSignal.aborted).toBe(true);
         const input = container.querySelector<HTMLInputElement>('#codeInput');
