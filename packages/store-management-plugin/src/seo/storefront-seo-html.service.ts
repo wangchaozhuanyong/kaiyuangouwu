@@ -11,7 +11,7 @@ import {
     type StorefrontPageData,
 } from '@vendure/storefront-content-plugin';
 import { load } from 'cheerio';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, realpathSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -38,6 +38,17 @@ type Renderer = {
 };
 const loadRenderer = createRequire(__filename);
 const scriptAssetName = /^[\w-]+\.js$/u;
+const publicBodyParserOptions = {
+    xml: {
+        xmlMode: false,
+        decodeEntities: true,
+        lowerCaseAttributeNames: false,
+        lowerCaseTags: false,
+        // dom-serializer consumes this alongside Cheerio's parser options.
+        // Preserve UTF-8 text instead of expanding Chinese into numeric entities.
+        encodeEntities: 'utf8' as const,
+    },
+};
 const SNAPSHOT_LIFETIME = 30_000;
 const MAX_HTML_ENTRIES = 64;
 const MAX_HTML_BYTES = 32 * 1024 * 1024;
@@ -45,13 +56,72 @@ const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
 const ACTIVE_STOREFRONT_ROOT = '/var/www/kaiyuangouwu-storefront-current';
 type ArtifactInputs = {
     root: string;
+    template?: Promise<PreparedPublicHtmlTemplate>;
     assets?: Promise<string[]>;
     scriptPreloads?: Promise<string[] | undefined>;
 };
 
+export interface PreparedPublicHtmlTemplate {
+    readonly shell: string;
+    readonly slots: Readonly<Record<'body' | 'state' | 'commerce' | 'trailing', string>>;
+}
+
+/** Only immutable artifact structure is reusable. No merchant data is retained here. */
+export function preparePublicHtmlTemplate(template: string): PreparedPublicHtmlTemplate {
+    const document = load(template.replace(/<!--#\s*include[\s\S]*?-->/gu, ''));
+    if (document('#root').length !== 1 || !document('script[type="module"][src]').length)
+        throw new Error('Invalid storefront artifact shell');
+    document(
+        [
+            'title',
+            'meta[name="description"]',
+            'meta[name="robots"]',
+            'link[rel="canonical"]',
+            'link[rel="alternate"]',
+            'link[rel~="icon"]',
+            'link[rel="apple-touch-icon"]',
+            '#storefront-public-page-data',
+        ].join(', '),
+    ).remove();
+    document('meta[name], meta[property]').each((_index, element) => {
+        const name = document(element).attr('name') ?? document(element).attr('property') ?? '';
+        if (/^(?:og:|twitter:)/iu.test(name)) document(element).remove();
+    });
+    const prefix = `storefront-slot-${randomUUID()}`;
+    const slots = Object.freeze({
+        body: `<!--${prefix}-body-->`,
+        state: `<!--${prefix}-state-->`,
+        commerce: `<!--${prefix}-commerce-->`,
+        trailing: `<!--${prefix}-trailing-->`,
+    });
+    document('#root').attr('data-public-rendered', '1').html(slots.body);
+    document('body').append(slots.state);
+    return Object.freeze({ shell: document.html(), slots });
+}
+
+/** Replace each private shell slot once; inserted HTML/data is never interpreted as a slot. */
+function fillPublicHtmlSlots(shell: string, values: ReadonlyArray<readonly [string, string]>): string {
+    const positions = values
+        .map(([slot, value]) => {
+            const index = shell.indexOf(slot);
+            if (index < 0 || shell.indexOf(slot, index + slot.length) !== -1)
+                throw new Error('Invalid public HTML insertion slot');
+            return { index, slot, value };
+        })
+        .sort((a, b) => a.index - b.index);
+    const output: string[] = [];
+    let offset = 0;
+    for (const { index, slot, value } of positions) {
+        output.push(shell.slice(offset, index), value);
+        offset = index + slot.length;
+    }
+    output.push(shell.slice(offset));
+    return output.join('');
+}
+
 /** Replaces metadata without disturbing the matching artifact's styles, icons or script entry. */
 export function assemblePublicHtml(
-    template: string,
+    template: string | PreparedPublicHtmlTemplate,
     page: StorefrontPageData,
     body: string,
     styles: string[] = [],
@@ -59,24 +129,13 @@ export function assemblePublicHtml(
 ): string {
     const seo = page.seo;
     if (!seo) throw new Error('Missing public SEO resolution');
-    const head = renderPublicSeoHead(seo);
-    const html = template
-        .replace(/<title\b[^>]*>[\s\S]*?<\/title>/giu, '')
-        .replace(
-            /<meta\b[^>]*(?:name|property)=["'](?:description|robots|og:[^"']+|twitter:[^"']+)["'][^>]*>/giu,
-            '',
-        )
-        .replace(/<link\b[^>]*rel=["'](?:canonical|alternate)["'][^>]*>/giu, '')
-        .replace(/<!--#\s*include[\s\S]*?-->/gu, '')
-        .replace(
-            /<html\b([^>]*)>/iu,
-            (_match, attrs: string) =>
-                `<html${attrs.replace(/\s+lang=["'][^"']*["']/iu, '')} lang="${seo.languageCode === 'zh_Hans' ? 'zh-CN' : 'en'}">`,
-        )
-        .replace('</head>', `${head}\n</head>`);
-    const document = load(html);
-    if (document('#root').length !== 1 || !document('script[type="module"][src]').length)
-        throw new Error('Invalid storefront artifact shell');
+    const prepared =
+        typeof template === 'string'
+            ? measurePublicDocumentSync('render-template-prepare', () => preparePublicHtmlTemplate(template))
+            : template;
+    const document = measurePublicDocumentSync('render-shell-parse', () => load(prepared.shell));
+    document('html').attr('lang', seo.languageCode === 'zh_Hans' ? 'zh-CN' : 'en');
+    document('head').append(renderPublicSeoHead(seo));
     const config = page.config as {
         code?: string;
         accessMode?: string;
@@ -152,17 +211,35 @@ export function assemblePublicHtml(
         );
         linkedResources.add(href);
     }
-    document('#root').attr('data-public-rendered', '1').html(body);
+    // React already emits a valid fragment. Cheerio's supported HTML-mode
+    // htmlparser2 path avoids rebuilding a document/HTML5 insertion context;
+    // preserve SVG attribute/tag casing and leave shell validation on parse5.
+    const fragment = measurePublicDocumentSync('render-body-parse', () =>
+        load(body, publicBodyParserOptions, false),
+    );
     // Match the client cascade before hydration: shared commerce presentation
     // precedes common overrides; page-specific resources follow them.
-    const commerceStyles = document(
-        'style[data-href="storefront-home-showcase"], style[data-href="storefront-service-entries"]',
-    );
+    const moved = measurePublicDocumentSync('render-style-placement', () => {
+        const commerce: string[] = [];
+        const trailing: string[] = [];
+        fragment('style[data-href]').each((_index, element) => {
+            const name = fragment(element).attr('data-href');
+            const target =
+                name === 'storefront-home-showcase' || name === 'storefront-service-entries'
+                    ? commerce
+                    : name === 'storefront-business-services' || name === 'storefront-support'
+                      ? trailing
+                      : undefined;
+            if (target) {
+                target.push(fragment.html(element));
+                fragment(element).remove();
+            }
+        });
+        return { commerce: commerce.join(''), trailing: trailing.join('') };
+    });
     const commonStyle = document('head link[rel="stylesheet"]').first();
-    if (commerceStyles.length) {
-        if (commonStyle.length) commonStyle.before(commerceStyles);
-        else document('head').append(commerceStyles);
-    }
+    if (commonStyle.length) commonStyle.before(prepared.slots.commerce);
+    else document('head').append(prepared.slots.commerce);
     // Discover render-blocking CSS before the large inline commerce resource,
     // without moving its stylesheet and changing the server/client cascade.
     const styleHints: string[] = [];
@@ -184,14 +261,20 @@ export function assemblePublicHtml(
         hintedStyles.add(href);
     });
     document('head').prepend(styleHints.join(''));
-    document('head').append(
-        document('style[data-href="storefront-business-services"], style[data-href="storefront-support"]'),
+    document('head').append(prepared.slots.trailing);
+    const state = measurePublicDocumentSync(
+        'render-snapshot-serialize',
+        () =>
+            `<script type="application/json" id="storefront-public-page-data">${serializeStorefrontPageData(page)}</script>`,
     );
-    document('#storefront-public-page-data').remove();
-    document('body').append(
-        `<script type="application/json" id="storefront-public-page-data">${serializeStorefrontPageData(page)}</script>`,
+    return measurePublicDocumentSync('render-output', () =>
+        fillPublicHtmlSlots(document.html(), [
+            [prepared.slots.body, fragment.html()],
+            [prepared.slots.state, state],
+            [prepared.slots.commerce, moved.commerce],
+            [prepared.slots.trailing, moved.trailing],
+        ]),
     );
-    return document.html();
 }
 
 @Injectable()
@@ -229,6 +312,23 @@ export class StorefrontSeoHtmlService {
             );
         }
         return inputs.assets;
+    }
+
+    private template(root: string, inputs?: ArtifactInputs): Promise<PreparedPublicHtmlTemplate> {
+        const read = async () => {
+            const source = await readFile(resolve(root, 'index.html'), 'utf8');
+            return measurePublicDocumentSync('render-template-prepare', () =>
+                preparePublicHtmlTemplate(source),
+            );
+        };
+        if (!inputs) return read();
+        if (!inputs.template) {
+            inputs.template = read().catch(error => {
+                inputs.template = undefined;
+                throw error;
+            });
+        }
+        return inputs.template;
     }
 
     private admit(html: string, expiresAt: number): boolean {
@@ -279,7 +379,7 @@ export class StorefrontSeoHtmlService {
                 const inputs = this.inputs(root);
                 stage = 'template-read';
                 const template = await measurePublicDocument('render-template', () =>
-                    readFile(resolve(root, 'index.html'), 'utf8'),
+                    this.template(root, inputs),
                 );
                 stage = 'route-styles';
                 const prefixes =

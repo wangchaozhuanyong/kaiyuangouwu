@@ -429,7 +429,8 @@ describe('public page inline artwork', () => {
         const original = h.modules.get.getMockImplementation();
         if (!original) throw new Error('Expected media provider fixture');
         h.modules.get.mockImplementation(token => {
-            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW') return { readPublicInlinePreview: read };
+            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW')
+                return { readPublicInlinePreview: read, readPreparedPublicInlinePreview: read };
             if (token === StorefrontMediaManifestService) return { isPublic: authorize };
             return original(token);
         });
@@ -657,6 +658,26 @@ describe('public page inline artwork', () => {
         expect(warm.page).toBe(cold.page);
         expect(JSON.stringify(cold.page)).not.toMatch(/storefront-page-loader|durations|page-cache/u);
         expect(h.content).toHaveBeenCalledOnce();
+    });
+
+    it('never invokes preview generation for a document, including a cold aggregate and missing prepared pixels', async () => {
+        const h = artworkHarness();
+        const generate = vi.fn(() => Promise.reject(new Error('Generation must belong to a worker')));
+        const prepared = vi.fn().mockResolvedValue(undefined);
+        const original = h.modules.get.getMockImplementation();
+        h.modules.get.mockImplementation(token =>
+            token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW'
+                ? { readPublicInlinePreview: generate, readPreparedPublicInlinePreview: prepared }
+                : original?.(token),
+        );
+        const document = await withPublicDocumentTiming(async () => {
+            const page = await h.service.readForDocument(h.ctx, 'a.test');
+            expect(publicDocumentTimingHeader().join(', ')).toContain('storefront-media-preview-read;dur=');
+            return page;
+        });
+        expect(prepared).toHaveBeenCalled();
+        expect(generate).not.toHaveBeenCalled();
+        expect(document.media.every(item => !item.placeholder)).toBe(true);
     });
 
     it('retains the anonymous source check if a session appears during the first revision read', async () => {
@@ -1251,7 +1272,8 @@ describe('public page inline artwork', () => {
         const original = h.modules.get.getMockImplementation();
         if (!original) throw new Error('Expected the module harness implementation');
         h.modules.get.mockImplementation(token => {
-            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW') return { readPublicInlinePreview: read };
+            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW')
+                return { readPublicInlinePreview: read, readPreparedPublicInlinePreview: read };
             if (token === StorefrontMediaManifestService)
                 return { isPublic: vi.fn().mockResolvedValue(true) };
             return original(token);
@@ -1289,7 +1311,8 @@ describe('public page inline artwork', () => {
         const original = h.modules.get.getMockImplementation();
         if (!original) throw new Error('Expected the module harness implementation');
         h.modules.get.mockImplementation(token => {
-            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW') return { readPublicInlinePreview: read };
+            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW')
+                return { readPublicInlinePreview: read, readPreparedPublicInlinePreview: read };
             if (token === StorefrontMediaManifestService) return { isPublic: authorize };
             return original(token);
         });
@@ -1496,7 +1519,8 @@ describe('private-route public configuration bootstrap', () => {
         const original = h.modules.get.getMockImplementation();
         if (!original) throw new Error('Expected the module harness implementation');
         h.modules.get.mockImplementation(token => {
-            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW') return { readPublicInlinePreview: read };
+            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW')
+                return { readPublicInlinePreview: read, readPreparedPublicInlinePreview: read };
             if (token === StorefrontMediaManifestService) return { isPublic: authorize };
             return original(token);
         });

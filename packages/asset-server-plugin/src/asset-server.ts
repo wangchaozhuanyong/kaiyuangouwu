@@ -64,29 +64,44 @@ export class AssetServer {
     }
 
     /** Callers must authorize this namespace-relative path with the store's public manifest first. */
+    async readPreparedPublicInlinePreview(
+        identifier: string,
+        maxLength: 512 | 1024 = 1024,
+    ): Promise<string | undefined> {
+        return this.publicInlinePreview(identifier, maxLength, true);
+    }
+
+    /** Generation remains available to background preparation and existing callers. */
     async readPublicInlinePreview(
         identifier: string,
         maxLength: 512 | 1024 = 1024,
     ): Promise<string | undefined> {
+        return this.publicInlinePreview(identifier, maxLength, false);
+    }
+
+    private async publicInlinePreview(identifier: string, maxLength: 512 | 1024, preparedOnly: boolean) {
         this.assertPublicMediaPath(identifier);
         try {
             // Internal fixed transforms share the existing queue and persisted derivative cache.
             // No public preset or extra preview request is exposed to the browser.
             for (const size of [24, 16]) {
-                const image = await this.transformedBuffer(
-                    identifier,
-                    {
-                        preset: undefined,
-                        width: size,
-                        height: size,
-                        mode: 'resize',
-                        quality: size,
-                        format: 'webp',
-                        fpx: undefined,
-                        fpy: undefined,
-                    },
-                    true,
-                );
+                const parameters: ImageTransformParameters = {
+                    preset: undefined,
+                    width: size,
+                    height: size,
+                    mode: 'resize',
+                    quality: size,
+                    format: 'webp',
+                    fpx: undefined,
+                    fpy: undefined,
+                };
+                const key = this.getFileNameFromParameters(identifier, parameters);
+                const image = preparedOnly
+                    ? (await this.assetStorageStrategy.fileExists(key))
+                        ? await this.assetStorageStrategy.readFileToBuffer(key)
+                        : undefined
+                    : await this.transformedBuffer(identifier, parameters, true);
+                if (!image) continue;
                 const preview = `data:image/webp;base64,${image.toString('base64')}`;
                 if (preview.length <= maxLength) return preview;
             }

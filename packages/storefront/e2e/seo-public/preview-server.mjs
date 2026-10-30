@@ -195,6 +195,7 @@ export async function startSeoFixtureServer(
     {
         transformPage,
         renderPage = renderPublicPage,
+        assembleDocument = assembleFixtureHtml,
         transformHtml,
         transformDocument,
         transformGraphQlData,
@@ -281,7 +282,7 @@ export async function startSeoFixtureServer(
             const htmlTemplate =
                 (await transformHtml?.(url.pathname, page)) ??
                 (template ??= await readFile(path.join(dist, 'index.html'), 'utf8'));
-            const html = assembleFixtureHtml(page, body, htmlTemplate);
+            const html = await assembleDocument(page, body, htmlTemplate);
             response.end((await transformDocument?.(html, { page, url })) ?? html);
         } catch (error) {
             json(response, { error: error.message }, 500);

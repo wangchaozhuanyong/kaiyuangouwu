@@ -2,6 +2,10 @@ This is a local synthetic anonymous SSR and hydration acceptance fixture. All st
 article, source and reviewer data are synthetic. It does not call a real backend or prove indexing,
 deployment, sales or editorial review.
 
+After building the affected backend package, add `--production-html` to
+`loading-continuity.mjs` to use the actual backend HTML assembler. The report records its
+compiled fingerprint and rejects changes during acceptance; API data stays synthetic and local.
+
 Run the storefront's authorized production build first. Then run `node e2e/seo-public/verify.mjs`
 from `packages/storefront`. The harness loads `dist/.server/public-page-renderer.cjs` and serves the
 matching actual `dist/index.html` and browser bundles. It mocks business API responses only; it

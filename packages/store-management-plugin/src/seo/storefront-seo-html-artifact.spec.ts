@@ -127,6 +127,40 @@ describe('public HTML optional route script hints', () => {
         expect(load(html)('#root').text()).toBe('Matching renderer body');
     });
 
+    it('reuses a prepared immutable shell and discards it when the artifact path changes', async () => {
+        const first = await artifactService(
+            "exports.renderPublicPage = async () => '<main>First artifact</main>';",
+        );
+        const root = (first as unknown as { artifactRoot(): string }).artifactRoot();
+        vi.spyOn(
+            first as unknown as { immutableRoot(root: string): boolean },
+            'immutableRoot',
+        ).mockReturnValue(true);
+        const one = await first.render(payload());
+        // If the immutable path is unchanged, preparation must not revisit the template.
+        await writeFile(path.join(root, 'index.html'), '<html>damaged after immutable publication</html>');
+        expect(load(await first.render(payload()))('#root').text()).toBe(load(one)('#root').text());
+        const second = await artifactService(
+            "exports.renderPublicPage = async () => '<main>Second artifact</main>';",
+        );
+        const next = (second as unknown as { artifactRoot(): string }).artifactRoot();
+        vi.spyOn(first as unknown as { artifactRoot(): string }, 'artifactRoot').mockReturnValue(next);
+        expect(load(await first.render(payload()))('#root').text()).toBe('Second artifact');
+    });
+
+    it('retries a failed template preparation instead of retaining a rejected immutable input', async () => {
+        const service = await artifactService('');
+        const root = (service as unknown as { artifactRoot(): string }).artifactRoot();
+        vi.spyOn(
+            service as unknown as { immutableRoot(root: string): boolean },
+            'immutableRoot',
+        ).mockReturnValue(true);
+        await writeFile(path.join(root, 'index.html'), '<html>incomplete artifact</html>');
+        await expect(service.render(payload())).rejects.toThrow('temporarily unavailable');
+        await writeFile(path.join(root, 'index.html'), shell);
+        expect(load(await service.render(payload()))('#root').text()).toBe('Matching renderer body');
+    });
+
     it('does not call the home hint provider for another public route', async () => {
         const service = await artifactService(
             "exports.getPublicRouteScriptPreloads = () => { throw new Error('Home only'); };",

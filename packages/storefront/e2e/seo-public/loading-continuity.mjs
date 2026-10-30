@@ -53,6 +53,32 @@ const checks = [];
 const failures = [];
 let vite;
 const options = { listenHost: '127.0.0.1', transformPage };
+let productionAssembler;
+// Opt in to the actual backend assembler instead of the synthetic shell helper.
+// Data/API fixtures remain local; this is not an origin/server performance test.
+if (process.argv.includes('--production-html')) {
+    const file = path.join(
+        project,
+        'packages/store-management-plugin/dist/seo/storefront-seo-html.service.js',
+    );
+    productionAssembler = {
+        file,
+        sha256: createHash('sha256')
+            .update(await readFile(file))
+            .digest('hex'),
+    };
+    const { assemblePublicHtml, preparePublicHtmlTemplate } = require(file);
+    let prepared;
+    let source;
+    options.assembleDocument = (page, body, template) => {
+        // Fixture templates include route-specific stylesheet injection.
+        if (source !== template) {
+            prepared = preparePublicHtmlTemplate(template);
+            source = template;
+        }
+        return assemblePublicHtml(prepared, page, body);
+    };
+}
 if (dev) {
     const { createServer } = await import('vite');
     vite = await createServer({
@@ -1913,11 +1939,22 @@ try {
             });
         }
 } finally {
+    if (
+        productionAssembler &&
+        createHash('sha256')
+            .update(await readFile(productionAssembler.file))
+            .digest('hex') !== productionAssembler.sha256
+    )
+        failures.push({
+            case: 'assembler-input-changed',
+            message: 'The compiled assembler changed during acceptance',
+        });
     await writeFile(
         path.join(output, 'report.json'),
         JSON.stringify(
             {
                 synthetic: true,
+                productionAssembler,
                 harnessSha256: createHash('sha256')
                     .update(await readFile(fileURLToPath(import.meta.url)))
                     .digest('hex'),

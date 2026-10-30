@@ -39,6 +39,20 @@ async function harness(worker = false) {
 }
 
 describe('public inline media previews', () => {
+    it('reads prepared pixels without reading originals, converting, or writing on a public cache miss', async () => {
+        const { server, storage } = await harness();
+        expect(await server.readPreparedPublicInlinePreview('preview/landscape.png', 512)).toBeUndefined();
+        expect(storage.readFileToBuffer).not.toHaveBeenCalled();
+        expect(storage.writeFileFromBuffer).not.toHaveBeenCalled();
+        const preview = await server.readPublicInlinePreview('preview/landscape.png', 512);
+        expect(preview).toBeDefined();
+        storage.readFileToBuffer.mockClear();
+        storage.writeFileFromBuffer.mockClear();
+        expect(await server.readPreparedPublicInlinePreview('preview/landscape.png', 512)).toBe(preview);
+        expect(storage.readFileToBuffer.mock.calls.every(([path]) => path.startsWith('cache/'))).toBe(true);
+        expect(storage.writeFileFromBuffer).not.toHaveBeenCalled();
+    });
+
     it('fits the twelve-card budget with valid pixels and reuses the existing derivative cache', async () => {
         const { server, storage } = await harness(true);
         const compact = await server.readPublicInlinePreview('preview/landscape.png', 512);

@@ -319,24 +319,26 @@ export class StorefrontPublicPageService {
             }),
         );
         const assertCurrent = () =>
-            measurePublicDocument('page-document-check', async () => {
-                try {
-                    await this.assertMode(ctx, mode);
-                } catch (error) {
-                    if (!(error instanceof PublicPageAccessChangedError)) throw error;
-                    throw new ServiceUnavailableException('Public access changed; retry the document');
-                }
-                if (
-                    !revision ||
-                    identity() !== scope ||
-                    page.scope.host !== host ||
-                    page.scope.channelCode !== ctx.channel.code ||
-                    page.scope.languageCode !== String(ctx.languageCode) ||
-                    page.scope.currencyCode !== String(ctx.currencyCode) ||
-                    revision !== (await this.cache.revision(ctx.channelId))
-                )
-                    throw new ServiceUnavailableException('Public page changed; retry the document');
-            });
+            measurePublicDocument('page-document-check', () =>
+                measurePublicDocument('media-revision-check', async () => {
+                    try {
+                        await this.assertMode(ctx, mode);
+                    } catch (error) {
+                        if (!(error instanceof PublicPageAccessChangedError)) throw error;
+                        throw new ServiceUnavailableException('Public access changed; retry the document');
+                    }
+                    if (
+                        !revision ||
+                        identity() !== scope ||
+                        page.scope.host !== host ||
+                        page.scope.channelCode !== ctx.channel.code ||
+                        page.scope.languageCode !== String(ctx.languageCode) ||
+                        page.scope.currencyCode !== String(ctx.currencyCode) ||
+                        revision !== (await this.cache.revision(ctx.channelId))
+                    )
+                        throw new ServiceUnavailableException('Public page changed; retry the document');
+                }),
+            );
         await assertCurrent();
         const deadline = Date.now() + 500;
         const media = await measurePublicDocument('page-document-media', () =>
@@ -627,7 +629,9 @@ export class StorefrontPublicPageService {
         if (!providers) return document?.existing ?? publicPageMedia(page);
         const deadline = document?.deadline ?? Date.now() + (prepare ? 2_000 : 250);
         const originalPage = page;
-        page = await this.homeMediaProducts(ctx, host, page, deadline, preparation);
+        page = await measurePublicDocument('media-product-read', () =>
+            this.homeMediaProducts(ctx, host, page, deadline, preparation),
+        );
         const productsDeferred = preparation?.deferred === true;
         const media =
             page === originalPage
@@ -725,7 +729,10 @@ export class StorefrontPublicPageService {
             // rechecks before returning or caching. Reuse only this phase's read;
             // a document continuation or publication retry must read afresh.
             let phaseManifest: ReturnType<StorefrontMediaManifestService['get']> | undefined;
-            const readManifest = () => (phaseManifest ??= manifest.get(ctx, host));
+            const readManifest = () =>
+                (phaseManifest ??= measurePublicDocument('media-manifest-read', () =>
+                    manifest.get(ctx, host),
+                ));
             const populated = await publicMediaWithPreviews(
                 ordered,
                 host,
@@ -739,7 +746,22 @@ export class StorefrontPublicPageService {
                         throw error;
                     }
                 },
-                path => Promise.resolve(available.get(path) ?? reader.readPublicInlinePreview(path, 512)),
+                path => {
+                    const existing = available.get(path);
+                    if (existing) return Promise.resolve(existing);
+                    // Only queue-owned preparation generates pixels. Public requests read
+                    // persisted derivatives, even on a cold aggregate/cache continuation.
+                    return prepare
+                        ? measurePublicDocument('media-preview-prepare', () =>
+                              reader.readPublicInlinePreview(path, 512),
+                          )
+                        : measurePublicDocument(
+                              'media-preview-read',
+                              () =>
+                                  reader.readPreparedPublicInlinePreview?.(path, 512) ??
+                                  Promise.resolve(undefined),
+                          );
+                },
                 // Ordinary public/preview reads keep 250ms; only queue-owned workers use 2s.
                 // The HTML response has its own bounded continuation; SSI remains cache-only.
                 Math.max(0, deadline - Date.now()),
@@ -818,6 +840,10 @@ export class StorefrontPublicPageService {
         try {
             const reader = this.moduleRef.get<{
                 readPublicInlinePreview(path: string, maxLength?: 512 | 1024): Promise<string | undefined>;
+                readPreparedPublicInlinePreview?(
+                    path: string,
+                    maxLength?: 512 | 1024,
+                ): Promise<string | undefined>;
             }>('STOREFRONT_PUBLIC_IMAGE_PREVIEW', { strict: false });
             const manifest = this.moduleRef.get<StorefrontMediaManifestService>(
                 StorefrontMediaManifestService,
