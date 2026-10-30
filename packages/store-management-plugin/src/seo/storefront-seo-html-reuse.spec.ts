@@ -127,6 +127,25 @@ it('bounds entry count and retained bytes while still returning uncached documen
     expect((await h.render(overflow)).match(/<main>(.*?)<\/main>/u)?.[1]).not.toBe(first);
 });
 
+it('retains ordinary warm generations within the actual UTF-8 byte budget', async () => {
+    const h = await harness();
+    const page = { ...h.page, config: { ...h.page.config, description: 'x'.repeat(450_000) } };
+    // Three stores, two languages and two audience variants refreshed over four
+    // rounds occupy 48 entries, below both existing capacity limits.
+    let requestedBytes = 0;
+    for (let i = 0; i < 48; i++)
+        requestedBytes += Buffer.byteLength(await h.render({ ...page, version: `warm-${i}` }));
+    const bytes = [...h.records.values()].reduce(
+        (sum: number, entry) => sum + Buffer.byteLength((entry as { value: string }).value),
+        0,
+    );
+    expect(bytes).toBeLessThan(32 * 1024 * 1024);
+    expect(requestedBytes).toBeLessThan(32 * 1024 * 1024);
+    expect(h.records.size).toBe(48);
+    const last = { ...page, version: 'warm-47' };
+    expect(await h.render(last)).toBe(await h.render(last));
+});
+
 it('bounds the number of retained HTML entries', async () => {
     const small = await harness();
     for (let i = 0; i < 65; i++) await small.render({ ...small.page, version: `small-${i}` });
