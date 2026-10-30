@@ -497,6 +497,14 @@
         height: 100%;
         object-fit: contain;
     }
+    /* Promotional artwork fills the product-row frame; catalog images retain contain. */
+    .desktop-store-layout
+        .home-page
+        .category-promotion-layout:not(.is-visual-only)
+        .category-promotion-visual.is-device-poster
+        img {
+        object-fit: cover;
+    }
     .desktop-store-layout .home-page .content-story-layout {
         grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
         min-height: 340px;
@@ -1507,4 +1515,42 @@
         font-size: var(--type-body-size);
         line-height: var(--type-body-leading);
     }
+}
+
+/* Shared guide content complements the merchant's existing artwork and theme. */
+.content-story-copy:has(.story-links:not(:empty)) {
+    background: var(--coupon-blue-surface);
+    color: var(--coupon-blue-ink);
+}
+.content-story-copy:has(.story-links) h2 {
+    white-space: pre-line;
+}
+.story-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-12);
+    margin-top: var(--space-16);
+}
+.story-links .managed-content-card {
+    display: flex;
+    align-items: center;
+    min-height: var(--experience-control-min);
+}
+.story-links .managed-content-media {
+    display: none;
+}
+
+.story-links:not(:empty) + .content-story-action {
+    width: auto;
+    padding: var(--space-12) var(--space-16);
+    border-radius: var(--skin-control-radius);
+    background: var(--coupon-blue-ink);
+    color: var(--surface);
+}
+
+.story-links:empty {
+    display: none;
+}
+.content-story-copy:has(.story-links:not(:empty)) :is(.content-story-kicker, .content-story-body) {
+    opacity: 1;
 }

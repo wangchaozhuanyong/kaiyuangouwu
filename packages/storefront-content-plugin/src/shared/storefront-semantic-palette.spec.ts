@@ -14,12 +14,12 @@ import {
 
 describe('storefront semantic palette', () => {
     it.each(['classic', 'neo-minimalist'] as const)(
-        'keeps invitation colors while reward roles inherit the active %s skin',
+        'keeps the light invitation readable while reward roles inherit the active %s skin',
         preset => {
             const variables = storefrontReferralCssVariables(preset);
             const palette = resolveStorefrontSemanticPalette(preset, { accentColor: '#ff0000' });
             expect(storefrontSkinCssVariables(preset, palette)).toMatchObject(variables);
-            expect(variables['--referral-invite-surface']).toBe('#173d39');
+            expect(variables['--referral-invite-surface']).toBe('#ecf5f1');
             expect(variables).toMatchObject({
                 '--referral-reward-surface': 'var(--surface)',
                 '--referral-reward-ink': 'var(--text)',

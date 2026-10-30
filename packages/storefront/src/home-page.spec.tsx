@@ -2346,6 +2346,41 @@ describe('HomePage category promotion', () => {
 });
 
 describe('HomePage managed story contrast', () => {
+    it('uses configured service links, preserves artwork and excludes disabled entries', () => {
+        const block: StorefrontContentBlock = {
+            ...heroBlock,
+            id: 'service-guide',
+            type: 'STORY',
+            title: 'AI 账号与工具\n一站选齐',
+            targetType: 'PAGE',
+            targetValue: '/category',
+            ctaLabel: '查看全部商品',
+            items: [
+                {
+                    ...trustBarBlock.items[0],
+                    id: 'subscription',
+                    label: '账号订阅',
+                    targetType: 'COLLECTION',
+                    targetValue: '240',
+                },
+                {
+                    ...trustBarBlock.items[0],
+                    id: 'hidden',
+                    label: '隐藏服务',
+                    enabled: false,
+                    targetType: 'PAGE',
+                    targetValue: '/support',
+                },
+            ],
+        };
+        const element = homeMarkupElement({ contentBlocks: [block], configuredBlockTypes: ['STORY'] }, true);
+        expect(element.querySelectorAll('.story-links a')).toHaveLength(1);
+        expect(element.querySelector('.story-links a')?.getAttribute('href')).toContain('collectionId=240');
+        expect(element.querySelector('.content-story-copy')?.textContent).not.toContain('隐藏服务');
+        expect(element.querySelector('.content-story-action')?.textContent).toContain('查看全部商品');
+        expect(element.querySelector('.content-story-visual img')?.getAttribute('alt')).toBe(block.title);
+    });
+
     it('keeps the managed title color instead of the global heading color', () => {
         const storyBlock: StorefrontContentBlock = {
             ...heroBlock,

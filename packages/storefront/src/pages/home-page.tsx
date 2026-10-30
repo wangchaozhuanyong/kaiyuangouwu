@@ -1138,10 +1138,7 @@ function ManagedContentSection({
     productsResolved = false,
     error = '',
     onRetry,
-    language,
-    locale,
-    market,
-    onContentTarget,
+    ...context
 }: {
     block: StorefrontContentBlock;
     products: Product[];
@@ -1154,6 +1151,7 @@ function ManagedContentSection({
     market: MarketConfig;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
+    const { language, locale, market, onContentTarget } = context;
     const blockHasTarget =
         block.targetType !== 'NONE' &&
         Boolean(block.targetValue) &&
@@ -1188,17 +1186,7 @@ function ManagedContentSection({
             ? products.find(product => product.id === block.targetValue)
             : undefined;
     if (block.type === 'CATEGORY_AD') {
-        return (
-            <CategoryPromotionSection
-                block={block}
-                products={products}
-                loading={loading}
-                language={language}
-                locale={locale}
-                market={market}
-                onContentTarget={onContentTarget}
-            />
-        );
+        return <CategoryPromotionSection block={block} products={products} loading={loading} {...context} />;
     }
     if (block.type === 'FEATURED_COLLECTION') {
         return (
@@ -1208,10 +1196,7 @@ function ManagedContentSection({
                 loading={loading}
                 error={error}
                 onRetry={onRetry}
-                market={market}
-                language={language}
-                locale={locale}
-                onContentTarget={onContentTarget}
+                {...context}
             />
         );
     }
@@ -1235,9 +1220,7 @@ function ManagedContentSection({
     return (
         <section
             className={`content-section managed-content-section managed-content-${block.type.toLowerCase()}`}
-            style={{
-                ...managedContentStyle(block),
-            }}
+            style={managedContentStyle(block)}
         >
             <SectionHeader
                 title={block.title}
@@ -1326,7 +1309,7 @@ function CategoryPromotionSection({
     const desktop = useDesktopLayout();
     const productRailRef = useRef<HTMLDivElement>(null);
     const [scrollbarHeight, setScrollbarHeight] = useState(0);
-    const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
+    const blockHasTarget = block.targetType !== 'NONE' && block.targetValue;
     const displayCount = Math.min(4, Math.max(1, contentNumberSetting(block.settings?.displayCount, 4)));
     const categoryProducts = selectCategoryPromotionProducts({
         selectedProductIds: contentStringArraySetting(block.settings?.selectedProductIds),
@@ -1346,6 +1329,7 @@ function CategoryPromotionSection({
     const scenePoster = devicePoster || block.settings?.categoryArtworkLayout === 'scene-poster';
     const desktopImage = heroImageForViewport(block, true);
     const mobileImage = devicePoster ? heroImageForViewport(block, false) : desktopImage;
+    const image = desktopImage.imageUrl ? desktopImage : mobileImage;
     const sectionClassName = `content-section managed-content-section managed-content-category_ad category-promotion-section${
         colorfulMarketplace ? ' is-color-marketplace' : ''
     }`;
@@ -1391,12 +1375,10 @@ function CategoryPromotionSection({
                         blockHasTarget ? (isZh ? `打开${block.title}` : `Open ${block.title}`) : block.title
                     }
                 >
-                    {desktopImage.imageUrl || mobileImage.imageUrl ? (
+                    {image.imageUrl ? (
                         <SafeImage
-                            src={desktopImage.imageUrl || mobileImage.imageUrl}
-                            previewSourceDimensions={
-                                (desktopImage.imageUrl ? desktopImage : mobileImage).imageAsset
-                            }
+                            src={image.imageUrl}
+                            previewSourceDimensions={image.imageAsset}
                             mediaSources={
                                 mobileImage.imageUrl && mobileImage.imageUrl !== desktopImage.imageUrl
                                     ? [
@@ -1415,8 +1397,8 @@ function CategoryPromotionSection({
                             imageKind="hero"
                             sizes={devicePoster ? '(min-width: 1024px) 320px, calc(100vw - 32px)' : undefined}
                             loading="lazy"
-                            width={desktopImage.imageAsset?.width || undefined}
-                            height={desktopImage.imageAsset?.height || undefined}
+                            width={image.imageAsset?.width}
+                            height={image.imageAsset?.height}
                         />
                     ) : (
                         <span className="category-promotion-placeholder" aria-hidden="true">
@@ -1502,7 +1484,7 @@ function FeaturedCollectionSection({
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const isZh = language === 'zh';
-    const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
+    const blockHasTarget = block.targetType !== 'NONE' && block.targetValue;
     const [featuredProduct, ...supportingProducts] = products;
     const configuredProductIds = contentStringArraySetting(block.settings?.selectedProductIds);
     const placeholderCount = Math.min(
@@ -1695,30 +1677,29 @@ function FeaturedCollectionSection({
 
 function ContentStorySection({
     block,
-    language,
-    onContentTarget,
+    ...context
 }: {
     block: StorefrontContentBlock;
     language: StorefrontLanguage;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
+    const { language, onContentTarget } = context;
     const isZh = language === 'zh';
-    const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
+    const links = block.items.filter(
+        item => item.enabled && item.label && item.targetType !== 'NONE' && item.targetValue,
+    );
+    const blockHasTarget = block.targetType !== 'NONE' && block.targetValue;
 
+    const open = () => onContentTarget(block.targetType, block.targetValue);
     return (
         <section className="content-section content-story-section" aria-labelledby={`${block.id}-title`}>
-            <article
-                className="content-story-layout"
-                style={{
-                    ...managedContentStyle(block),
-                }}
-            >
+            <article className="content-story-layout" style={managedContentStyle(block)}>
                 <button
                     className="content-story-visual"
                     type="button"
                     disabled={!blockHasTarget}
-                    onClick={() => onContentTarget(block.targetType, block.targetValue)}
-                    aria-label={blockHasTarget ? block.ctaLabel || block.title : undefined}
+                    onClick={open}
+                    aria-label={block.title}
                 >
                     {block.imageUrl ? (
                         <SafeImage
@@ -1732,7 +1713,6 @@ function ContentStorySection({
                         />
                     ) : (
                         <span className="content-story-placeholder" aria-hidden="true">
-                            <span>STORY</span>
                             <Sparkles />
                         </span>
                     )}
@@ -1745,12 +1725,18 @@ function ContentStorySection({
                     {block.body ? (
                         <ContentText className="content-story-body">{block.body}</ContentText>
                     ) : null}
+                    <div className="story-links">
+                        {links.map(item => (
+                            <ManagedContentItemButton
+                                key={item.id}
+                                item={item}
+                                products={emptyProducts}
+                                {...context}
+                            />
+                        ))}
+                    </div>
                     {blockHasTarget ? (
-                        <button
-                            className="content-story-action"
-                            type="button"
-                            onClick={() => onContentTarget(block.targetType, block.targetValue)}
-                        >
+                        <button className="content-story-action" type="button" onClick={open}>
                             <span>{block.ctaLabel || (isZh ? '继续阅读' : 'Read the story')}</span>
                             <ChevronRight aria-hidden="true" />
                         </button>
