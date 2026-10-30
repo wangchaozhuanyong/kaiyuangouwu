@@ -139,6 +139,7 @@ export async function observePublic(origins, releaseId, fetcher = fetch) {
                 headers: {
                     'User-Agent': ua,
                     'Cache-Control': 'no-cache',
+                    Connection: 'close',
                     ...(client === 'api' ? { 'Apollo-Require-Preflight': 'true' } : {}),
                 },
             });
@@ -168,6 +169,25 @@ export async function observePublic(origins, releaseId, fetcher = fetch) {
     return observations;
 }
 
+/** Reload is graceful: every sample must eventually satisfy the same strict
+ * policy check. Bound observations instead of accepting a mixed old/new set. */
+export async function observeSettledPublic(
+    observe,
+    verify,
+    wait = () => new Promise(done => setTimeout(done, 500)),
+) {
+    for (let attempt = 0; attempt < 6; attempt++) {
+        const observations = await observe();
+        try {
+            verify(observations);
+            return observations;
+        } catch (error) {
+            if (attempt === 5) throw error;
+            await wait();
+        }
+    }
+}
+
 export function assertPublicTransition(before, after, reviewedScriptHash) {
     if (reviewedScriptHash !== undefined) assert.match(reviewedScriptHash, /^[A-Za-z0-9+/]{43}=$/u);
     assert.equal(after.length, before.length);
@@ -181,8 +201,14 @@ export function assertPublicTransition(before, after, reviewedScriptHash) {
                 const token = " 'sha256-" + reviewedScriptHash + "'";
                 const next = current.headers[name] ?? '';
                 const previous = old.headers[name] ?? '';
+                // JSON API responses do not execute the document script. They
+                // may retain their exact previous CSP while HTML must admit it.
+                if (current.client === 'api' && next === previous) continue;
                 const scripts = next.split(';').find(part => part.trim().startsWith('script-src '));
-                assert.ok(scripts?.includes(token), 'Missing reviewed document script in live CSP');
+                assert.ok(
+                    scripts?.includes(token),
+                    `Missing reviewed document script in live CSP: ${current.origin} ${current.client}`,
+                );
                 assert.equal(
                     next.replace(token, ''),
                     previous.replace(token, ''),
@@ -293,8 +319,10 @@ async function activate({ candidate, targetSha, configSha256, previousSha256, re
         validateLive: () => command('nginx', ['-t']),
         reload: () => command('systemctl', ['reload', 'nginx']),
         verify: async () => {
-            const after = await observePublic(origins, `${releaseId}-after`);
-            assertPublicTransition(before, after, reviewedScriptHash);
+            const after = await observeSettledPublic(
+                () => observePublic(origins, `${releaseId}-after`),
+                observations => assertPublicTransition(before, observations, reviewedScriptHash),
+            );
             assert.equal(sha256(readFileSync(nginxTarget)), configSha256);
             verifySnapshot();
             const accepted = {
@@ -322,12 +350,14 @@ async function activate({ candidate, targetSha, configSha256, previousSha256, re
         },
         verifyRestored: async () => {
             assert.equal(sha256(readFileSync(nginxTarget)), previousSha256);
-            const restored = await observePublic(origins, `${releaseId}-restored`);
-            // Vary/order can be normalized at the edge. Compare every security
-            // header and COOP to the previously observed native public response.
-            for (let i = 0; i < before.length; i++)
-                for (const name of [...securityHeaders, 'cross-origin-opener-policy'])
-                    assert.equal(restored[i].headers[name], before[i].headers[name]);
+            await observeSettledPublic(
+                () => observePublic(origins, `${releaseId}-restored`),
+                restored => {
+                    for (let i = 0; i < before.length; i++)
+                        for (const name of [...securityHeaders, 'cross-origin-opener-policy'])
+                            assert.equal(restored[i].headers[name], before[i].headers[name]);
+                },
+            );
             verifySnapshot();
             writeFileSync(
                 `${directory}/recovery.json`,
