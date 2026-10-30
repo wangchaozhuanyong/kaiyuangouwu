@@ -18,6 +18,7 @@ import {
     IPHONE_UA,
     nginxTransaction,
     observePublic,
+    observeSettledPublic,
 } from './nginx-release.mjs';
 import nginxRevision from './nginx-revision.cjs';
 import { nginxDeployCommand, nginxReceiptFromInvocation } from './nginx-ssm.mjs';
@@ -315,6 +316,7 @@ function publicFetcher(candidate, mutate = () => undefined) {
     return async (url, options) => {
         assert.equal(url.protocol, 'https:');
         assert.equal(options.redirect, 'error');
+        assert.equal(options.headers.Connection, 'close');
         assert.ok([DESKTOP_UA, IPHONE_UA].includes(options.headers['User-Agent']));
         const api = url.pathname === '/shop-api';
         if (api) assert.equal(options.headers['Apollo-Require-Preflight'], 'true');
@@ -482,6 +484,12 @@ test('CSP transitions accept only the exact reviewed document script hash and pr
         row.headers['content-security-policy'] =
             "default-src 'self'; script-src 'self' 'sha256-" + reviewed + "'; object-src 'none'";
     assertPublicTransition(before, after, reviewed);
+    const unchangedApi = structuredClone(after);
+    unchangedApi.forEach((row, index) => {
+        if (row.client === 'api')
+            row.headers['content-security-policy'] = before[index].headers['content-security-policy'];
+    });
+    assertPublicTransition(before, unchangedApi, reviewed);
     assert.throws(() => assertPublicTransition(before, after), /Security header changed/u);
     for (const extra of [
         " 'unsafe-inline'",
@@ -498,4 +506,30 @@ test('CSP transitions accept only the exact reviewed document script hash and pr
     const missing = structuredClone(after);
     missing[0].headers['content-security-policy'] = before[0].headers['content-security-policy'];
     assert.throws(() => assertPublicTransition(before, missing, reviewed), /reviewed document script/u);
+});
+
+test('graceful reload observations wait for the exact policy while persistent mismatch still fails', async () => {
+    let reads = 0;
+    let waits = 0;
+    const result = await observeSettledPublic(
+        async () => ++reads,
+        value => assert.equal(value, 3),
+        async () => {
+            waits++;
+        },
+    );
+    assert.equal(result, 3);
+    assert.equal(waits, 2);
+    let failures = 0;
+    await assert.rejects(
+        observeSettledPublic(
+            async () => ++failures,
+            () => {
+                throw new Error('exact security check still fails');
+            },
+            async () => undefined,
+        ),
+        /exact security check still fails/u,
+    );
+    assert.equal(failures, 6);
 });
