@@ -7,7 +7,7 @@ import {
 import { load } from 'cheerio';
 import { describe, expect, it } from 'vitest';
 
-import { assemblePublicHtml } from './storefront-seo-html.service';
+import { assemblePublicHtml, preparePublicHtmlTemplate } from './storefront-seo-html.service';
 import {
     buildPublicSeoDocument,
     publicRobots,
@@ -35,6 +35,52 @@ const facts = (host = 'store-a.test'): PublicSeoFacts => ({
 });
 
 describe('one public SEO policy', () => {
+    it('reuses only an immutable shell while preserving large snapshots, literal slots and stylesheet order', () => {
+        const template = preparePublicHtmlTemplate(
+            '<html><head><title>Old title</title>' +
+                '<link rel="stylesheet" href="/assets/common-12345678.css">' +
+                '<script type="module" src="/assets/test.js"></script></head><body><div id="root"></div></body></html>',
+        );
+        const originalShell = template.shell;
+        for (const host of ['store-a.test', 'store-b.test']) {
+            const seo = buildPublicSeoDocument({ kind: 'home' }, facts(host), settings(), null, 1);
+            const page = {
+                scope: { host },
+                config: {},
+                seo,
+                literal: template.slots.state,
+                text: '</script><script>unsafe()</script>'.repeat(10_000),
+            };
+            const html = assemblePublicHtml(
+                template,
+                page as never,
+                '<style data-href="storefront-home-showcase">.grid{display:grid}</style>' +
+                    '<main><p>&lt;style&gt;literal 中文</p></main>' +
+                    '<svg viewBox="0 0 20 20"><linearGradient id="shade"></linearGradient></svg>' +
+                    '<table><tbody><tr><td>Cell</td></tr></tbody></table>' +
+                    '<style data-href="storefront-support">.help{display:block}</style>',
+            );
+            const dom = load(html);
+            expect(dom('head style[data-href="storefront-home-showcase"]').length).toBe(1);
+            expect(html.indexOf('data-href="storefront-home-showcase"')).toBeLessThan(
+                html.indexOf('rel="stylesheet" href="/assets/common-12345678.css"'),
+            );
+            expect(dom('#root style')).toHaveLength(0);
+            expect(dom('#root main').text()).toBe('<style>literal 中文');
+            expect(html).toContain('literal 中文');
+            expect(dom('#root svg').attr('viewBox')).toBe('0 0 20 20');
+            expect(dom('#root svg').children().get(0)?.tagName).toBe('linearGradient');
+            expect(dom('#root tbody td').text()).toBe('Cell');
+            expect(JSON.parse(dom('#storefront-public-page-data').text())).toEqual(page);
+            expect(
+                dom('script')
+                    .toArray()
+                    .some(element => dom(element).text() === 'unsafe()'),
+            ).toBe(false);
+            expect(template.shell).toBe(originalShell);
+        }
+    });
+
     it.each(['store-a', 'store-b'])('declares %s icons in the initial public HTML without SSI', code => {
         const seo = buildPublicSeoDocument({ kind: 'home' }, facts(), settings(), null, 1);
         const html = assemblePublicHtml(

@@ -21,6 +21,17 @@ const phases = [
     'render-styles',
     'render-react',
     'render-assemble',
+    'render-template-prepare',
+    'render-shell-parse',
+    'render-body-parse',
+    'render-style-placement',
+    'render-snapshot-serialize',
+    'render-output',
+    'media-product-read',
+    'media-manifest-read',
+    'media-preview-read',
+    'media-preview-prepare',
+    'media-revision-check',
 ] as const;
 export type PublicDocumentPhase = (typeof phases)[number];
 export type PublicCacheReadOutcome = 'hit' | 'miss' | 'join' | 'bypass';
