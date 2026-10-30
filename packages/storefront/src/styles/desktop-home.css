@@ -1518,11 +1518,11 @@
 }
 
 /* Shared guide content complements the merchant's existing artwork and theme. */
-.content-story-copy:has(.story-links:not(:empty)) {
+.content-story-copy:has(.story-links a) {
     background: var(--coupon-blue-surface);
     color: var(--coupon-blue-ink);
 }
-.content-story-copy:has(.story-links) h2 {
+.content-story-copy h2 {
     white-space: pre-line;
 }
 .story-links {
@@ -1531,16 +1531,11 @@
     gap: var(--space-12);
     margin-top: var(--space-16);
 }
-.story-links .managed-content-card {
-    display: flex;
-    align-items: center;
-    min-height: var(--experience-control-min);
-}
 .story-links .managed-content-media {
     display: none;
 }
 
-.story-links:not(:empty) + .content-story-action {
+.story-links:not(:empty) + button {
     width: auto;
     padding: var(--space-12) var(--space-16);
     border-radius: var(--skin-control-radius);
@@ -1551,6 +1546,21 @@
 .story-links:empty {
     display: none;
 }
-.content-story-copy:has(.story-links:not(:empty)) :is(.content-story-kicker, .content-story-body) {
+.content-story-copy:has(.story-links a) > p {
     opacity: 1;
+}
+
+@media (max-width: 1023px) {
+    .story-links {
+        display: grid;
+        width: 100%;
+        gap: 0;
+    }
+    .story-links .managed-content-copy {
+        min-height: var(--experience-control-min);
+        padding: 0;
+    }
+    .story-links:not(:empty) + button {
+        width: 100%;
+    }
 }
