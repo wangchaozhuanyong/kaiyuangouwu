@@ -168,15 +168,28 @@ export async function observePublic(origins, releaseId, fetcher = fetch) {
     return observations;
 }
 
-export function assertPublicTransition(before, after) {
+export function assertPublicTransition(before, after, reviewedScriptHash) {
+    if (reviewedScriptHash !== undefined) assert.match(reviewedScriptHash, /^[A-Za-z0-9+/]{43}=$/u);
     assert.equal(after.length, before.length);
     for (let index = 0; index < before.length; index++) {
         const old = before[index];
         const current = after[index];
         assert.equal(current.origin, old.origin);
         assert.equal(current.client, old.client);
-        for (const name of securityHeaders)
-            assert.equal(current.headers[name], old.headers[name], `Security header changed: ${name}`);
+        for (const name of securityHeaders) {
+            if (name === 'content-security-policy' && reviewedScriptHash) {
+                const token = " 'sha256-" + reviewedScriptHash + "'";
+                const next = current.headers[name] ?? '';
+                const previous = old.headers[name] ?? '';
+                const scripts = next.split(';').find(part => part.trim().startsWith('script-src '));
+                assert.ok(scripts?.includes(token), 'Missing reviewed document script in live CSP');
+                assert.equal(
+                    next.replace(token, ''),
+                    previous.replace(token, ''),
+                    `Security header changed: ${name}`,
+                );
+            } else assert.equal(current.headers[name], old.headers[name], `Security header changed: ${name}`);
+        }
         const expected = current.client === 'iphone' ? null : 'same-origin-allow-popups';
         assert.equal(
             current.headers['cross-origin-opener-policy'],
@@ -223,6 +236,27 @@ async function activate({ candidate, targetSha, configSha256, previousSha256, re
     const replacement = readFileSync(candidate);
     assert.equal(sha256(original), previousSha256, 'Active Nginx configuration drifted');
     assert.equal(sha256(replacement), configSha256, 'Candidate configuration checksum differs');
+    // Bind this single CSP exception to the exact reviewed main document, not
+    // a caller-supplied hash or an arbitrary token discovered in live headers.
+    const template = command('sudo', [
+        '-n',
+        '-H',
+        '-u',
+        'ubuntu',
+        'git',
+        '-C',
+        '/var/www/kaiyuangouwu',
+        'show',
+        `${targetSha}:packages/storefront/index.html`,
+    ]);
+    const script = template.match(/<script id="storefront-document-continuity">([\s\S]*?)<\/script>/u)?.[1];
+    const reviewedScriptHash =
+        script === undefined ? undefined : createHash('sha256').update(script).digest('base64');
+    if (reviewedScriptHash)
+        assert.ok(
+            replacement.toString('utf8').includes("'sha256-" + reviewedScriptHash + "'"),
+            'Reviewed document script is absent from candidate CSP',
+        );
     const snapshot = liveSnapshot();
     const origins = (await loadProductionStorefronts()).storefronts.map(store => store.origin);
     const before = await observePublic(origins, `${releaseId}-before`);
@@ -260,7 +294,7 @@ async function activate({ candidate, targetSha, configSha256, previousSha256, re
         reload: () => command('systemctl', ['reload', 'nginx']),
         verify: async () => {
             const after = await observePublic(origins, `${releaseId}-after`);
-            assertPublicTransition(before, after);
+            assertPublicTransition(before, after, reviewedScriptHash);
             assert.equal(sha256(readFileSync(nginxTarget)), configSha256);
             verifySnapshot();
             const accepted = {

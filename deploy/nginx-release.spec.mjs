@@ -471,3 +471,31 @@ test('Production Release requires Nginx acceptance and cannot silently fall thro
     );
     assert.ok(!/bun install|migration|build_production|deploy_production_runtime/u.test(child));
 });
+
+test('CSP transitions accept only the exact reviewed document script hash and preserve every other directive', async () => {
+    const before = await observePublic(origins, 'before', publicFetcher(false));
+    const after = await observePublic(origins, 'after', publicFetcher(true));
+    const reviewed = 'a'.repeat(43) + '=';
+    for (const row of before)
+        row.headers['content-security-policy'] = "default-src 'self'; script-src 'self'; object-src 'none'";
+    for (const row of after)
+        row.headers['content-security-policy'] =
+            "default-src 'self'; script-src 'self' 'sha256-" + reviewed + "'; object-src 'none'";
+    assertPublicTransition(before, after, reviewed);
+    assert.throws(() => assertPublicTransition(before, after), /Security header changed/u);
+    for (const extra of [
+        " 'unsafe-inline'",
+        ' https://unreviewed.example',
+        " 'sha256-" + 'b'.repeat(43) + "='",
+    ]) {
+        const unsafe = structuredClone(after);
+        unsafe[0].headers['content-security-policy'] = unsafe[0].headers['content-security-policy'].replace(
+            '; object-src',
+            extra + '; object-src',
+        );
+        assert.throws(() => assertPublicTransition(before, unsafe, reviewed), /Security header changed/u);
+    }
+    const missing = structuredClone(after);
+    missing[0].headers['content-security-policy'] = before[0].headers['content-security-policy'];
+    assert.throws(() => assertPublicTransition(before, missing, reviewed), /reviewed document script/u);
+});
