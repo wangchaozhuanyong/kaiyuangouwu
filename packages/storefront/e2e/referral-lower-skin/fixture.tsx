@@ -19,13 +19,13 @@ import {
 import { normalizeStorefrontVisualPreset } from '../../../storefront-content-plugin/src/visual-presets';
 import { DesktopLayoutContext, useDesktopViewport } from '../../src/desktop-layout';
 import { languageCodeFor } from '../../src/i18n';
-import { ReferralPage } from '../../src/pages/referral-page';
-import { createStorefrontQueryClient, storefrontQueryKeys } from '../../src/query-client';
-import { ReferralPageContext } from '../../src/storefront-page-contexts';
 import '../../src/storefront-styles';
 import '../../src/commerce-styles';
 import '../../src/styles/account-catalog-surfaces.css';
 import '../../src/styles/account-identity.css';
+import { ReferralPage } from '../../src/pages/referral-page';
+import { createStorefrontQueryClient, storefrontQueryKeys } from '../../src/query-client';
+import { ReferralPageContext } from '../../src/storefront-page-contexts';
 import { applyStorefrontVisualPreset } from '../../src/use-storefront-visual-preset';
 
 // Entirely synthetic, in-memory reads. No ShopApi instance, HTTP API or account writes.
