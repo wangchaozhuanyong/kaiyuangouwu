@@ -22,6 +22,12 @@
     }
 }
 
+/* The document handoff's temporary trailing extent must not be compressed by
+   the results column while rows are still becoming available. */
+.category-results::after {
+    flex-shrink: 0;
+}
+
 * {
     box-sizing: border-box;
 }
