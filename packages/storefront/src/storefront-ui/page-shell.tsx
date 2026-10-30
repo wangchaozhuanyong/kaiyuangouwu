@@ -167,13 +167,10 @@ export function SubpageBody({ className, ...props }: HTMLAttributes<HTMLDivEleme
 }
 
 export function Subpage({
-    title,
-    language,
-    onBack,
-    backLabel,
     surfaceColor,
     className,
     children,
+    ...header
 }: {
     title: string;
     language: StorefrontLanguage;
@@ -189,7 +186,7 @@ export function Subpage({
 
     return (
         <main className={`page subpage${className ? ` ${className}` : ''}`} style={surfaceStyle}>
-            <SubHeader title={title} language={language} onBack={onBack} backLabel={backLabel} />
+            <SubHeader {...header} />
             {children}
         </main>
     );
@@ -215,12 +212,12 @@ export function SubHeader({
     return (
         <header
             className={`topbar subpage-header${className ? ` ${className}` : ''}`}
-            data-page-return={backLabel ? true : undefined}
+            data-page-return={backLabel}
             data-action-visibility={actionVisibility}
             data-desktop-actions={Boolean(action) && actionVisibility === 'all' ? true : undefined}
         >
             <PageBackButton onClick={onBack} label={backLabel ?? (language === 'zh' ? '返回' : 'Back')}>
-                {backLabel && <span>{backLabel}</span>}
+                {backLabel}
             </PageBackButton>
             <strong>{title}</strong>
             <span className="subpage-header-actions">{action}</span>
