@@ -182,7 +182,12 @@ export { StorefrontPublicCacheService } from './performance/storefront-public-ca
 
 export { couponCollectionsForVariant } from './promotion/store-coupon-collections.js';
 
-export { PUBLIC_CATALOG_READER, type PublicCatalogReader } from './public-catalog-reader';
+export {
+    PUBLIC_CATALOG_READER,
+    type PublicCatalogReader,
+    type PublicProductMedia,
+    type PublicProductMediaReader,
+} from './public-catalog-reader';
 
 export { StorefrontPublicCacheInvalidatedEvent } from './performance/storefront-cache-invalidation.service';
 export { StorefrontMediaDeliveryService } from './performance/storefront-media-delivery.service';
