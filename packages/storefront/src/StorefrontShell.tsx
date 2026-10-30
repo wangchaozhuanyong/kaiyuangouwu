@@ -32,6 +32,7 @@ import { type ActiveCustomer } from './types';
 const StorefrontUpdatePrompt = lazy(() =>
     import('./StorefrontUpdatePrompt').then(module => ({ default: module.StorefrontUpdatePrompt })),
 );
+
 const StorefrontTrafficPreference = lazy(() =>
     import('./storefront-ui/storefront-traffic-preference').then(module => ({
         default: module.StorefrontTrafficPreference,
@@ -273,6 +274,18 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                         }
                     >
                         <StorefrontPageFrame
+                            consent={
+                                !previewEmbedded && (
+                                    <StorefrontErrorBoundary fallback={null}>
+                                        <Suspense>
+                                            <StorefrontTrafficPreference
+                                                api={storefrontContextValue.api}
+                                                language={language}
+                                            />
+                                        </Suspense>
+                                    </StorefrontErrorBoundary>
+                                )
+                            }
                             routeName={renderedRouteName}
                             language={language}
                             desktop={desktop}
@@ -437,17 +450,6 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                 </StorefrontErrorBoundary>
                             )}
                         </OverlayHost>
-
-                        {deferredUiReady && (
-                            <StorefrontErrorBoundary fallback={null}>
-                                <Suspense fallback={null}>
-                                    <StorefrontTrafficPreference
-                                        api={storefrontContextValue.api}
-                                        language={language}
-                                    />
-                                </Suspense>
-                            </StorefrontErrorBoundary>
-                        )}
                     </PageReadinessBoundary>
                 </OverlayHost>
             </DesktopLayoutContext.Provider>

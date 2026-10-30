@@ -45,6 +45,93 @@
         <meta name="twitter:image" content="/storefront/neutral-social.png" />
         <meta name="twitter:image:alt" content="店铺商品与服务" />
         <title>在线商城</title>
+        <script id="storefront-document-continuity">
+            (function () {
+                try {
+                    var choice = /(?:^|;\s*)storefront_analytics_consent=(granted|denied)(?:;|$)/.test(
+                        document.cookie,
+                    );
+                    var stored = localStorage.getItem('storefront-analytics-opt-out:v1');
+                    if (choice || stored === '0' || stored === '1')
+                        document.documentElement.setAttribute('data-storefront-traffic-choice', '');
+                } catch (e) {}
+                if (
+                    new URLSearchParams(location.search).get('storefrontPreviewEmbedded') === '1' ||
+                    !/\/category\/?$/.test(location.pathname)
+                )
+                    return;
+                try {
+                    var key = history.state && history.state.__TSR_key;
+                    var cache = JSON.parse(sessionStorage.getItem('tsr-scroll-restoration-v1_3') || '{}');
+                    var entries = cache[key];
+                    var selector = '[data-scroll-restoration-id="category-results"]';
+                    var entry = entries && entries[selector];
+                    if (!entry || !Number.isFinite(entry.scrollY) || entry.scrollY <= 0) return;
+                    var done = false;
+                    // Parsing can expose a partial list before enough rows exist to restore.
+                    // Reserve only trailing scroll extent; existing card geometry stays native.
+                    var reserve = document.createElement('style');
+                    reserve.textContent =
+                        selector +
+                        '::after{content:"";display:block;height:calc(' +
+                        Math.ceil(entry.scrollY) +
+                        'px + 100vh)}';
+                    document.head.appendChild(reserve);
+                    function stop() {
+                        done = true;
+                        observer.disconnect();
+                        document.removeEventListener('load', restore, true);
+                        if (reserve) {
+                            reserve.remove();
+                            reserve = null;
+                        }
+                    }
+                    function restore() {
+                        if (done) return;
+                        var element = document.querySelector(selector);
+                        if (element) {
+                            element.scrollTop = entry.scrollY;
+                            var last = element.lastElementChild;
+                            if (
+                                reserve &&
+                                last &&
+                                last.getBoundingClientRect().bottom -
+                                    element.getBoundingClientRect().top +
+                                    element.scrollTop +
+                                    (parseFloat(getComputedStyle(element).paddingBottom) || 0) >=
+                                    entry.scrollY + element.clientHeight
+                            ) {
+                                reserve.remove();
+                                reserve = null;
+                            }
+                        }
+                        if (!reserve && document.documentElement.hasAttribute('data-storefront-app-owned'))
+                            stop();
+                    }
+                    var observer = new MutationObserver(restore);
+                    observer.observe(document.documentElement, {
+                        childList: true,
+                        subtree: true,
+                        attributes: true,
+                        attributeFilter: ['data-storefront-app-owned'],
+                    });
+                    document.addEventListener('load', restore, true);
+                    document.addEventListener('storefront:page-error', stop, { once: true });
+                    window.addEventListener('pagehide', stop, { once: true });
+                    document.addEventListener(
+                        'storefront:app-owned',
+                        function () {
+                            restore();
+                        },
+                        { once: true },
+                    );
+                    ['pointerdown', 'wheel', 'touchstart', 'keydown'].forEach(function (type) {
+                        document.addEventListener(type, stop, { once: true, passive: true });
+                    });
+                    restore();
+                } catch (e) {}
+            })();
+        </script>
         <script defer src="/storefront/document-loading.js?v=soft-entry-20261028"></script>
         <!-- Public HTML already carries its verified theme. Unknown stores stay neutral
              until configuration arrives; a cached theme must not delay document parsing. -->

@@ -26,6 +26,7 @@ export function StorefrontPageFrame({
     header,
     accountNavigation,
     deferred,
+    consent,
     publicMedia,
     publicMediaScope,
     publicMediaHost,
@@ -45,6 +46,7 @@ export function StorefrontPageFrame({
     header?: ReactNode;
     accountNavigation?: ReactNode;
     deferred?: ReactNode;
+    consent?: ReactNode;
     publicMedia?: readonly MediaDescriptor[];
     publicMediaScope?: string;
     publicMediaHost?: string;
@@ -109,6 +111,7 @@ export function StorefrontPageFrame({
                             )}
                         </header>
                     )}
+                    {consent}
                     {deferred}
                     <div
                         className={
