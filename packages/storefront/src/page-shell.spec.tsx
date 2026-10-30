@@ -29,10 +29,10 @@ describe('Subpage surface', () => {
         const stylesheet = readStorefrontStylesheet();
 
         expect(stylesheet).toMatch(
-            /\.desktop-account-layout \.page\.subpage > \.subpage-header:not\(\[data-desktop-actions\]\)\s*\{[^}]*display:\s*none;/u,
+            /\.desktop-account-layout\s+\.page\.subpage\s*> \.subpage-header:not\(\[data-desktop-actions\]\):not\(\[data-page-return\]\)\s*\{[^}]*display:\s*none;/u,
         );
         expect(stylesheet).toMatch(
-            /\.desktop-account-layout \.subpage-header > :is\(button:first-child, strong\)\s*\{[^}]*display:\s*none;/u,
+            /\.desktop-account-layout \.subpage-header:not\(\[data-page-return\]\) > :is\(button:first-child, strong\)\s*\{[^}]*display:\s*none;/u,
         );
         expect(stylesheet).toMatch(
             /\.desktop-account-layout \.subpage-header-actions\s*\{[^}]*margin-left:\s*auto;/u,

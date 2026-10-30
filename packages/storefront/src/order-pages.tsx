@@ -28,7 +28,6 @@ import {
     AfterSalesEvidenceGallery,
     AfterSalesEvidenceUploader,
 } from './components/common/after-sales-evidence';
-import { PageBackButton } from './components/common/page-back-button';
 import { useDesktopLayout } from './desktop-layout';
 import { DigitalReceiptPanel, orderHasDigitalDelivery } from './digital-receipt-panel';
 import { compactUiCopy, languageCodeFor } from './i18n';
@@ -959,7 +958,12 @@ export function OrderDetailPage({
     const [confirmingDeliveryId, setConfirmingDeliveryId] = useState('');
     if (!order) {
         return (
-            <Subpage title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack}>
+            <Subpage
+                title={isZh ? '订单详情' : 'Order details'}
+                language={language}
+                onBack={onBack}
+                backLabel={backLabel ?? (isZh ? '返回上一层' : 'Back')}
+            >
                 <EmptyState icon={<Package />} title={isZh ? '没有找到订单' : 'Order not found'} />
             </Subpage>
         );
@@ -1236,19 +1240,12 @@ export function OrderDetailPage({
     const content = (
         <>
             {!isDrawer && (
-                <SubHeader title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack} />
-            )}
-            {!isDrawer && (
-                <header className="delivery-linked-order-heading">
-                    <h1>{isZh ? '订单详情' : 'Order details'}</h1>
-                    <PageBackButton
-                        className="delivery-back-link"
-                        label={backLabel ?? (isZh ? '返回' : 'Back')}
-                        onClick={onBack}
-                    >
-                        {backLabel ?? (isZh ? '返回' : 'Back')}
-                    </PageBackButton>
-                </header>
+                <SubHeader
+                    title={isZh ? '订单详情' : 'Order details'}
+                    language={language}
+                    onBack={onBack}
+                    backLabel={backLabel ?? (isZh ? '返回上一层' : 'Back')}
+                />
             )}
             <section className={orderPageClassName('order-status')}>
                 <strong>{customerOrderStateLabel(order, language)}</strong>

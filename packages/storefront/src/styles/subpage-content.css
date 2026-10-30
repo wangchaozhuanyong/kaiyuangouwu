@@ -393,29 +393,9 @@
         color: var(--text);
     }
     .desktop-store-layout .subpage-header > strong {
-        display: block;
         flex: 1;
         text-align: left;
-        font-size: var(--type-topbar-size);
-        font-weight: var(--font-weight-semibold);
         opacity: 1;
-        line-height: var(--type-topbar-leading);
-    }
-    .desktop-store-layout .subpage-header > button {
-        position: static;
-        display: flex;
-        flex: none;
-        align-items: center;
-        justify-content: center;
-        width: auto;
-        min-width: var(--experience-control-min);
-        min-height: var(--experience-control-min);
-        height: auto;
-        padding: var(--space-8);
-        border-radius: var(--skin-control-radius);
-        background: transparent;
-        border: 0;
-        color: var(--muted);
     }
     .desktop-store-layout .subpage-header button svg {
         width: 20px;
@@ -451,10 +431,12 @@
     .desktop-account-layout .page.subpage > .subpage-header {
         justify-content: flex-end;
     }
-    .desktop-account-layout .page.subpage > .subpage-header:not([data-desktop-actions]) {
+    .desktop-account-layout
+        .page.subpage
+        > .subpage-header:not([data-desktop-actions]):not([data-page-return]) {
         display: none;
     }
-    .desktop-account-layout .subpage-header > :is(button:first-child, strong) {
+    .desktop-account-layout .subpage-header:not([data-page-return]) > :is(button:first-child, strong) {
         display: none;
     }
     .desktop-account-layout .subpage-header-actions {
@@ -470,4 +452,15 @@
     .subpage-header:has(.locale-preferences-trigger) > strong {
         text-align: left;
     }
+}
+
+/* Nested pages keep one return row, including inside the desktop account layout. */
+.subpage-header[data-page-return] {
+    grid-column: 1 / -1;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.subpage-header > .page-back-button.has-label {
+    white-space: nowrap;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
 }

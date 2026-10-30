@@ -725,7 +725,7 @@ img {
 }
 
 .account-topbar button,
-.subpage-header button,
+.subpage-header button:not(.page-back-button),
 .notice-button {
     width: 44px;
     height: 44px;
