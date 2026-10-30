@@ -54,6 +54,31 @@ try {
         0,
         'User input releases the extent',
     );
+    // CSS can initially expose a 12px results box, then its real mobile height.
+    // Do not release the reserve based on that unstyled intermediate geometry.
+    await p.goto('http://reserve.test/zh/category');
+    await p.evaluate(() => {
+        history.replaceState({ __TSR_key: 'e' }, '');
+        const list = document.querySelector('.category-results');
+        list.style.height = '0px';
+        list.style.maxHeight = '0px';
+        const row = list.firstElementChild;
+        row.style.height = '1200px';
+        row.style.minHeight = '1200px';
+    });
+    await p.evaluate(source);
+    await p.evaluate(() => {
+        const list = document.querySelector('.category-results');
+        list.style.height = '616px';
+        list.style.maxHeight = '616px';
+        list.firstElementChild.style.height = '128px';
+        list.firstElementChild.style.minHeight = '128px';
+    });
+    await p.waitForTimeout(100);
+    const styled = await p.locator('.category-results').evaluate(element => element.scrollTop);
+    await fs.writeFile(q + '/styled-transition.json', JSON.stringify({ styled }));
+    assert.equal(styled, 320, 'Styles arriving before React must not invalidate the restored position');
+    await p.evaluate(() => document.dispatchEvent(new Event('pointerdown')));
 } finally {
     await browser.close();
 }

@@ -94,6 +94,7 @@
                             var last = element.lastElementChild;
                             if (
                                 reserve &&
+                                document.documentElement.hasAttribute('data-storefront-app-owned') &&
                                 last &&
                                 last.getBoundingClientRect().bottom -
                                     element.getBoundingClientRect().top +
