@@ -1,4 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+
+beforeAll(async () => {
+    // Prepare the real route library before testing the two deliberately pending auth imports.
+    await import('@tanstack/react-router');
+});
 
 afterEach(() => {
     vi.doUnmock('./auth-overlay');
