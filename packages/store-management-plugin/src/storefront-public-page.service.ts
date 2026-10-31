@@ -52,7 +52,12 @@ import {
     publicPageMedia,
 } from './performance/storefront-public-media';
 import { StorePromotionCampaignService } from './promotion/store-promotion-campaign.service';
-import { PUBLIC_CATALOG_READER, type PublicCatalogReader } from './public-catalog-reader';
+import {
+    PUBLIC_CATALOG_READER,
+    type PublicCatalogReader,
+    type PublicProductMedia,
+    type PublicProductMediaReader,
+} from './public-catalog-reader';
 import { StoreCurrencySettingsService } from './store-currency-settings.service';
 import {
     StorefrontActivationService,
@@ -798,13 +803,14 @@ export class StorefrontPublicPageService {
             id => !known.some(product => String(product.id) === id),
         );
         if (!missing.length || Date.now() >= deadline) return page;
-        const selected: Array<NonNullable<Awaited<ReturnType<PublicProductSummaryReader['byId']>>>> = [];
+        const selected: PublicProductMedia[] = [];
         let completed = 0;
-        let reader: PublicProductSummaryReader;
+        let reader: PublicProductSummaryReader & Partial<PublicProductMediaReader>;
         try {
-            reader = this.moduleRef.get<PublicProductSummaryReader>(PUBLIC_PRODUCT_SUMMARY_READER, {
-                strict: false,
-            });
+            reader = this.moduleRef.get<PublicProductSummaryReader & Partial<PublicProductMediaReader>>(
+                PUBLIC_PRODUCT_SUMMARY_READER,
+                { strict: false },
+            );
             if (typeof reader?.byId !== 'function') return page;
         } catch {
             if (preparation) preparation.deferred = true;
@@ -815,7 +821,7 @@ export class StorefrontPublicPageService {
             while (pending.length && Date.now() < deadline) {
                 const id = pending.shift();
                 if (!id) return;
-                const load = () => reader.byId(ctx, id);
+                const load = () => (reader.mediaById ? reader.mediaById(ctx, id) : reader.byId(ctx, id));
                 try {
                     const product = await ((page.config as { accessMode?: string }).accessMode === 'PREVIEW'
                         ? this.cache.loadUncached(load)

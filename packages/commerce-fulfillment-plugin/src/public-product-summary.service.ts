@@ -10,6 +10,7 @@ import {
     LocaleStringHydrator,
     Product,
     ProductService,
+    ProductVariant,
     ProductVariantService,
     PublicProductDetail,
     PublicProductSummary,
@@ -19,7 +20,12 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
-import { couponCollectionsForVariant } from '@vendure/store-management-plugin';
+import {
+    couponCollectionsForVariant,
+    type PublicProductMedia,
+    type PublicProductMediaReader,
+} from '@vendure/store-management-plugin';
+import { IsNull } from 'typeorm';
 
 import {
     AutoCardShopProductVariantResolver,
@@ -31,7 +37,7 @@ import { ProductPackagingService } from './product-packaging.service';
 
 /** Anonymous storefront projection using the same stock, tax and coupon readers as GraphQL. */
 @Injectable()
-export class PublicProductSummaryService implements PublicProductSummaryReader {
+export class PublicProductSummaryService implements PublicProductSummaryReader, PublicProductMediaReader {
     private readonly availability: AutoCardShopProductVariantResolver;
     private readonly metadata: DigitalProductVariantMetadataResolver;
 
@@ -77,6 +83,36 @@ export class PublicProductSummaryService implements PublicProductSummaryReader {
         this.assertPublicContext(ctx);
         const product = await this.products.findOne(ctx, id, ['featuredAsset']);
         return product?.enabled ? this.summary(ctx, product) : null;
+    }
+
+    async mediaById(ctx: RequestContext, id: string): Promise<PublicProductMedia | null> {
+        this.assertPublicContext(ctx);
+        const product = await this.products.findOne(ctx, id, ['featuredAsset']);
+        if (!product?.enabled) return null;
+        // Preserve the public variant reader's visibility, order and per-product limit,
+        // without hydrating prices, stock, coupon collections or localized commerce text.
+        const variants = await this.connection.getRepository(ctx, ProductVariant).find({
+            where: {
+                productId: product.id,
+                deletedAt: IsNull(),
+                enabled: true,
+                channels: { id: ctx.channelId },
+            },
+            relations: ['featuredAsset'],
+            select: { id: true, featuredAsset: { id: true, preview: true } },
+            loadEagerRelations: false,
+            order: { id: 'ASC' },
+            take: this.config.apiOptions.shopListQueryLimit,
+        });
+        const featuredAsset = this.asset(ctx, product.featuredAsset);
+        return {
+            id: String(product.id),
+            featuredAsset,
+            variants: variants.map(variant => ({
+                featuredAsset: this.asset(ctx, variant.featuredAsset),
+                product: { featuredAsset },
+            })),
+        };
     }
 
     async project(ctx: RequestContext, products: Product[]) {

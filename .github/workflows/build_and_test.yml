@@ -96,9 +96,13 @@ jobs:
                   node --test deploy/icloud-relay-diagnostic.spec.mjs deploy/window-test-order-cleanup.spec.mjs
                   node --test packages/dev-server/scripts/catalog-ownership-evidence.spec.mjs deploy/catalog-ownership-audit.spec.mjs
                   node --test deploy/historical-asset-cleanup.spec.mjs
+            - name: Test lint prerequisite selection
+              run: node --test scripts/ci-lint-prerequisites.spec.mjs
             - name: Build lint prerequisites
               if: needs.detect-changes.outputs.has_lint_packages == 'true'
-              run: bun run build:core-common
+              env:
+                  CI_PLAN: ${{ needs.detect-changes.outputs.plan }}
+              run: node scripts/ci-lint-prerequisites.mjs
             - name: Lint changed source without new warnings
               env:
                   CI_PLAN: ${{ needs.detect-changes.outputs.plan }}
