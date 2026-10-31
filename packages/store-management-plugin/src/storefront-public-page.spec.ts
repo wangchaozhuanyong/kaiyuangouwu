@@ -1,5 +1,5 @@
 import { ServiceUnavailableException } from '@nestjs/common';
-import { ForbiddenError, PUBLIC_PRODUCT_SUMMARY_READER } from '@vendure/core';
+import { Channel, ForbiddenError, PUBLIC_PRODUCT_SUMMARY_READER } from '@vendure/core';
 import {
     publicPageRequestKey,
     StorefrontAccountSettingsService,
@@ -1727,7 +1727,13 @@ describe('authoritative public access modes', () => {
             const profile = { findOne: vi.fn().mockResolvedValue({ status, isPublished }) };
             const domain = { exists: vi.fn().mockResolvedValue(verified) };
             const connection = {
-                getRepository: vi.fn().mockReturnValueOnce(profile).mockReturnValue(domain),
+                getRepository: vi.fn((_ctx, entity) =>
+                    entity === Channel
+                        ? { findOne: vi.fn().mockResolvedValue({ id: 'a' }) }
+                        : entity.name === 'StoreProfile'
+                          ? profile
+                          : domain,
+                ),
             };
             const channels = {
                 findOne: vi.fn().mockResolvedValue({ id: 'a' }),
@@ -1741,19 +1747,26 @@ describe('authoritative public access modes', () => {
         },
     );
 
-    it('keeps a missing/default channel closed and exposes matching structured error code', async () => {
-        const service = new StorefrontActivationService(
-            { getRepository: () => ({ findOne: () => Promise.resolve({ status: 'ACTIVE' }) }) } as never,
-            {
-                findOne: () => Promise.resolve({ id: 'default' }),
-                getDefaultChannel: () => Promise.resolve({ id: 'default' }),
-            } as never,
-        );
-        expect(await service.getAccessMode(setup().ctx as never)).toBe('CLOSED');
-        const error = new StorefrontClosedError();
-        expect(error.code).toBe('STOREFRONT_CLOSED');
-        expect(error.extensions.code).toBe('STOREFRONT_CLOSED');
-    });
+    it.each(['missing', 'default'])(
+        'keeps the %s channel closed and exposes matching structured error code',
+        async channelId => {
+            const service = new StorefrontActivationService(
+                {
+                    getRepository: () => ({
+                        findOne: () => Promise.resolve(channelId === 'missing' ? null : { id: channelId }),
+                    }),
+                } as never,
+                {
+                    findOne: () => Promise.resolve({ id: 'default' }),
+                    getDefaultChannel: () => Promise.resolve({ id: 'default' }),
+                } as never,
+            );
+            expect(await service.getAccessMode({ ...setup().ctx, channelId } as never)).toBe('CLOSED');
+            const error = new StorefrontClosedError();
+            expect(error.code).toBe('STOREFRONT_CLOSED');
+            expect(error.extensions.code).toBe('STOREFRONT_CLOSED');
+        },
+    );
 
     it('uses all current preview sections without any shared reads/writes, including nested readers', async () => {
         const h = accessHarness('PREVIEW');
