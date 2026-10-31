@@ -2,10 +2,9 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { STOREFRONT_IMAGE_SIZES } from '../../../storefront-content-plugin/src/shared/responsive-image.ts';
 import { startSeoFixtureServer } from '../seo-public/preview-server.mjs';
 
-import { buildPublicPage, createPreviewServer } from './preview-server.mjs';
+import { buildPublicPage, createPreviewServer, STOREFRONT_IMAGE_SIZES } from './preview-server.mjs';
 
 let server;
 let base;

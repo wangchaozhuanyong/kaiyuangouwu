@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createServer as createViteServer } from 'vite';
 
 import {
     canonicalPublicPageRequest,
@@ -15,14 +16,29 @@ import {
     STOREFRONT_PAGE_DATA_ELEMENT_ID,
     storefrontNavigationCollections,
 } from '../../../storefront-content-plugin/src/shared/public-page-data.ts';
-import {
-    mediaDescriptor,
-    STOREFRONT_IMAGE_SIZES,
-} from '../../../storefront-content-plugin/src/shared/responsive-image.ts';
 import { fixtureData as cartFixtureData } from '../cart-commands/fixtures.mjs';
 import { fixtureData } from '../visual-presets/fixtures.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
+// Load the real shared TypeScript graph through the storefront's existing compiler.
+// Native Node loading cannot resolve its extensionless TypeScript re-exports.
+const configLoader = await createViteServer({
+    configFile: false,
+    root: resolve(here, '../../'),
+    appType: 'custom',
+    server: { middlewareMode: true, hmr: false, watch: null },
+    optimizeDeps: { noDiscovery: true },
+});
+let imageConfig;
+try {
+    imageConfig = await configLoader.ssrLoadModule(
+        resolve(here, '../../../storefront-content-plugin/src/shared/responsive-image.ts'),
+    );
+} finally {
+    await configLoader.close();
+}
+const { mediaDescriptor, STOREFRONT_IMAGE_SIZES } = imageConfig;
+export { STOREFRONT_IMAGE_SIZES };
 const require = createRequire(resolve(here, '../../../asset-server-plugin/package.json'));
 const { parse, getOperationAST } = require('graphql');
 const sharp = require('sharp');
