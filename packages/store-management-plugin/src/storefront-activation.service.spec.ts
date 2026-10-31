@@ -1,6 +1,126 @@
-import { describe, expect, it, vi } from 'vitest';
+import { Channel, ChannelService } from '@vendure/core';
+import { DataSource, EntitySchema } from 'typeorm';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { StoreProfile } from './entities/store-profile.entity';
 import { isOperationalStorefront, StorefrontActivationService } from './storefront-activation.service';
+
+describe('public access reads with real SQL', () => {
+    const zone = new EntitySchema({
+        name: 'PublicAccessZone',
+        tableName: 'public_access_zone',
+        columns: { id: { type: String, primary: true }, name: { type: String } },
+    });
+    const channel = new EntitySchema<{
+        id: number;
+        defaultShippingZone: { id: string } | null;
+        defaultTaxZone: { id: string } | null;
+    }>({
+        name: 'PublicAccessChannel',
+        tableName: 'public_access_channel',
+        columns: { id: { type: Number, primary: true } },
+        relations: {
+            defaultShippingZone: { type: 'many-to-one', target: zone.options.name },
+            defaultTaxZone: { type: 'many-to-one', target: zone.options.name },
+        },
+    });
+    const profile = new EntitySchema({
+        name: 'PublicAccessProfile',
+        columns: {
+            id: { type: String, primary: true },
+            channelId: { type: Number },
+            status: { type: String },
+            isPublished: { type: Boolean },
+        },
+    });
+    const domain = new EntitySchema({
+        name: 'PublicAccessDomain',
+        columns: {
+            id: { type: String, primary: true },
+            channelId: { type: Number },
+            status: { type: String },
+            isPrimary: { type: Boolean },
+        },
+    });
+    const queries: string[] = [];
+    const database = new DataSource({
+        type: 'sqljs',
+        entities: [zone, channel, profile, domain],
+        synchronize: true,
+        logging: ['query'],
+        logger: {
+            logQuery: query => queries.push(query),
+            logQueryError: () => undefined,
+            logQuerySlow: () => undefined,
+            logSchemaBuild: () => undefined,
+            logMigration: () => undefined,
+            log: () => undefined,
+        },
+    });
+    const connection = {
+        getRepository: (_ctx: unknown, entity: unknown) =>
+            database.getRepository(entity === Channel ? channel : entity === StoreProfile ? profile : domain),
+    };
+    const channels = {
+        // Exercise the actual old service lookup too, so an accidental return to its
+        // shipping/tax hydration is observable in SQL rather than hidden by a mock.
+        findOne: (requestContext: unknown, id: string | number) =>
+            ChannelService.prototype.findOne.call({ connection } as never, requestContext as never, id),
+        getDefaultChannel: () => Promise.resolve({ id: 1 }),
+    };
+    const service = new StorefrontActivationService(connection as never, channels as never);
+    const ctx = { apiType: 'shop', channelId: 2 } as never;
+    beforeAll(async () => {
+        await database.initialize();
+        await database.getRepository(zone).save([{ id: 'zone', name: 'Unneeded shipping and tax data' }]);
+        await database
+            .getRepository(channel)
+            .save([
+                { id: 1 },
+                { id: 2, defaultShippingZone: { id: 'zone' }, defaultTaxZone: { id: 'zone' } },
+                { id: 3 },
+            ]);
+        await database.getRepository(profile).save([
+            { id: 'profile-default', channelId: 1, status: 'ACTIVE', isPublished: true },
+            { id: 'profile-a', channelId: 2, status: 'ACTIVE', isPublished: true },
+            { id: 'profile-b', channelId: 3, status: 'ACTIVE', isPublished: true },
+        ]);
+        await database.getRepository(domain).save([
+            { id: 'domain-default', channelId: 1, status: 'ACTIVE', isPrimary: true },
+            { id: 'domain-a', channelId: 2, status: 'ACTIVE', isPrimary: true },
+        ]);
+    });
+    afterAll(async () => {
+        if (database.isInitialized) await database.destroy();
+    });
+    it('checks channel existence without fetching shipping or tax relations', async () => {
+        queries.length = 0;
+        expect(await service.getAccessMode(ctx)).toBe('LIVE');
+        const channelReads = queries.filter(query => query.includes('public_access_channel'));
+        expect(channelReads).toHaveLength(1);
+        expect(channelReads[0]).not.toContain('public_access_zone');
+        expect(queries).toHaveLength(3);
+    });
+    it('keeps missing/default channels and another store without its own active domain closed', async () => {
+        for (const id of [99, 1, 3]) expect(await service.getAccessMode(ctx, id)).toBe('CLOSED');
+    });
+    it('uses the persisted channel identity when SQL normalizes a numeric ID', async () => {
+        // The platform channel stays closed even if it has a legacy profile/domain.
+        expect(await service.getAccessMode(ctx, '01')).toBe('CLOSED');
+    });
+    it('rechecks channel deletion, suspension and domain revocation on the retained context', async () => {
+        await database.getRepository(profile).update('profile-a', { status: 'SUSPENDED' });
+        expect(await service.getAccessMode(ctx)).toBe('CLOSED');
+        await database.getRepository(profile).update('profile-a', { status: 'ACTIVE' });
+        expect(await service.getAccessMode(ctx)).toBe('LIVE');
+        await database.getRepository(domain).update('domain-a', { status: 'INACTIVE' });
+        expect(await service.getAccessMode(ctx)).toBe('CLOSED');
+        await database.getRepository(domain).update('domain-a', { status: 'ACTIVE' });
+        expect(await service.getAccessMode(ctx)).toBe('LIVE');
+        await database.getRepository(channel).delete(2);
+        expect(await service.getAccessMode(ctx)).toBe('CLOSED');
+    });
+});
 
 function createService(
     status: 'DRAFT' | 'ACTIVE' | 'SUSPENDED' | null,
@@ -16,7 +136,13 @@ function createService(
         exists: vi.fn().mockResolvedValue(hasActivePrimaryDomain),
     };
     const connection = {
-        getRepository: vi.fn().mockReturnValueOnce(profileRepository).mockReturnValue(domainRepository),
+        getRepository: vi.fn((_ctx, entity) =>
+            entity === Channel
+                ? { findOne: vi.fn().mockResolvedValue({ id: channelId }) }
+                : entity === StoreProfile
+                  ? profileRepository
+                  : domainRepository,
+        ),
     };
     const channelService = {
         findOne: vi.fn().mockResolvedValue({ id: channelId, sellerId }),
@@ -33,7 +159,12 @@ describe('StorefrontActivationService', () => {
             exists: vi.fn().mockResolvedValue(true),
         };
         const service = new StorefrontActivationService(
-            { getRepository: () => repository } as any,
+            {
+                getRepository: (_ctx: unknown, entity: unknown) =>
+                    entity === Channel
+                        ? { findOne: vi.fn().mockResolvedValue({ id: 'store-a' }) }
+                        : repository,
+            } as any,
             {
                 findOne: vi.fn().mockResolvedValue({ id: 'store-a', sellerId: 'merchant' }),
                 getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default', sellerId: 'platform' }),
@@ -180,6 +311,8 @@ describe('public preview payment boundary', () => {
         };
         const connection = {
             getRepository: vi.fn((_ctx, entity) => {
+                if (entity === Channel)
+                    return { findOne: vi.fn(options => Promise.resolve({ id: options.where.id })) };
                 if (entity.name === 'StoreProfile') return { findOne: vi.fn(() => Promise.resolve(current)) };
                 if (entity.name === 'StoreDomain')
                     return { exists: vi.fn(() => Promise.resolve(primary.active)) };

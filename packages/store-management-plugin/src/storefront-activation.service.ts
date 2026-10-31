@@ -2,6 +2,7 @@ import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { isControlledTestPaymentMethod } from '@vendure/common/lib/controlled-test-payment';
 import type { PaymentInput } from '@vendure/common/lib/generated-shop-types';
 import {
+    Channel,
     ChannelService,
     ID,
     idsAreEqual,
@@ -128,7 +129,13 @@ export class StorefrontActivationService implements OnApplicationBootstrap {
 
     async getAccessMode(ctx: RequestContext, channelId: ID = ctx.channelId): Promise<StorefrontAccessMode> {
         const [channel, defaultChannel] = await Promise.all([
-            this.channelService.findOne(ctx, channelId),
+            // Keep the database's canonical ID for the default-channel check without
+            // hydrating shipping/tax relations. All authority reads remain fresh.
+            this.connection.getRepository(ctx, Channel).findOne({
+                where: { id: channelId },
+                select: { id: true },
+                loadEagerRelations: false,
+            }),
             this.channelService.getDefaultChannel(ctx),
         ]);
         if (!channel || idsAreEqual(channel.id, defaultChannel.id)) return 'CLOSED';
