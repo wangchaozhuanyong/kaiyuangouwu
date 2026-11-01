@@ -32,6 +32,23 @@ async function harness(worker = true) {
 }
 
 describe('bounded worker derivative preparation', () => {
+    it.each([800, 960])(
+        'prepares the registered %ipx detail candidate with the existing worker path',
+        async width => {
+            const { server, files } = await harness();
+            const name = `storefront-detail-${width}`;
+            await server.preparePublicDerivative('preview/public.png', name, 90);
+            const preset = storefrontAssetPresets.find(candidate => candidate.name === name);
+            expect(preset).toMatchObject({ width, height: width, mode: 'resize' });
+            const derivatives = [...files.entries()].filter(([key]) => key !== 'preview/public.png');
+            expect(derivatives).toHaveLength(1);
+            expect(await sharp(derivatives[0][1]).metadata()).toMatchObject({
+                format: 'webp',
+                width,
+                height: width,
+            });
+        },
+    );
     it('coalesces cold HTTP derivatives after authorizing every request, including denied joiners', async () => {
         const { server, storage } = await harness(false);
         const preset = new PresetOnlyStrategy({

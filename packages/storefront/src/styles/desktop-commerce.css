@@ -406,7 +406,7 @@
     .desktop-account-profile[data-identity-theme='mist'] {
         --identity-surface: #f4f7fb;
         --identity-text: #243247;
-        --identity-muted: #66758a;
+        --identity-muted: #627186;
         --identity-avatar: #e7edf5;
         --identity-radius: 12px;
         display: flex;

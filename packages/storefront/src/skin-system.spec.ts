@@ -100,7 +100,16 @@ describe('storefront skin system', () => {
         });
         expect(tokens.get('--identity-surface')).toBe('#f4f7fb');
         expect(tokens.get('--identity-text')).toBe('#243247');
-        expect(tokens.get('--identity-muted')).toBe('#66758a');
+        const luminance = (hex: string) => {
+            const channels = (hex.slice(1).match(/../g) ?? []).map(value => {
+                const channel = parseInt(value, 16) / 255;
+                return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+            });
+            return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+        };
+        const background = luminance(tokens.get('--identity-surface') ?? '');
+        const foreground = luminance(tokens.get('--identity-muted') ?? '');
+        expect((background + 0.05) / (foreground + 0.05)).toBeGreaterThanOrEqual(4.5);
         expect(stylesheet('./components/common/desktop-account-navigation.tsx')).toContain(
             'data-identity-theme="mist"',
         );

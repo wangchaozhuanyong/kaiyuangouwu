@@ -365,7 +365,8 @@ try {
                     expect(timings.submitToPaymentMs).toBeLessThan(5000);
                     expect(paymentMethodsResolved).toBe(false);
                     await expect(
-                        page.getByText(isZh ? '正在加载支付方式' : 'Loading payment methods', {
+                        page.getByRole('status', {
+                            name: isZh ? '正在加载支付方式' : 'Loading payment methods',
                             exact: true,
                         }),
                     ).toBeVisible();
@@ -389,7 +390,7 @@ try {
                 expect(commands.some(command => command.preparePayment)).toBe(true);
                 expect(commands.filter(command => command.preparePayment)).toHaveLength(1);
             } else {
-                await page.goto(`${origin}/${language}/cart`);
+                await page.goto(`${origin}/cart`);
                 await expect(checkout).toBeEnabled({ timeout: 15000 });
                 if (scenario === 'checkout-recovery') await checkout.click();
                 else

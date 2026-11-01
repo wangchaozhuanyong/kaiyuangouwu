@@ -12,8 +12,11 @@ import { installSiteFixture } from '../client-loading/site-interaction-fixture.m
 import { syntheticPage } from '../seo-public/fixtures.mjs';
 import { fixtureData } from '../visual-presets/fixtures.mjs';
 
-const root = fileURLToPath(new URL('../../../../', import.meta.url));
-const output = path.join(root, 'reports/coupon-first-frame-20261026');
+const root = path.resolve(fileURLToPath(new URL('../../../../', import.meta.url)));
+const output = path.resolve(
+    process.env.COUPON_FIRST_FRAME_OUTPUT_DIR || path.join(root, 'reports/coupon-first-frame-20261026'),
+);
+if (!output.startsWith(root + path.sep)) throw new Error('Coupon evidence must stay inside this project.');
 const baseline = process.argv.includes('--baseline');
 const dist = baseline ? path.join(output, 'baseline-dist') : path.join(root, 'packages/storefront/dist');
 const require = createRequire(import.meta.url);
@@ -149,8 +152,10 @@ try {
                 const before = await page.locator('[data-home-catalog="sales"]').boundingBox();
                 const beforeCoupons = await page.locator('.coupon-hub-section').count();
                 const beforeCards = await page.locator('.coupon-hub-section .desktop-coupon-ticket').count();
+                await page.screenshot({ path: path.join(output, `html-${width}-${current}.png`) });
                 await page.evaluate(() => {
                     window.couponFrames = [];
+                    window.couponPresence = [];
                     window.couponMeasure = true;
                     window.couponShifts = 0;
                     window.couponLcp = 0;
@@ -164,6 +169,7 @@ try {
                     const frame = () => {
                         const shelf = document.querySelector('[data-home-catalog="sales"]');
                         window.couponFrames.push(shelf ? shelf.getBoundingClientRect().top + scrollY : null);
+                        window.couponPresence.push(document.querySelectorAll('.coupon-hub-section').length);
                         if (window.couponMeasure) requestAnimationFrame(frame);
                     };
                     requestAnimationFrame(frame);
@@ -182,6 +188,7 @@ try {
                     return {
                         lcp: window.couponLcp,
                         frames: window.couponFrames,
+                        presence: window.couponPresence,
                         clsAfterCss: window.couponShifts,
                         ttfb: nav.responseStart - nav.requestStart,
                         domInteractive: nav.domInteractive,
@@ -204,6 +211,10 @@ try {
                     assert.equal(beforeCoupons, expected);
                     assert.equal(afterCoupons, beforeCoupons);
                     assert(displacement <= 1, `Product shelf moved ${displacement}px: ${current}/${width}`);
+                    assert(
+                        metrics.presence.every(count => count === expected),
+                        `Coupon section changed during adoption: ${current}/${width}`,
+                    );
                     assert(Math.abs(after.y - before.y) <= 1);
                     if (current === 'prepared' || current === 'empty')
                         assert.equal(

@@ -3354,7 +3354,11 @@ html[lang='en'] .primary-category-image {
 }
 
 .primary-categories-all::before {
-    display: none;
+    /* Expand into the strip's reserved gutter without moving its visible artwork. */
+    content: '';
+    display: block;
+    position: absolute;
+    inset: 0 0 0 -8px;
 }
 
 .primary-categories-all-label {
@@ -4016,6 +4020,7 @@ html[lang='en'] .primary-category-image {
 }
 
 .category-topbar > .search-trigger {
+    position: relative;
     width: 100%;
     height: 36px;
     padding: 0 12px;
@@ -4024,6 +4029,13 @@ html[lang='en'] .primary-category-image {
     border-radius: var(--skin-control-radius);
     background: var(--control-surface);
     box-shadow: none;
+}
+
+/* Keep the reviewed 36px artwork while extending its hit area within the topbar. */
+.category-topbar > .search-trigger::before {
+    content: '';
+    position: absolute;
+    inset: -4px 0;
 }
 
 .category-topbar > .search-trigger:hover {
