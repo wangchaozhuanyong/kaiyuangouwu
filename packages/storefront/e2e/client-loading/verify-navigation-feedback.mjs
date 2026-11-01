@@ -96,6 +96,9 @@ try {
                         path: location.pathname,
                         route: document.querySelector('[data-route]')?.dataset.route,
                         homeVisible: visible(document.querySelector('.home-page')),
+                        homePending: visible(document.querySelector('.page-skeleton--home')),
+                        categoryVisible: visible(document.querySelector('.category-page')),
+                        categoryPending: visible(document.querySelector('.page-skeleton--catalog')),
                         boot: visible(document.querySelector('#storefront-boot-loading')),
                         globalIndicators: [
                             ...document.querySelectorAll(
@@ -122,9 +125,9 @@ try {
                     .first();
             await page.evaluate(() => {
                 window.__stableNavigation =
-                    document.querySelector('.bottom-nav') ??
-                    [...document.querySelectorAll('nav')].find(
-                        element => element.getAttribute('aria-label') === 'Main navigation',
+                    document.querySelector('.storefront-bottom-nav') ??
+                    [...document.querySelectorAll('nav')].find(element =>
+                        ['Main navigation', '主导航'].includes(element.getAttribute('aria-label')),
                     );
                 window.__navigationClick = performance.now();
             });
@@ -138,12 +141,12 @@ try {
             await expect(
                 nav().getByRole('link', { name: language === 'zh' ? '首页' : 'Home', exact: true }),
             ).toHaveAttribute('aria-current', 'page');
-            await expect(page.locator('.page-readiness-navigation')).toBeVisible();
-            if (width === 390)
-                await expect(
-                    page.locator('.storefront-pending-mobile-header .mobile-page-header'),
-                ).toBeVisible();
-            const geometry = await page.locator('.page-readiness-navigation').evaluate(element => {
+            const targetSkeleton = page.locator('.page-skeleton--home[role="status"]');
+            await expect(targetSkeleton).toBeVisible();
+            await expect(targetSkeleton).toHaveAttribute('aria-busy', 'true');
+            await expect(page.locator('.page-readiness-navigation')).not.toBeVisible();
+            await expect(nav()).toBeVisible();
+            const geometry = await targetSkeleton.evaluate(element => {
                 const rect = element.getBoundingClientRect();
                 return {
                     x: rect.x,
@@ -157,12 +160,14 @@ try {
             });
             record.loadingGeometry = geometry;
             assert.ok(
-                Math.abs(geometry.x + geometry.width / 2 - geometry.bodyWidth / 2) < 3,
-                'Loading feedback must be horizontally centered: ' + JSON.stringify(geometry),
+                geometry.width > 0 &&
+                    geometry.x >= -1 &&
+                    geometry.x + geometry.width <= geometry.viewport + 1,
+                'Target skeleton must fit the visible content width: ' + JSON.stringify(geometry),
             );
             assert.ok(
-                geometry.y > 100 && geometry.y + geometry.height < (width === 390 ? 760 : 830),
-                'Loading feedback must sit inside the visible content area',
+                geometry.y >= 0 && geometry.y < (width === 390 ? 844 : 900),
+                'Target skeleton must begin inside the visible viewport',
             );
             await page.screenshot({ path: path.join(output, `${width}-cold-pending.png`) });
             // Exercise the exact CSS overlap that used to suppress navigation feedback.
@@ -174,11 +179,12 @@ try {
                 notice.textContent = 'Update failed. Previous content is still shown.';
                 document.body.append(notice);
             });
-            await expect(page.locator('.page-readiness-navigation')).toBeVisible();
+            await expect(targetSkeleton).toBeVisible();
+            await expect(page.locator('.page-readiness-navigation')).not.toBeVisible();
             await page.locator('[data-qa-overlap]').evaluate(element => element.remove());
             record.checks.push('A separate background-error notice cannot hide target navigation feedback');
             record.checks.push(
-                'Target identity and selected navigation appear while target code is blocked; source body is gone; central feedback remains visible',
+                'Target identity and selected navigation appear while code is blocked; target skeleton owns feedback without a second global loader',
             );
             // A new intent must escape the stalled destination without waiting for its code.
             await nav().locator('a[href*="/category"]').first().click();
@@ -217,7 +223,10 @@ try {
                         frame =>
                             frame.at >= click.at &&
                             frame.path === click.target &&
-                            frame.route === (click.target.endsWith('/category') ? 'category' : 'home'),
+                            frame.route === (click.target.endsWith('/category') ? 'category' : 'home') &&
+                            (click.target.endsWith('/category')
+                                ? frame.categoryVisible || frame.categoryPending
+                                : frame.homeVisible || frame.homePending),
                     );
                     const content = window.__navigationFrames.find(
                         frame => frame.at >= click.at && frame.path === click.target && frame.homeVisible,
@@ -230,13 +239,14 @@ try {
                 }),
                 longTasks: window.__navigationLongTasks,
             }));
+            assert.ok(
+                record.timings.clicks.every(
+                    click => click.feedbackMs !== null && click.feedbackMs <= (cpu === 1 ? 100 : 200),
+                ),
+                'Visible target feedback must paint within the normal/CPU4 budget',
+            );
+            assert.equal(await page.evaluate(() => Boolean(window.__stableNavigation?.isConnected)), true);
             if (cpu === 1) {
-                assert.ok(
-                    record.timings.clicks.every(
-                        click => click.feedbackMs !== null && click.feedbackMs <= 100,
-                    ),
-                    'Normal-environment navigation feedback must paint within 100ms',
-                );
                 assert.ok(
                     record.timings.clicks.at(-1).contentMs <= 300,
                     'Warm home content must paint within 300ms',
@@ -262,6 +272,7 @@ try {
             record.errors = errors;
             record.network = network;
             results.push(record);
+            await context.unrouteAll({ behavior: 'ignoreErrors' });
             await context.close();
             process.stdout.write(
                 `${width}: ${record.status}${record.error ? ` ${record.error.split('\n')[0]}` : ''}\n`,

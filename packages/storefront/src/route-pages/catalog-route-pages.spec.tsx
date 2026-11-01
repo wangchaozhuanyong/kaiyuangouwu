@@ -450,7 +450,77 @@ describe('product detail read states', () => {
     });
 });
 
-it('shows late scoped coupons during the same visit while keeping empty results and account isolation', () => {
+it('preserves prepared coupons during identity bootstrap and failed refresh, but accepts a confirmed empty read', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const host = document.createElement('div');
+    const root = createRoot(host);
+    const coupon = { id: 'prepared', claimable: true, claimed: false, remainingIssueCount: 1 };
+    const market = enabledMarkets[0];
+    const snapshot = {
+        generatedAt: Date.now(),
+        scope: { channelCode: market.code, currencyCode: market.currencyCode, languageCode: 'en' },
+        couponAudience: 'anonymous',
+        couponCampaigns: [coupon],
+    } as unknown as PublicPageData;
+    const read = vi.spyOn(await import('../storefront-page-data'), 'readInitialPublicPage');
+    read.mockReturnValue(snapshot);
+    const activeCouponCampaigns = vi.fn().mockRejectedValue(new Error('Read failed'));
+    const value = {
+        language: 'en',
+        market,
+        collections: [],
+        contentBlocks: [{ type: 'COUPONS', enabled: true }],
+        catalogTakes: { sales: 16, recommended: 16 },
+        bestSellerProducts: [],
+        recommendationProducts: [],
+        configQuery: {},
+        contentQuery: { data: {} },
+        productsQuery: { data: [] },
+        activeCoupons: [],
+        couponCampaignsQuery: { data: undefined },
+        customerLoadState: 'loading',
+        customer: null,
+        api: { activeCouponCampaigns },
+    } as unknown as StorefrontContextValue;
+    const key = storefrontQueryKeys.couponCampaigns(storefrontQueryKeys.market(market), 'en', null);
+    const show = () =>
+        act(() =>
+            root.render(
+                <QueryClientProvider client={client}>
+                    <StorefrontContext.Provider value={{ ...value }}>
+                        <HomeRoutePage />
+                    </StorefrontContext.Provider>
+                </QueryClientProvider>,
+            ),
+        );
+    try {
+        couponFrames = [];
+        show();
+        expect(couponFrames.every(frame => JSON.stringify(frame) === JSON.stringify([coupon]))).toBe(true);
+        Object.assign(value, { customerLoadState: 'ready' });
+        show();
+        expect(activeCouponCampaigns).not.toHaveBeenCalled();
+        await act(async () => {
+            await client.invalidateQueries({ queryKey: key });
+        });
+        expect(activeCouponCampaigns).toHaveBeenCalledOnce();
+        expect(homeInputs?.coupons).toEqual([coupon]);
+        act(() => {
+            client.setQueryData(key, []);
+        });
+        show();
+        expect(homeInputs?.coupons).toEqual([]);
+        Object.assign(value, { customer: { id: 'different-owner' } });
+        show();
+        expect(homeInputs?.coupons).toEqual([]);
+    } finally {
+        act(() => root.unmount());
+        client.clear();
+        read.mockRestore();
+    }
+});
+
+it('does not insert late coupons until natural reentry and isolates later account or language changes', () => {
     const client = new QueryClient();
     const host = document.createElement('div');
     const root = createRoot(host);
@@ -496,7 +566,7 @@ it('shows late scoped coupons during the same visit while keeping empty results 
             );
         });
         show('initial');
-        expect(homeInputs?.coupons).toEqual([coupon]);
+        expect(homeInputs?.coupons).toEqual([]);
         expect(
             client.getQueryData(
                 storefrontQueryKeys.couponCampaigns(storefrontQueryKeys.market(value.market), 'en', null),
@@ -568,7 +638,7 @@ it('shows late scoped coupons during the same visit while keeping empty results 
             );
         });
         show('next-visit');
-        expect(homeInputs?.coupons).toEqual([coupon]);
+        expect(homeInputs?.coupons).toEqual([]);
         show('next-visit-with-current-customer');
         expect(homeInputs?.coupons).toEqual([coupon]);
     } finally {
@@ -579,19 +649,20 @@ it('shows late scoped coupons during the same visit while keeping empty results 
 
 it.each([
     ['anonymous', 'en', null, true],
+    ['anonymous', 'en', null, true, 60_000],
     ['unknown', 'en', null, false],
     ['anonymous', 'zh_Hans', null, false],
     ['anonymous', 'en', 'customer-1', false],
 ] as const)(
     'adopts only matching anonymous first-frame coupons: %s / %s / %s',
-    async (audience, languageCode, customerId, visible) => {
+    async (audience, languageCode, customerId, visible, clockOffset: number = 0) => {
         const client = new QueryClient();
         const host = document.createElement('div');
         const root = createRoot(host);
         const coupon = { id: 'prepared-coupon', claimable: true, claimed: false, remainingIssueCount: 1 };
         const market = enabledMarkets[0];
         const snapshot = {
-            generatedAt: Date.now(),
+            generatedAt: Date.now() + clockOffset,
             scope: { channelCode: market.code, currencyCode: market.currencyCode, languageCode },
             couponAudience: audience,
             couponCampaigns: [coupon],
@@ -626,7 +697,13 @@ it.each([
                 ),
             );
             expect(couponFrames[0]).toEqual(visible ? [coupon] : []);
-            expect(homeInputs?.coupons).toEqual([]);
+            expect(homeInputs?.coupons).toEqual(visible ? [coupon] : []);
+            if (visible)
+                expect(
+                    client.getQueryState(
+                        storefrontQueryKeys.couponCampaigns(storefrontQueryKeys.market(market), 'en', null),
+                    )?.dataUpdatedAt,
+                ).toBeLessThanOrEqual(Date.now());
             if (customerId || languageCode !== 'en' || audience === 'unknown')
                 expect(
                     client.getQueryData(
@@ -651,7 +728,7 @@ it.each([
                     </QueryClientProvider>,
                 );
             });
-            expect(homeInputs?.coupons).toEqual([coupon]);
+            expect(homeInputs?.coupons).toEqual(visible ? [coupon] : []);
         } finally {
             act(() => root.unmount());
             client.clear();

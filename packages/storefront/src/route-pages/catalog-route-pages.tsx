@@ -3,8 +3,9 @@ import { lazyRouteComponent } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
 import { importHomePage } from '../catalog-page-imports';
+import { claimableCouponCampaigns } from '../coupon-campaign-eligibility';
 import { languageCodeFor } from '../i18n';
-import { offlineLoadError } from '../loading-state';
+import { storefrontInitialQueryError } from '../loading-state';
 import { usePageReadiness, usePageRouteCommit } from '../page-readiness';
 import { PublicCatalogMediaProvider, merchandisingMediaCatalogs } from '../public-catalog-media';
 import { retryStorefrontRead, storefrontQueryKeys } from '../query-client';
@@ -24,34 +25,20 @@ export function HomeRoutePage() {
     const runtime = useRuntime();
     const readMarket = storefrontQueryKeys.market(runtime.market);
     const readLanguage = languageCodeFor(runtime.language);
-    const [initialPage] = useState(() =>
-        document.getElementById('root')?.dataset.publicAdopted !== '1' ? readInitialPublicPage() : undefined,
-    );
-    const initialRenderTime = initialPage?.generatedAt;
     const couponScope = `${readMarket}:${readLanguage}`;
-    const matchingSnapshot =
-        initialPage &&
-        `${initialPage.scope.channelCode}:${initialPage.scope.currencyCode}:${initialPage.scope.languageCode}` ===
-            couponScope;
-    const campaignsQuery = useQuery({
-        queryKey: storefrontQueryKeys.couponCampaigns(readMarket, readLanguage, runtime.customer?.id ?? null),
-        queryFn: ({ signal }) => runtime.api.activeCouponCampaigns(signal),
-        enabled:
-            runtime.customerLoadState === 'ready' &&
-            runtime.contentBlocks.some(block => block.type === 'COUPONS' && block.enabled),
-        initialData:
-            runtime.customer || !matchingSnapshot || initialPage?.couponAudience !== 'anonymous'
-                ? undefined
-                : (initialPage?.couponCampaigns as StorefrontCouponCampaign[] | undefined),
-        initialDataUpdatedAt: initialPage?.generatedAt,
-        // Recheck the prepared list on entry so an empty snapshot cannot suppress fresh offers.
-        staleTime: 0,
-    });
     const [couponVisit] = useState(() => {
+        const initialPage =
+            document.getElementById('root')?.dataset.publicAdopted !== '1'
+                ? readInitialPublicPage()
+                : undefined;
+        const prepared =
+            initialPage?.couponAudience === 'anonymous' &&
+            `${initialPage.scope.channelCode}:${initialPage.scope.currencyCode}:${initialPage.scope.languageCode}` ===
+                couponScope
+                ? (initialPage.couponCampaigns as StorefrontCouponCampaign[] | undefined)
+                : undefined;
         const coupons = initialPage
-            ? matchingSnapshot && initialPage.couponAudience === 'anonymous'
-                ? ((initialPage.couponCampaigns ?? []) as StorefrontCouponCampaign[])
-                : []
+            ? (prepared ?? [])
             : runtime.customerLoadState === 'ready' &&
                 runtime.couponCampaignsQuery.data !== undefined &&
                 Date.now() - runtime.couponCampaignsQuery.dataUpdatedAt < 30_000
@@ -61,21 +48,38 @@ export function HomeRoutePage() {
             owner: initialPage ? null : (runtime.customer?.id ?? null),
             scope: couponScope,
             coupons,
+            seed: prepared,
+            renderTime: initialPage?.generatedAt,
+            visible: claimableCouponCampaigns(coupons, initialPage?.generatedAt).length > 0,
         };
     });
-    const couponOwnerChanged =
-        runtime.customerLoadState !== 'loading' && (runtime.customer?.id ?? null) !== couponVisit.owner;
+    const initialRenderTime = couponVisit.renderTime;
+    const campaignsQuery = useQuery({
+        queryKey: storefrontQueryKeys.couponCampaigns(readMarket, readLanguage, runtime.customer?.id ?? null),
+        queryFn: ({ signal }) => runtime.api.activeCouponCampaigns(signal),
+        enabled:
+            runtime.customerLoadState === 'ready' &&
+            runtime.contentBlocks.some(block => block.type === 'COUPONS' && block.enabled),
+        initialData: !runtime.customer && couponVisit.scope === couponScope ? couponVisit.seed : undefined,
+        // A server/device clock difference must not create indefinitely fresh reads.
+        initialDataUpdatedAt: Math.min(initialRenderTime ?? 0, Date.now()),
+        // Reuse prepared reads within the public snapshot's existing freshness window.
+        staleTime: 30_000,
+    });
     const [couponVisitCommitted, setCouponVisitCommitted] = useState(false);
     useEffect(() => setCouponVisitCommitted(true), []);
-    // Preserve the exact snapshot for adoption, then follow the current account's
-    // scoped read, including an empty result. An unknown first frame is not a veto.
-    const visitCoupons = couponVisitCommitted
-        ? runtime.customerLoadState === 'ready'
-            ? (campaignsQuery.data ?? [])
-            : []
-        : couponOwnerChanged || couponVisit.scope !== couponScope
-          ? []
-          : couponVisit.coupons;
+    // The first frame owns this visit's section presence. Identity bootstrap or a
+    // pending/failed read must not remove prepared public content; a confirmed
+    // different owner/scope must never inherit it. Current successful reads still
+    // remove claimed/expired offers, including a confirmed empty result.
+    const visitCoupons =
+        (runtime.customer?.id ?? null) !== couponVisit.owner ||
+        couponVisit.scope !== couponScope ||
+        !couponVisit.visible
+            ? []
+            : !couponVisitCommitted || runtime.customerLoadState !== 'ready'
+              ? couponVisit.coupons
+              : (campaignsQuery.data ?? couponVisit.coupons);
     const { language, configQuery, contentQuery, productsQuery } = runtime;
     usePageReadiness(
         contentQuery.isPending,
@@ -83,22 +87,8 @@ export function HomeRoutePage() {
         undefined,
         contentQuery.data === undefined && contentQuery.isError,
     );
-    const contentError =
-        contentQuery.data === undefined
-            ? contentQuery.isPaused
-                ? offlineLoadError(language)
-                : contentQuery.error
-                  ? storefrontErrorMessage(contentQuery.error, language)
-                  : ''
-            : '';
-    const catalogError =
-        productsQuery.data === undefined
-            ? productsQuery.isPaused
-                ? offlineLoadError(language)
-                : productsQuery.error
-                  ? storefrontErrorMessage(productsQuery.error, language)
-                  : null
-            : null;
+    const contentError = storefrontInitialQueryError(contentQuery, language);
+    const catalogError = storefrontInitialQueryError(productsQuery, language) || null;
     return (
         <HomePageContext.Provider
             value={{
@@ -111,14 +101,9 @@ export function HomeRoutePage() {
                     (runtime.managedContentProductsQuery?.data === undefined &&
                         (runtime.managedContentProductsQuery?.isPaused ||
                             runtime.managedContentProductsQuery?.isError)),
-                managedContentError:
-                    runtime.managedContentProductsQuery?.data === undefined
-                        ? runtime.managedContentProductsQuery?.isPaused
-                            ? offlineLoadError(language)
-                            : runtime.managedContentProductsQuery?.error
-                              ? storefrontErrorMessage(runtime.managedContentProductsQuery.error, language)
-                              : ''
-                        : '',
+                managedContentError: runtime.managedContentProductsQuery
+                    ? storefrontInitialQueryError(runtime.managedContentProductsQuery, language)
+                    : '',
                 onManagedContentRetry: () =>
                     void runtime.managedContentProductsQuery?.refetch({ cancelRefetch: false }),
                 managedContentResolved: runtime.managedContentResolved,

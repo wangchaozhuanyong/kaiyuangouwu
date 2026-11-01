@@ -142,7 +142,7 @@ const IMAGE_PRESETS: Record<StorefrontImageKind, ImagePresetGroup> = {
     detail: {
         width: 1600,
         height: 1600,
-        presets: imagePresets('storefront-detail', [640, 1200, 1600]),
+        presets: imagePresets('storefront-detail', [640, 800, 960, 1200, 1600]),
         placeholderPreset: 'storefront-placeholder-square-48',
         quality: 90,
         sizes: '(min-width: 1024px) 600px, 100vw',

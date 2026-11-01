@@ -391,10 +391,12 @@
     pointer-events: none;
 }
 @media (prefers-reduced-motion: no-preference) {
-    #storefront-boot-loading {
+    /* A compact SSR startup hint may fade over content. An empty-document brand
+       hands off immediately to React's sole initial brand, without two stages. */
+    #storefront-boot-loading[data-presentation='status'] {
         transition:
             opacity var(--experience-motion-fast) var(--experience-ease-standard),
-            visibility 0s linear var(--experience-motion-fast);
+            visibility 0s var(--experience-motion-fast);
     }
 }
 #root:empty + #storefront-boot-loading:not([aria-hidden='true']),

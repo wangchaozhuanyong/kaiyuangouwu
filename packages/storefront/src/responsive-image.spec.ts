@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     boundedMediaPreviews,
     mediaDescriptor,
+    storefrontResponsiveImagePresets,
     validInlineImagePreview,
 } from '../../storefront-content-plugin/src/shared/responsive-image';
 
@@ -15,6 +16,22 @@ import {
 import { HERO_TOKEN_TOPUP_IMAGE } from './storefront-images';
 
 describe('responsiveImageSources', () => {
+    it('shares intermediate high-DPR detail candidates with server registration and queued derivatives', () => {
+        const source = '/assets/preview/detail.webp?v=current';
+        const detail = responsiveImageSources(source, 'detail');
+        if (!detail) throw new Error('Missing uploaded detail candidates');
+        const presets = storefrontResponsiveImagePresets().filter(preset =>
+            preset.name.startsWith('storefront-detail-'),
+        );
+        expect(presets.map(preset => preset.width)).toEqual([640, 800, 960, 1200, 1600]);
+        for (const preset of presets) {
+            expect(detail.webpSrcSet).toContain(`preset=${preset.name}&format=webp&q=90 ${preset.width}w`);
+            expect(preset.height).toBe(preset.width);
+            expect(preset.mode).toBe('resize');
+        }
+        expect(detail.fallbackSrcSet).toBe(detail.webpSrcSet);
+        expect(detail.fallbackSrc).toContain('storefront-detail-1600');
+    });
     it('bounds complete inline preview bytes and rejects remote, oversized or non-raster hints', () => {
         const prefix = 'data:image/webp;base64,';
         const preview = prefix + 'A'.repeat(1024 - prefix.length);

@@ -78,7 +78,13 @@ describe('finite media job queues', () => {
             kind,
         }));
         const plans = publicDerivativePlans([...uses, ...uses]);
-        expect(plans).toHaveLength(17);
+        expect(plans).toHaveLength(19);
+        for (const width of [800, 960])
+            expect(plans).toContainEqual({
+                path: 'preview/image.jpg',
+                preset: `storefront-detail-${width}`,
+                quality: 90,
+            });
         for (const kind of ['card', 'detail', 'hero', 'icon', 'thumbnail'] as const) {
             const source = responsiveImageSources('/assets/preview/image.jpg', kind);
             if (!source) throw new Error('Expected responsive source');
