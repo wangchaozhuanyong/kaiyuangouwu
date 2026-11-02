@@ -135,13 +135,10 @@ export function BlogContent({
                         </span>
                     </p>
                 )}
-                <div className="blog-card-footer">
+                <div className={`blog-card-footer${article.skill ? ' blog-card-footer-skill' : ''}`}>
                     <DateLine article={article} />
                     <div className="blog-card-actions">
-                        <a
-                            className={`${isFeatured && !article.skill ? 'blog-primary-link' : 'blog-read-link'} type-action`}
-                            {...link(href(article.slug))}
-                        >
+                        <a className="blog-read-link type-action" {...link(href(article.slug))}>
                             {article.skill ? '了解用途' : '阅读全文'} <ArrowRight aria-hidden="true" />
                         </a>
                         {article.skill && (
