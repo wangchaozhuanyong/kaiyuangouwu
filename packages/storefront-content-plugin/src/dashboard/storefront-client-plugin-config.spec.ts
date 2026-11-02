@@ -26,6 +26,20 @@ describe('storefront client plugin configuration', () => {
         );
     });
 
+    it('appends the blog without changing existing plugin order or auto-enabling an entry', () => {
+        expect(clientPluginCatalog.slice(0, 2).map(plugin => plugin.code)).toEqual([
+            'category-coupon-entry',
+            'category-support-entry',
+        ]);
+        const blog = clientPluginCatalog.find(plugin => plugin.code === 'news-blog-entry');
+        expect(blog).toMatchObject({ defaultPlacement: 'BUSINESS_SERVICES_MAIN' });
+        if (!blog) throw new Error('Blog plugin catalog entry is missing');
+        expect(createClientPluginDraft().items).toHaveLength(0);
+        const draft = addClientPlugin(createClientPluginDraft(), blog);
+        expect(clientPluginDraftIsValid(draft)).toBe(true);
+        expect(clientPluginBlockInput(draft).items[0].settings?.pluginCode).toBe('news-blog-entry');
+    });
+
     it('creates an empty valid category plugin layout', () => {
         const draft = createClientPluginDraft();
 

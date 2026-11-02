@@ -24,15 +24,6 @@ export interface StorefrontClientPluginDefinition {
 /** 平台自研客户端插件目录。只有这里发布的插件才能写入店铺配置。 */
 export const storefrontClientPluginCatalog: readonly StorefrontClientPluginDefinition[] = [
     {
-        code: 'news-blog-entry',
-        name: '新闻博客',
-        englishName: 'News blog',
-        description: 'AI 官方资讯与指南。',
-        englishDescription: 'AI news.',
-        version: '1.0.0',
-        defaultPlacement: 'BUSINESS_SERVICES_MAIN',
-    },
-    {
         code: 'category-coupon-entry',
         name: '优惠券快捷入口',
         englishName: 'Coupon shortcut',
@@ -83,6 +74,15 @@ export const storefrontClientPluginCatalog: readonly StorefrontClientPluginDefin
         englishName: 'GPT self-service recharge',
         description: '验证兑换码、提交账号资料并查询 GPT 充值结果。',
         englishDescription: 'Redeem a code and track your GPT recharge.',
+        version: '1.0.0',
+        defaultPlacement: 'BUSINESS_SERVICES_MAIN',
+    },
+    {
+        code: 'news-blog-entry',
+        name: '新闻博客',
+        englishName: 'News blog',
+        description: 'AI 官方资讯与指南。',
+        englishDescription: 'AI news.',
         version: '1.0.0',
         defaultPlacement: 'BUSINESS_SERVICES_MAIN',
     },
