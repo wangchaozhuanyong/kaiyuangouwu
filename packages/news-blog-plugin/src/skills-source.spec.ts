@@ -45,6 +45,12 @@ describe('skill discovery and selection evidence', () => {
             rankings: [{ view: 'trending', rank: 12, displayCount: '1.5K' }],
         });
         expect(parseSkillBoard('<html>temporarily unavailable</html>', 'hot')).toEqual([]);
+        expect(
+            parseSkillBoard(
+                row('/owner/repo/document-helper', 187) + row('/owner/other/document-helper', 301),
+                'all-time',
+            ),
+        ).toHaveLength(1);
     });
     it('requires actual Skill front matter and a meaningful body, including multiline descriptions', () => {
         expect(parseSkillDocument(document)?.name).toBe('document-helper');

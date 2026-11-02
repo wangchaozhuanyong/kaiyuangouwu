@@ -532,6 +532,28 @@ describe('paid worker recovery', () => {
 });
 
 describe('public GitHub request admission', () => {
+    it('keeps multibyte documents within the database byte limit', async () => {
+        const http = new BlogSkillsHttp({} as never, connection);
+        vi.spyOn(http, 'read').mockResolvedValue('汉'.repeat(20000));
+        await expect(
+            http.document('owner/repo', 'a'.repeat(40), 'skills/source-test/SKILL.md'),
+        ).rejects.toThrow('原文过长');
+    });
+
+    it('renews an expired anonymous window before catalog admission, without paid publication traffic', async () => {
+        const http = new BlogSkillsHttp({ safeUrls: {} } as never, connection);
+        const state = await http.state();
+        await db
+            .getRepository('BlogSkillState')
+            .update(state.id, { requestCount: 40, requestWindow: new Date(Date.now() - 1000) });
+        await Promise.all([http.state(), http.state()]);
+        const renewed = await http.state();
+        expect(renewed.requestCount).toBe(0);
+        expect(renewed.requestWindow?.getTime()).toBeGreaterThan(Date.now());
+        await db.getRepository('BlogSkillState').update(state.id, { requestCount: 7 });
+        expect((await http.state()).requestCount).toBe(7);
+    });
+
     it('enforces a shared forty-request window before DNS and rejects unconfigured hosts', async () => {
         const resolveForRequest = vi.fn().mockRejectedValue(new Error('Synthetic network boundary'));
         const http = new BlogSkillsHttp({ safeUrls: { resolveForRequest } } as never, connection);
@@ -1307,6 +1329,149 @@ describe('free source workflow', () => {
         await skills.schedule(contextFor());
         expect(await db.getRepository('BlogSkillRecommendation').count()).toBe(1);
     });
+    it('keeps daily free recommendations available from the same high-star repository without repeating a Skill', async () => {
+        await enableFree();
+        const evidence: SkillEvidence = {
+            repository: 'owner/synthetic-skills',
+            repositoryId: '123',
+            directory: 'skills/new-skill',
+            name: 'new-skill',
+            description: 'Review frontend code using supplied project instructions.',
+            body: 'Independent synthetic instructions for the newly selected source document. '.repeat(20),
+            readme: '',
+            commit: 'a'.repeat(40),
+            stars: 12000,
+            rankings: [{ view: 'all-time', rank: 187, url: 'https://www.skills.sh/', displayCount: '10K' }],
+            observedAt: new Date().toISOString(),
+            aliases: ['new-identity'],
+        };
+        await db.getRepository('BlogSkill').save({
+            identity: 'new-identity',
+            repositoryId: '123',
+            repository: evidence.repository,
+            directory: evidence.directory,
+            name: evidence.name,
+            contentHash: fingerprint(evidence.body),
+            body: evidence.body,
+            evidenceJson: JSON.stringify(evidence),
+            status: 'READY',
+            message: '',
+            checkedAt: new Date(),
+        });
+        const day = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+        const yesterday = new Date(Date.parse(day + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+        await db.getRepository('BlogSkillRecommendation').save({
+            channelId: 1,
+            day: yesterday,
+            identity: 'old-identity',
+            repositoryId: '123',
+            status: 'PUBLISHED',
+            message: '',
+            articleId: null,
+            contentHash: 'different-source',
+            evidenceJson: JSON.stringify({ ...evidence, body: 'A distinct old source.', history: {} }),
+        });
+        const skills = new BlogSkillsService(
+            connection,
+            service,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+        await skills.schedule(contextFor(), new Date(day + 'T09:01:00+08:00'));
+        const selected = await db
+            .getRepository('BlogSkillRecommendation')
+            .findOneByOrFail({ channelId: 1, day });
+        expect(selected.identity).toBe('new-identity');
+        await skills.schedule(contextFor(), new Date(day + 'T09:02:00+08:00'));
+        expect(await db.getRepository('BlogSkillRecommendation').count()).toBe(2);
+    });
+    it('defers an incomplete historical Skill pool until its public window recovers', async () => {
+        await enableFree();
+        const day = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        const parent = await service.request(contextFor(), 'COLLECT', 'history-pool-window', {
+            historyStart: day,
+            historyEnd: day,
+        });
+        const retryAfter = new Date(Date.now() + 3600000);
+        const catalog = { refresh: vi.fn(() => Promise.resolve(retryAfter)) };
+        const skills = new BlogSkillsService(
+            connection,
+            service,
+            catalog as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+        await expect(skills.scheduleHistory(contextFor(), String(parent.id), [day])).rejects.toBeInstanceOf(
+            SkillDeferred,
+        );
+        expect(catalog.refresh).toHaveBeenCalledWith(expect.any(Date), true);
+        expect(await db.getRepository('BlogSkillRecommendation').count()).toBe(0);
+    });
+    it('uses an already pinned historical candidate when another repository reaches its anonymous limit', async () => {
+        await enableFree();
+        const day = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        const parent = await service.request(contextFor(), 'COLLECT', 'history-cached-source', {
+            historyStart: day,
+            historyEnd: day,
+        });
+        const evidence = (name: string, rank: number): SkillEvidence => ({
+            repository: `owner/${name}`,
+            repositoryId: String(rank + 100),
+            directory: 'skills/' + name,
+            name,
+            description: 'Review supplied frontend code using project requirements.',
+            body: `Synthetic historical source ${name}. `.repeat(20),
+            readme: '',
+            commit: 'a'.repeat(40),
+            stars: 10000,
+            rankings: [{ view: 'all-time', rank, url: 'https://www.skills.sh/', displayCount: '1K' }],
+            observedAt: new Date().toISOString(),
+            aliases: [name],
+        });
+        for (const e of [evidence('waiting-source', 1), evidence('cached-source', 2)])
+            await db.getRepository('BlogSkill').save({
+                identity: e.name,
+                repositoryId: e.repositoryId,
+                repository: e.repository,
+                directory: e.directory,
+                name: e.name,
+                contentHash: fingerprint(e.body),
+                body: e.body,
+                evidenceJson: JSON.stringify(e),
+                status: 'READY',
+                message: '',
+                checkedAt: new Date(),
+            });
+        const retryAfter = new Date(Date.now() + 3600000);
+        const catalog = {
+            refresh: () => Promise.resolve(retryAfter),
+            historicalEvidence: vi.fn((e: SkillEvidence) =>
+                e.name === 'waiting-source'
+                    ? Promise.reject(new SkillDeferred(retryAfter))
+                    : Promise.resolve({ ...e, sourceSnapshotAt: '2026-09-01T00:00:00Z' }),
+            ),
+        };
+        const skills = new BlogSkillsService(
+            connection,
+            service,
+            catalog as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+        await skills.scheduleHistory(contextFor(), String(parent.id), [day]);
+        const selected = await db
+            .getRepository('BlogSkillRecommendation')
+            .findOneByOrFail({ channelId: 1, day });
+        expect(selected.identity).toBe('cached-source');
+        expect(catalog.historicalEvidence).toHaveBeenCalledTimes(2);
+    });
     it('rejects automatic publication after a settings change or full-text tampering', async () => {
         const settings = await enableFree();
         const { worker } = freeWorker();
@@ -1350,6 +1515,31 @@ it.skipIf(!process.env.BLOG_SKILL_AUDIT_DIR)(
         const out = resolve(process.env.BLOG_SKILL_AUDIT_DIR ?? '');
         await mkdir(out, { recursive: true });
         const http = new BlogSkillsHttp({ safeUrls: new SafeProviderUrlService() } as never, connection);
+        const reads: Array<Record<string, unknown>> = [];
+        const actualRead = http.read.bind(http);
+        vi.spyOn(http, 'read').mockImplementation(async (...args) => {
+            try {
+                const body = await actualRead(...args);
+                const observation: Record<string, unknown> = { url: args[0], ok: true };
+                if (/^https:\/\/api.github.com\/repos\/[^/]+\/[^/?]+$/u.test(args[0])) {
+                    const repository = JSON.parse(body);
+                    Object.assign(observation, {
+                        stars: repository.stargazers_count,
+                        fork: repository.fork,
+                        archived: repository.archived,
+                    });
+                }
+                reads.push(observation);
+                return body;
+            } catch (error) {
+                reads.push({
+                    url: args[0],
+                    ok: false,
+                    reason: error instanceof Error ? error.message : 'read failed',
+                });
+                throw error;
+            }
+        });
         const catalog = new BlogSkillsCatalog(connection, http);
         await catalog.refresh();
         const rows = await db.getRepository('BlogSkill').find({ where: { status: 'READY' } });
@@ -1358,6 +1548,7 @@ it.skipIf(!process.env.BLOG_SKILL_AUDIT_DIR)(
             observedAt: new Date().toISOString(),
             externalModelCalls: 0,
             candidates: rows.map(x => ({ identity: x.identity, ...JSON.parse(x.evidenceJson) })),
+            reads,
             state,
         };
         const evergreen = rows

@@ -3,6 +3,7 @@ import { TransactionalConnection } from '@vendure/core';
 
 import { hash } from './content';
 import { dayStart } from './history';
+import { SkillDeferred } from './skill-deferral';
 import { BlogSkill, BlogSkillObservation, BlogSkillRecommendation, BlogSkillState } from './skill-entities';
 import { BlogSkillsHttp } from './skills-http';
 import {
@@ -14,6 +15,7 @@ import {
     SkillEvidence,
     skillPageAllowed,
 } from './skills-source';
+import { rankedSkillDocuments, readSkillTree } from './skills-tree';
 type Repo = {
     id: number;
     full_name: string;
@@ -23,7 +25,6 @@ type Repo = {
     stargazers_count: number;
     default_branch: string;
 };
-type TreeEntry = { path: string; type: string; sha: string; size?: number; mode: string };
 @Injectable()
 export class BlogSkillsCatalog {
     private historicalCommits = new Map<string, Promise<{ sha: string; at: string }>>();
@@ -142,10 +143,18 @@ export class BlogSkillsCatalog {
         }
         return document;
     }
-    async refresh(now = new Date()) {
+    async refresh(now = new Date(), force = false): Promise<Date | undefined> {
         const state = await this.http.state();
         const states = this.connection.rawConnection.getRepository(BlogSkillState);
-        if (state.lastCollectedAt && now.getTime() - state.lastCollectedAt.getTime() < 6 * 3600000) return;
+        if (state.requestCount >= 32 && state.requestWindow && state.requestWindow > now)
+            return state.requestWindow;
+        if (
+            !force &&
+            !state.message.startsWith('等待来源窗口') &&
+            state.lastCollectedAt &&
+            now.getTime() - state.lastCollectedAt.getTime() < 6 * 3600000
+        )
+            return;
         const leaseUntil = new Date(now.getTime() + 20 * 60000);
         const claim = await states
             .createQueryBuilder()
@@ -154,11 +163,12 @@ export class BlogSkillsCatalog {
             .where('id = :id', { id: state.id })
             .andWhere('(leaseUntil IS NULL OR leaseUntil < :now)', { now })
             .execute();
-        if (claim.affected !== 1) return;
+        if (claim.affected !== 1) return new Date(now.getTime() + 60000);
         const candidates = this.connection.rawConnection.getRepository(BlogSkill);
         let found = 0;
         let updated = 0;
         let failed = 0;
+        let deferredUntil: Date | undefined;
         try {
             const robots = await this.http.read('https://www.skills.sh/robots.txt');
             const discoveries = new Map<string, SkillDiscovery>();
@@ -211,26 +221,29 @@ export class BlogSkillsCatalog {
                       ? 1
                       : 2;
             const ordered = [...groups.entries()].sort(([a], [b]) => priority(a) - priority(b));
-            const urgent = ordered.filter(([repo]) => priority(repo) === 0);
-            const recent = ordered.filter(
-                ([repo, rows]) =>
-                    priority(repo) !== 0 && rows.some(x => x.rankings.some(y => y.view !== 'all-time')),
+            const rank = (rows: SkillDiscovery[], view: 'all-time' | 'trending' | 'hot') =>
+                Math.min(
+                    9999,
+                    ...rows.flatMap(x => x.rankings.filter(y => y.view === view).map(y => y.rank)),
+                );
+            const groupRows = ordered.sort(
+                ([a, left], [b, right]) =>
+                    priority(a) - priority(b) ||
+                    Number(rank(right, 'all-time') < 9999) - Number(rank(left, 'all-time') < 9999) ||
+                    rank(left, 'all-time') - rank(right, 'all-time') ||
+                    Math.min(rank(left, 'trending'), rank(left, 'hot')) -
+                        Math.min(rank(right, 'trending'), rank(right, 'hot')),
             );
-            const evergreen = ordered.filter(
-                ([repo, rows]) =>
-                    priority(repo) !== 0 && rows.every(x => x.rankings.every(y => y.view === 'all-time')),
-            );
-            const groupRows = [...urgent];
-            // Reserve discovery capacity for evergreen options when today's popular pack has already appeared.
-            while (recent.length || evergreen.length) {
-                for (const pool of [recent, recent, evergreen]) {
-                    const row = pool.shift();
-                    if (row) groupRows.push(row);
-                }
-            }
             for (const [repository, skills] of groupRows) {
+                if (Date.now() - now.getTime() > 10 * 60000) {
+                    deferredUntil = new Date(Date.now() + 60000);
+                    break;
+                }
                 const currentState = await this.http.state();
-                if (currentState.requestCount >= 32) break; // Leave room to verify today's publication.
+                if (currentState.requestCount >= 32) {
+                    deferredUntil = currentState.requestWindow ?? new Date(now.getTime() + 3600000);
+                    break;
+                }
                 try {
                     const repo = await this.repository(repository, 'discovery');
                     const commit = await this.http.json<{ sha: string; commit: { tree: { sha: string } } }>(
@@ -238,13 +251,9 @@ export class BlogSkillsCatalog {
                         'discovery',
                     );
                     if (!/^[a-f0-9]{40}$/u.test(commit.sha)) throw new Error('Skill 来源版本无效');
-                    const tree = await this.http.json<{ truncated: boolean; tree: TreeEntry[] }>(
-                        `/repos/${repo.full_name}/git/trees/${commit.commit.tree.sha}?recursive=1`,
-                        'discovery',
-                    );
-                    if (tree.truncated || !Array.isArray(tree.tree)) throw new Error('仓库目录资料不完整');
+                    const tree = await readSkillTree(this.http, repo.full_name, commit.commit.tree.sha);
                     let readme = '';
-                    const readmeFile = tree.tree.find(
+                    const readmeFile = tree.find(
                         x =>
                             /^README(?:\.md)?$/iu.test(x.path) && x.type === 'blob' && (x.size ?? 0) <= 55000,
                     );
@@ -255,20 +264,18 @@ export class BlogSkillsCatalog {
                             /* SKILL.md is mandatory, README optional. */
                         }
                     }
-                    for (const discovery of skills.slice(0, 8)) {
-                        const paths = tree.tree.filter(
-                            x =>
-                                x.type === 'blob' &&
-                                x.mode !== '120000' &&
-                                /(?:^|\/)SKILL\.md$/u.test(x.path) &&
-                                (x.size ?? 0) <= 55000 &&
-                                (x.path === 'SKILL.md' || x.path.split('/').at(-2) === discovery.slug),
-                        );
-                        if (paths.length !== 1) continue;
-                        const file = paths[0];
-                        const body = await this.http.document(repo.full_name, commit.sha, file.path);
-                        const parsed = parseSkillDocument(body);
-                        if (!parsed || parsed.name !== discovery.slug) continue;
+                    const selectedSkills = skills.slice(0, 16);
+                    const documents = await rankedSkillDocuments(
+                        this.http,
+                        repo.full_name,
+                        commit.sha,
+                        tree,
+                        selectedSkills,
+                    );
+                    for (const discovery of selectedSkills) {
+                        const matched = documents.get(discovery.slug);
+                        if (!matched) continue;
+                        const { file, body, parsed } = matched;
                         const directory = file.path.replace(/(?:^|\/)SKILL\.md$/u, '');
                         const identity = hash(`${repo.id}:${directory}`);
                         const contentHash = fingerprint(body);
@@ -330,21 +337,28 @@ export class BlogSkillsCatalog {
                         );
                         updated++;
                     }
-                } catch {
+                } catch (error) {
                     failed++;
+                    if (error instanceof SkillDeferred) {
+                        deferredUntil = error.retryAfter;
+                        break;
+                    }
                 }
             }
-        } catch {
+        } catch (error) {
             failed++;
+            deferredUntil =
+                error instanceof SkillDeferred ? error.retryAfter : new Date(Date.now() + 30 * 60000);
         } finally {
             await states.update(
                 { id: state.id, leaseUntil },
                 {
                     leaseUntil: null,
                     lastCollectedAt: now,
-                    message: `发现 ${found} 条，核验 ${updated} 条，来源或仓库未完成 ${failed} 项；未通过的条目不会自动发布`,
+                    message: `${deferredUntil ? '等待来源窗口恢复；' : ''}发现 ${found} 条，核验 ${updated} 条，来源或仓库未完成 ${failed} 项；未通过的条目不会自动发布`,
                 },
             );
         }
+        return deferredUntil;
     }
 }

@@ -592,6 +592,8 @@ export class BlogQueueService implements OnApplicationBootstrap {
                     }
                 }
             }
+            if (days.length && Date.now() - (run.startedAt ?? run.createdAt).getTime() > 20 * 60000)
+                throw new SkillDeferred(new Date(Date.now() + 60000));
             if (days.length && config.skillEnabled)
                 await this.skills?.scheduleHistory(ctx, String(run.id), days);
             await this.connection.getRepository(ctx, BlogRun).update(run.id, {

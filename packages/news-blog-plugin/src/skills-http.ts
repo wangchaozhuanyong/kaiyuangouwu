@@ -33,6 +33,17 @@ export class BlogSkillsHttp {
                 row = await repo.findOneByOrFail({ code: 'catalog' });
             }
         }
+        const now = new Date();
+        if (row.requestWindow && row.requestWindow <= now) {
+            await repo
+                .createQueryBuilder()
+                .update()
+                .set({ requestWindow: new Date(now.getTime() + 3600000), requestCount: 0 })
+                .where('id = :id', { id: row.id })
+                .andWhere('requestWindow <= :now', { now })
+                .execute();
+            row = await repo.findOneByOrFail({ code: 'catalog' });
+        }
         return row;
     }
     async read(url: string, hops = 0, purpose: 'discovery' | 'publication' = 'publication'): Promise<string> {
@@ -178,7 +189,7 @@ export class BlogSkillsHttp {
         const body = await this.read(
             `https://raw.githubusercontent.com/${repository}/${commit}/${path.split('/').map(encodeURIComponent).join('/')}`,
         );
-        if (body.length > 55000) throw new Error('Skill 原文过长');
+        if (Buffer.byteLength(body, 'utf8') > 55000) throw new Error('Skill 原文过长');
         return body;
     }
 }

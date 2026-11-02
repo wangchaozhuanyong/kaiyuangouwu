@@ -28,7 +28,7 @@ export const fingerprint = (body: string) =>
 export function parseSkillBoard(html: string, view: SkillRanking['view']): SkillDiscovery[] {
     const $ = load(html);
     const rows: SkillDiscovery[] = [];
-    const limit = view === 'trending' ? 50 : view === 'hot' ? 30 : 100;
+    const limit = view === 'trending' ? 50 : view === 'hot' ? 30 : 300;
     $('a[href]').each((_, el) => {
         const a = $(el);
         const href = a.attr('href') ?? '';
