@@ -34,7 +34,9 @@ const routeStyleBudgetBytes = 32 * 1024;
 // Regression ceilings include the actual initial vendor, bootstrap and selected
 // lazy-route dependency closure, rather than just the entry file. Rounded up
 // from the 2026-10-15 audited candidate; the entry/CSS ceilings remain independent.
-const initialJsBudgetKiB = { startup: 717, home: 973, catalog: 933, product: 946, services: 962, login: 775 };
+// Approved 2026-11-02: allow the measured news-blog route/protocol overhead (1–2 KiB).
+// Baseline comparison: packages/news-blog-plugin/IMPLEMENTATION-REPORT.md.
+const initialJsBudgetKiB = { startup: 718, home: 975, catalog: 935, product: 946, services: 962, login: 777 };
 const initialCssBudgetKiB = {
     startup: 375,
     home: 375,

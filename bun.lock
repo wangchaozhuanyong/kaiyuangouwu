@@ -504,6 +504,7 @@
         "@vendure/harden-plugin": "3.7.2",
         "@vendure/icloud-relay-plugin": "0.1.0",
         "@vendure/image-generation-plugin": "0.1.0",
+        "@vendure/news-blog-plugin": "0.1.0",
         "@vendure/next-admin-plugin": "0.1.0",
         "@vendure/operations-dashboard-plugin": "0.1.0",
         "@vendure/store-domain-plugin": "0.1.0",
@@ -664,6 +665,28 @@
         "bullmq",
         "ioredis",
       ],
+    },
+    "packages/news-blog-plugin": {
+      "name": "@vendure/news-blog-plugin",
+      "version": "0.1.0",
+      "dependencies": {
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/graphql": "~13.4.4",
+        "@vendure/common": "3.7.2",
+        "@vendure/core": "3.7.2",
+        "@vendure/image-generation-plugin": "0.1.0",
+        "@vendure/store-management-plugin": "0.1.0",
+        "@vendure/storefront-content-plugin": "0.1.0",
+        "cheerio": "1.0.0",
+        "graphql-tag": "^2.12.6",
+        "reflect-metadata": "^0.2.2",
+        "sharp": "0.35.5",
+        "typeorm": "^0.3.21",
+      },
+      "devDependencies": {
+        "typescript": "5.8.2",
+        "vitest": "^4.1.11",
+      },
     },
     "packages/next-admin": {
       "name": "next-admin",
@@ -3208,6 +3231,8 @@
     "@vendure/image-generation-plugin": ["@vendure/image-generation-plugin@workspace:packages/image-generation-plugin"],
 
     "@vendure/job-queue-plugin": ["@vendure/job-queue-plugin@workspace:packages/job-queue-plugin"],
+
+    "@vendure/news-blog-plugin": ["@vendure/news-blog-plugin@workspace:packages/news-blog-plugin"],
 
     "@vendure/next-admin-plugin": ["@vendure/next-admin-plugin@workspace:packages/next-admin-plugin"],
 
@@ -6760,6 +6785,8 @@
     "@vendure/job-queue-plugin/ioredis": ["ioredis@5.9.3", "", { "dependencies": { "@ioredis/commands": "1.5.0", "cluster-key-slot": "^1.1.0", "debug": "^4.3.4", "denque": "^2.1.0", "lodash.defaults": "^4.2.0", "lodash.isarguments": "^3.1.0", "redis-errors": "^1.2.0", "redis-parser": "^3.0.0", "standard-as-callback": "^2.1.0" } }, "sha512-VI5tMCdeoxZWU5vjHWsiE/Su76JGhBvWF1MJnV9ZtGltHk9BmD48oDq8Tj8haZ85aceXZMxLNDQZRVo5QKNgXA=="],
 
     "@vendure/job-queue-plugin/typescript": ["typescript@5.8.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ=="],
+
+    "@vendure/news-blog-plugin/typescript": ["typescript@5.8.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ=="],
 
     "@vendure/ngx-translate-extract/braces": ["braces@file:patches/security-vendors/braces", {}],
 

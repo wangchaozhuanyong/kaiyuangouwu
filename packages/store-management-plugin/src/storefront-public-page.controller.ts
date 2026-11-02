@@ -12,6 +12,12 @@ import { StorefrontPublicPageService } from './storefront-public-page.service';
 import { publicPagePreferences } from './storefront-public-request';
 
 export function parsePublicPageRequest(query: Request['query']): PublicPageRequest {
+    if (query.kind === 'blog')
+        return canonicalPublicPageRequest({
+            kind: 'blog',
+            id: typeof query.id === 'string' ? query.id : undefined,
+            input: typeof query.input === 'string' ? JSON.parse(query.input) : {},
+        });
     if (query.kind == null || query.kind === 'home') return canonicalPublicPageRequest({ kind: 'home' });
     if (query.kind === 'product' && typeof query.id === 'string')
         return canonicalPublicPageRequest({ kind: 'product', id: query.id });

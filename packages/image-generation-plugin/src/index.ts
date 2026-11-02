@@ -33,3 +33,5 @@ export { ImageProviderCostAdjustment } from './entities/image-provider-cost-adju
 export * from './image-provider-billing-review.js';
 
 export { runBillingReviewCli } from './image-provider-billing-cli.js';
+
+export { EditorialProviderService } from './editorial-provider.service';

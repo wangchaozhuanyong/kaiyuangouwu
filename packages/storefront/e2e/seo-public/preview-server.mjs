@@ -194,6 +194,7 @@ export async function startSeoFixtureServer(
     port = 0,
     {
         transformPage,
+        pageFactory = dataFor,
         renderPage = renderPublicPage,
         assembleDocument = assembleFixtureHtml,
         transformHtml,
@@ -206,7 +207,7 @@ export async function startSeoFixtureServer(
     } = {},
 ) {
     const pageFor = (...args) => {
-        const page = dataFor(...args);
+        const page = pageFactory(...args);
         transformPage?.(page, { url: args[0], host: args[1] });
         return page;
     };

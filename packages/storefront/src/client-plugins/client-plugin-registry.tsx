@@ -101,6 +101,10 @@ function AiImageStudioEntryPlugin({ language, onNavigate }: Readonly<ClientPlugi
 }
 
 const toolCopy = {
+    blog: [
+        ['新闻博客', 'AI 资讯与指南', '阅读'],
+        ['News blog', 'AI news', 'Read'],
+    ],
     coupons: [
         ['先领券，再选购', '查看可领取的优惠券', '去领券'],
         ['Claim a coupon first', 'See available coupons', 'View'],
@@ -137,6 +141,7 @@ function ToolEntryPlugin({
 }: Readonly<ClientPluginComponentProps & { name?: keyof typeof toolCopy; onWarmup?: () => void }>) {
     const [title, description, action] = toolCopy[name][language === 'zh' ? 0 : 1];
     const Icon = {
+        blog: WandSparkles,
         coupons: TicketPercent,
         support: Headphones,
         'image-studio': WandSparkles,
@@ -174,6 +179,9 @@ function toolEntry(name: keyof typeof toolCopy): ComponentType<ClientPluginCompo
     return props => <ToolEntryPlugin {...props} name={name} />;
 }
 
+function NewsBlogEntryPlugin(props: Readonly<ClientPluginComponentProps>) {
+    return props.language === 'zh' ? <ToolEntryPlugin {...props} name="blog" /> : null;
+}
 const clientPluginRenderers: Readonly<Record<string, ComponentType<ClientPluginComponentProps> | undefined>> =
     {
         'category-coupon-entry': toolEntry('coupons'),
@@ -181,6 +189,7 @@ const clientPluginRenderers: Readonly<Record<string, ComponentType<ClientPluginC
         'ai-image-studio-entry': AiImageStudioEntryPlugin,
         'two-factor-code-tool': toolEntry('two-factor'),
         'icloud-mail-query-entry': toolEntry('mail-query'),
+        'news-blog-entry': NewsBlogEntryPlugin,
         'gpt-recharge-entry': ToolEntryPlugin,
     };
 

@@ -42,6 +42,7 @@ import {
 import { HardenPlugin } from '@vendure/harden-plugin';
 import { IcloudRelayPlugin } from '@vendure/icloud-relay-plugin';
 import { ImageGenerationPlugin } from '@vendure/image-generation-plugin';
+import { NewsBlogPlugin } from '@vendure/news-blog-plugin';
 import { NextAdminPlugin } from '@vendure/next-admin-plugin';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import {
@@ -971,6 +972,7 @@ export const devConfig: VendureConfig = {
                   }),
                   StorefrontCatalogPlugin,
                   StorefrontContentPlugin,
+                  NewsBlogPlugin,
                   StorefrontReviewPlugin,
                   StoreDomainPlugin.init({
                       cnameTarget: process.env.STORE_DOMAIN_CNAME_TARGET || 'vendure.localhost',

@@ -29,14 +29,17 @@ const domainRules: Array<[ResourceDomain, RegExp]> = [
     ],
     ['customers', /customer|address/iu],
     ['marketing', /promotion|coupon|referral|withdrawal|marketing|flashsale|sharing/iu],
-    ['storefront', /catalogsyncrule|storefront|contentblock|review|traffic|translation|systemannouncement/iu],
+    [
+        'storefront',
+        /newsblog|catalogsyncrule|storefront|contentblock|review|traffic|translation|systemannouncement/iu,
+    ],
     [
         'settings',
         /catalogsyncrule|channel|seller|store(?!front)|commerce|settings|finance|currency|rate|shipping|tax|country|zone|role|administrator|platformownership|job|scheduledtask|apikey|incident|govern(?:ed|ance)|dataretention|datasubject|migratedigitalinventory/iu,
     ],
     [
         'plugins',
-        /gptrecharge|icloud|twofactor|imagegeneration|imageprovider|imageskill|image(?:model|promptskill|output)|clientplugin|telegram|incident/iu,
+        /newsblog|gptrecharge|icloud|twofactor|imagegeneration|imageprovider|imageskill|image(?:model|promptskill|output)|clientplugin|telegram|incident/iu,
     ],
 ];
 // Session transitions own their existing redirect/cache lifecycle, rather than page refresh.

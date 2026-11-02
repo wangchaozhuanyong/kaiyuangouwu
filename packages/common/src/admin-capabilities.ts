@@ -202,6 +202,7 @@ export const ADMIN_CAPABILITY_DEFINITIONS: readonly AdminCapabilityDefinition[] 
         ['ReadStorefrontContent'],
         ['UpdateStorefrontContent'],
     ),
+    page('/plugins/news-blog', 'STORE', ['ManageNewsBlog'], ['ManageNewsBlog', 'PublishNewsBlog']),
     page('/plugins/client-plugins', 'STORE', ['ReadStorefrontContent'], ['UpdateStorefrontContent']),
     ...section(
         '/plugins/ai-settings',

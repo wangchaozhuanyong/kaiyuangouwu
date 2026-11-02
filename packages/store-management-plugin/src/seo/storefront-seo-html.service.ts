@@ -390,7 +390,9 @@ export class StorefrontSeoHtmlService {
                                     ? ['search-loading-', 'search-page-']
                                     : []),
                             ]
-                          : [];
+                          : page.request?.kind === 'blog'
+                            ? ['blog-']
+                            : [];
                 const preloadScripts =
                     page.request?.kind === 'home' &&
                     typeof renderer.getPublicRouteScriptPreloads === 'function';

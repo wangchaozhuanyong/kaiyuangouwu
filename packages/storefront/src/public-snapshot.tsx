@@ -47,6 +47,7 @@ import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import { type StorefrontContentTargetType, type StorefrontFlashSale, type StorefrontLanguage } from './types';
 
 type SnapshotComponents = {
+    BlogContent?: (typeof import('./pages/blog-content'))['BlogContent'];
     BusinessServicesPage?: (typeof import('./pages/business-services-page'))['BusinessServicesPage'];
     CategoryPage?: (typeof import('./pages/category-page'))['CategoryPage'];
     GuideContent?: (typeof import('./pages/guide-page'))['GuideContent'];
@@ -59,6 +60,7 @@ type SnapshotComponents = {
 
 async function loadSnapshotComponents(page: PublicPageData): Promise<SnapshotComponents> {
     const request = page.request;
+    if (request?.kind === 'blog') return import('./pages/blog-content');
     if (request?.kind === 'article') return import('./pages/guide-page');
     if (request?.kind === 'product') return import('./pages/product-detail-page');
     if (request?.kind === 'catalog')
@@ -135,7 +137,10 @@ function SnapshotPage({ page, components }: { page: PublicPageData; components: 
     const request = page.request;
     const route = resolveCategoryRoute(snapshotRoute(page), collections);
     let body;
-    if (request?.kind === 'article' && page.publicContent) {
+    if (request?.kind === 'blog' && page.blog) {
+        const BlogContent = requiredComponent(components.BlogContent);
+        body = <BlogContent page={page.blog} input={request.input} />;
+    } else if (request?.kind === 'article' && page.publicContent) {
         const GuideContent = requiredComponent(components.GuideContent);
         body = <GuideContent content={page.publicContent} language={language} />;
     } else if (request?.kind === 'article') {
@@ -531,7 +536,12 @@ export async function createPublicSnapshotApp(page: PublicPageData) {
     }).pathname;
     const child = createRoute({
         getParentRoute: () => root,
-        path: pathname.startsWith('/guides/') ? '/guides/$slug' : pathname,
+        path:
+            pathname.startsWith('/blog/') && pathname !== '/blog/'
+                ? '/blog/$slug'
+                : pathname.startsWith('/guides/')
+                  ? '/guides/$slug'
+                  : pathname,
         component: () => <SnapshotPage page={page} components={components} />,
     });
     const router = createRouter({

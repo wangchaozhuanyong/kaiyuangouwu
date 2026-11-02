@@ -77,3 +77,6 @@ export { isStorefrontVisualPresetId } from './visual-presets';
 
 export { resolveManagedLegalDocument } from './shared/legal-content';
 export type { ManagedLegalContentBlock } from './shared/legal-content';
+export * from './shared/news-blog';
+
+export { storefrontAssetUrl } from './content-image';

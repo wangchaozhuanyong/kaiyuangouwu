@@ -289,10 +289,17 @@ export function auditInteractionRoutes() {
 export function checkRouteAdmission(routeNames, familyNames, routeFiles) {
     const problems = [];
     if (new Set(routeNames).size !== routeNames.length) problems.push('路由注册存在重复名称');
+    // TanStack file paths differ from semantic route names for nested content.
+    // These exact aliases still require both registration and a page family.
+    const contentRouteFiles = {
+        guide: 'guides.$slug',
+        blog: 'blog.index',
+        'blog-article': 'blog.$slug',
+    };
     const expected = new Set([
         '__root.tsx',
         'index.tsx',
-        ...routeNames.map(name => `${name === 'guide' ? 'guides.$slug' : name}.tsx`),
+        ...routeNames.map(name => `${contentRouteFiles[name] ?? name}.tsx`),
     ]);
     for (const file of routeFiles)
         if (!expected.has(file)) problems.push(`routes/${file}: 新路由未接入 storefrontRouteNames 与页面族`);

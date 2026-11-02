@@ -784,3 +784,21 @@ defineNextAdminExtension({
         },
     ],
 });
+
+const NewsBlogModule = lazy(() =>
+    routeModuleLoaders.newsBlog().then(module => ({ default: module.NewsBlogModule })),
+);
+defineNextAdminExtension({
+    id: 'news-blog-dashboard-plugin',
+    routes: [
+        {
+            id: 'news-blog',
+            path: '/plugins/news-blog',
+            title: '新闻博客',
+            component: NewsBlogModule,
+            permissions: ['ManageNewsBlog'],
+            navItem: { label: '新闻博客', sectionId: 'plugins', order: 75 },
+            preload: routeModuleLoaders.newsBlog,
+        },
+    ],
+});

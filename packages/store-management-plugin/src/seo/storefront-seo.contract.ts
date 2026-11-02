@@ -10,7 +10,7 @@ export const storefrontSeoTargetTypes = [
 export type StorefrontSeoTargetType = (typeof storefrontSeoTargetTypes)[number];
 export const storefrontSeoLanguages = ['zh_Hans', 'en'] as const;
 export type StorefrontSeoLanguage = (typeof storefrontSeoLanguages)[number];
-export const storefrontSeoPageKeys = ['services', 'support', 'terms', 'privacy', 'promo'] as const;
+export const storefrontSeoPageKeys = ['services', 'support', 'terms', 'privacy', 'promo', 'blog'] as const;
 export interface StorefrontSeoIdentity {
     targetType: StorefrontSeoTargetType;
     targetId: string;

@@ -95,6 +95,8 @@ describe('public storefront browsing boundary', () => {
         'storefrontAnnouncements',
         'storefrontAnnouncement',
         'storefrontContentSettings',
+        'newsBlogArticles',
+        'newsBlogArticle',
         'storefrontProductReviews',
         'storefrontReviewSettings',
         'activeStoreCommerceMode',
@@ -119,6 +121,11 @@ describe('public storefront browsing boundary', () => {
         'icloudPrimaryAccounts',
         'icloudReceivedMails',
         'myDeliveryEmails',
+        'newsBlogSettings',
+        'newsBlogRuns',
+        'newsBlogSourceItems',
+        'newsBlogHistory',
+        'newsBlogProviderOptions',
     ])('keeps private and unreviewed queries protected: %s', field => expect(invoke(field).run).toThrow());
     it.each([
         'storefrontDailyRecommendations',

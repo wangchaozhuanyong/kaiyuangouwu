@@ -108,7 +108,7 @@ export class StorefrontLcpPreloadService {
                 ? request.id === 'services' || request.id === 'support'
                     ? request.id
                     : undefined
-                : request.kind === 'article'
+                : request.kind === 'article' || request.kind === 'blog'
                   ? undefined
                   : request.kind;
         const preload = route ? this.preloads(page, host, route, layout, request) : '';

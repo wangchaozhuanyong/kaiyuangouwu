@@ -7,6 +7,8 @@ describe('desktop page family contract', () => {
     it('maps every storefront route exactly once into the seven desktop families', () => {
         expect(desktopPageFamilyByRoute['gpt-recharge']).toBe('tools');
         expect(desktopPageFamilyByRoute.guide).toBe('content');
+        expect(desktopPageFamilyByRoute.blog).toBe('content');
+        expect(desktopPageFamilyByRoute['blog-article']).toBe('content');
         expect(Object.keys(desktopPageFamilyByRoute).sort()).toEqual([...storefrontRouteNames].sort());
         expect(new Set(Object.values(desktopPageFamilyByRoute))).toEqual(
             new Set(['discovery', 'product', 'commerce', 'account', 'auth', 'tools', 'content']),

@@ -6,7 +6,7 @@
     "private": true,
     "//": "dev uses Portless for worktree-safe URLs; dev:agent adds machine-readable status/stop commands; dev:direct is the fixed-port escape hatch; workers are explicit and repository-locked.",
     "scripts": {
-        "build:local-plugins": "bun run --cwd ../telemetry-plugin build && bun run --cwd ../harden-plugin build && bun run --cwd ../content-translation-plugin build && bun run --cwd ../operations-dashboard-plugin build && bun run --cwd ../two-factor-dashboard-plugin build && bun run --cwd ../storefront-catalog-plugin build && bun run --cwd ../storefront-cart-plugin build && bun run --cwd ../storefront-review-plugin build && bun run --cwd ../store-domain-plugin build && bun run --cwd ../storefront-content-plugin build && bun run --cwd ../store-management-plugin build && bun run --cwd ../catalog-management-plugin build && bun run --cwd ../commerce-fulfillment-plugin build && bun run --cwd ../image-generation-plugin build && bun run --cwd ../next-admin-plugin build && bun run --cwd ../icloud-relay-plugin build",
+        "build:local-plugins": "bun run --cwd ../telemetry-plugin build && bun run --cwd ../harden-plugin build && bun run --cwd ../content-translation-plugin build && bun run --cwd ../operations-dashboard-plugin build && bun run --cwd ../two-factor-dashboard-plugin build && bun run --cwd ../storefront-catalog-plugin build && bun run --cwd ../storefront-cart-plugin build && bun run --cwd ../storefront-review-plugin build && bun run --cwd ../store-domain-plugin build && bun run --cwd ../storefront-content-plugin build && bun run --cwd ../store-management-plugin build && bun run --cwd ../catalog-management-plugin build && bun run --cwd ../commerce-fulfillment-plugin build && bun run --cwd ../image-generation-plugin build && bun run --cwd ../next-admin-plugin build && bun run --cwd ../icloud-relay-plugin build && bun run --cwd ../news-blog-plugin build",
         "populate": "node -r ts-node/register -r dotenv/config populate-dev-server.ts",
         "predev:server": "bun run build:local-plugins",
         "dev:server": "node ../cli/dist/cli.js dev server --server-entry ./index.ts",
@@ -54,6 +54,7 @@
         "load-test:1k": "node -r ts-node/register load-testing/run-load-test.ts 1000",
         "load-test:10k": "node -r ts-node/register load-testing/run-load-test.ts 10000",
         "load-test:100k": "node -r ts-node/register load-testing/run-load-test.ts 100000",
+        "test:news-blog-e2e": "vitest run --config ../../e2e-common/vitest.config.mts e2e/news-blog.mysql.e2e-spec.ts",
         "test:cart-e2e": "cross-env PACKAGE=dev-server vitest --config ../../e2e-common/vitest.config.mts --run e2e/cart-checkout.e2e-spec.ts",
         "check:cart-e2e-types": "tsc --project tsconfig.cart-e2e.json --noEmit"
     },
@@ -81,7 +82,8 @@
         "dotenv": "^16.6.1",
         "@vendure/next-admin-plugin": "0.1.0",
         "google-auth-library": "^10.9.1",
-        "braces": "file:../../patches/security-vendors/braces"
+        "braces": "file:../../patches/security-vendors/braces",
+        "@vendure/news-blog-plugin": "0.1.0"
     },
     "devDependencies": {
         "@typescript/native-preview": "7.0.0-dev.20260515.1",

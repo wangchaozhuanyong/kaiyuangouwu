@@ -22,6 +22,7 @@ const sharedStaticInputs = new Set([
 const sharedPublicInputs = new Set([
     'packages/storefront-content-plugin/src/shared/public-page-data.ts',
     'packages/storefront-content-plugin/src/shared/public-seo.ts',
+    'packages/storefront-content-plugin/src/shared/news-blog.ts',
 ]);
 export const staticStyleOwner = file => (sharedStaticInputs.has(file) ? 'storefront' : undefined);
 // The Admin decoration preview compiles the storefront router and CSS into its own bundle.

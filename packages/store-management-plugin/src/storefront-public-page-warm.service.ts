@@ -1,4 +1,5 @@
 import { Injectable, OnApplicationBootstrap, OnApplicationShutdown, Optional } from '@nestjs/common';
+import type { Json } from '@vendure/common/lib/shared-types';
 import {
     CacheService,
     ForbiddenError,
@@ -160,7 +161,10 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
 
     private async saveRoutes(ctx: RequestContext, key: string, routes: PublicHotRoute[]) {
         if ((await this.registryKey(ctx)) !== key) return;
-        await publicSectionWithinBudget(this.cache.set(key, routes, { ttl: HOT_TTL }), 200);
+        await publicSectionWithinBudget(
+            this.cache.set(key, JSON.parse(JSON.stringify(routes)) as Json[], { ttl: HOT_TTL }),
+            200,
+        );
         if ((await this.registryKey(ctx)) !== key)
             await publicSectionWithinBudget(this.cache.delete(key), 200);
     }
@@ -170,8 +174,8 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
             const recent = this.pending.get(key) ?? [];
             this.pending.delete(key);
             if ((await this.registryKey(ctx)) !== key) return;
-            const previous = await publicSectionWithinBudget(this.cache.get<PublicHotRoute[]>(key), 200);
-            const routes = mergePublicHotRoutes(previous ?? [], recent);
+            const previous = await publicSectionWithinBudget(this.cache.get<Json[]>(key), 200);
+            const routes = mergePublicHotRoutes((previous ?? []) as PublicHotRoute[], recent);
             await this.saveRoutes(ctx, key, routes);
         }
     }
@@ -246,7 +250,7 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
         if (!first) return { warmed: 0 };
         const key = await this.registryKey(first);
         if (!key) return { warmed: 0 };
-        const previous = await publicSectionWithinBudget(this.cache.get<PublicHotRoute[]>(key), 200);
+        const previous = await publicSectionWithinBudget(this.cache.get<Json[]>(key), 200);
         const primaryLanguage =
             first.channel.defaultLanguageCode === LanguageCode.zh_Hans
                 ? LanguageCode.zh_Hans
@@ -303,7 +307,7 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
             }
         }
         const routes = mergePublicHotRoutes(
-            (previous ?? [])
+            ((previous ?? []) as PublicHotRoute[])
                 .filter(route => validHosts.has(route.host))
                 .map(route => ({ ...route, primary: false })),
             defaults,
