@@ -265,10 +265,32 @@ describe('account referral visibility', () => {
                             fetchStatus: 'idle',
                         }),
             });
-            expect(failed).toContain('暂不可用');
-            expect(failed).toContain('重试');
+            // A background failure retains the confirmed amount; only an initial
+            // failure without data uses the unavailable state and local retry.
+            expect(failed).toContain('CNY</span> <span>8.80');
+            expect(failed).not.toContain('暂不可用');
             expect(failed).not.toContain('CNY</span> <span>0.00');
-            expect(failed).not.toContain('CNY</span> <span>8.80');
+            const initialFailure = renderAccount(true, {
+                desktop,
+                prepareClient: client => {
+                    // Freeze the failed read in this static fixture; a new
+                    // observer would otherwise start its normal mount retry.
+                    client.setQueryDefaults(queryKey, { retryOnMount: false });
+                    client
+                        .getQueryCache()
+                        .find({ queryKey })
+                        ?.setState({
+                            data: undefined,
+                            status: 'error',
+                            error: new Error('Initial read failed'),
+                            fetchStatus: 'idle',
+                        });
+                },
+            });
+            expect(initialFailure).toContain('暂不可用');
+            expect(initialFailure).toContain('重试');
+            expect(initialFailure).not.toContain('CNY</span> <span>0.00');
+            expect(initialFailure).not.toContain('CNY</span> <span>8.80');
         },
     );
 });
