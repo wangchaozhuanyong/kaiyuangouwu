@@ -1147,6 +1147,26 @@ describe('free source workflow', () => {
         );
         return { worker, provider, media };
     }
+    it('blocks a previously cached category page before generating or publishing it', async () => {
+        await enableFree();
+        await db.getRepository('BlogSourceItem').update(1, {
+            sourceCode: 'anthropic',
+            url: 'https://www.anthropic.com/news/product',
+            title: 'Product',
+        });
+        const { worker, provider, media } = freeWorker();
+        const run = await service.request(contextFor(), 'GENERATE', 'cached-category-page', {
+            sourceIds: ['1'],
+        });
+        await worker.process('1', String(run.id));
+        const completed = await db.getRepository('BlogRun').findOneByOrFail({ id: run.id });
+        expect(completed.state).toBe('FAILED');
+        expect(completed.message).toBe('任务未完成，请检查来源、文章版本与配置后重试');
+        expect(await db.getRepository('BlogArticle').count()).toBe(0);
+        expect(provider.text).not.toHaveBeenCalled();
+        expect(provider.image).not.toHaveBeenCalled();
+        expect(media.createCover).not.toHaveBeenCalled();
+    });
     it('publishes verified source briefs through the real database queue with zero model calls or budget', async () => {
         await enableFree();
         const { worker, provider, media } = freeWorker();
