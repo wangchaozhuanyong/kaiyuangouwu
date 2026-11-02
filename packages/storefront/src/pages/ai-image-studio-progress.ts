@@ -10,11 +10,6 @@ export interface ImageGenerationProgress {
     determinate: boolean;
 }
 
-export interface ImageGenerationPollingController {
-    stop(): void;
-    refreshNow(): void;
-}
-
 const processedOutputStates = new Set(['SUCCEEDED', 'FAILED', 'CANCELLED']);
 
 export function imageGenerationProgress(job: GenerationProgressInput): ImageGenerationProgress {
@@ -39,47 +34,4 @@ export function imageGenerationElapsedSeconds(startedAt: string | number, now = 
 
 export function imageGenerationPollDelay(startedAt: number, now = Date.now()): number {
     return now - startedAt < 60_000 ? 2_000 : 5_000;
-}
-
-export function startImageGenerationPolling(
-    refresh: () => Promise<void>,
-    nextDelay: () => number,
-): ImageGenerationPollingController {
-    let stopped = false;
-    let running = false;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-
-    const clearScheduledRefresh = () => {
-        if (timeout !== undefined) clearTimeout(timeout);
-        timeout = undefined;
-    };
-    const schedule = () => {
-        if (stopped || running) return;
-        clearScheduledRefresh();
-        timeout = setTimeout(() => void run(), Math.max(250, nextDelay()));
-    };
-    const run = async () => {
-        if (stopped || running) return;
-        clearScheduledRefresh();
-        running = true;
-        try {
-            await refresh();
-        } catch {
-            // The page owns the visible error state. Polling must recover after a transient failure.
-        } finally {
-            running = false;
-            schedule();
-        }
-    };
-
-    schedule();
-    return {
-        stop() {
-            stopped = true;
-            clearScheduledRefresh();
-        },
-        refreshNow() {
-            void run();
-        },
-    };
 }

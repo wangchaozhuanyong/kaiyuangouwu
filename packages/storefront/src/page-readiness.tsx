@@ -42,9 +42,9 @@ const PageLoadingContext = createContext<{
 const PageRouteCommitContext = createContext<(() => void) | null>(null);
 
 /** React owns the visible loading/error UI. Local reads may still be pending. */
-export function markStorefrontAppOwned(): void {
+export function markStorefrontAppOwned(initialSurface = false): void {
     document.documentElement.setAttribute('data-storefront-app-owned', '');
-    document.dispatchEvent(new Event('storefront:app-owned'));
+    document.dispatchEvent(new CustomEvent('storefront:app-owned', { detail: { initialSurface } }));
 }
 
 /** A real route commit completes adoption; a server ready attribute is not a client signal. */
@@ -317,8 +317,8 @@ export function PageReadinessBoundary({
         // A rendered public snapshot is adopted only by its real route commit.
         // Once adopted, coupons, recommendations and other local reads cannot
         // keep the document startup presentation alive.
-        if (!requireInitialRouteCommit || initialRouteCommitted) markStorefrontAppOwned();
-    }, [requireInitialRouteCommit, initialRouteCommitted]);
+        if (!requireInitialRouteCommit || initialRouteCommitted) markStorefrontAppOwned(initial);
+    }, [requireInitialRouteCommit, initialRouteCommitted, initial]);
 
     useLayoutEffect(() => {
         // Child layout effects register before this check. A loading page must not be marked

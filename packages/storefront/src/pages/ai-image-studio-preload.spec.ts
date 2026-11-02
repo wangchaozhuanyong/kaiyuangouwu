@@ -36,7 +36,7 @@ it('loads only on intent, rejects pre-import logout/scope cancellation, and reta
     current = true;
     prepareImageStudioData(api, null, market, () => current);
     await vi.dynamicImportSettled();
-    expect(runtime.preload).toHaveBeenCalledExactlyOnceWith(api, null, market);
+    expect(runtime.preload).toHaveBeenCalledExactlyOnceWith(api, null, market, market.defaultLanguageCode);
 
     prepareImageStudioData(api, null, market, () => current);
     clearStudioCache();

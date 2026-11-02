@@ -163,7 +163,9 @@ export function AuthPageBoundary({
 
 /** Shared page inset and section rhythm; the page shell alone reserves its end gap. */
 export function SubpageBody({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-    return <div {...props} className={`subpage-body${className ? ` ${className}` : ''}`} />;
+    return (
+        <div data-content-reveal {...props} className={`subpage-body${className ? ` ${className}` : ''}`} />
+    );
 }
 
 export function Subpage({

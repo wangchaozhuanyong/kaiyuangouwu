@@ -1,6 +1,9 @@
 import { Headphones, KeyRound, Mail, TicketPercent, WandSparkles } from 'lucide-react';
 import { type ComponentType, useCallback, useContext, useEffect, useRef } from 'react';
 
+import { shouldPrefetchMedia } from '../hooks/useOnlineStatus';
+import { useStorefrontPageActivity } from '../hooks/useStorefrontPageActivity';
+import { languageCodeFor } from '../i18n';
 import { prepareImageStudioData } from '../pages/ai-image-studio-preload';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { type RouteState } from '../storefront-router';
@@ -40,57 +43,15 @@ interface ResolvedClientPlugin {
     Component: ComponentType<ClientPluginComponentProps>;
 }
 
+const entryClass = 'category-client-plugin';
+
 export function isAssistanceClientPlugin(plugin: Pick<ResolvedClientPlugin, 'code'>): boolean {
     return plugin.code === 'category-coupon-entry' || plugin.code === 'category-support-entry';
 }
 
-function CouponEntryPlugin({ language, onNavigate, illustrated }: Readonly<ClientPluginComponentProps>) {
-    const isZh = language === 'zh';
-    return (
-        <button
-            type="button"
-            className={`category-client-plugin category-client-plugin-coupon${illustrated ? ' has-assistance-artwork' : ''}`}
-            onClick={() => onNavigate({ name: 'coupons' })}
-        >
-            <span className="category-client-plugin-icon" aria-hidden="true">
-                <TicketPercent />
-            </span>
-            <span className="category-client-plugin-copy">
-                <strong>{isZh ? '先领券，再选购' : 'Claim a coupon first'}</strong>
-                <span>{isZh ? '查看可领取的优惠券' : 'See available coupons'}</span>
-            </span>
-            <span className="category-client-plugin-action">{isZh ? '去领券' : 'View'}</span>
-            {illustrated && <AssistanceArtwork source={couponArtwork} />}
-        </button>
-    );
-}
-
-function SupportEntryPlugin({ language, onNavigate, illustrated }: Readonly<ClientPluginComponentProps>) {
-    const isZh = language === 'zh';
-    return (
-        <button
-            type="button"
-            className={`category-client-plugin category-client-plugin-support${illustrated ? ' has-assistance-artwork' : ''}`}
-            onClick={() => onNavigate({ name: 'support' })}
-        >
-            <span className="category-client-plugin-icon" aria-hidden="true">
-                <Headphones />
-            </span>
-            <span className="category-client-plugin-copy">
-                <strong>{isZh ? '选购遇到问题？' : 'Need help choosing?'}</strong>
-                <span>
-                    {isZh ? '联系客服获取商品与订单帮助' : 'Contact support for product and order help'}
-                </span>
-            </span>
-            <span className="category-client-plugin-action">{isZh ? '联系客服' : 'Support'}</span>
-            {illustrated && <AssistanceArtwork source={supportArtwork} />}
-        </button>
-    );
-}
-
 function AssistanceArtwork({ source }: Readonly<{ source: string }>) {
     return (
-        <picture className="category-client-plugin-artwork" aria-hidden="true">
+        <picture className={`${entryClass}-artwork`} aria-hidden="true">
             <source media="(max-width: 1023px)" srcSet={`${source}#compact`} />
             <img src={source} alt="" width="440" height="144" draggable={false} />
         </picture>
@@ -98,11 +59,12 @@ function AssistanceArtwork({ source }: Readonly<{ source: string }>) {
 }
 
 function AiImageStudioEntryPlugin({ language, onNavigate }: Readonly<ClientPluginComponentProps>) {
-    const isZh = language === 'zh';
     const storefront = useContext(StorefrontContext);
+    const active = useStorefrontPageActivity();
     const warmupOwner = useRef({});
 
     const handleWarmup = useCallback(() => {
+        if (!active || !shouldPrefetchMedia()) return;
         void preloadStorefrontRouteComponent('image-studio');
         if (storefront?.api && storefront.market) {
             const owner = warmupOwner.current;
@@ -111,9 +73,10 @@ function AiImageStudioEntryPlugin({ language, onNavigate }: Readonly<ClientPlugi
                 storefront.customer,
                 storefront.market,
                 () => warmupOwner.current === owner,
+                languageCodeFor(language),
             );
         }
-    }, [storefront]);
+    }, [storefront, active]);
 
     useEffect(() => {
         warmupOwner.current = {};
@@ -128,31 +91,28 @@ function AiImageStudioEntryPlugin({ language, onNavigate }: Readonly<ClientPlugi
     }, [handleWarmup, storefront]);
 
     return (
-        <button
-            type="button"
-            className="category-client-plugin category-client-plugin-image-studio"
-            onClick={() => onNavigate({ name: 'image-studio' })}
-            onMouseEnter={handleWarmup}
-            onTouchStart={handleWarmup}
-            onFocus={handleWarmup}
-        >
-            <span className="category-client-plugin-icon" aria-hidden="true">
-                <WandSparkles />
-            </span>
-            <span className="category-client-plugin-copy">
-                <strong>{isZh ? 'AI 图片工坊' : 'AI Image Studio'}</strong>
-                <span>
-                    {isZh
-                        ? '智能优化描述，选择模型快速生成图片'
-                        : 'Improve your prompt, choose a model, and create images'}
-                </span>
-            </span>
-            <span className="category-client-plugin-action">{isZh ? '开始创作' : 'Create'}</span>
-        </button>
+        <ToolEntryPlugin
+            language={language}
+            onNavigate={onNavigate}
+            name="image-studio"
+            onWarmup={handleWarmup}
+        />
     );
 }
 
 const toolCopy = {
+    coupons: [
+        ['先领券，再选购', '查看可领取的优惠券', '去领券'],
+        ['Claim a coupon first', 'See available coupons', 'View'],
+    ],
+    support: [
+        ['选购遇到问题？', '联系客服获取商品与订单帮助', '联系客服'],
+        ['Need help choosing?', 'Contact support for product and order help', 'Support'],
+    ],
+    'image-studio': [
+        ['AI 图片工坊', '智能优化描述，选择模型快速生成图片', '开始创作'],
+        ['AI Image Studio', 'Improve your prompt, choose a model, and create images', 'Create'],
+    ],
     'two-factor': [
         ['2FA 动态码', '密钥不上传，在当前浏览器本地生成', '立即使用'],
         ['2FA codes', 'Generate codes locally without uploading secrets', 'Open'],
@@ -172,38 +132,52 @@ function ToolEntryPlugin({
     onNavigate,
     language,
     name = 'gpt-recharge',
-}: Readonly<ClientPluginComponentProps & { name?: keyof typeof toolCopy }>) {
+    illustrated,
+    onWarmup,
+}: Readonly<ClientPluginComponentProps & { name?: keyof typeof toolCopy; onWarmup?: () => void }>) {
     const [title, description, action] = toolCopy[name][language === 'zh' ? 0 : 1];
-    const Icon = name === 'mail-query' ? Mail : KeyRound;
+    const Icon = {
+        coupons: TicketPercent,
+        support: Headphones,
+        'image-studio': WandSparkles,
+        'mail-query': Mail,
+        'two-factor': KeyRound,
+        'gpt-recharge': KeyRound,
+    }[name];
+    const assistance = name === 'coupons' || name === 'support';
+    const suffix = name === 'gpt-recharge' ? '' : ` ${entryClass}-${name === 'coupons' ? 'coupon' : name}`;
     return (
         <button
             type="button"
-            className={`category-client-plugin${name === 'gpt-recharge' ? '' : ` category-client-plugin-${name}`}`}
+            className={`${entryClass}${suffix}${assistance && illustrated ? ' has-assistance-artwork' : ''}`}
             onClick={() => onNavigate({ name })}
+            onMouseEnter={onWarmup}
+            onTouchStart={onWarmup}
+            onFocus={onWarmup}
         >
-            <span
-                className="category-client-plugin-icon"
-                aria-hidden={name === 'gpt-recharge' ? undefined : true}
-            >
+            <span className={`${entryClass}-icon`} aria-hidden={name === 'gpt-recharge' ? undefined : true}>
                 <Icon />
             </span>
-            <span className="category-client-plugin-copy">
+            <span className={`${entryClass}-copy`}>
                 <strong>{title}</strong>
                 <span>{description}</span>
             </span>
-            <span className="category-client-plugin-action">{action}</span>
+            <span className={`${entryClass}-action`}>{action}</span>
+            {assistance && illustrated && (
+                <AssistanceArtwork source={name === 'support' ? supportArtwork : couponArtwork} />
+            )}
         </button>
     );
 }
 
-function toolEntry(name: 'two-factor' | 'mail-query'): ComponentType<ClientPluginComponentProps> {
+function toolEntry(name: keyof typeof toolCopy): ComponentType<ClientPluginComponentProps> {
     return props => <ToolEntryPlugin {...props} name={name} />;
 }
 
 const clientPluginRenderers: Readonly<Record<string, ComponentType<ClientPluginComponentProps> | undefined>> =
     {
-        'category-coupon-entry': CouponEntryPlugin,
-        'category-support-entry': SupportEntryPlugin,
+        'category-coupon-entry': toolEntry('coupons'),
+        'category-support-entry': toolEntry('support'),
         'ai-image-studio-entry': AiImageStudioEntryPlugin,
         'two-factor-code-tool': toolEntry('two-factor'),
         'icloud-mail-query-entry': toolEntry('mail-query'),

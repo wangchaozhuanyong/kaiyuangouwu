@@ -1,15 +1,18 @@
-/** Remembers only entrance history, never data. Cached returns and background reads stay still. */
+export type ContentEntrance = 'first' | 'return';
+
+/** Remembers presentation history only. Refreshes never become another entrance. */
 export function createContentRevealController(reveal = revealContentRegions) {
     const displayed = new Set<string>();
     let activeKey: string | undefined;
     let waiting = false;
+    let entering = false;
+    let adopted = false;
+    let previousPage = false;
     let stop: () => void = () => undefined;
     const remember = (key: string) => {
         displayed.add(key);
-        if (displayed.size > 64) {
-            const oldest = displayed.values().next();
-            if (!oldest.done) displayed.delete(oldest.value);
-        }
+        const oldest = displayed.values().next().value;
+        if (displayed.size > 64 && oldest !== undefined) displayed.delete(oldest);
     };
     return {
         update(
@@ -30,10 +33,12 @@ export function createContentRevealController(reveal = revealContentRegions) {
             }
             if (activeKey !== key) {
                 stop();
+                previousPage = activeKey !== undefined;
+                adopted = !previousPage && skip;
                 activeKey = key;
                 waiting = false;
+                entering = true;
             }
-            if (skip) remember(key);
             if (failed) {
                 stop();
                 return;
@@ -43,7 +48,11 @@ export function createContentRevealController(reveal = revealContentRegions) {
                 waiting = true;
                 return;
             }
-            if (waiting && !displayed.has(key)) stop = reveal(root);
+            if (entering && !adopted) {
+                if (waiting && !displayed.has(key)) stop = reveal(root, 'first');
+                else if (previousPage) stop = reveal(root, 'return');
+            }
+            entering = false;
             waiting = false;
             remember(key);
         },
@@ -54,7 +63,7 @@ export function createContentRevealController(reveal = revealContentRegions) {
 }
 
 /** A bounded presentation effect. It never controls query state, focus or clickability. */
-export function revealContentRegions(root: HTMLElement): () => void {
+export function revealContentRegions(root: HTMLElement, entrance: ContentEntrance = 'first'): () => void {
     if (
         typeof root.animate !== 'function' ||
         window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ||
@@ -63,8 +72,34 @@ export function revealContentRegions(root: HTMLElement): () => void {
         return () => undefined;
 
     const content = root.querySelector<HTMLElement>('#storefront-content') ?? root;
-    const regions = Array.from(content.querySelectorAll<HTMLElement>('[data-content-reveal]'))
+    const explicit = Array.from(content.querySelectorAll<HTMLElement>('[data-content-reveal]')).filter(
+        element => !element.closest('[hidden], [inert], [aria-hidden="true"]'),
+    );
+    const splitFixedOwners = (element: HTMLElement): HTMLElement[] => {
+        if (element.querySelector('.page-action-bar, header.topbar, [role="dialog"], .sheet-layer'))
+            return Array.from(element.children).flatMap(child =>
+                child instanceof HTMLElement ? splitFixedOwners(child) : [],
+            );
+        return [element];
+    };
+    const candidates = explicit.length
+        ? explicit
+        : Array.from(content.querySelectorAll<HTMLElement>('main.page')).flatMap(page =>
+              Array.from(page.children).flatMap(element =>
+                  element instanceof HTMLElement ? splitFixedOwners(element) : [],
+              ),
+          );
+    const regions = candidates
         .filter(element => {
+            // Headers, fixed actions, primary media and overlay owners never join body entrances.
+            if (
+                element.matches(
+                    'header, footer, img, picture, .topbar, .page-action-bar, [role="dialog"], .sheet-layer',
+                ) ||
+                element.querySelector('img[fetchpriority="high"]') ||
+                ['fixed', 'sticky'].includes(getComputedStyle(element).position)
+            )
+                return false;
             // A region may be mounted inside a retained route or still contain a local skeleton.
             if (
                 element.closest('[hidden], [inert], [aria-hidden="true"]') ||
@@ -73,6 +108,11 @@ export function revealContentRegions(root: HTMLElement): () => void {
                 element.contains(document.activeElement)
             )
                 return false;
+            // Catalogs restore their own reading pane, independently of window.scrollY.
+            for (let parent: HTMLElement | null = element; parent; parent = parent.parentElement) {
+                if (parent.scrollTop > 0) return false;
+                if (parent === root) break;
+            }
             const box = element.getBoundingClientRect();
             return box.width > 0 && box.height > 0 && box.bottom > 0 && box.top < window.innerHeight;
         })
@@ -90,15 +130,25 @@ export function revealContentRegions(root: HTMLElement): () => void {
         if (!Number.isFinite(amount) || amount < 0) return fallback;
         return value.endsWith('ms') ? amount : value.endsWith('s') ? amount * 1000 : fallback;
     };
-    const duration = milliseconds('--experience-motion-emphasized', 240);
-    const stagger = milliseconds('--experience-motion-stagger', 60);
-    const distance = style.getPropertyValue('--experience-reveal-distance').trim() || '6px';
+    const returning = entrance === 'return';
+    const duration = milliseconds(
+        returning ? '--experience-return-duration' : '--experience-reveal-duration',
+        returning ? 180 : 320,
+    );
+    const stagger = milliseconds(
+        returning ? '--experience-return-stagger' : '--experience-reveal-stagger',
+        returning ? 20 : 40,
+    );
+    const distance =
+        style
+            .getPropertyValue(returning ? '--experience-return-distance' : '--experience-reveal-distance')
+            .trim() || (returning ? '4px' : '8px');
     const easing =
-        style.getPropertyValue('--experience-ease-standard').trim() || 'cubic-bezier(0.2, 0, 0, 1)';
+        style.getPropertyValue('--experience-reveal-easing').trim() || 'cubic-bezier(.22,.8,.24,1)';
     const animations = regions.map((element, index) =>
         element.animate(
             [
-                { opacity: 0.94, transform: `translateY(${distance})` },
+                { opacity: returning ? 0.94 : 0, transform: `translateY(-${distance})` },
                 { opacity: 1, transform: 'translateY(0)' },
             ],
             { duration, delay: index * stagger, easing, fill: 'backwards' },

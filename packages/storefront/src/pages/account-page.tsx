@@ -30,11 +30,7 @@ import {
 import { useDesktopLayout } from '../desktop-layout';
 import { compactUiCopy, languageCodeFor } from '../i18n';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
-import {
-    isReferralClientFeatureEnabled,
-    readCachedReferralProgram,
-    writeCachedReferralProgram,
-} from '../referral-client-feature';
+import { isReferralClientFeatureEnabled } from '../referral-client-feature';
 import { AccountPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { DailyRecommendationSection } from '../storefront-ui/daily-recommendation-section';
@@ -122,15 +118,7 @@ export function AccountPage() {
             storefrontQueryKeys.market(market),
             languageCodeFor(language),
         ),
-        queryFn: async ({ signal }) => {
-            const program = await api.referralProgram(signal);
-            if (program) {
-                writeCachedReferralProgram(market.code, program);
-            }
-            return program;
-        },
-        initialData: () => readCachedReferralProgram(market.code),
-        initialDataUpdatedAt: 0,
+        queryFn: ({ signal }) => api.referralProgram(signal),
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
@@ -149,14 +137,16 @@ export function AccountPage() {
     const referralWallet = referralOverviewQuery.data?.wallets.find(
         wallet => wallet.currencyCode === market.currencyCode,
     );
-    const referralBalanceStatus = referralOverviewQuery.isPending
-        ? 'loading'
-        : referralOverviewQuery.isError
-          ? 'error'
-          : 'ready';
-    const referralBalance = referralOverviewQuery.isSuccess
-        ? (referralWallet?.availableBalance ?? 0)
-        : undefined;
+    const referralBalanceStatus =
+        referralOverviewQuery.data !== undefined
+            ? 'ready'
+            : referralOverviewQuery.isPending && !referralOverviewQuery.isPaused
+              ? 'loading'
+              : referralOverviewQuery.isError
+                ? 'error'
+                : 'ready';
+    const referralBalance =
+        referralOverviewQuery.data !== undefined ? (referralWallet?.availableBalance ?? 0) : undefined;
     const counts = countsQuery.data ?? { pending: 0, shipping: 0, receiving: 0, completed: 0 };
     const afterSalesQuery = useQuery({
         queryKey: storefrontQueryKeys.afterSalesRequests(

@@ -691,8 +691,11 @@ describe('store-scoped initial loading and recovery', () => {
         boot.dataset.presentation = 'initial';
         document.body.append(boot);
         host.id = 'root';
+        const owned = vi.fn();
+        document.addEventListener('storefront:app-owned', owned);
         try {
             render();
+            expect((owned.mock.calls[0][0] as CustomEvent).detail).toEqual({ initialSurface: true });
             expect(initial()).not.toBeNull();
             expect(host.querySelector('.brand-loading')).not.toBeNull();
             expect(phase()).toBe('preparing');
@@ -700,6 +703,7 @@ describe('store-scoped initial loading and recovery', () => {
             expect(initial()).toBeNull();
             expect(stage()?.hidden).toBe(false);
         } finally {
+            document.removeEventListener('storefront:app-owned', owned);
             boot.remove();
         }
     });
