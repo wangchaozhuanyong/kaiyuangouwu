@@ -211,7 +211,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    animation: mailQueryFadeIn 0.2s ease;
+    animation: mailQueryFadeIn var(--experience-motion-standard) var(--experience-ease-standard);
 }
 
 .mail-query-page .toast-msg.error {
@@ -487,7 +487,7 @@
 
 /* ====== Results View ====== */
 .mail-query-page .result-section {
-    animation: mailQueryFadeIn 0.25s ease;
+    /* Result entrances are owned by the common content reveal controller. */
 }
 
 .mail-query-page .mail-live-controls {

@@ -100,6 +100,11 @@ try {
                         categoryVisible: visible(document.querySelector('.category-page')),
                         categoryPending: visible(document.querySelector('.page-skeleton--catalog')),
                         boot: visible(document.querySelector('#storefront-boot-loading')),
+                        regionalIndicators: [
+                            ...document.querySelectorAll(
+                                '.page-skeleton .brand-loading-dots,.content-loading .brand-loading-dots',
+                            ),
+                        ].filter(visible).length,
                         globalIndicators: [
                             ...document.querySelectorAll(
                                 '#storefront-boot-loading,.page-readiness-initial,.page-readiness-navigation',
@@ -253,8 +258,11 @@ try {
                 );
             }
             assert.ok(
-                record.frames.every(frame => frame.globalIndicators <= 1),
-                'Startup and React must never display overlapping global loading surfaces',
+                record.frames.every(
+                    frame =>
+                        frame.globalIndicators <= 1 && !(frame.globalIndicators && frame.regionalIndicators),
+                ),
+                'Startup, central and regional waits must never overlap',
             );
             assert.deepEqual(errors, []);
             assert.deepEqual(network.fixtureErrors, []);

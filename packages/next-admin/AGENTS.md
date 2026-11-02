@@ -4,7 +4,7 @@
 
 ## 开发前与接入约束
 
-- 开发前阅读 [统一标准](./LOADING_REFRESH_INTERACTION_STANDARD.md)，按现有页面确认路由、资源域、读取条件、写入影响、草稿与权限边界。新增功能必须沿用这套方案。
+- 设计与交互工作先遵守 [当前治理方案](../../docs/WEB_DESIGN_GOVERNANCE.md) 的规则所有权和准入要求，再阅读 [统一标准](./LOADING_REFRESH_INTERACTION_STANDARD.md)，按现有页面确认路由、资源域、读取条件、写入影响、草稿与权限边界。新增功能必须沿用这套方案。
 - 业务路由沿用 AppShell / TabbedOutlet 的公共页面工作区、错误恢复和离开保护；独立业务入口使用 AdminPageWorkspace。扩展面板沿用扩展宿主的加载、失败、局部重试和草稿规则，不得另建页面生命周期。
 - GraphQL 读取使用 useAdminQuery / useAdminLazyQuery；非 GraphQL 读取使用 useAdminReadResource。Apollo 是唯一共享服务端数据缓存；不得用页面缓存或 localStorage 建第二份业务数据真源。表单草稿和 URL 筛选状态按其原有用途管理。
 - 查询时效、阶段和资源域沿用公共 queryPolicy 与资源规则。轮询使用公共查询选项或 useActiveInterval，隐藏页面、隐藏窗口和离线时暂停；不得页面自行 setInterval 或绕过活动状态读取。

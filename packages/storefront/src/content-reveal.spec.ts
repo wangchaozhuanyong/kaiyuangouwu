@@ -36,7 +36,7 @@ describe('content entrance ownership', () => {
         expect(animate).not.toHaveBeenCalled();
         entrance.dispose();
     });
-    it('reveals only a target that really waited, once, without replaying background reads or returns', () => {
+    it('uses a first entrance after waiting and a short return, without replaying background reads', () => {
         const reveal = vi.fn(() => vi.fn());
         const entrance = createContentRevealController(reveal);
         const root = document.createElement('div');
@@ -45,14 +45,18 @@ describe('content entrance ownership', () => {
         expect(reveal).not.toHaveBeenCalled();
         entrance.update(root, 'product', true);
         expect(reveal).toHaveBeenCalledOnce();
+        expect(reveal).toHaveBeenLastCalledWith(root, 'first');
         const stop = reveal.mock.results[0].value;
         entrance.update(root, 'product', false);
         expect(stop).toHaveBeenCalledOnce();
         entrance.update(root, 'product', true);
+        expect(reveal).toHaveBeenCalledOnce();
         entrance.update(root, 'cached-home', true);
+        expect(reveal).toHaveBeenLastCalledWith(root, 'return');
         entrance.update(root, 'product', false);
         entrance.update(root, 'product', true);
-        expect(reveal).toHaveBeenCalledOnce();
+        expect(reveal).toHaveBeenCalledTimes(3);
+        expect(reveal).toHaveBeenLastCalledWith(root, 'return');
     });
 
     it('never replays adopted public HTML and never reveals a failed or superseded target', () => {
@@ -70,6 +74,8 @@ describe('content entrance ownership', () => {
         expect(reveal).toHaveBeenCalledOnce();
         entrance.update(root, 'next', false);
         expect(stop).toHaveBeenCalled();
+        entrance.update(root, 'ssr', true, true);
+        expect(reveal).toHaveBeenLastCalledWith(root, 'return');
     });
 });
 
@@ -77,7 +83,7 @@ describe('bounded visible region animation', () => {
     function scene() {
         document.body.innerHTML = '<main id="storefront-content"><header>Navigation</header></main>';
         const root = document.querySelector<HTMLElement>('main');
-        if (!root) throw new Error('Missing scene root');
+        if (!root) throw new Error('Missing content test scene');
         const animations: Array<{
             element: HTMLElement;
             frames: unknown;
@@ -126,8 +132,13 @@ describe('bounded visible region animation', () => {
         expect(animations).toHaveLength(4);
         expect(animations[0].element.textContent).toBe('Earlier visually');
         expect(animations.map(item => (item.options as KeyframeAnimationOptions).delay)).toEqual([
-            0, 60, 120, 180,
+            0, 40, 80, 120,
         ]);
+        expect(animations[0].frames).toEqual([
+            { opacity: 0, transform: 'translateY(-8px)' },
+            { opacity: 1, transform: 'translateY(0)' },
+        ]);
+        expect(animations[0].options).toMatchObject({ duration: 320, easing: 'cubic-bezier(.22,.8,.24,1)' });
         expect(root.querySelector('button')?.disabled).toBe(false);
         expect(root.querySelector('header')?.getAttribute('style')).toBeNull();
         window.dispatchEvent(new Event('pointerdown'));
@@ -149,11 +160,43 @@ describe('bounded visible region animation', () => {
         expect(animations[0].cancel).toHaveBeenCalledOnce();
     });
 
+    it('uses the shared entrance on ordinary page bodies without moving headers, fixed actions or overlays', () => {
+        const { root, animations } = scene();
+        root.innerHTML += [
+            '<main class="page">',
+            '<header>Header</header>',
+            '<section>Account body</section>',
+            '<article>Details</article>',
+            '<footer>Footer</footer>',
+            '<div class="page-action-bar">Action</div>',
+            '<aside style="position:fixed">Fixed</aside>',
+            '<section>',
+            '<img fetchpriority="high">',
+            '</section>',
+            '<section role="dialog">Dialog</section>',
+            '<div>',
+            '<section>Nested body</section>',
+            '<div class="page-action-bar">Nested action</div>',
+            '</div>',
+            '</main>',
+        ].join('');
+        const cancel = revealContentRegions(root, 'return');
+        expect(animations.map(item => item.element.textContent)).toEqual([
+            'Account body',
+            'Details',
+            'Nested body',
+        ]);
+        expect(animations.every(item => (item.options as KeyframeAnimationOptions).duration === 180)).toBe(
+            true,
+        );
+        cancel();
+    });
+
     it('skips reduced motion, restored scroll and a region the user is already operating', () => {
         const { root, animations } = scene();
         root.innerHTML += '<section data-content-reveal><input aria-label="Draft"></section>';
         const input = root.querySelector('input');
-        if (!input) throw new Error('Missing scene input');
+        if (!input) throw new Error('Missing focused test control');
         input.focus();
         revealContentRegions(root);
         expect(animations).toHaveLength(0);
@@ -174,16 +217,46 @@ describe('bounded visible region animation', () => {
         'keeps production CSS seconds and %s stagger in WAAPI milliseconds',
         stagger => {
             const { root, animations } = scene();
-            root.style.setProperty('--experience-motion-emphasized', '.24s');
-            root.style.setProperty('--experience-motion-stagger', stagger);
+            root.style.setProperty('--experience-reveal-duration', '.32s');
+            root.style.setProperty('--experience-reveal-stagger', stagger);
             root.innerHTML +=
                 '<section data-content-reveal>First</section><section data-content-reveal>Second</section>';
             const cancel = revealContentRegions(root);
             expect(animations.map(item => (item.options as KeyframeAnimationOptions).duration)).toEqual([
-                240, 240,
+                320, 320,
             ]);
             expect(animations.map(item => (item.options as KeyframeAnimationOptions).delay)).toEqual([0, 60]);
             cancel();
         },
     );
+    it('keeps cached content nearly opaque and uses the shorter return timing', () => {
+        const { root, animations } = scene();
+        root.innerHTML +=
+            '<section data-content-reveal>List</section><section data-content-reveal>Details</section>';
+        const cancel = revealContentRegions(root, 'return');
+        expect(animations[0].frames).toEqual([
+            { opacity: 0.94, transform: 'translateY(-4px)' },
+            { opacity: 1, transform: 'translateY(0)' },
+        ]);
+        expect(animations.map(item => (item.options as KeyframeAnimationOptions).duration)).toEqual([
+            180, 180,
+        ]);
+        expect(animations.map(item => (item.options as KeyframeAnimationOptions).delay)).toEqual([0, 20]);
+        cancel();
+    });
+
+    it('skips a restored reading pane and cancels motion when a nested pane starts scrolling', () => {
+        const { root, animations } = scene();
+        const pane = document.createElement('div');
+        pane.innerHTML = '<section data-content-reveal>Restored category</section>';
+        root.append(pane);
+        pane.scrollTop = 300;
+        revealContentRegions(root, 'return');
+        expect(animations).toHaveLength(0);
+        pane.scrollTop = 0;
+        revealContentRegions(root);
+        expect(animations).toHaveLength(1);
+        pane.dispatchEvent(new Event('scroll'));
+        expect(animations[0].cancel).toHaveBeenCalledOnce();
+    });
 });

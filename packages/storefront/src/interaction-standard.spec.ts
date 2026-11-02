@@ -1,10 +1,80 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { auditInteractionStandard, checkInteractionSource } from '../scripts/check-interaction-standard.mjs';
+import {
+    assertInteractionStandard,
+    auditInteractionRoutes,
+    checkInteractionSource,
+    checkRouteAdmission,
+    interactionSources,
+} from '../scripts/check-interaction-standard.mjs';
 
 describe('storefront interaction architecture guard', () => {
-    it('enforces the standard across current pages, hooks and client plugins', () => {
-        expect(auditInteractionStandard()).toEqual([]);
+    it('rejects a second query cache, module-level business snapshots and direct or delegated request intervals', () => {
+        for (const source of [
+            'const client = new QueryClient()',
+            'import { QueryClient as PageCache } from "@tanstack/react-query"; const client = new PageCache()',
+            'import * as Query from "@tanstack/react-query"; const Cache = Query.QueryClient; const client = new (Cache as any)()',
+            'const snapshots = new Map<string, Product[]>()',
+            'const invoices = new Map<string, NewInvoiceType>()',
+            'const invoices = new Map<ImageStudioDraft, NewInvoiceType>()',
+            'const state = { results: new Map() }',
+            'window.setInterval(() => api.orders(), 2000)',
+            'const refreshOrders = () => api.orders(); setInterval(refreshOrders, 2000)',
+            'function tick() { query.refetch({cancelRefetch:false}) } setInterval(tick, 2000)',
+        ])
+            expect(checkInteractionSource('pages/new-page.tsx', source)).not.toEqual([]);
+        expect(
+            checkInteractionSource('pages/clock.tsx', 'setInterval(() => setNow(Date.now()), 1000)'),
+        ).toEqual([]);
+        expect(
+            checkInteractionSource('pages/draft.tsx', 'const drafts = new Map<string, ImageStudioDraft>()'),
+        ).toEqual([]);
+    });
+    // Each source is independent. Keep the normal per-test timeout instead of
+    // assigning one 5s budget to the growing application corpus.
+    it.each(interactionSources())('enforces the interaction contract in $file', ({ file, source }) => {
+        expect(checkInteractionSource(file, source)).toEqual([]);
+    });
+    it('enforces registration and page-family coverage for all current route files', () => {
+        expect(auditInteractionRoutes()).toEqual([]);
+    });
+    it('keeps first-frame geometry protection active on new CSS files', () => {
+        expect(checkInteractionSource('pages/future.css', '.body { content-visibility: auto }')).not.toEqual(
+            [],
+        );
+        expect(checkInteractionSource('pages/future.css', '.body { display: grid }')).toEqual([]);
+    });
+    it('rejects new route files without registration and classifications without a route, without fixing a page count', () => {
+        const files = ['__root.tsx', 'index.tsx', 'home.tsx'];
+        expect(checkRouteAdmission(['home'], ['home'], files)).toEqual([]);
+        expect(checkRouteAdmission(['home'], ['home'], [...files, 'future.tsx'])).not.toEqual([]);
+        expect(checkRouteAdmission(['home', 'future'], ['home'], [...files, 'future.tsx'])).not.toEqual([]);
+        expect(checkRouteAdmission(['home'], ['home', 'retired'], files)).not.toEqual([]);
+        expect(checkRouteAdmission(['home', 'home'], ['home'], files)).not.toEqual([]);
+        expect(checkRouteAdmission(['home', 'future'], ['home', 'future'], [...files, 'future.tsx'])).toEqual(
+            [],
+        );
+    });
+    it('blocks acceptance when a caller supplies violations', () => {
+        expect(() =>
+            assertInteractionStandard(checkInteractionSource('pages/future.tsx', 'const data = new Map()')),
+        ).toThrow('模块级 Map');
+        expect(() => assertInteractionStandard([])).not.toThrow();
+    });
+    it('makes the existing production-build verifier fail before artifact acceptance on an interaction violation', async () => {
+        vi.doMock('../scripts/check-interaction-standard.mjs', () => ({
+            assertInteractionStandard: () => {
+                throw new Error('fixture interaction violation');
+            },
+        }));
+        try {
+            await expect(import('../scripts/verify-production-build.mjs')).rejects.toThrow(
+                'fixture interaction violation',
+            );
+        } finally {
+            vi.doUnmock('../scripts/check-interaction-standard.mjs');
+            vi.resetModules();
+        }
     });
     it('rejects page reloads, unscoped placeholders, cancelling refreshes and hidden-page polling in new code', () => {
         for (const source of [

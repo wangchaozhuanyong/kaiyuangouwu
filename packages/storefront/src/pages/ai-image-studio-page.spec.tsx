@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 /* eslint-disable @typescript-eslint/require-await -- React act callbacks and API fixtures use asynchronous contracts. */
+import { QueryClientProvider } from '@tanstack/react-query';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from '../api';
+import { ShopApiTimeoutError } from '../api/helpers';
+import { storefrontQueryClient } from '../query-client';
+import { StorefrontQueryFeedback } from '../StorefrontQueryFeedback';
 import {
     type ActiveCustomer,
     type ImageGenerationJob,
@@ -36,6 +40,7 @@ const market: MarketConfig = {
     countryCode: 'CN',
     label: 'Test',
 };
+const studioScope = { marketCode: 'test:CNY', languageCode: 'zh_Hans' };
 const reference = {
     id: 'ref-1',
     originalName: 'coffee.png',
@@ -187,25 +192,35 @@ async function setup(
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
-    await act(async () =>
+    const renderCustomer = (
+        customer: ActiveCustomer | null = { id: 'customer-1' } as ActiveCustomer,
+        language: 'zh' | 'en' = 'zh',
+    ) =>
         root.render(
-            <AiImageStudioPage
-                api={api as unknown as ShopApi}
-                customer={{ id: 'customer-1' } as ActiveCustomer}
-                market={market}
-                displayCurrencyCode="CNY"
-                language="zh"
-                onBack={() => undefined}
-                onSignIn={() => undefined}
-                onNotify={onNotify}
-            />,
-        ),
-    );
+            <QueryClientProvider client={storefrontQueryClient}>
+                <AiImageStudioPage
+                    api={api as unknown as ShopApi}
+                    customer={customer}
+                    market={market}
+                    displayCurrencyCode="CNY"
+                    language={language}
+                    onBack={() => undefined}
+                    onSignIn={() => undefined}
+                    onNotify={onNotify}
+                />
+                <StorefrontQueryFeedback language="zh" scope={{ ...studioScope, includePrivate: true }} />
+            </QueryClientProvider>,
+        );
+    await act(async () => renderCustomer());
+    // Query commits configuration, then history, then its shared entity view.
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    await act(async () => vi.advanceTimersByTimeAsync(1));
     cleanups.push(() => {
         root.unmount();
         container.remove();
     });
-    return { api, container, onNotify, root };
+    return { api, container, onNotify, root, renderCustomer };
 }
 function button(container: Element, text: string) {
     const value = [...container.querySelectorAll('button')].find(item => item.textContent?.includes(text));
@@ -236,21 +251,21 @@ describe('AI studio complete customer workflows', () => {
     it('keeps successful cached values and the draft after a partial refresh and remount', async () => {
         const { api, container } = await setup({ balance: 2500 });
         await type(container, '保留客户草稿');
-        const previous = getStudioCachedData('test', 'customer-1');
+        const previous = getStudioCachedData(studioScope, 'customer-1');
         const displayedBalance = container.querySelector('.is-balance')?.textContent;
         await act(async () => vi.advanceTimersByTimeAsync(1000));
         api.imageStudioWallet.mockRejectedValue(new Error('wallet unavailable'));
         api.imagePromptQuotaStatus.mockRejectedValue(new Error('quota unavailable'));
         api.imageModelQuotaStatus.mockRejectedValue(new Error('models unavailable'));
         await click(button(container, '刷新'));
-        const cached = getStudioCachedData('test', 'customer-1');
+        const cached = getStudioCachedData(studioScope, 'customer-1');
         expect(cached?.balance).toBe(2500);
         expect(cached?.promptQuota).toEqual(previous?.promptQuota);
         expect(cached?.modelQuotas).toEqual(previous?.modelQuotas);
         expect(cached?.lastFetchedAt).toBe(previous?.lastFetchedAt);
         expect(container.querySelector('.is-balance')?.textContent).toBe(displayedBalance);
         expect(container.querySelector('textarea')?.value).toBe('保留客户草稿');
-        expect(container.textContent).toContain('部分数据刷新失败');
+        expect(container.textContent).toContain('更新失败，已保留上次内容');
         const reopened = await setup({ walletFailure: true });
         expect(reopened.container.querySelector('.is-balance')?.textContent).toBe(displayedBalance);
         expect(reopened.container.querySelector('textarea')?.value).toBe('保留客户草稿');
@@ -259,8 +274,8 @@ describe('AI studio complete customer workflows', () => {
     it('shows an unavailable cold wallet instead of a fabricated zero and keeps paid actions disabled', async () => {
         const { api, container } = await setup({ walletFailure: true, paid: true });
         await type(container, '保留客户草稿');
-        expect(getStudioCachedData('test', 'customer-1')?.balance).toBeNull();
-        expect(getStudioCachedData('test', 'customer-1')?.lastFetchedAt).toBe(0);
+        expect(getStudioCachedData(studioScope, 'customer-1')?.balance).toBeNull();
+        expect(getStudioCachedData(studioScope, 'customer-1')?.lastFetchedAt).toBe(0);
         expect(container.querySelector('.is-balance')?.textContent).toContain('待更新');
         expect(button(container, '费用待更新').disabled).toBe(true);
         expect(api.optimizeImagePrompt).not.toHaveBeenCalled();
@@ -270,11 +285,11 @@ describe('AI studio complete customer workflows', () => {
         const { api, container } = await setup();
         await type(container, '保留客户草稿');
         expect(button(container, '开始生成').disabled).toBe(false);
-        const previous = getStudioCachedData('test', 'customer-1');
+        const previous = getStudioCachedData(studioScope, 'customer-1');
         api.imageModelQuotaStatus.mockRejectedValueOnce(new Error('models unavailable'));
         await click(button(container, '刷新'));
-        expect(getStudioCachedData('test', 'customer-1')?.modelQuotas).toEqual(previous?.modelQuotas);
-        expect(getStudioCachedData('test', 'customer-1')?.lastFetchedAt).toBe(previous?.lastFetchedAt);
+        expect(getStudioCachedData(studioScope, 'customer-1')?.modelQuotas).toEqual(previous?.modelQuotas);
+        expect(getStudioCachedData(studioScope, 'customer-1')?.lastFetchedAt).toBe(previous?.lastFetchedAt);
         expect(button(container, '开始生成').disabled).toBe(true);
         expect(api.createImageGeneration).not.toHaveBeenCalled();
         await click(button(container, '刷新'));
@@ -657,7 +672,10 @@ describe('AI studio complete customer workflows', () => {
         await click(button(container, '加载更多'));
         expect(container.textContent).toContain('商品 44');
         await click(button(container, '失败'));
-        expect(api.myImageGenerationJobs).toHaveBeenLastCalledWith(0, 20, undefined, ['FAILED', 'CANCELLED']);
+        expect(api.myImageGenerationJobs).toHaveBeenLastCalledWith(0, 20, expect.any(AbortSignal), [
+            'FAILED',
+            'CANCELLED',
+        ]);
         expect(container.textContent).toContain('商品 44');
         expect(container.textContent).not.toContain('商品 43');
     });
@@ -904,7 +922,7 @@ describe('AI studio complete customer workflows', () => {
 
         // Unmount component (simulating navigation away)
         const currentContainer = container;
-        cleanups.splice(0).forEach(cleanup => cleanup());
+        await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
         currentContainer.remove();
 
         // Mount again (simulating navigation back into studio)
@@ -948,5 +966,197 @@ describe('AI studio complete customer workflows', () => {
         expect(nextContainer.textContent).toContain('fixture');
         const nextTextarea = nextContainer.querySelector<HTMLTextAreaElement>('textarea');
         expect(nextTextarea?.value).toBe('国潮风古风茶饮海报');
+    });
+
+    it('reuses fresh guest configuration across navigation without reloading it on every mount', async () => {
+        const { api, root, renderCustomer } = await setup();
+        await act(async () => renderCustomer(null));
+        await act(async () => vi.advanceTimersByTimeAsync(180));
+        const reads = api.imageStudioConfig.mock.calls.length;
+        await act(async () => root.render(<div>Another page</div>));
+        await act(async () => renderCustomer(null));
+        await act(async () => vi.advanceTimersByTimeAsync(180));
+        expect(api.imageStudioConfig).toHaveBeenCalledTimes(reads);
+    });
+
+    it('keeps an unconfirmed generation locked after navigating away and back', async () => {
+        const history: ImageGenerationJob[] = [];
+        const { api, container, root, renderCustomer } = await setup({ history });
+        await type(container, '跨页保护提交');
+        let finish!: (result: ImageGenerationJob) => void;
+        api.createImageGeneration.mockReturnValue(
+            new Promise(resolve => {
+                finish = resolve;
+            }),
+        );
+        await click(button(container, '开始生成'));
+        expect(api.createImageGeneration).toHaveBeenCalledTimes(1);
+        await act(async () => root.render(<div>Another page</div>));
+        await act(async () => renderCustomer());
+        await act(async () => vi.advanceTimersByTimeAsync(180));
+        const generate = container.querySelector<HTMLButtonElement>('.ai-studio-generate-button');
+        if (!generate) throw new Error('Missing generate button');
+        expect(generate.disabled).toBe(true);
+        await click(generate);
+        expect(api.createImageGeneration).toHaveBeenCalledTimes(1);
+        const submitted = job(100);
+        history.push(submitted);
+        await act(async () => finish(submitted));
+        await act(async () => vi.advanceTimersByTimeAsync(180));
+        expect(generate.disabled).toBe(false);
+        expect(container.textContent).toContain('商品 100');
+    });
+
+    it('reuses an unknown submission identity after navigation and clears it after confirmed success', async () => {
+        const { api, container, root, renderCustomer } = await setup();
+        await type(container, '跨页重试使用同一请求');
+        api.createImageGeneration.mockRejectedValueOnce(new ShopApiTimeoutError('Unknown result', true));
+        await click(button(container, '开始生成'));
+        expect(container.textContent).toContain('提交结果暂时无法确认');
+        const first = api.createImageGeneration.mock.calls[0][0];
+        expect(first.idempotencyKey).toBeTruthy();
+        await act(async () => root.render(<div>Another page</div>));
+        await act(async () => renderCustomer());
+        await act(async () => vi.advanceTimersByTimeAsync(180));
+        // Neither remount, reconnect nor focus may automatically replay a write.
+        await act(async () => {
+            window.dispatchEvent(new Event('online'));
+            window.dispatchEvent(new Event('focus'));
+        });
+        await act(async () => vi.advanceTimersByTimeAsync(180));
+        expect(api.createImageGeneration).toHaveBeenCalledTimes(1);
+        await click(button(container, '开始生成'));
+        expect(api.createImageGeneration).toHaveBeenCalledTimes(2);
+        expect(api.createImageGeneration.mock.calls[1][0].idempotencyKey).toBe(first.idempotencyKey);
+        await click(button(container, '创作'));
+        await click(button(container, '开始生成'));
+        expect(api.createImageGeneration).toHaveBeenCalledTimes(3);
+        expect(api.createImageGeneration.mock.calls[2][0].idempotencyKey).not.toBe(first.idempotencyKey);
+    });
+
+    it.each([
+        { newerEdit: false, finishWhileAway: false },
+        { newerEdit: true, finishWhileAway: false },
+        { newerEdit: false, finishWhileAway: true },
+    ])(
+        'recovers optimization across navigation (newer edit $newerEdit, finishes while away $finishWhileAway)',
+        async ({ newerEdit, finishWhileAway }) => {
+            const { api, container, root, renderCustomer } = await setup();
+            await type(container, '离页优化描述');
+            const optimized = await api.optimizeImagePrompt();
+            api.optimizeImagePrompt.mockClear();
+            let finish!: (result: typeof optimized) => void;
+            api.optimizeImagePrompt.mockReturnValue(
+                new Promise(resolve => {
+                    finish = resolve;
+                }),
+            );
+            await click(button(container, '免费优化'));
+            expect(api.optimizeImagePrompt).toHaveBeenCalledTimes(1);
+            await act(async () => root.render(<div>Another page</div>));
+            if (finishWhileAway) await act(async () => finish(optimized));
+            await act(async () => renderCustomer());
+            await act(async () => vi.advanceTimersByTimeAsync(180));
+            if (newerEdit) await type(container, '后来编辑的描述');
+            if (!finishWhileAway) await act(async () => finish(optimized));
+            await act(async () => vi.advanceTimersByTimeAsync(180));
+            expect(container.querySelector('textarea')?.value).toBe(
+                newerEdit ? '后来编辑的描述' : optimized.optimizedPrompt,
+            );
+            expect(api.optimizeImagePrompt).toHaveBeenCalledTimes(1);
+            expect(
+                storefrontQueryClient.getMutationCache().findAll({ mutationKey: ['studio-write'] }),
+            ).toHaveLength(0);
+        },
+    );
+
+    it('keeps an in-flight write locked across same-account updates and language changes', async () => {
+        const { api, container, renderCustomer } = await setup();
+        await type(container, '保留提交中的描述');
+        let finish!: (result: ImageGenerationJob) => void;
+        api.createImageGeneration.mockReturnValue(
+            new Promise(resolve => {
+                finish = resolve;
+            }),
+        );
+        await click(button(container, '开始生成'));
+        const generate = () => {
+            const element = container.querySelector<HTMLButtonElement>('.ai-studio-generate-button');
+            if (!element) throw new Error('Missing generate button');
+            return element;
+        };
+        expect(generate().disabled).toBe(true);
+        const reads = api.imageStudioConfig.mock.calls.length;
+        await act(async () => renderCustomer({ id: 'customer-1' } as ActiveCustomer));
+        await act(async () => vi.advanceTimersByTimeAsync(180));
+        expect(api.imageStudioConfig).toHaveBeenCalledTimes(reads);
+        expect(generate().disabled).toBe(true);
+        await act(async () => renderCustomer({ id: 'customer-1' } as ActiveCustomer, 'en'));
+        await act(async () => vi.advanceTimersByTimeAsync(180));
+        expect(generate().disabled).toBe(true);
+        await click(generate());
+        expect(api.createImageGeneration).toHaveBeenCalledTimes(1);
+        expect(container.querySelector('textarea')?.value).toBe('保留提交中的描述');
+        await act(async () => finish(job(100)));
+        await act(async () => vi.advanceTimersByTimeAsync(180));
+        expect(api.createImageGeneration).toHaveBeenCalledTimes(1);
+    });
+
+    it('refreshes history and configuration once while repeated clicks join the same reads', async () => {
+        const { api, container } = await setup({ history: [job()] });
+        const historyReads = api.myImageGenerationJobs.mock.calls.length;
+        const configReads = api.imageStudioConfig.mock.calls.length;
+        let finish!: (page: { items: ImageGenerationJob[]; totalItems: number }) => void;
+        api.myImageGenerationJobs.mockReturnValue(
+            new Promise(resolve => {
+                finish = resolve;
+            }),
+        );
+        const refresh = button(container, '刷新');
+        await act(async () => {
+            refresh.click();
+            refresh.click();
+        });
+        expect(refresh.disabled).toBe(true);
+        expect(refresh.getAttribute('aria-busy')).toBe('true');
+        expect(api.myImageGenerationJobs).toHaveBeenCalledTimes(historyReads + 1);
+        expect(api.imageStudioConfig).toHaveBeenCalledTimes(configReads + 1);
+        await act(async () => finish({ items: [job(20)], totalItems: 1 }));
+        await act(async () => vi.advanceTimersByTimeAsync(180));
+        expect(refresh.disabled).toBe(false);
+        expect(container.textContent).toContain('商品 20');
+    });
+
+    it('pauses active-job polling when hidden or offline and recovers after a transient read failure', async () => {
+        const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+        const running = { ...job(), state: 'RUNNING' } as ImageGenerationJob;
+        const { api, container } = await setup({ history: [running] });
+        await act(async () => vi.advanceTimersByTimeAsync(2500));
+        const before = api.myImageGenerationJob.mock.calls.length;
+        expect(before).toBeGreaterThan(0);
+        visibility.mockReturnValue('hidden');
+        await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+        await act(async () => vi.advanceTimersByTimeAsync(10000));
+        expect(api.myImageGenerationJob).toHaveBeenCalledTimes(before);
+        visibility.mockReturnValue('visible');
+        await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+        await act(async () => vi.advanceTimersByTimeAsync(180));
+        expect(api.myImageGenerationJob.mock.calls.length).toBeGreaterThan(before);
+        online.mockReturnValue(false);
+        await act(async () => window.dispatchEvent(new Event('offline')));
+        const offlineReads = api.myImageGenerationJob.mock.calls.length;
+        await act(async () => vi.advanceTimersByTimeAsync(10000));
+        expect(api.myImageGenerationJob).toHaveBeenCalledTimes(offlineReads);
+        api.myImageGenerationJob.mockRejectedValueOnce(new Error('Synthetic task read failure'));
+        online.mockReturnValue(true);
+        await act(async () => window.dispatchEvent(new Event('online')));
+        await act(async () => vi.advanceTimersByTimeAsync(180));
+        expect(container.textContent).toContain('更新失败，已保留上次内容');
+        expect(container.textContent).toContain('商品 0');
+        const failedReads = api.myImageGenerationJob.mock.calls.length;
+        await act(async () => vi.advanceTimersByTimeAsync(5000));
+        expect(api.myImageGenerationJob.mock.calls.length).toBeGreaterThan(failedReads);
+        expect(container.textContent).not.toContain('更新失败，已保留上次内容');
     });
 });

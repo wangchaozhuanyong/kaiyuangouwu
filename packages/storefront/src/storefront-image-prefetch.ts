@@ -1,13 +1,8 @@
+import { shouldPrefetchMedia } from './hooks/useOnlineStatus';
 import { decodeImageElement, IMAGE_REQUEST_TIMEOUT_MS } from './image-readiness';
 import { imageSources, type StorefrontImageKind } from './responsive-image';
 
-export function shouldPrefetchMedia(): boolean {
-    if (typeof navigator === 'undefined' || typeof window === 'undefined') return false;
-    const connection = (
-        navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }
-    ).connection;
-    return !connection?.saveData && !['slow-2g', '2g'].includes(connection?.effectiveType ?? '');
-}
+export { shouldPrefetchMedia };
 
 export async function decodeStorefrontImage(
     src: string,

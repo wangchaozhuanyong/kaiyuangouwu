@@ -46,7 +46,7 @@
             boot.setAttribute('aria-busy', startupFailed ? 'false' : 'true');
         }
     }
-    function finish() {
+    function finish(event) {
         stopStartupWatch();
         document.removeEventListener('click', beforeAppAction, true);
         document.removeEventListener('submit', beforeAppAction, true);
@@ -57,6 +57,12 @@
         if (failure) failure.remove();
         var boot = document.getElementById('storefront-boot-loading');
         if (boot) {
+            // React has already committed its one initial brand/error surface.
+            // A document fade here would paint two owners for another 120ms.
+            if (event && event.detail && event.detail.initialSurface) {
+                boot.remove();
+                return;
+            }
             boot.setAttribute('aria-hidden', 'true');
             boot.setAttribute('aria-busy', 'false');
         }

@@ -1,15 +1,17 @@
-import type { ImageStudioCacheEntry } from './ai-image-studio-cache';
+import type { ImageStudioDraft } from './ai-image-studio-cache';
 
-// Session invalidation stays synchronous without importing the optional studio
-// draft/configuration/prefetch implementation into every storefront entry.
-export const studioCacheState = {
-    entries: new Map<string, ImageStudioCacheEntry>(),
-    activePreloads: new Map<string, Promise<void>>(),
+// Only unsaved editor input has a separate owner. Server data belongs to the root QueryClient.
+export const studioCacheState: {
+    drafts: Map<string, ImageStudioDraft>;
+    generation: number;
+    dispose?: () => void;
+} = {
+    drafts: new Map<string, ImageStudioDraft>(),
     generation: 0,
 };
 
 export function clearStudioCache(): void {
-    studioCacheState.generation += 1;
-    studioCacheState.entries.clear();
-    studioCacheState.activePreloads.clear();
+    studioCacheState.generation++;
+    studioCacheState.drafts.clear();
+    studioCacheState.dispose?.();
 }

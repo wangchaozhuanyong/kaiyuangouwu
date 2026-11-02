@@ -1,6 +1,7 @@
 /* eslint-disable import/order, max-len -- Bilingual copy and clean relative types are intentional. */
 import { ChevronDown, Clipboard, Clock3, Search, X } from 'lucide-react';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createDeferredContentReveal } from '../../content-reveal';
 import { SubHeader } from '../../storefront-ui/page-shell';
 
 import type { IcloudQueryResult, ShopApi } from '../../api';
@@ -118,6 +119,8 @@ export function MailQueryPage({
     const [copiedOtp, setCopiedOtp] = useState<string | null>(null);
     const [expandedMails, setExpandedMails] = useState<Set<string>>(new Set());
 
+    const pageRef = useRef<HTMLElement>(null);
+    const resultReveal = useRef(createDeferredContentReveal());
     const inputRef = useRef<HTMLInputElement>(null);
     const activeRequestRef = useRef<AbortController | null>(null);
     const streamRef = useRef<AbortController | null>(null);
@@ -132,6 +135,17 @@ export function MailQueryPage({
     const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const reactId = useId();
+
+    useLayoutEffect(() => {
+        if (pageRef.current && (loading || result)) {
+            resultReveal.current.update(
+                pageRef.current,
+                `result:${generationRef.current}`,
+                !loading && Boolean(result),
+            );
+        }
+    }, [loading, Boolean(result)]);
+    useEffect(() => () => resultReveal.current.dispose(), []);
 
     const triggerShake = useCallback(() => {
         setShakeInput(false);
@@ -621,7 +635,11 @@ export function MailQueryPage({
             : toast;
 
     return (
-        <main className="page subpage mail-query-page" aria-label={isZh ? '邮箱查询服务' : 'Email lookup'}>
+        <main
+            ref={pageRef}
+            className="page subpage mail-query-page"
+            aria-label={isZh ? '邮箱查询服务' : 'Email lookup'}
+        >
             <SubHeader
                 title={isZh ? '邮箱查询服务' : 'Email lookup'}
                 language={language}
@@ -872,7 +890,7 @@ export function MailQueryPage({
                         </>
                     ) : (
                         /* Results View */
-                        <section className="result-section" id="resultSection">
+                        <section className="result-section" id="resultSection" data-content-reveal>
                             {/* Summary Card */}
                             <div className="result-summary-card">
                                 <div className="summary-header">

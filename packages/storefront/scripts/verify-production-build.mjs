@@ -5,8 +5,10 @@ import { fileURLToPath } from 'node:url';
 
 import { assertDisplayLocalization } from '../../../scripts/audit-display-localization.mjs';
 
+import { assertInteractionStandard } from './check-interaction-standard.mjs';
 import { initialResourceCosts } from './initial-resource-budget.mjs';
 
+assertInteractionStandard();
 assertDisplayLocalization();
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

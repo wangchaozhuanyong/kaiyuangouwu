@@ -128,6 +128,18 @@ describe('document startup feedback without hiding available content', () => {
         expect(reload).not.toHaveBeenCalled();
     });
 
+    it('removes the document brand in the same ownership commit when React owns the initial surface', async () => {
+        root().textContent = '';
+        start();
+        expect(boot()).not.toBeNull();
+        document.documentElement.setAttribute('data-storefront-app-owned', '');
+        document.dispatchEvent(new CustomEvent('storefront:app-owned', { detail: { initialSurface: true } }));
+        expect(boot()).toBeNull();
+        expect(active()).toBe(false);
+        await vi.advanceTimersByTimeAsync(10000);
+        expect(document.getElementById('storefront-boot-error')).toBeNull();
+    });
+
     it('hands full-document restoration back to the browser before replacement', () => {
         start();
         owned();

@@ -8,7 +8,6 @@
     --space-16: 16px;
     --space-24: 24px;
     --space-32: 32px;
-    --space-40: 40px;
     --space-48: 48px;
     --space-section: var(--space-16);
     --space-major: var(--space-24);
@@ -28,10 +27,11 @@
     --experience-motion-fast: 120ms;
     --experience-motion-standard: 180ms;
     --experience-motion-emphasized: 240ms;
-    --experience-motion-stagger: 60ms;
-    --experience-reveal-distance: 6px;
-    --experience-ease-standard: cubic-bezier(0.2, 0, 0, 1);
-    --experience-ease-emphasized: cubic-bezier(0.2, 0, 0, 1.2);
+    --experience-reveal-duration: 320ms;
+    --experience-reveal-stagger: 40ms;
+    --experience-reveal-distance: 8px;
+    --experience-reveal-easing: cubic-bezier(.22,.8,.24,1);
+    --experience-ease-standard: cubic-bezier(.2,0,0,1);
     font-family: var(--font-ui);
     font-weight: var(--font-weight-normal);
     line-height: var(--line-height-body);
@@ -150,11 +150,6 @@
     accent-color: var(--accent);
 }
 
-@media (max-width: 767px) {
-    :root {
-        --experience-reveal-distance: 4px;
-    }
-}
 
 @media (min-width: 1024px) {
     :root {

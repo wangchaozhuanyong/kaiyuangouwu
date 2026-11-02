@@ -39,15 +39,17 @@ describe('configured image-studio warmup intent', () => {
     const render = async (context: StorefrontContextValue, configured = true) => {
         await act(() =>
             Promise.resolve(
-                root?.render(
-                    <StorefrontContext.Provider value={context}>
-                        <ClientPluginSlot
-                            block={configured ? block : undefined}
-                            placement="BUSINESS_SERVICES_MAIN"
-                            language="zh"
-                            onNavigate={() => undefined}
-                        />
-                    </StorefrontContext.Provider>,
+                Promise.resolve(
+                    root?.render(
+                        <StorefrontContext.Provider value={context}>
+                            <ClientPluginSlot
+                                block={configured ? block : undefined}
+                                placement="BUSINESS_SERVICES_MAIN"
+                                language="zh"
+                                onNavigate={() => undefined}
+                            />
+                        </StorefrontContext.Provider>,
+                    ),
                 ),
             ),
         );
@@ -61,9 +63,35 @@ describe('configured image-studio warmup intent', () => {
         root = createRoot(host);
     });
     afterEach(async () => {
-        await act(() => Promise.resolve(root?.unmount()));
+        await act(() => Promise.resolve(Promise.resolve(root?.unmount())));
         host.remove();
         vi.useRealTimers();
+        vi.restoreAllMocks();
+    });
+
+    it('does not speculate while hidden or offline and resumes only when active', async () => {
+        const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+        const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+        await render(store('MY'));
+        await act(async () => vi.advanceTimersByTimeAsync(500));
+        expect(runtime.prepare).not.toHaveBeenCalled();
+        expect(runtime.route).not.toHaveBeenCalled();
+        visibility.mockReturnValue('visible');
+        online.mockReturnValue(false);
+        await act(() => {
+            document.dispatchEvent(new Event('visibilitychange'));
+            window.dispatchEvent(new Event('offline'));
+            return Promise.resolve();
+        });
+        await act(async () => vi.advanceTimersByTimeAsync(500));
+        expect(runtime.prepare).not.toHaveBeenCalled();
+        online.mockReturnValue(true);
+        await act(() => {
+            window.dispatchEvent(new Event('online'));
+            return Promise.resolve();
+        });
+        await act(async () => vi.advanceTimersByTimeAsync(300));
+        expect(runtime.prepare).toHaveBeenCalledTimes(1);
     });
 
     it('does no warmup when unconfigured, retains 300ms and hover/touch/focus intent', async () => {
@@ -71,15 +99,18 @@ describe('configured image-studio warmup intent', () => {
         await render(context, false);
         await act(async () => {
             await vi.advanceTimersByTimeAsync(400);
+            return Promise.resolve();
         });
         expect(runtime.prepare).not.toHaveBeenCalled();
         await render(context);
         await act(async () => {
             await vi.advanceTimersByTimeAsync(299);
+            return Promise.resolve();
         });
         expect(runtime.prepare).not.toHaveBeenCalled();
         await act(async () => {
             await vi.advanceTimersByTimeAsync(1);
+            return Promise.resolve();
         });
         expect(runtime.prepare).toHaveBeenCalledTimes(1);
         expect(runtime.prepare.mock.calls[0].slice(0, 3)).toEqual([context.api, null, context.market]);
@@ -93,6 +124,7 @@ describe('configured image-studio warmup intent', () => {
             await act(() => {
                 button.dispatchEvent(event);
                 return Promise.resolve();
+                return Promise.resolve();
             });
         }
         expect(runtime.prepare).toHaveBeenCalledTimes(4);
@@ -105,6 +137,7 @@ describe('configured image-studio warmup intent', () => {
         await render(initial);
         await act(async () => {
             await vi.advanceTimersByTimeAsync(300);
+            return Promise.resolve();
         });
         const oldScope = runtime.prepare.mock.calls[0][3] as () => boolean;
         expect(oldScope()).toBe(true);
@@ -112,6 +145,7 @@ describe('configured image-studio warmup intent', () => {
         expect(oldScope()).toBe(false);
         await act(async () => {
             await vi.advanceTimersByTimeAsync(300);
+            return Promise.resolve();
         });
         const currentScope = runtime.prepare.mock.calls[1][3] as () => boolean;
         expect(currentScope()).toBe(true);
@@ -120,10 +154,11 @@ describe('configured image-studio warmup intent', () => {
         expect(currentScope()).toBe(false);
         await act(async () => {
             await vi.advanceTimersByTimeAsync(300);
+            return Promise.resolve();
         });
         const finalScope = runtime.prepare.mock.calls[2][3] as () => boolean;
         expect(finalScope()).toBe(true);
-        await act(() => Promise.resolve(root?.unmount()));
+        await act(() => Promise.resolve(Promise.resolve(root?.unmount())));
         root = undefined;
         expect(finalScope()).toBe(false);
     });
@@ -153,6 +188,7 @@ describe('configured image-studio warmup intent', () => {
                     />,
                 );
                 return Promise.resolve();
+                return Promise.resolve();
             });
             const buttons = [...host.querySelectorAll('button')];
             expect(buttons.map(button => button.querySelector('strong')?.textContent)).toEqual(
@@ -170,6 +206,7 @@ describe('configured image-studio warmup intent', () => {
             ).toEqual([false, true, false]);
             await act(() => {
                 buttons.forEach(button => button.click());
+                return Promise.resolve();
                 return Promise.resolve();
             });
             expect(onNavigate.mock.calls).toEqual([

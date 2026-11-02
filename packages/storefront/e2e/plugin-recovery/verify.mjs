@@ -97,10 +97,11 @@ try {
             await page
                 .getByRole('button', { name: language === 'zh' ? '刷新' : 'Refresh', exact: true })
                 .click();
-            const warning = page.getByRole('status').filter({
-                hasText: language === 'zh' ? '部分数据刷新失败' : 'Some data could not be refreshed',
-            });
+            const warning = page.locator('[data-query-feedback=error]');
             await expect(warning).toBeVisible();
+            await expect(warning).toContainText(
+                language === 'zh' ? '已保留上次内容' : 'Previous content is still shown',
+            );
             const partial = await page.evaluate(() => window.pluginRecovery.snapshot());
             expect(partial.balance).toBe(before.balance);
             expect(partial.promptQuota).toEqual(before.promptQuota);

@@ -9,6 +9,7 @@ export function prepareImageStudioData(
     customer: ActiveCustomer | null,
     market: MarketConfig,
     isCurrent: () => boolean,
+    languageCode = market.defaultLanguageCode,
 ): void {
     const generation = studioCacheState.generation;
     void import('./ai-image-studio-cache')
@@ -16,7 +17,7 @@ export function prepareImageStudioData(
             // Importing may finish after logout or a different plugin/store scope.
             // Reject that intent before the old account can start any request.
             if (generation === studioCacheState.generation && isCurrent())
-                return module.preloadImageStudioData(api, customer, market);
+                return module.preloadImageStudioData(api, customer, market, languageCode);
         })
         .catch(() => undefined);
 }

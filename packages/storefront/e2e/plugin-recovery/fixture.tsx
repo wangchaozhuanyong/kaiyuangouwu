@@ -1,16 +1,24 @@
+// organize-imports-ignore -- Use the production cascade before plugin styles.
+import '../../src/storefront-styles';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { type ShopApi } from '../../src/api';
 import { CustomerTwoFactorEntry } from '../../src/client-plugins/two-factor/isolated-entry';
+import { languageCodeFor } from '../../src/i18n';
 import { clearStudioCache, getStudioCachedData } from '../../src/pages/ai-image-studio-cache';
 import { AiImageStudioPage } from '../../src/pages/ai-image-studio-page';
-import '../../src/styles.css';
-import '../../src/styles/desktop-layout.css';
-import '../../src/styles/visual-presets.css';
-import { type ActiveCustomer, type ImageStudioConfig, type MarketConfig } from '../../src/types';
+import { storefrontQueryClient } from '../../src/query-client';
+import { StorefrontQueryFeedback } from '../../src/StorefrontQueryFeedback';
+import {
+    type ActiveCustomer,
+    type ImageGenerationJob,
+    type ImageStudioConfig,
+    type MarketConfig,
+} from '../../src/types';
 
-// Only API reads and the outer navigation are fixtures. Both rendered plugins are production components.
+// API data and navigation are synthetic. Interaction mode simulates writes only in this browser; no backend is contacted.
 const language = new URLSearchParams(location.search).get('language') === 'en' ? 'en' : 'zh';
 const market: MarketConfig = {
     code: 'plugin-recovery',
@@ -73,21 +81,71 @@ const config = {
         },
     ],
 } as ImageStudioConfig;
+const interactionMode = new URLSearchParams(location.search).get('mode') === 'interaction';
+const serverHistory: ImageGenerationJob[] = [];
+let finishGeneration: (() => void) | undefined;
+const heldReads = new Map<string, Array<() => void>>();
 let failed = new Set<string>();
 const calls: string[] = [];
 const writes: string[] = [];
 const read = <T,>(name: string, value: T): Promise<T> => {
     calls.push(name);
-    return failed.has(name)
-        ? Promise.reject(new Error(`Synthetic ${name} unavailable`))
-        : Promise.resolve(value);
+    const complete = () =>
+        failed.has(name)
+            ? Promise.reject(new Error(`Synthetic ${name} unavailable`))
+            : Promise.resolve(value);
+    const held = heldReads.get(name);
+    if (held)
+        return new Promise<T>((resolve, reject) => held.push(() => void complete().then(resolve, reject)));
+    return complete();
 };
+const syntheticJob = (index: number): ImageGenerationJob =>
+    ({
+        id: `synthetic-job-${index}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        state: 'QUEUED',
+        modelCodeSnapshot: 'fixture-model',
+        modelNameSnapshot: 'Fixture model',
+        officialModelIdSnapshot: 'fixture',
+        originalPrompt: `Synthetic generation ${index}`,
+        finalPrompt: `Synthetic generation ${index}`,
+        referenceMode: 'NONE',
+        aspectRatio: '1:1',
+        resolution: '1K',
+        quantity: 1,
+        unitPriceSnapshot: 100,
+        reservedAmount: 0,
+        chargedAmount: 0,
+        releasedAmount: 0,
+        currencyCode: 'CNY',
+        outputs: [],
+    }) as ImageGenerationJob;
 const readApi = {
     imageStudioConfig: () => read('config', config),
     imageStudioWallet: () => read('wallet', { availableBalance: 2500, currencyCode: 'CNY' }),
     imagePromptQuotaStatus: () => read('promptQuota', promptQuota),
     imageModelQuotaStatus: () => read('modelQuotas', modelQuotas),
-    myImageGenerationJobs: () => read('history', { items: [], totalItems: 0 }),
+    myImageGenerationJobs: (skip = 0, take = 20, _signal?: AbortSignal, states?: string[]) => {
+        const items = serverHistory.filter(job => !states || states.includes(job.state));
+        return read('history', { items: items.slice(skip, skip + take), totalItems: items.length });
+    },
+    myImageGenerationJob: (id: string) =>
+        read('job', serverHistory.find(job => job.id === id) ?? syntheticJob(0)),
+    ...(interactionMode
+        ? {
+              createImageGeneration: () => {
+                  writes.push('createImageGeneration');
+                  return new Promise<ImageGenerationJob>(resolve => {
+                      finishGeneration = () => {
+                          const job = syntheticJob(1);
+                          serverHistory.unshift(job);
+                          resolve(job);
+                      };
+                  });
+              },
+          }
+        : {}),
     previewImageGenerationPrompt: () => read('promptPreview', { length: 120, limit: 8000, valid: true }),
 };
 const api = new Proxy(readApi, {
@@ -104,7 +162,33 @@ const fixture = {
         failed = new Set(names);
     },
     clear: clearStudioCache,
-    snapshot: () => structuredClone(getStudioCachedData(market.code, customer.id)),
+    snapshot: () =>
+        structuredClone(
+            getStudioCachedData(
+                {
+                    marketCode: `${market.code}:${market.currencyCode}`,
+                    languageCode: languageCodeFor(language),
+                },
+                customer.id,
+            ),
+        ),
+    hold(name: string) {
+        heldReads.set(name, []);
+    },
+    release(name: string) {
+        const waiting = heldReads.get(name) ?? [];
+        heldReads.delete(name);
+        waiting.forEach(finish => finish());
+    },
+    finishGeneration() {
+        finishGeneration?.();
+        finishGeneration = undefined;
+    },
+    addHistory() {
+        const job = { ...syntheticJob(serverHistory.length + 10), state: 'FAILED' } as ImageGenerationJob;
+        serverHistory.unshift(job);
+        return job.originalPrompt;
+    },
     calls,
     writes,
 };
@@ -123,6 +207,7 @@ function Fixture() {
                 <button onClick={() => setPage('home')}>Fixture home</button>
                 <button onClick={() => setPage('studio')}>Open studio</button>
                 <button onClick={() => setPage('vault')}>Open vault</button>
+                <button onClick={() => setOwner({ ...owner })}>Same account update</button>
                 <button onClick={() => setOwner({ id: 'synthetic-second-owner' } as ActiveCustomer)}>
                     Change owner
                 </button>
@@ -132,7 +217,7 @@ function Fixture() {
             {page === 'studio' && (
                 <AiImageStudioPage
                     api={api}
-                    customer={customer}
+                    customer={owner}
                     market={market}
                     displayCurrencyCode="CNY"
                     language={language}
@@ -155,4 +240,20 @@ function Fixture() {
 }
 const root = document.getElementById('root');
 if (!root) throw new Error('Fixture root missing');
-createRoot(root).render(<Fixture />);
+createRoot(root).render(
+    <QueryClientProvider client={storefrontQueryClient}>
+        <div
+            className={`storefront-app${matchMedia('(min-width:1024px)').matches ? ' desktop-store-layout' : ''}`}
+        >
+            <Fixture />
+            <StorefrontQueryFeedback
+                language={language}
+                scope={{
+                    marketCode: `${market.code}:${market.currencyCode}`,
+                    languageCode: languageCodeFor(language),
+                    includePrivate: true,
+                }}
+            />
+        </div>
+    </QueryClientProvider>,
+);
