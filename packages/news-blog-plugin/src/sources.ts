@@ -23,6 +23,7 @@ export const sourceCatalog = [
         code: 'gemini-blog',
         name: 'Google Gemini 官方博客',
         url: 'https://blog.google/rss/',
+        historyUrl: 'https://blog.google/products-and-platforms/products/gemini/',
         hosts: ['blog.google'],
         category: 'gemini',
         mode: 'RSS',
@@ -108,7 +109,29 @@ export function parseSource(code: string, html: string): CollectedItem[] {
     const source = sourceCatalog.find(x => x.code === code);
     if (!source) throw new Error('未知资讯源');
     const rows: CollectedItem[] = [];
-    if (source.mode === 'RSS') {
+    if (code === 'gemini-blog' && /<uni-flex-card\b/iu.test(html)) {
+        const $ = load(html);
+        $('uni-flex-card').each((_, node) => {
+            const card = $(node);
+            try {
+                const analytics = JSON.parse(card.attr('data-ga4-analytics-lead-click') ?? '{}') as Record<
+                    string,
+                    unknown
+                >;
+                const published =
+                    typeof analytics.publish_date === 'string' ? analytics.publish_date.split('|')[0] : '';
+                const row = item(code, {
+                    url: card.attr('cta-url'),
+                    title: card.attr('headline'),
+                    date: published,
+                    body: card.attr('description') ?? card.text(),
+                });
+                if (row) rows.push(row);
+            } catch {
+                /* An undated or malformed card cannot become a news item. */
+            }
+        });
+    } else if (source.mode === 'RSS') {
         if (/<!DOCTYPE|<!ENTITY/iu.test(html)) throw new Error('不接受带实体声明的订阅');
         const $ = load(html, { xmlMode: true });
         $('item,entry').each((_, node) => {

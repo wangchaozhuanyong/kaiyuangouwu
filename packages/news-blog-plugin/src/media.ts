@@ -20,7 +20,7 @@ const escape = (s: string) =>
         x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[x] ?? x,
     );
 /** Fixed artwork pixels, not DOM typography. The title is drawn after image generation. */
-export function coverSvg(draft: BlogDraft, withBackdrop = true): string {
+export function coverSvg(draft: BlogDraft, withBackdrop = true, includeTitle = true): string {
     const lines = Array.from(draft.title)
         .reduce<string[]>((rows, char) => {
             if (!rows.length || Array.from(rows[rows.length - 1]).length >= 18) rows.push('');
@@ -37,9 +37,13 @@ export function coverSvg(draft: BlogDraft, withBackdrop = true): string {
               ].join('')
             : '<rect y="180" width="1600" height="720" fill="#f8fafc" fill-opacity="0.90"/>'
     }
-    <g font-family="sans-serif" fill="#202b3b"><text x="110" y="170" font-size="40">${escape(blogCategoryLabels[draft.category])} · AI 资讯</text>
+    ${
+        includeTitle
+            ? `<g font-family="sans-serif" fill="#202b3b"><text x="110" y="170" font-size="40">${escape(blogCategoryLabels[draft.category])} · AI 资讯</text>
     ${lines.map((line, index) => `<text x="110" y="${330 + index * 95}" font-size="64" font-weight="700">${escape(line)}</text>`).join('')}
-    <text x="110" y="825" font-size="28">主题封面 · 根据本文内容整理</text></g></svg>`;
+    <text x="110" y="825" font-size="28">主题封面 · 根据本文内容整理</text></g>`
+            : '<path d="M180 280H720V620H180Z M240 350H660 M240 420H600 M240 490H640" fill="none" stroke="#899bb7" stroke-width="22" stroke-linejoin="round"/>'
+    }</svg>`;
 }
 @Injectable()
 export class BlogMediaService {
@@ -118,8 +122,9 @@ export class BlogMediaService {
         draft: BlogDraft,
         key: string,
         background?: Buffer,
+        includeTitle = true,
     ): Promise<BlogCover> {
-        const overlay = Buffer.from(coverSvg(draft, !background));
+        const overlay = Buffer.from(coverSvg(draft, !background, includeTitle));
         const pipeline = background
             ? sharp(background)
                   .resize(1600, 900, { fit: 'cover' })

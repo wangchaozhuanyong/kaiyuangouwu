@@ -33,6 +33,8 @@ import {
     serializeDraft,
 } from './content';
 import { BlogArticle, BlogRevision, BlogRun, BlogSettings, BlogSource, BlogSourceItem } from './entities';
+import { freeDraftDigest } from './free-content';
+import { historyDays, previousMonth } from './history';
 import { BlogSkill, BlogSkillRecommendation, BlogSkillState } from './skill-entities';
 import { sourceAllows, sourceCatalog } from './sources';
 
@@ -48,6 +50,12 @@ export interface BlogRunInput {
     candidatesOnly?: boolean;
     templateOnly?: boolean;
     skillUpdateHash?: string;
+    freeMode?: boolean;
+    freeDigest?: string;
+    historyStart?: string;
+    historyEnd?: string;
+    historyRunId?: string;
+    historyDay?: string;
 }
 @Injectable()
 export class BlogService {
@@ -100,6 +108,7 @@ export class BlogService {
               )?.message
             : undefined;
         return {
+            historyWindow: previousMonth(),
             skillStatus,
             skillCandidates: this.config(row).skillEnabled
                 ? (
@@ -125,6 +134,8 @@ export class BlogService {
     async saveSettings(ctx: RequestContext, raw: Record<string, unknown>, expectedVersion: number) {
         const row = await this.settings(ctx);
         const config = this.config(row);
+        config.freeMode = raw.freeMode === true;
+        config.freeAutoPublish = config.freeMode && raw.freeAutoPublish === true;
         for (const key of [
             'title',
             'description',
@@ -166,7 +177,7 @@ export class BlogService {
             interval > 1440 ||
             !Number.isInteger(maximum) ||
             maximum < 1 ||
-            maximum > 20
+            maximum > (config.freeMode ? 3 : 20)
         )
             throw new Error('采集间隔或每日篇数无效');
         if (
@@ -542,6 +553,11 @@ export class BlogService {
         )
             throw new Error('请选择最多十条同一事件的来源');
         await this.settings(ctx);
+        if (input.historyStart || input.historyEnd) {
+            if (kind !== 'COLLECT' || !ctx.activeUserId || !ctx.userHasPermissions(['SuperAdmin' as never]))
+                throw new Error('历史补采需要超级管理员从采集工作区发起');
+            historyDays(input.historyStart ?? '', input.historyEnd ?? '');
+        }
         const run = await this.connection.withTransaction(ctx, async tx => {
             const settingsRepo = this.connection.getRepository(tx, BlogSettings);
             // Acquire the channel budget write lock before reading spent/reserved amounts. Works on MySQL and SQLite.
@@ -554,6 +570,29 @@ export class BlogService {
             const settings = await this.settings(tx);
             const config = this.config(settings);
             const repo = this.connection.getRepository(tx, BlogRun);
+            if (input.historyStart && !config.freeMode) throw new Error('历史回放仅使用免费整理模式');
+            if (input.historyDay) {
+                if (!input.historyRunId) throw new Error('缺少历史任务来源');
+                const parent = await repo.findOne({
+                    where: { id: input.historyRunId, channelId: tx.channelId, kind: 'COLLECT' },
+                });
+                const range = parent ? (JSON.parse(parent.inputJson) as BlogRunInput) : null;
+                if (
+                    !config.freeMode ||
+                    !range?.historyStart ||
+                    !range.historyEnd ||
+                    !historyDays(range.historyStart, range.historyEnd).includes(input.historyDay)
+                )
+                    throw new Error('历史任务范围无效');
+            }
+            if (config.freeMode && kind === 'SECTION')
+                throw new Error('免费模式不调用段落改写模型，可直接编辑正文');
+            // Server-owned mode: an API caller cannot turn a free request into a supplier call.
+            input = {
+                ...input,
+                freeMode: config.freeMode,
+                ...(config.freeMode && kind === 'MEDIA' ? { templateOnly: true } : {}),
+            };
             if (kind === 'GENERATE' && input.sourceIds?.length) {
                 let evidence = await this.connection
                     .getRepository(tx, BlogSourceItem)
@@ -636,17 +675,18 @@ export class BlogService {
             if ((kind === 'SECTION' || kind === 'MEDIA') && !input.articleId) throw new Error('缺少文章');
             if (kind === 'GENERATE' && (!input.sourceIds?.length || input.sourceIds.length > 10))
                 throw new Error('请选择需要整理的资讯');
-            const today = budgetDate();
-            const reserved =
-                kind === 'GENERATE' || kind === 'SECTION' || kind === 'SKILL' || kind === 'SKILL_REVIEW'
-                    ? config.textReserveMicros
-                    : kind === 'MEDIA' &&
-                        !input.candidatesOnly &&
-                        !input.templateOnly &&
-                        config.imageProviderCode &&
-                        config.imageModel
-                      ? config.imageReserveMicros
-                      : 0;
+            const today = input.historyDay ?? budgetDate();
+            const reserved = config.freeMode
+                ? 0
+                : kind === 'GENERATE' || kind === 'SECTION' || kind === 'SKILL' || kind === 'SKILL_REVIEW'
+                  ? config.textReserveMicros
+                  : kind === 'MEDIA' &&
+                      !input.candidatesOnly &&
+                      !input.templateOnly &&
+                      config.imageProviderCode &&
+                      config.imageModel
+                    ? config.imageReserveMicros
+                    : 0;
             const runs = await repo.find({ where: { channelId: tx.channelId, budgetDate: today } });
             const events = new Set(
                 runs
@@ -659,7 +699,10 @@ export class BlogService {
                 events.size >= settings.dailyMaxArticles
             )
                 throw new Error('今日自动文章数量已达上限');
-            if (kind === 'GENERATE' || kind === 'SECTION' || kind === 'SKILL' || kind === 'SKILL_REVIEW') {
+            if (
+                !config.freeMode &&
+                (kind === 'GENERATE' || kind === 'SECTION' || kind === 'SKILL' || kind === 'SKILL_REVIEW')
+            ) {
                 if (!config.textProviderCode || !config.textModel || reserved <= 0)
                     throw new Error('请先配置文本供应商、模型和单次预算');
             }
@@ -706,6 +749,88 @@ export class BlogService {
         });
         if (run.state === 'QUEUED' && this.enqueue) await this.enqueue(ctx, run);
         return run;
+    }
+    async publishFree(
+        ctx: RequestContext,
+        id: string,
+        version: number,
+        digest: string,
+        settingsVersion: number,
+    ) {
+        await this.connection.withTransaction(ctx, async tx => {
+            await this.connection
+                .getRepository(tx, BlogSettings)
+                .createQueryBuilder()
+                .update()
+                .set({ version: () => 'version' })
+                .where('channelId = :id', { id: tx.channelId })
+                .execute();
+            const settings = await this.settings(tx);
+            const config = this.config(settings);
+            if (
+                !settings.enabled ||
+                !config.freeMode ||
+                !config.freeAutoPublish ||
+                settings.version !== settingsVersion
+            )
+                throw new Error('免费自动发布设置已变化');
+            const row = await this.get(tx, id);
+            const draft = JSON.parse(row.draftJson) as BlogDraft;
+            if (
+                row.version !== version ||
+                row.state !== 'PENDING_REVIEW' ||
+                row.publishedJson ||
+                !draft.tags.includes('来源快讯') ||
+                freeDraftDigest(draft) !== digest ||
+                contentIssues(draft).length ||
+                (JSON.parse(row.issuesJson) as string[]).length
+            )
+                throw new Error('免费快讯的版本、来源整理结果或素材检查未通过');
+            const now = new Date().toISOString();
+            const published: BlogPublishedArticle = {
+                ...draft,
+                id: String(row.id),
+                slug: row.slug,
+                version: version + 1,
+                publishedAt: now,
+                updatedAt: now,
+                reviewedAt: null,
+                reviewerName: null,
+                publicationMode: 'AUTOMATIC',
+                readingMinutes: Math.max(1, Math.ceil(Array.from(draft.body).length / 450)),
+            };
+            const updated = await this.connection.getRepository(tx, BlogArticle).update(
+                { id: row.id, channelId: tx.channelId, version },
+                {
+                    version: version + 1,
+                    state: 'PUBLISHED',
+                    publishedJson: JSON.stringify(published),
+                    publishedAt: new Date(now),
+                    publishedTitle: draft.title,
+                    publishedCategory: draft.category,
+                    publishedSearchText: `${draft.title} ${draft.summary} ${draft.tags.join(' ')}`,
+                    publishedPinned: draft.pinned,
+                    issuesJson: '[]',
+                },
+            );
+            if (updated.affected !== 1) throw new Error('自动发布期间文章已被修改');
+            await this.connection.getRepository(tx, BlogRevision).save(
+                new BlogRevision({
+                    channelId: tx.channelId,
+                    articleId: Number(row.id),
+                    version: version + 1,
+                    action: 'AUTO_PUBLISH',
+                    actorId: 'system:news-blog-free',
+                    snapshotJson: JSON.stringify(published),
+                }),
+            );
+        });
+        await this.events.publish(
+            new StorefrontDataChangedEvent(ctx, ['content', 'config'], {
+                channelIds: [ctx.channelId],
+                entityType: 'NewsBlog',
+            }),
+        );
     }
     async reconcile(ctx: RequestContext, id: string, actualCostMicros: number) {
         if (

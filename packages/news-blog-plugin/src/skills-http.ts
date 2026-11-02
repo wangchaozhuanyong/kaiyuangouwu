@@ -5,6 +5,7 @@ import { request } from 'node:https';
 
 import { SkillDeferred } from './skill-deferral';
 import { BlogSkillState } from './skill-entities';
+import { decodeSourceResponse } from './source-response';
 
 /** Anonymous public reads only. A persisted global limit protects all merchant workers. */
 @Injectable()
@@ -42,7 +43,9 @@ export class BlogSkillsHttp {
             u.password ||
             u.port ||
             hops > 3 ||
-            !['www.skills.sh', 'skills.sh', 'api.github.com'].includes(u.hostname)
+            !['www.skills.sh', 'skills.sh', 'api.github.com', 'raw.githubusercontent.com'].includes(
+                u.hostname,
+            )
         )
             throw new Error('Skill 来源不在白名单');
         if (
@@ -50,6 +53,12 @@ export class BlogSkillsHttp {
             !['/', '/trending', '/hot', '/robots.txt'].includes(u.pathname)
         )
             throw new Error('仅采集公开技能榜单');
+        if (
+            u.hostname === 'raw.githubusercontent.com' &&
+            !/^\/[\w.-]+\/[\w.-]+\/[a-f0-9]{40}\/.+\/(?:SKILL\.md|README(?:\.md)?)$/iu.test(u.pathname) &&
+            !/^\/[\w.-]+\/[\w.-]+\/[a-f0-9]{40}\/(?:SKILL\.md|README(?:\.md)?)$/iu.test(u.pathname)
+        )
+            throw new Error('仅读取固定提交的 Skill 与说明文档');
         if (u.hostname === 'api.github.com') {
             await this.state();
             const repo = this.connection.rawConnection.getRepository(BlogSkillState);
@@ -75,7 +84,8 @@ export class BlogSkillsHttp {
         const result = await new Promise<{
             status: number;
             location?: string;
-            body: string;
+            body: Buffer;
+            encoding?: string;
             retry?: string;
             reset?: string;
         }>((resolve, reject) => {
@@ -90,6 +100,7 @@ export class BlogSkillsHttp {
                             : done(null, target.address, target.family),
                     headers: {
                         'User-Agent': 'VendureNewsBlog/1.0',
+                        'Accept-Encoding': 'gzip, br, deflate',
                         Accept:
                             u.hostname === 'api.github.com'
                                 ? 'application/vnd.github+json'
@@ -110,7 +121,8 @@ export class BlogSkillsHttp {
                         resolve({
                             status: res.statusCode ?? 0,
                             location: res.headers.location,
-                            body: Buffer.concat(chunks).toString('utf8'),
+                            body: Buffer.concat(chunks),
+                            encoding: String(res.headers['content-encoding'] ?? ''),
                             retry: String(res.headers['retry-after'] ?? ''),
                             reset: String(res.headers['x-ratelimit-reset'] ?? ''),
                         }),
@@ -138,16 +150,35 @@ export class BlogSkillsHttp {
         if ([403, 429].includes(result.status) && u.hostname === 'api.github.com')
             throw new SkillDeferred((await this.state()).requestWindow ?? new Date(Date.now() + 3600000));
         if (result.status !== 200) throw new Error(`Skill 来源暂不可用（HTTP ${result.status}）`);
-        return result.body;
+        return decodeSourceResponse(result.body, result.encoding, 2000000).toString('utf8');
     }
     async json<T>(path: string, purpose: 'discovery' | 'publication' = 'publication'): Promise<T> {
         if (
             !/^\/repos\/[\w.-]+\/[\w.-]+\//u.test(path + '/') ||
             path.includes('..') ||
             path.includes('#') ||
-            (path.includes('?') && !/\?(?:recursive=1|ref=[a-f0-9]{40})$/u.test(path))
+            (path.includes('?') &&
+                !/\?(?:recursive=1|ref=[a-f0-9]{40})$/u.test(path) &&
+                !/^\/repos\/[\w.-]+\/[\w.-]+\/commits\?until=\d{4}-\d{2}-\d{2}T\d{2}%3A\d{2}%3A\d{2}\.\d{3}Z&per_page=1$/u.test(
+                    path,
+                ))
         )
             throw new Error('GitHub 请求路径无效');
         return JSON.parse(await this.read(`https://api.github.com${path}`, 0, purpose)) as T;
+    }
+    async document(repository: string, commit: string, path: string) {
+        if (
+            !/^[\w.-]+\/[\w.-]+$/u.test(repository) ||
+            !/^[a-f0-9]{40}$/u.test(commit) ||
+            !path ||
+            path.split('/').some(x => !x || x === '.' || x === '..') ||
+            !/(?:^|\/)(?:SKILL\.md|README(?:\.md)?)$/iu.test(path)
+        )
+            throw new Error('Skill 固定版本路径无效');
+        const body = await this.read(
+            `https://raw.githubusercontent.com/${repository}/${commit}/${path.split('/').map(encodeURIComponent).join('/')}`,
+        );
+        if (body.length > 55000) throw new Error('Skill 原文过长');
+        return body;
     }
 }

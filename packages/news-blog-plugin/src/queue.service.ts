@@ -15,6 +15,8 @@ import { In, LessThan } from 'typeorm';
 import { BlogRunInput, BlogService } from './blog.service';
 import { contentIssues, hash, normalizeDraft, serializeDraft, verifyGeneratedDraft } from './content';
 import { BlogArticle, BlogRun, BlogSettings, BlogSource, BlogSourceItem } from './entities';
+import { freeDraftDigest, freeDraftIssues, freeNewsDraft } from './free-content';
+import { dayStart, historyDays } from './history';
 import { BlogMediaService } from './media';
 import { SkillDeferred } from './skill-deferral';
 import { BlogSkillsService } from './skills.service';
@@ -137,7 +139,19 @@ export class BlogQueueService implements OnApplicationBootstrap {
             const settings = await this.blog.settings(ctx);
             if (!settings.enabled) throw new Error('博客已关闭');
             const input = JSON.parse(run.inputJson) as BlogRunInput & { templateOnly?: boolean };
-            if (run.reservedMicros > 0 && input.settingsVersion && input.settingsVersion !== settings.version)
+            if (input.freeMode)
+                await repo.update(run.id, {
+                    telemetryJson: JSON.stringify({
+                        mode: 'FREE_SOURCE',
+                        providerAttempted: false,
+                        externalModelCalls: 0,
+                    }),
+                });
+            if (
+                (run.reservedMicros > 0 || input.freeMode) &&
+                input.settingsVersion &&
+                input.settingsVersion !== settings.version
+            )
                 throw new Error('模型或预算配置已变化');
             if (run.kind === 'SKILL' || run.kind === 'SKILL_REVIEW') {
                 if (!this.skills) throw new Error('Skill 服务未启用');
@@ -148,7 +162,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
                     () => this.beginPaidAttempt(ctx, run),
                     x => this.telemetry(ctx, run, x),
                 );
-            } else if (run.kind === 'COLLECT') await this.collect(ctx);
+            } else if (run.kind === 'COLLECT') await this.collect(ctx, run, input);
             else if (run.kind === 'MEDIA') await this.image(ctx, run, input);
             else await this.generate(ctx, run, input);
             await repo.update(
@@ -233,7 +247,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
         if (definition.mode !== 'CHANGELOG') {
             let response: Awaited<ReturnType<BlogSourceHttp['read']>>;
             try {
-                response = await this.http.read(code, value.url, tracked ? metadata : {});
+                response = await this.http.read(code, value.url, prior ? metadata : {});
             } catch {
                 if (prior) {
                     await repo.update(prior.id, {
@@ -323,10 +337,13 @@ export class BlogQueueService implements OnApplicationBootstrap {
             }),
         );
     }
-    private async collect(ctx: RequestContext) {
+    private async collect(ctx: RequestContext, run: BlogRun, input: BlogRunInput) {
         const rows = await this.blog.sources(ctx);
         const now = new Date();
-        const cutoff = now.getTime() - 7 * 86400000;
+        const days = input.historyStart ? historyDays(input.historyStart, input.historyEnd ?? '') : [];
+        const cutoff = days.length
+            ? dayStart(days[0]).getTime() - 72 * 3600000
+            : now.getTime() - 7 * 86400000;
         // The published snapshot is independent of an edited draft's current state.
         const publishedRows = await this.connection
             .getRepository(ctx, BlogArticle)
@@ -345,11 +362,17 @@ export class BlogQueueService implements OnApplicationBootstrap {
             try {
                 const definition = sourceCatalog.find(x => x.code === source.code);
                 if (!definition) throw new Error('未知资讯源');
-                const response = await this.http.read(source.code, definition.url, {
-                    etag: source.etag,
-                    lastModified: source.lastModified,
-                });
-                const items =
+                const response = await this.http.read(
+                    source.code,
+                    definition.url,
+                    days.length
+                        ? {}
+                        : {
+                              etag: source.etag,
+                              lastModified: source.lastModified,
+                          },
+                );
+                let items =
                     response.status === 304
                         ? []
                         : parseSource(source.code, response.body).filter(
@@ -357,13 +380,48 @@ export class BlogQueueService implements OnApplicationBootstrap {
                                   x.publishedAt.getTime() <= now.getTime() + 300000 &&
                                   (x.publishedAt.getTime() >= cutoff || publishedUrls.has(x.url)),
                           );
-                for (const value of items.slice(0, 15)) {
-                    checked.add(value.url);
-                    try {
-                        await this.ingest(ctx, source.code, value, now);
-                    } catch {
-                        failed.add(value.url);
-                    }
+                if (days.length && 'historyUrl' in definition) {
+                    const archive = await this.http.read(source.code, definition.historyUrl);
+                    items = [
+                        ...new Map(
+                            [
+                                ...items,
+                                ...parseSource(source.code, archive.body).filter(
+                                    x => x.publishedAt.getTime() >= cutoff && x.publishedAt <= now,
+                                ),
+                            ].map(x => [x.entryKey, x]),
+                        ).values(),
+                    ];
+                }
+                const bounded = items.slice(0, days.length ? 100 : 15);
+                for (let offset = 0; offset < bounded.length; offset += 2) {
+                    if (days.length && Date.now() - (run.startedAt ?? run.createdAt).getTime() > 20 * 60000)
+                        throw new SkillDeferred(new Date(Date.now() + 60000));
+                    const outcomes = await Promise.allSettled(
+                        bounded.slice(offset, offset + 2).map(async value => {
+                            checked.add(value.url);
+                            const cachedItem = days.length
+                                ? await this.connection.getRepository(ctx, BlogSourceItem).findOne({
+                                      where: {
+                                          channelId: ctx.channelId,
+                                          sourceCode: source.code,
+                                          url: value.url,
+                                          title: value.title,
+                                      },
+                                  })
+                                : null;
+                            if (
+                                cachedItem?.status === 'READY' &&
+                                cachedItem.fetchedAt >= run.createdAt &&
+                                !JSON.parse(cachedItem.metadataJson || '{}').readFailure
+                            )
+                                return;
+                            await this.ingest(ctx, source.code, value, now, cachedItem ?? undefined);
+                        }),
+                    );
+                    outcomes.forEach((outcome, index) => {
+                        if (outcome.status === 'rejected') failed.add(bounded[offset + index].url);
+                    });
                 }
                 // A feed 304 only describes the index, not the article or its image files.
                 const prior = await this.connection.getRepository(ctx, BlogSourceItem).find({
@@ -414,7 +472,8 @@ export class BlogQueueService implements OnApplicationBootstrap {
                     etag: response.etag,
                     lastModified: response.lastModified,
                 });
-            } catch {
+            } catch (error) {
+                if (error instanceof SkillDeferred) throw error;
                 await this.connection.getRepository(ctx, BlogSource).update(source.id, {
                     lastCollectedAt: now,
                     status: 'FAILED',
@@ -423,8 +482,91 @@ export class BlogQueueService implements OnApplicationBootstrap {
             }
         }
         const settings = await this.blog.settings(ctx);
-        if (!settings.automationEnabled) return;
+        if (!settings.automationEnabled && !days.length) return;
         const config = this.blog.config(settings);
+        if (config.freeMode) {
+            const evidence = await this.connection.getRepository(ctx, BlogSourceItem).find({
+                where: { channelId: ctx.channelId, status: 'READY' },
+                order: { sourcePublishedAt: 'DESC' },
+                take: 1000,
+            });
+            const eligible = evidence.filter(x =>
+                rows.some(source => source.enabled && source.code === x.sourceCode),
+            );
+            const previous = days.length
+                ? await this.connection.getRepository(ctx, BlogRun).find({
+                      where: { channelId: ctx.channelId, kind: 'GENERATE' },
+                  })
+                : [];
+            const seen = new Set(previous.map(x => (JSON.parse(x.inputJson) as BlogRunInput).eventKey));
+            const fingerprints = new Set<string>();
+            let queued = 0;
+            for (const selectedDay of days.length ? days : ['']) {
+                const asOf = selectedDay ? dayStart(selectedDay).getTime() + 86400000 - 1 : Date.now();
+                const candidates = eligible
+                    .filter(
+                        x =>
+                            x.sourcePublishedAt.getTime() <= asOf &&
+                            (asOf - x.sourcePublishedAt.getTime() <= 72 * 3600000 ||
+                                (!selectedDay &&
+                                    publishedRows.some(article => article.eventKey === x.eventKey))) &&
+                            (!selectedDay || !seen.has(x.eventKey)) &&
+                            !fingerprints.has(x.contentHash),
+                    )
+                    .sort((a, b) => newsPriority(b, asOf) - newsPriority(a, asOf));
+                const selected = new Set<string>();
+                const balanced = [
+                    ...candidates.filter(x => {
+                        const vendor = x.sourceCode.startsWith('gemini') ? 'gemini' : x.sourceCode;
+                        if (selected.has(vendor)) return false;
+                        selected.add(vendor);
+                        return true;
+                    }),
+                    ...candidates,
+                ];
+                let count = 0;
+                for (const item of balanced) {
+                    if (count >= settings.dailyMaxArticles) break;
+                    if (fingerprints.has(item.contentHash) || (selectedDay && seen.has(item.eventKey)))
+                        continue;
+                    try {
+                        const article = publishedRows.find(x => x.eventKey === item.eventKey);
+                        if (article && (selectedDay || article.state !== 'PUBLISHED')) continue;
+                        const requested = await this.blog.request(
+                            ctx,
+                            'GENERATE',
+                            `free:${item.eventKey}:${item.contentHash.slice(0, 16)}`,
+                            {
+                                sourceIds: [String(item.id)],
+                                ...(article
+                                    ? { articleId: String(article.id), expectedVersion: article.version }
+                                    : {}),
+                                ...(selectedDay
+                                    ? {
+                                          historyDay: selectedDay,
+                                          historyRunId: String(run.id),
+                                      }
+                                    : {}),
+                            },
+                        );
+                        seen.add(item.eventKey);
+                        fingerprints.add(item.contentHash);
+                        if (requested.state === 'QUEUED' || requested.state === 'RUNNING') {
+                            count++;
+                            queued++;
+                        }
+                    } catch {
+                        break;
+                    }
+                }
+            }
+            if (days.length && config.skillEnabled)
+                await this.skills?.scheduleHistory(ctx, String(run.id), days);
+            await this.connection.getRepository(ctx, BlogRun).update(run.id, {
+                message: `${days.length ? `历史回放 ${days[0]} 至 ${days.at(-1)}` : '免费采集'}：已安排 ${queued} 条来源快讯；无合格资讯的日期不凑数，详见来源与子任务记录`,
+            });
+            return;
+        }
         if (!config.textProviderCode || config.dailyBudgetMicros <= 0 || config.textReserveMicros <= 0)
             return;
         const published = await this.connection.getRepository(ctx, BlogArticle).find({
@@ -432,7 +574,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
             select: { eventKey: true },
         });
         const publishedEvents = new Set(published.map(article => article.eventKey).filter(Boolean));
-        const candidates = (
+        const paidCandidates = (
             await this.connection.getRepository(ctx, BlogSourceItem).find({
                 where: { channelId: ctx.channelId, status: 'READY' },
                 order: { fetchedAt: 'DESC' },
@@ -445,13 +587,13 @@ export class BlogQueueService implements OnApplicationBootstrap {
                 (Date.now() - x.sourcePublishedAt.getTime() <= 72 * 3600000 ||
                     publishedEvents.has(x.eventKey)),
         );
-        candidates.sort((a, b) => newsPriority(b) - newsPriority(a));
-        for (const item of candidates) {
+        paidCandidates.sort((a, b) => newsPriority(b) - newsPriority(a));
+        for (const item of paidCandidates) {
             const article = await this.connection
                 .getRepository(ctx, BlogArticle)
                 .findOne({ where: { channelId: ctx.channelId, eventKey: item.eventKey } });
             if (article && article.state !== 'PUBLISHED') continue;
-            const input = {
+            const generationInput = {
                 sourceIds: [String(item.id)],
                 ...(article ? { articleId: String(article.id), expectedVersion: article.version } : {}),
             };
@@ -460,7 +602,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
                     ctx,
                     'GENERATE',
                     `auto:${item.eventKey}:${item.contentHash.slice(0, 16)}`,
-                    input,
+                    generationInput,
                 );
             } catch {
                 break;
@@ -561,16 +703,27 @@ export class BlogQueueService implements OnApplicationBootstrap {
             body: x.body,
             date: x.sourcePublishedAt.toISOString(),
         }));
-        await this.beginPaidAttempt(ctx, run);
-        const output = await this.provider.text(
-            ctx,
-            config.textProviderCode,
-            config.textModel,
-            SYSTEM,
-            JSON.stringify({ evidence }),
-        );
-        await this.telemetry(ctx, run, output.telemetry);
-        const data = JSON.parse(output.text);
+        const freeSource = {
+            ...items[0],
+            category: items[0].category as BlogDraft['category'],
+            fetchedAt: new Date(
+                JSON.parse(items[0].metadataJson || '{}').lastSuccessAt ?? items[0].fetchedAt,
+            ),
+        };
+        let data: Partial<BlogDraft> & { insufficient?: boolean };
+        if (input.freeMode) data = freeNewsDraft(freeSource, input.historyDay);
+        else {
+            await this.beginPaidAttempt(ctx, run);
+            const output = await this.provider.text(
+                ctx,
+                config.textProviderCode,
+                config.textModel,
+                SYSTEM,
+                JSON.stringify({ evidence }),
+            );
+            await this.telemetry(ctx, run, output.telemetry);
+            data = JSON.parse(output.text);
+        }
         if (data.insufficient) {
             await this.connection
                 .getRepository(ctx, BlogSourceItem)
@@ -593,7 +746,19 @@ export class BlogQueueService implements OnApplicationBootstrap {
         draft.cover = existing?.cover ?? null;
         draft.sourceImages = items.flatMap(x => JSON.parse(x.metadataJson || '{}').images ?? []).slice(0, 3);
         draft.illustrations = existing?.illustrations ?? [];
-        const issues = [...contentIssues(draft), ...verifyGeneratedDraft(draft, evidence)];
+        const issues = [
+            ...contentIssues(draft),
+            ...(input.freeMode
+                ? freeDraftIssues(
+                      draft,
+                      normalizeDraft({
+                          ...freeNewsDraft(freeSource, input.historyDay),
+                          sources: draft.sources,
+                          pinned: existing?.pinned ?? false,
+                      }),
+                  )
+                : verifyGeneratedDraft(draft, evidence)),
+        ];
         let article = original;
         if (!article) {
             article = await this.connection
@@ -620,6 +785,9 @@ export class BlogQueueService implements OnApplicationBootstrap {
                 articleId: String(article.id),
                 expectedVersion: article.version,
                 candidatesOnly: Boolean(draft.cover),
+                ...(input.freeMode && !original && config.freeAutoPublish
+                    ? { freeDigest: freeDraftDigest(draft) }
+                    : {}),
             });
     }
     private async applyGenerated(
@@ -694,10 +862,18 @@ export class BlogQueueService implements OnApplicationBootstrap {
         const cover = input.candidatesOnly
             ? draft.cover
             : (sourceCover ??
-              (await this.media.createCover(ctx, draft, hash(`${ctx.channelId}:${run.id}`), bytes)));
+              (await this.media.createCover(
+                  ctx,
+                  draft,
+                  hash(`${ctx.channelId}:${run.id}`),
+                  bytes,
+                  !input.freeMode,
+              )));
         const illustrations = input.candidatesOnly
             ? draft.illustrations
-            : await this.media.createIllustrations(ctx, draft, hash(`${ctx.channelId}:${run.id}:diagram`));
+            : input.freeMode
+              ? []
+              : await this.media.createIllustrations(ctx, draft, hash(`${ctx.channelId}:${run.id}:diagram`));
         const next = {
             ...draft,
             cover,
@@ -717,6 +893,14 @@ export class BlogQueueService implements OnApplicationBootstrap {
             },
         );
         if (result.affected !== 1) throw new Error('配图期间文章发生变化，保留新素材供后台选用');
+        if (input.freeMode && input.freeDigest && input.settingsVersion)
+            await this.blog.publishFree(
+                ctx,
+                String(row.id),
+                row.version + 1,
+                input.freeDigest,
+                input.settingsVersion,
+            );
     }
 }
 export const collectNewsBlogTask = new ScheduledTask({

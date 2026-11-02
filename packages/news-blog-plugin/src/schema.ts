@@ -93,6 +93,8 @@ export const adminSchema = gql`
         sourceIds: [ID!]
         sectionIndex: Int
         templateOnly: Boolean
+        historyStart: String
+        historyEnd: String
     }
     extend type Mutation {
         reconcileNewsBlogRun(id: ID!, actualCostMicros: Int!): NewsBlogRun!

@@ -12,6 +12,7 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { NewsBlogArticleEditor } from './NewsBlogArticleEditor';
+import { NewsBlogHistoryReplay } from './NewsBlogHistoryReplay';
 import { NewsBlogRunRecovery } from './NewsBlogRunRecovery';
 import { NewsBlogSettings } from './NewsBlogSettings';
 import {
@@ -131,7 +132,9 @@ export function NewsBlogModule() {
     const task = (kind: string, extra: Record<string, unknown> = {}) =>
         execute(
             () => request({ variables: { input: { kind, requestKey: crypto.randomUUID(), ...extra } } }),
-            '请求已受理，可在运行记录查看任务状态；文章需人工审核发布。',
+            query.data?.newsBlogSettings.freeMode
+                ? '免费任务已受理，可在运行记录查看结果；内容按当前自动发布设置处理。'
+                : '请求已受理，可在运行记录查看任务状态；文章需人工审核发布。',
         );
     const articles = query.data?.newsBlogArticleList.items ?? [];
     const pageNumber = Math.max(1, Number(params.get('page')) || 1);
@@ -145,7 +148,7 @@ export function NewsBlogModule() {
                         <FeatureHelpButton title="新闻博客" topic="news-blog.overview" />
                     </h1>
                     <p className="mt-1 text-sm text-slate-500">
-                        新闻审核后发布；热门 Skill 按已启用的自动化设置每日更新。
+                        来源与使用依据可核对；内容按当前整理与发布设置处理，热门 Skill 每日最多一条。
                     </p>
                 </div>
                 <AdminButton refreshPage disabled={query.loading} onClick={() => void query.refetch()}>
@@ -279,6 +282,16 @@ export function NewsBlogModule() {
             )}
             {tab === 'sources' && (
                 <section className="space-y-5">
+                    {isAdmin &&
+                        query.data?.newsBlogSettings.freeMode &&
+                        query.data.newsBlogSettings.historyWindow && (
+                            <NewsBlogHistoryReplay
+                                key={`${scope}:${query.data.newsBlogSettings.historyWindow.start}`}
+                                window={query.data.newsBlogSettings.historyWindow}
+                                disabled={busy || !query.data.newsBlogSettings.enabled}
+                                collect={range => void task('COLLECT', range)}
+                            />
+                        )}
                     <AdminButton
                         disabled={busy || !query.data?.newsBlogSettings.enabled}
                         onClick={() => void task('COLLECT')}
