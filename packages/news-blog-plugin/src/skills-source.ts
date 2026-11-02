@@ -8,6 +8,8 @@ export type SkillRanking = {
 };
 export type SkillDiscovery = { repository: string; slug: string; rankings: SkillRanking[] };
 export type SkillEvidence = {
+    sourceSnapshotAt?: string;
+    history?: { day: string; parentRunId: string };
     repository: string;
     repositoryId: string;
     directory: string;

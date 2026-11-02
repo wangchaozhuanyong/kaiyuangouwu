@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { TransactionalConnection } from '@vendure/core';
 
 import { hash } from './content';
+import { dayStart } from './history';
 import { BlogSkill, BlogSkillObservation, BlogSkillRecommendation, BlogSkillState } from './skill-entities';
 import { BlogSkillsHttp } from './skills-http';
 import {
@@ -25,6 +26,8 @@ type Repo = {
 type TreeEntry = { path: string; type: string; sha: string; size?: number; mode: string };
 @Injectable()
 export class BlogSkillsCatalog {
+    private historicalCommits = new Map<string, Promise<{ sha: string; at: string }>>();
+    private historicalDocuments = new Map<string, Promise<SkillEvidence>>();
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly http: BlogSkillsHttp,
@@ -56,6 +59,88 @@ export class BlogSkillsCatalog {
         if (fingerprint(body) !== fingerprint(evidence.body) || !parseSkillDocument(body))
             throw new Error('Skill 原文核验失败');
         return { ...evidence, repository: repo.full_name, stars: repo.stargazers_count };
+    }
+    async verifyFree(evidence: SkillEvidence): Promise<SkillEvidence> {
+        const age = Date.now() - Date.parse(evidence.observedAt);
+        if (
+            !Number.isFinite(age) ||
+            age < -300000 ||
+            age > 86400000 ||
+            !Number.isSafeInteger(evidence.stars) ||
+            evidence.stars < 1000 ||
+            !/^\d+$/u.test(evidence.repositoryId)
+        )
+            throw new Error('Skill 仓库观察资料不足或过期');
+        // Reuse the current catalog's repository observation; re-read the immutable document without API quota.
+        const body = await this.http.document(
+            evidence.repository,
+            evidence.commit,
+            `${evidence.directory ? `${evidence.directory}/` : ''}SKILL.md`,
+        );
+        const parsed = parseSkillDocument(body);
+        if (
+            !parsed ||
+            parsed.name !== evidence.name ||
+            parsed.description !== evidence.description ||
+            fingerprint(body) !== fingerprint(evidence.body)
+        )
+            throw new Error('固定版本 Skill 原文核验失败');
+        return evidence;
+    }
+    async historicalEvidence(evidence: SkillEvidence, beforeDay: string): Promise<SkillEvidence> {
+        const cutoff = dayStart(beforeDay).toISOString();
+        const repoKey = `${evidence.repositoryId}:${cutoff}`;
+        let commit = this.historicalCommits.get(repoKey);
+        if (!commit) {
+            commit = this.http
+                .json<Array<{ sha: string; commit: { committer: { date: string } } }>>(
+                    `/repos/${evidence.repository}/commits?until=${encodeURIComponent(cutoff)}&per_page=1`,
+                    'publication',
+                )
+                .then(rows => {
+                    const row = rows[0];
+                    if (
+                        !row ||
+                        !/^[a-f0-9]{40}$/u.test(row.sha) ||
+                        !Number.isFinite(Date.parse(row.commit.committer.date)) ||
+                        Date.parse(row.commit.committer.date) > Date.parse(cutoff)
+                    )
+                        throw new Error('没有回放开始前的固定仓库版本');
+                    return { sha: row.sha, at: row.commit.committer.date };
+                });
+            this.historicalCommits.set(repoKey, commit);
+            commit.catch(() => this.historicalCommits.delete(repoKey));
+        }
+        const fixed = await commit;
+        const key = `${repoKey}:${evidence.directory}`;
+        let document = this.historicalDocuments.get(key);
+        if (!document) {
+            document = this.http
+                .document(
+                    evidence.repository,
+                    fixed.sha,
+                    `${evidence.directory ? `${evidence.directory}/` : ''}SKILL.md`,
+                )
+                .then(body => {
+                    const parsed = parseSkillDocument(body);
+                    if (!parsed || parsed.name !== evidence.name)
+                        throw new Error('回放开始前没有这份 Skill 原文');
+                    const rankings = evidence.rankings.filter(x => x.view === 'all-time');
+                    if (!rankings.length) throw new Error('历史补录只使用已核对的长期热门候选');
+                    return {
+                        ...evidence,
+                        ...parsed,
+                        body,
+                        readme: '',
+                        commit: fixed.sha,
+                        sourceSnapshotAt: fixed.at,
+                        rankings,
+                    };
+                });
+            this.historicalDocuments.set(key, document);
+            document.catch(() => this.historicalDocuments.delete(key));
+        }
+        return document;
     }
     async refresh(now = new Date()) {
         const state = await this.http.state();
@@ -165,7 +250,7 @@ export class BlogSkillsCatalog {
                     );
                     if (readmeFile) {
                         try {
-                            readme = await this.blob(repo.full_name, readmeFile.sha);
+                            readme = await this.http.document(repo.full_name, commit.sha, readmeFile.path);
                         } catch {
                             /* SKILL.md is mandatory, README optional. */
                         }
@@ -181,7 +266,7 @@ export class BlogSkillsCatalog {
                         );
                         if (paths.length !== 1) continue;
                         const file = paths[0];
-                        const body = await this.blob(repo.full_name, file.sha);
+                        const body = await this.http.document(repo.full_name, commit.sha, file.path);
                         const parsed = parseSkillDocument(body);
                         if (!parsed || parsed.name !== discovery.slug) continue;
                         const directory = file.path.replace(/(?:^|\/)SKILL\.md$/u, '');
@@ -261,15 +346,5 @@ export class BlogSkillsCatalog {
                 },
             );
         }
-    }
-    private async blob(repository: string, sha: string) {
-        const file = await this.http.json<{ content?: string; encoding?: string }>(
-            `/repos/${repository}/git/blobs/${sha}`,
-            'discovery',
-        );
-        if (file.encoding !== 'base64') throw new Error('Skill 原文格式无效');
-        const body = Buffer.from(file.content ?? '', 'base64').toString('utf8');
-        if (body.length > 55000) throw new Error('Skill 原文过长');
-        return body;
     }
 }

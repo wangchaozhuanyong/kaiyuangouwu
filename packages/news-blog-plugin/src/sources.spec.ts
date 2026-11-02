@@ -16,6 +16,17 @@ describe('official news extraction', () => {
         expect(rows).toHaveLength(1);
         expect(rows[0].category).toBe('gemini');
     });
+    it('reads dated official Gemini archive cards without treating undated links as posts', () => {
+        const rows = parseSource(
+            'gemini-blog',
+            `<uni-flex-card headline="Gemini synthetic update"
+            cta-url="https://blog.google/products/gemini/synthetic/"
+            data-ga4-analytics-lead-click='{"publish_date":"2026-10-13|16:00"}'></uni-flex-card>
+            <uni-flex-card headline="Undated" cta-url="https://blog.google/products/gemini/undated/"></uni-flex-card>`,
+        );
+        expect(rows).toHaveLength(1);
+        expect(rows[0].publishedAt.toISOString()).toBe('2026-10-13T00:00:00.000Z');
+    });
     it('splits release notes and ignores navigation or missing dates', () => {
         const first = [
             '<nav>navigation</nav><main><h2 id="november">November 1, 2026</h2><ul><li>Feature A: First',

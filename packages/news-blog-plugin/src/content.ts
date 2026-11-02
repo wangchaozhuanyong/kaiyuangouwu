@@ -4,6 +4,8 @@ export const hash = (value: string) => createHash('sha256').update(value).digest
 export const budgetDate = (date = new Date()) =>
     new Date(date.getTime() + 8 * 3600_000).toISOString().slice(0, 10);
 export interface EditorialSettings {
+    freeMode: boolean;
+    freeAutoPublish: boolean;
     skillEnabled: boolean;
     skillPublishTime: string;
     skillMinStars: number;
@@ -19,6 +21,8 @@ export interface EditorialSettings {
     imageReserveMicros: number;
 }
 export const defaultSettings: EditorialSettings = {
+    freeMode: false,
+    freeAutoPublish: false,
     skillEnabled: false,
     skillPublishTime: '09:00',
     skillMinStars: 1000,

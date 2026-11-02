@@ -3,6 +3,7 @@ import { EditorialProviderService } from '@vendure/image-generation-plugin';
 import { request } from 'node:https';
 
 import { imageAllowed } from './source-images';
+import { decodeSourceResponse } from './source-response';
 import { sourceAllows } from './sources';
 @Injectable()
 export class BlogSourceHttp {
@@ -62,6 +63,7 @@ export class BlogSourceHttp {
                             : done(null, target.address, target.family),
                     headers: {
                         'User-Agent': 'VendureNewsBlog/1.0',
+                        'Accept-Encoding': 'gzip, br, deflate',
                         Accept: options.page
                             ? 'image/png,image/jpeg,image/webp,image/gif'
                             : 'application/rss+xml,application/xml,text/html',
@@ -99,6 +101,11 @@ export class BlogSourceHttp {
             return this.fetch(code, new URL(response.headers.location, rawUrl).href, options, hops + 1);
         }
         if (![200, 304].includes(response.status)) throw new Error(`来源暂不可用（HTTP ${response.status}）`);
+        response.body = decodeSourceResponse(
+            response.body,
+            response.headers['content-encoding'],
+            options.page ? 8000000 : 2000000,
+        );
         return response;
     }
 }

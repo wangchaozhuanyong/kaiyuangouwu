@@ -9,6 +9,9 @@ export type BlogAdminArticle = {
     issues: string[];
 };
 export type BlogAdminSettings = {
+    freeMode?: boolean;
+    freeAutoPublish?: boolean;
+    historyWindow?: { start: string; end: string };
     skillStatus?: string;
     skillCandidates?: Array<{
         name: string;
