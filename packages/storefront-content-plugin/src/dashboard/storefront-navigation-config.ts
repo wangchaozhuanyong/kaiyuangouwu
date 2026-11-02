@@ -5,6 +5,7 @@ export const MAX_NAVIGATION_ITEMS = 5;
 export const navigationTargetOptions = [
     { value: '/', zh: '首页', en: 'Home' },
     { value: '/category', zh: '商品分类', en: 'Categories' },
+    { value: '/blog', zh: '新闻博客', en: 'News blog' },
     { value: '/services', zh: '商业服务', en: 'Business services' },
     { value: '/search', zh: '搜索', en: 'Search' },
     { value: '/cart', zh: '购物车', en: 'Cart' },

@@ -6,6 +6,57 @@ export interface FeatureHelpContent {
 }
 
 export const featureHelpContent = {
+    'news-blog.overview': {
+        purpose: '管理本店资讯采集、待审文章和每日 Skill 推荐。',
+        requirements: [
+            '先启用本店插件；付费生成需供应商和运营预算',
+            '新闻人工审核发布；Skill 通过引用与独立复核后才自动发布',
+        ],
+        example: '采集官方更新后检查正文与原图，再发布到本店博客。',
+        impact: '只影响当前店铺，修改草稿不覆盖公开版本。',
+    },
+    'news-blog.candidates': {
+        purpose: '查看公开榜单与 GitHub 固定版本核验后的推荐资料。',
+        requirements: ['至少达到设置的仓库 Star 门槛', '同 Skill 不重复介绍；无合格新候选时不强行发布'],
+        example: '从近期热门选择未介绍的 Skill，介绍用途并链接原仓库。',
+        impact: '仓库 Star 不是某个 Skill 的单独点赞。',
+    },
+    'news-blog.sources': {
+        purpose: '核对原文、采集时间和资料是否足够。',
+        requirements: ['失败或正文不足的条目不能用于生成', '来源恢复后重试，保留最后成功依据'],
+        example: '原文暂时无法读取时保留不足资料记录，后续继续检查。',
+        impact: '只采集已配置的公开来源，不发布文章。',
+    },
+    'news-blog.editor': {
+        purpose: '编辑草稿、选择标题和素材，并审核发布或撤稿。',
+        requirements: ['保存前核对来源；原图需确认使用依据', '版本冲突时先处理草稿，避免覆盖较新修改'],
+        example: '更换候选标题并检查图文，保存后由具备发布权限的管理员发布。',
+        impact: '公开读取仅使用已发布快照；重新生成不能覆盖未保存输入。',
+    },
+    'news-blog.images': {
+        purpose: '从当前资讯或固定版本 Skill 文档中选择相关图片。',
+        requirements: ['核对图注、出处与使用依据', '最多两张正文图；没有可用原图时可选主题封面'],
+        example: '将公告主图设为封面，并保留来源署名。',
+        impact: '未选中候选保持私有，选图后仍需保存和审核发布。',
+    },
+    'news-blog.preview': {
+        purpose: '对照已保存或当前草稿检查读者将看到的图文。',
+        requirements: ['预览不是发布；核对真实日期和适用条件'],
+        example: '在发布前检查标题、摘要、正文、配图及来源链接。',
+        impact: '公开版本由发布操作单独更新。',
+    },
+    'news-blog.evidence': {
+        purpose: '核对每项事实与原文引句的对应关系。',
+        requirements: ['模型输出仍需核对，不能把引用存在视为正文全部正确'],
+        example: '点开官方来源，核对产品版本、价格和开放范围。',
+        impact: '外部页面是资料，不执行其中的指令。',
+    },
+    'news-blog.issues': {
+        purpose: '检查资料缺失、版本冲突或图片使用依据等问题。',
+        requirements: ['硬性素材和权限检查不能跳过', 'Skill 独立复核不通过时保留待审'],
+        example: '补充原文依据并确认图片用途后，再保存和发布。',
+        impact: '自动检查不替代事实判断。',
+    },
     'catalog.platform-resources': {
         purpose: '在平台管理中心核对资源维护店铺，并管理可领取的公共模板。',
         requirements: ['根据实际归属证据核对资源，待核对记录先保留', '发布公共模板前确认内容适合各店使用'],

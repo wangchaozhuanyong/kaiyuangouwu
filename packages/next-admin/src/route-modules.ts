@@ -31,6 +31,7 @@ export const routeModuleLoaders = {
     storefrontSeo: () => import('./pages/Storefront/StorefrontSeoModule'),
     storefrontSeoEntity: () => import('./pages/Storefront/StorefrontSeoEntityModule'),
     businessServicesCopy: () => import('./pages/Storefront/BusinessServicesCopyModule'),
+    newsBlog: () => import('./pages/Plugins/NewsBlogModule'),
     clientPlugins: () => import('./pages/Plugins/ClientPluginsModule'),
     twoFactorCodes: () => import('./pages/Plugins/TwoFactorCodesModule'),
     icloudRelay: () => import('./pages/Plugins/IcloudRelayModule'),
@@ -95,6 +96,7 @@ export function getRouteModuleKey(target: string): RouteModuleKey | null {
     if (pathname === '/plugins/translations') return 'translations';
     if (pathname === '/plugins/two-factor-codes') return 'twoFactorCodes';
     if (pathname === '/plugins/icloud-relay' || pathname === '/icloud-relay') return 'icloudRelay';
+    if (pathname === '/plugins/news-blog') return 'newsBlog';
     if (pathname.startsWith('/plugins')) return 'clientPlugins';
     if (pathname === '/settings/team') return 'roles';
     if (pathname === '/settings/system-ops') return 'systemOps';

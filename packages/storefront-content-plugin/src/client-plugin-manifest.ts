@@ -77,6 +77,15 @@ export const storefrontClientPluginCatalog: readonly StorefrontClientPluginDefin
         version: '1.0.0',
         defaultPlacement: 'BUSINESS_SERVICES_MAIN',
     },
+    {
+        code: 'news-blog-entry',
+        name: '新闻博客',
+        englishName: 'News blog',
+        description: 'AI 官方资讯与指南。',
+        englishDescription: 'AI news.',
+        version: '1.0.0',
+        defaultPlacement: 'BUSINESS_SERVICES_MAIN',
+    },
 ] as const;
 
 export const storefrontClientPluginCodes = storefrontClientPluginCatalog.map(plugin => plugin.code);

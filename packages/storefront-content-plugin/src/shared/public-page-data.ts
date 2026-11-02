@@ -1,3 +1,4 @@
+import type { BlogListInput, BlogPublicPage } from './news-blog';
 import type { PublicGuideContent, PublicSeoDocument } from './public-seo';
 import type { MediaDescriptor } from './responsive-image';
 
@@ -14,6 +15,7 @@ export type PublicPageCatalogInput = {
 };
 export type PublicPageRequest =
     | { kind: 'home' }
+    | { kind: 'blog'; input: BlogListInput; id?: string }
     | { kind: 'catalog'; input: PublicPageCatalogInput; path?: '/category' | '/search' }
     | { kind: 'product'; id: string }
     | { kind: 'article'; id: string }
@@ -27,6 +29,7 @@ export type PublicStorefrontLanguageCode = 'zh_Hans' | 'en';
 const publicStorefrontPaths = new Set([
     '/',
     '/home',
+    '/blog',
     '/product',
     '/category',
     '/search',
@@ -47,7 +50,7 @@ export function publicLanguageFromUrl(pathAndSearch: string): PublicStorefrontLa
     const unprefixed = pathname.slice(match[1].length + 1) || '/';
     if (
         !publicStorefrontPaths.has(unprefixed === '/' ? '/' : unprefixed.replace(/\/+$/u, '')) &&
-        !/^\/guides\/[a-z0-9_-]{1,100}\/?$/iu.test(unprefixed)
+        !/^\/(?:guides|blog)\/[a-z0-9_-]{1,100}\/?$/iu.test(unprefixed)
     )
         return;
     return match[1] === 'zh' ? 'zh_Hans' : 'en';
@@ -61,7 +64,7 @@ export function isPublicStorefrontPathname(pathname: string): boolean {
     const path = publicUnlocalizedPathname(pathname);
     return (
         publicStorefrontPaths.has(path === '/' ? '/' : path.replace(/\/+$/u, '')) ||
-        /^\/guides\/[a-z0-9_-]{1,100}\/?$/iu.test(path)
+        /^\/(?:guides|blog)\/[a-z0-9_-]{1,100}\/?$/iu.test(path)
     );
 }
 
@@ -81,6 +84,27 @@ export function publicLocalizedHref(
 /** One deterministic identity for SSI, early browser reads and navigation. No private route inputs. */
 export function canonicalPublicPageRequest(value: PublicPageRequest): PublicPageRequest {
     if (value.kind === 'home') return { kind: 'home' };
+    if (value.kind === 'blog') {
+        const blogInput = value.input ?? {};
+        const category = blogInput.category;
+        const parsed = canonicalPublicPageRequest({ kind: 'catalog', input: blogInput }) as Extract<
+            PublicPageRequest,
+            { kind: 'catalog' }
+        >;
+        const { term, skip, take } = parsed.input;
+        if (
+            (category && !['chatgpt', 'claude', 'gemini', 'industry', 'skills'].includes(category)) ||
+            take !== 12 ||
+            (skip ?? 0) % 12 ||
+            (value.id && !publicId.test(value.id))
+        )
+            throw new Error('Invalid blog');
+        return {
+            kind: 'blog',
+            id: value.id || undefined,
+            input: { term, category: category || undefined, skip, take },
+        };
+    }
     if (value.kind === 'page') {
         if (!['services', 'support', 'terms', 'privacy'].includes(value.id))
             throw new Error('Invalid public page');
@@ -154,23 +178,34 @@ export function publicPageRequestFromUrl(
         return;
     const url = new URL(pathAndSearch, 'https://storefront.invalid');
     if (url.origin !== 'https://storefront.invalid') return;
+    const query = url.searchParams;
     const rawPathname = publicUnlocalizedPathname(url.pathname);
     const pathname = rawPathname === '/' ? '/' : rawPathname.replace(/\/+$/u, '');
     if (pathname === '/' || pathname === '/home') return { kind: 'home' };
+    const blog = /^\/blog(?:\/([a-z0-9_-]{1,100}))?$/iu.exec(pathname);
+    if (blog)
+        return canonicalPublicPageRequest({
+            kind: 'blog',
+            id: blog[1],
+            input: {
+                term: query.get('term') ?? undefined,
+                category: query.get('category') ?? undefined,
+                skip: (Number(query.get('page') ?? 1) - 1) * 12,
+            },
+        });
     const article = /^\/guides\/([a-z0-9_-]{1,100})\/?$/iu.exec(pathname);
     if (article) return { kind: 'article', id: article[1] };
     if (pathname === '/services' || pathname === '/support')
         return { kind: 'page', id: pathname.slice(1) as 'services' | 'support' };
     if (pathname === '/legal') {
-        const id = url.searchParams.get('id');
+        const id = query.get('id');
         if (id !== 'terms' && id !== 'privacy') throw new Error('Invalid public legal page');
         return { kind: 'page', id };
     }
     if (pathname === '/product') {
-        return canonicalPublicPageRequest({ kind: 'product', id: url.searchParams.get('id') ?? '' });
+        return canonicalPublicPageRequest({ kind: 'product', id: query.get('id') ?? '' });
     }
     if (pathname !== '/category' && pathname !== '/search') return;
-    const query = url.searchParams;
     const child = query.get('childId') || query.get('child');
     const collection =
         child && child !== 'all' ? child : query.get('collectionId') || query.get('collection');
@@ -224,6 +259,7 @@ export function publicPageRequestFromUrl(
 export function publicPageRouteHref(value: PublicPageRequest): string {
     const request = canonicalPublicPageRequest(value);
     if (request.kind === 'home') return '/';
+    if (request.kind === 'blog' && request.id) return `/blog/${encodeURIComponent(request.id)}`;
     if (request.kind === 'product') return `/product?id=${encodeURIComponent(request.id)}`;
     if (request.kind === 'article') return `/guides/${encodeURIComponent(request.id)}`;
     if (request.kind === 'page')
@@ -231,7 +267,8 @@ export function publicPageRouteHref(value: PublicPageRequest): string {
             ? `/legal?id=${request.id}`
             : `/${request.id}`;
     const query = new URLSearchParams();
-    const input = request.input;
+    const input = request.input as PublicPageCatalogInput;
+    if (request.kind === 'blog' && request.input.category) query.set('category', request.input.category);
     if (input.term) query.set('term', input.term);
     if (input.collectionId) query.set('collectionId', input.collectionId);
     if (input.sort && input.sort !== 'RECOMMENDED')
@@ -248,7 +285,7 @@ export function publicPageRouteHref(value: PublicPageRequest): string {
         if (skip) query.set('skip', String(skip));
         query.set('take', String(take));
     }
-    return `${request.path ?? '/category'}${query.size ? `?${query}` : ''}`;
+    return `${request.kind === 'blog' ? '/blog' : (request.path ?? '/category')}${query.size ? `?${query}` : ''}`;
 }
 
 export function publicPageDataSearchParams(
@@ -257,10 +294,9 @@ export function publicPageDataSearchParams(
 ): URLSearchParams {
     const request = canonicalPublicPageRequest(value);
     const parameters = new URLSearchParams({ kind: request.kind });
-    if (request.kind === 'product' || request.kind === 'article' || request.kind === 'page')
-        parameters.set('id', request.id);
-    if (request.kind === 'catalog') {
-        parameters.set('path', request.path ?? '/category');
+    if ('id' in request && request.id) parameters.set('id', request.id);
+    if (request.kind === 'blog' || request.kind === 'catalog') {
+        if (request.kind === 'catalog') parameters.set('path', request.path ?? '/category');
         parameters.set('input', JSON.stringify(request.input));
     }
     if (scope.languageCode) parameters.set('languageCode', scope.languageCode);
@@ -313,6 +349,7 @@ export interface StorefrontPageData<
 > {
     seo?: PublicSeoDocument;
     publicContent?: PublicGuideContent;
+    blog?: BlogPublicPage;
     schemaVersion: 1;
     version: string;
     generatedAt: number;

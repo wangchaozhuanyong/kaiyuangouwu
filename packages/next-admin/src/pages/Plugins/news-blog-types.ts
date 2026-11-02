@@ -1,0 +1,67 @@
+import { type BlogDraft } from '../../../../storefront-content-plugin/src/shared/news-blog';
+export type BlogAdminArticle = {
+    id: string;
+    slug: string;
+    version: number;
+    state: string;
+    draft: BlogDraft;
+    published: unknown;
+    issues: string[];
+};
+export type BlogAdminSettings = {
+    skillStatus?: string;
+    skillCandidates?: Array<{
+        name: string;
+        repository: string;
+        status: string;
+        message: string;
+        stars: number;
+    }>;
+    skillEnabled: boolean;
+    skillPublishTime: string;
+    skillMinStars: number;
+    version: number;
+    enabled: boolean;
+    automationEnabled: boolean;
+    title: string;
+    description: string;
+    intervalMinutes: number;
+    dailyMaxArticles: number;
+    textProviderCode: string;
+    textModel: string;
+    imageProviderCode: string;
+    imageModel: string;
+    imageProtocol: string;
+    dailyBudgetMicros: number;
+    textReserveMicros: number;
+    imageReserveMicros: number;
+};
+export type BlogAdminSource = {
+    id: string;
+    code: string;
+    name: string;
+    url: string;
+    enabled: boolean;
+    version: number;
+    status: string;
+    message: string;
+};
+export type BlogAdminItem = {
+    id: string;
+    title: string;
+    url: string;
+    body: string;
+    status: string;
+    sourcePublishedAt: string;
+};
+export type BlogAdminRun = {
+    id: string;
+    kind: string;
+    state: string;
+    message: string;
+    reservedMicros: number;
+    chargedMicros: number;
+    createdAt: string;
+    telemetryJson: string | null;
+};
+export type BlogAdminAction = (action: () => Promise<unknown>, message: string) => Promise<void>;

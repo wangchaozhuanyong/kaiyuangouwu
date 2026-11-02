@@ -19,6 +19,7 @@ import type {
     StorefrontPageData,
 } from '@vendure/storefront-content-plugin';
 import {
+    BLOG_READER,
     canonicalPublicPageRequest,
     effectivePublicCatalogInput,
     isReusablePublicPageData,
@@ -31,6 +32,7 @@ import {
     StorefrontContentService,
     StorefrontVisualPresetService,
     validInlineImagePreview,
+    type BlogPublicReader,
     type MediaDescriptor,
     type PrimaryStorefrontMediaRoute,
     type PublicNavigationCollection,
@@ -419,38 +421,43 @@ export class StorefrontPublicPageService {
                     options.prepareCoupons === true &&
                         (this.processContext?.isWorker === true || this.cache.sharedVersions === false),
                 );
-                const routeData = this.cache.trackSource(() =>
-                    request.kind === 'catalog'
-                        ? (async () => {
-                              // Only a default category depends on the published navigation.
-                              // Explicit categories and search keep their parallel read path.
-                              const collections =
-                                  request.path !== '/search' &&
-                                  (!request.input.collectionId || request.input.collectionId === 'all')
-                                      ? ((await commonData).collections ?? [])
-                                      : [];
-                              return this.moduleRef
-                                  .get<PublicCatalogReader>(PUBLIC_CATALOG_READER, { strict: false })
-                                  .find(
-                                      ctx,
-                                      effectivePublicCatalogInput(
-                                          request,
-                                          collections as PublicNavigationCollection[],
-                                      ),
-                                  )
-                                  .then(catalog => ({ route: '/category', catalog }));
-                          })()
-                        : request.kind === 'product'
-                          ? this.moduleRef
-                                .get<PublicProductSummaryReader>(PUBLIC_PRODUCT_SUMMARY_READER, {
-                                    strict: false,
-                                })
-                                .detail(ctx, request.id)
-                                .then(product => ({
-                                    route: `/product/${encodeURIComponent(request.id)}`,
-                                    product,
-                                }))
-                          : Promise.resolve({ route: '/' }),
+                const routeData = this.cache.trackSource<Partial<StorefrontPageData>>(() =>
+                    request.kind === 'blog'
+                        ? this.moduleRef
+                              .get<BlogPublicReader>(BLOG_READER, { strict: false })
+                              .read(ctx, request.input, request.id)
+                              .then(blog => ({ blog }))
+                        : request.kind === 'catalog'
+                          ? (async () => {
+                                // Only a default category depends on the published navigation.
+                                // Explicit categories and search keep their parallel read path.
+                                const collections =
+                                    request.path !== '/search' &&
+                                    (!request.input.collectionId || request.input.collectionId === 'all')
+                                        ? ((await commonData).collections ?? [])
+                                        : [];
+                                return this.moduleRef
+                                    .get<PublicCatalogReader>(PUBLIC_CATALOG_READER, { strict: false })
+                                    .find(
+                                        ctx,
+                                        effectivePublicCatalogInput(
+                                            request,
+                                            collections as PublicNavigationCollection[],
+                                        ),
+                                    )
+                                    .then(catalog => ({ route: '/category', catalog }));
+                            })()
+                          : request.kind === 'product'
+                            ? this.moduleRef
+                                  .get<PublicProductSummaryReader>(PUBLIC_PRODUCT_SUMMARY_READER, {
+                                      strict: false,
+                                  })
+                                  .detail(ctx, request.id)
+                                  .then(product => ({
+                                      route: `/product/${encodeURIComponent(request.id)}`,
+                                      product,
+                                  }))
+                            : Promise.resolve({ route: '/' }),
                 );
                 const [common, data] = await Promise.all([commonData, routeData]);
                 const combined = {

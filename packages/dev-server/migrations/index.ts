@@ -159,6 +159,9 @@ import { AddGptRecharge1792152000000 } from './1792152000000-add-gpt-recharge';
 import { AddShopAbuseProtection1792180800000 } from './1792180800000-add-shop-abuse-protection';
 import { AddCatalogImportExecutionLease1792195200000 } from './1792195200000-add-catalog-import-execution-lease';
 import { PreserveIncidentEvidenceMilliseconds1792651200000 } from './1792651200000-preserve-incident-evidence-milliseconds';
+import { AddNewsBlog1793491200000 } from './1793491200000-add-news-blog';
+import { AddBlogSkills1793577600000 } from './1793577600000-add-blog-skills';
+import { AddBlogSourceMetadata1793577660000 } from './1793577660000-add-blog-source-metadata';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -322,4 +325,7 @@ export const devServerMigrations = [
     AddShopAbuseProtection1792180800000,
     AddCatalogImportExecutionLease1792195200000,
     PreserveIncidentEvidenceMilliseconds1792651200000,
+    AddNewsBlog1793491200000,
+    AddBlogSkills1793577600000,
+    AddBlogSourceMetadata1793577660000,
 ];

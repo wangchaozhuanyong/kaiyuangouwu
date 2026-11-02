@@ -12,6 +12,8 @@ const browsingRoutes = new Set<RouteName>([
     'category',
     'product',
     'guide',
+    'blog',
+    'blog-article',
     'search',
     'services',
     'flash-sale',

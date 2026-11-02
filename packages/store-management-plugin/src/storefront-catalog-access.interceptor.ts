@@ -35,6 +35,9 @@ const publicQueries = new Set([
     'storefrontAnnouncements',
     'storefrontAnnouncement',
     'storefrontContentSettings',
+    // Published snapshots only; BlogService enforces the active Channel and plugin access.
+    'newsBlogArticles',
+    'newsBlogArticle',
     'activeStoreCommerceMode',
     'imageStudioConfig',
     // The mail service authorizes each read with its query code and expiry.

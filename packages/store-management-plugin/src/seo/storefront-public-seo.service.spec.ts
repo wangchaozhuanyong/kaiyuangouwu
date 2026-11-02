@@ -206,6 +206,55 @@ describe('request-local public SEO preparation', () => {
         expect(test.pages.getAccessMode).toHaveBeenCalledOnce();
     });
 
+    it('uses the reviewed blog article metadata and absolute image while retaining the store noindex rule', async () => {
+        const test = fixture();
+        test.ctx.languageCode = LanguageCode.zh_Hans;
+        test.page.request = { kind: 'blog', id: 'verified-update', input: {} };
+        test.page.config = { ...test.page.config, customFields: { storefrontNameZh: '测试店铺' } } as never;
+        test.profile.descriptionZh = '中文店铺说明';
+        test.page.blog = {
+            title: '栏目标题',
+            description: '栏目说明',
+            items: [],
+            totalItems: 1,
+            featured: null,
+            relatedArticles: [],
+            article: {
+                title: '审核后的具体更新',
+                summary: '文章摘要',
+                seoDescription: '文章说明',
+                cover: { url: '/assets/cover.webp' },
+                publishedAt: '2026-11-01T00:00:00Z',
+                reviewedAt: '2026-11-01T01:00:00Z',
+                reviewerName: '编辑',
+                sources: [],
+            } as never,
+        };
+        test.seo.publishedRecord.mockResolvedValue({
+            version: 2,
+            payload: {
+                title: '通用栏目标题',
+                description: '通用栏目说明',
+                shareTitle: '通用分享标题',
+                shareDescription: '通用分享说明',
+                shareImageUrl: '/assets/generic.webp',
+                indexMode: 'NOINDEX',
+            },
+        });
+        const enriched = await test.service.enrich(test.ctx, test.host, test.page);
+        expect(enriched.seo?.title).toContain('审核后的具体更新');
+        expect(enriched.seo?.shareTitle).toContain('审核后的具体更新');
+        expect(enriched.seo?.description).toBe('文章说明');
+        expect(enriched.seo?.image).toBe('/assets/cover.webp');
+        expect(enriched.seo?.indexable).toBe(false);
+        expect(enriched.seo?.structuredData).toContainEqual(
+            expect.objectContaining({
+                '@type': 'BlogPosting',
+                image: [`https://${test.host}/assets/cover.webp`],
+            }),
+        );
+    });
+
     it('keeps preparation automatic for callers that only supply the page', async () => {
         const test = fixture();
 

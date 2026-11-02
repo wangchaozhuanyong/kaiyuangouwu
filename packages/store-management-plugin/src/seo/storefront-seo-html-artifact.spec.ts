@@ -277,7 +277,7 @@ describe.runIf(process.env.SEO_HTML_ARTIFACT_SMOKE === '1')(
                         artifact,
                         fingerprints,
                         scenarios,
-                        passed: scenarios.length === 19,
+                        passed: scenarios.length === 20,
                         runtime: 'actual StorefrontSeoHtmlService + built CJS renderer + built Vite template',
                         syntheticOnly: true,
                         noBusinessDatabase: true,
@@ -287,6 +287,7 @@ describe.runIf(process.env.SEO_HTML_ARTIFACT_SMOKE === '1')(
                 )}\n`,
             );
             process.stdout.write(`HTML service evidence: ${path.join(output, 'verification.json')}\n`);
+            expect(scenarios).toHaveLength(20);
         });
 
         for (const store of fixtureStores)
@@ -403,6 +404,28 @@ describe.runIf(process.env.SEO_HTML_ARTIFACT_SMOKE === '1')(
                         );
                     });
                 }
+
+        it('includes blog styles in the first HTML response before any client JavaScript', async () => {
+            const payload = page(fixtureStores[0], 'zh_Hans', 'home');
+            payload.request = { kind: 'blog', input: {} };
+            payload.blog = {
+                title: '合成博客首屏验收',
+                description: '本地渲染与样式检查',
+                items: [],
+                totalItems: 0,
+                featured: null,
+                article: null,
+                relatedArticles: [],
+            };
+            const html = await service.render(payload);
+            const dom = load(html);
+            expect(dom('#root main').attr('aria-label')).toBe('合成博客首屏验收');
+            expect(dom('#root nav[aria-label="文章分类"] a')).toHaveLength(6);
+            expect(dom('head link[rel="stylesheet"][href^="/assets/blog-"]')).toHaveLength(1);
+            scenarios.push(
+                'news blog: first-response route styles and body, zero client JavaScript required',
+            );
+        });
 
         it('adds the search route styles through the actual service path', async () => {
             const payload = page(fixtureStores[0], 'en', 'catalog');

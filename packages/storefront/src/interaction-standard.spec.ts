@@ -55,6 +55,15 @@ describe('storefront interaction architecture guard', () => {
             [],
         );
     });
+    it('requires registration, classification and exact files for nested blog routes', () => {
+        const files = ['__root.tsx', 'index.tsx', 'blog.index.tsx', 'blog.$slug.tsx'];
+        const routes = ['blog', 'blog-article'];
+        expect(checkRouteAdmission(routes, routes, files)).toEqual([]);
+        expect(checkRouteAdmission(['blog'], ['blog'], files)).not.toEqual([]);
+        expect(checkRouteAdmission(routes, ['blog'], files)).not.toEqual([]);
+        expect(checkRouteAdmission(routes, routes, files.slice(0, -1))).not.toEqual([]);
+        expect(checkRouteAdmission(routes, routes, [...files, 'blog.$other.tsx'])).not.toEqual([]);
+    });
     it('blocks acceptance when a caller supplies violations', () => {
         expect(() =>
             assertInteractionStandard(checkInteractionSource('pages/future.tsx', 'const data = new Map()')),

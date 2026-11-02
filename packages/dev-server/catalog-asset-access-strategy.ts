@@ -21,6 +21,7 @@ import {
     StorefrontMediaManifestService,
     StorefrontPromotionAccessService,
 } from '@vendure/store-management-plugin';
+import { BLOG_READER, type BlogPublicReader } from '@vendure/storefront-content-plugin';
 import { AdminTwoFactorService } from '@vendure/two-factor-dashboard-plugin';
 
 export const PUBLIC_CATALOG_ASSET_CACHE_CONTROL = 'public, max-age=300, s-maxage=300, must-revalidate';
@@ -111,6 +112,16 @@ export class CatalogAssetAccessStrategy implements ImageTransformStrategy {
                     .get(StorefrontMediaManifestService)
                     .isPublic(request.ctx, request.host, identifier)
             )
+                return allowPublicImage(request.ctx, request.host);
+        }
+        if (request) {
+            let blog: BlogPublicReader | undefined;
+            try {
+                blog = this.injector.get<BlogPublicReader>(BLOG_READER);
+            } catch {
+                /* Plugin not installed in base-schema mode. */
+            }
+            if (blog && (await blog.isAssetPublic(request.ctx, identifier)))
                 return allowPublicImage(request.ctx, request.host);
         }
         const session = await getSession();

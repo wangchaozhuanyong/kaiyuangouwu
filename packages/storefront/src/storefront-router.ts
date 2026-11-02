@@ -12,6 +12,8 @@ export type RouteName =
     | MainPage
     | 'product'
     | 'guide'
+    | 'blog'
+    | 'blog-article'
     | 'search'
     | 'purchase'
     | 'checkout'
@@ -56,6 +58,7 @@ export function isCheckoutRoute(name: string): name is CheckoutRouteName {
 export function routePageIdentity(route: RouteState): string {
     switch (route.name) {
         case 'product':
+        case 'blog-article':
         case 'guide':
         case 'legal':
             return `${route.name}:${route.id ?? ''}`;
@@ -87,6 +90,7 @@ export interface RouteState {
     tab?: OrderTab;
     token?: string;
     term?: string;
+    category?: string;
     collectionId?: string;
     childId?: string;
     sort?: SortMode;
@@ -118,6 +122,8 @@ export const storefrontRouteNames = [
     ...rootPages,
     'product',
     'guide',
+    'blog',
+    'blog-article',
     'search',
     ...checkoutRoutes,
     'order-confirmation',
@@ -230,19 +236,24 @@ export function createStorefrontScrollRestorationKey(
 export function routeSearch(route: RouteState): StorefrontRouteSearch {
     const { name: _name, publicLanguage, ...search } = route;
     const code = typeof window === 'undefined' ? undefined : publicLanguageFromUrl(window.location.pathname);
-    const language = publicLanguage ?? (code === 'zh_Hans' ? 'zh' : code === 'en' ? 'en' : undefined);
+    const language = route.name.startsWith('blog')
+        ? 'zh'
+        : (publicLanguage ?? (code === 'zh_Hans' ? 'zh' : code === 'en' ? 'en' : undefined));
     return {
         ...search,
-        ...((route.name === 'guide' || isPublicStorefrontPathname(routePath(route.name))) && language
+        ...(isArticleRoute(route.name) ? { id: undefined } : {}),
+        ...((isArticleRoute(route.name) || isPublicStorefrontPathname(routePath(route.name))) && language
             ? { __storefrontLanguage: language }
             : {}),
     };
 }
 
+const isArticleRoute = (name: RouteName) => name === 'guide' || name === 'blog-article';
+
 export function routeNavigateOptions(route: RouteState) {
-    if (route.name === 'guide')
+    if (isArticleRoute(route.name))
         return {
-            to: '/guides/$slug',
+            to: route.name === 'guide' ? '/guides/$slug' : '/blog/$slug',
             params: { slug: route.id ?? '' },
             search: routeSearch(route),
         };
@@ -299,6 +310,7 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
         tab: orderTabs.includes(tab as OrderTab) ? (tab as OrderTab) : undefined,
         token: stringValue('token'),
         term: stringValue('term'),
+        category: stringValue('category'),
         collectionId: stringValue('collectionId') ?? stringValue('collection'),
         childId: stringValue('childId') ?? stringValue('child'),
         sort: ['recommended', 'sales', 'newest', 'name', 'price-asc', 'price-desc'].includes(sort ?? '')
@@ -318,7 +330,7 @@ export function routeFromRouterLocation(pathname: string, search: Record<string,
     const languageCode = publicLanguageFromUrl(pathname);
     const path = publicUnlocalizedPathname(pathname);
     const normalizedPath = path === '/' ? '/' : path.replace(/\/+$/, '');
-    const guide = /^\/guides\/[a-z0-9_-]{1,100}$/iu.test(normalizedPath);
+    const article = /^\/(?:(guides)|blog)\/([a-z0-9_-]{1,100})$/iu.exec(normalizedPath);
     // Overlay state must not change the background page/query/readiness identity.
     const {
         auth: _auth,
@@ -328,14 +340,18 @@ export function routeFromRouterLocation(pathname: string, search: Record<string,
         ...pageSearch
     } = normalizeRouteSearch(search);
     return {
-        name: guide ? 'guide' : (routeNamesByPath.get(normalizedPath) ?? 'not-found'),
+        name: article
+            ? article[1]
+                ? 'guide'
+                : 'blog-article'
+            : (routeNamesByPath.get(normalizedPath) ?? 'not-found'),
         ...(languageCode || __storefrontLanguage
             ? {
                   publicLanguage: languageCode === 'zh_Hans' ? 'zh' : (languageCode ?? __storefrontLanguage),
               }
             : {}),
         ...pageSearch,
-        ...(guide ? { id: normalizedPath.slice('/guides/'.length) } : {}),
+        ...(article ? { id: article[2] } : {}),
     };
 }
 
@@ -373,6 +389,7 @@ export function routeHref(route: RouteState): string {
         'tab',
         'token',
         'term',
+        'category',
         'collectionId',
         'childId',
         'sort',
@@ -384,7 +401,7 @@ export function routeHref(route: RouteState): string {
         const value = search[key];
         if (
             value &&
-            !(key === 'id' && route.name === 'guide') &&
+            !(key === 'id' && isArticleRoute(route.name)) &&
             !(key === 'sort' && value === 'recommended') &&
             !(key === 'fulfillment' && value === 'all')
         ) {
@@ -401,9 +418,10 @@ export function routeHref(route: RouteState): string {
     const code = route.publicLanguage === 'zh' ? 'zh_Hans' : route.publicLanguage;
     const locationCode =
         typeof window === 'undefined' ? undefined : publicLanguageFromUrl(window.location.pathname);
-    const languageCode = code ?? locationCode;
-    const plainPath =
-        route.name === 'guide' ? `/guides/${encodeURIComponent(route.id ?? '')}` : routePath(route.name);
+    const languageCode = route.name.startsWith('blog') ? 'zh_Hans' : (code ?? locationCode);
+    const plainPath = isArticleRoute(route.name)
+        ? `${route.name === 'guide' ? '/guides' : '/blog'}/${encodeURIComponent(route.id ?? '')}`
+        : routePath(route.name);
     const path = languageCode ? publicLocalizedHref(plainPath, languageCode) : plainPath;
     return `${path}${params.size ? `?${params.toString()}` : ''}`;
 }

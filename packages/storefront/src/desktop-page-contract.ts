@@ -11,6 +11,8 @@ export const desktopPageFamilyByRoute = {
     recommendations: 'discovery',
     product: 'product',
     guide: 'content',
+    blog: 'content',
+    'blog-article': 'content',
     cart: 'commerce',
     purchase: 'commerce',
     checkout: 'commerce',

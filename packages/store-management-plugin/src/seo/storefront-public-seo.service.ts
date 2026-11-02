@@ -15,9 +15,11 @@ import {
 } from '@vendure/core';
 import { StoreDomain } from '@vendure/store-domain-plugin';
 import {
+    BLOG_READER,
     publicPageRequestKey,
     resolveManagedLegalDocument,
     StorefrontContentService,
+    type BlogPublicReader,
     type ManagedLegalContentBlock,
     type PublicPageRequest,
     type StorefrontPageData,
@@ -70,6 +72,7 @@ const language = (ctx: RequestContext): StorefrontSeoLanguage =>
 const SHARD_SIZE = 500;
 
 function identity(request: PublicPageRequest, code: StorefrontSeoLanguage): StorefrontSeoIdentity {
+    if (request.kind === 'blog') return { targetType: 'PAGE', targetId: 'blog', languageCode: code };
     if (request.kind === 'home') return { targetType: 'HOME', targetId: 'home', languageCode: code };
     if (request.kind === 'product')
         return { targetType: 'PRODUCT', targetId: request.id, languageCode: code };
@@ -158,7 +161,17 @@ export class StorefrontPublicSeoService {
             throw new ServiceUnavailableException('Public SEO preparation scope changed');
         const { configuration, primary: primaryHost, record: documentRecord, profile } = resolved;
         const settings = configuration?.payload ?? null;
-        const document = documentRecord?.payload ?? null;
+        const document =
+            request.kind === 'blog' && request.id && documentRecord?.payload
+                ? {
+                      ...documentRecord.payload,
+                      title: '',
+                      description: '',
+                      shareTitle: '',
+                      shareDescription: '',
+                      shareImageUrl: '',
+                  }
+                : (documentRecord?.payload ?? null);
         const config = page.config as PublicConfig;
         const blocks = (page.content as { blocks?: PublicBlock[] } | undefined)?.blocks ?? [];
         const names = config.customFields ?? {};
@@ -278,6 +291,29 @@ export class StorefrontPublicSeoService {
             }
             if ((request.input.skip ?? 0) >= (page.catalog?.totalItems ?? 0) && (request.input.skip ?? 0) > 0)
                 throw new NotFoundException('Public category page not found');
+        } else if (request.kind === 'blog') {
+            const blog = page.blog;
+            if (!blog) throw new NotFoundException('Published blog not found');
+            completeLanguages = ['zh_Hans'];
+            title = blog.article?.title ?? blog.title;
+            description = blog.article?.seoDescription || blog.article?.summary || blog.description;
+            image = blog.article?.cover?.url ?? blog.featured?.cover?.url ?? image;
+            if (blog.article)
+                structuredData.push({
+                    '@context': 'https://schema.org',
+                    '@type': 'BlogPosting',
+                    headline: title,
+                    description,
+                    datePublished: blog.article.publishedAt,
+                    dateModified:
+                        blog.article.updatedAt ?? blog.article.reviewedAt ?? blog.article.publishedAt,
+                    author: { '@type': 'Organization', name: storeName },
+                    ...(blog.article.publicationMode !== 'AUTOMATIC' && blog.article.reviewerName
+                        ? { reviewedBy: { '@type': 'Person', name: blog.article.reviewerName } }
+                        : {}),
+                    ...(image ? { image: [new URL(image, origin).href] } : {}),
+                    citation: blog.article.sources.map(source => source.url),
+                });
         } else if (request.kind === 'article') {
             if (
                 !document?.article?.body.trim() ||
@@ -423,11 +459,20 @@ export class StorefrontPublicSeoService {
                     { '@type': 'ListItem', position: 2, name: title, item: seo.canonical },
                 ],
             });
+        if (request.kind === 'blog' && request.input.term) {
+            seo.indexable = false;
+            seo.robots = 'noindex, follow';
+            seo.alternates = [];
+        }
         return { ...page, seo };
     }
 
     /** Rendering can outlive a committed closure or publication. Recheck before sending bytes. */
     async assertOutput(ctx: RequestContext, page: StorefrontPageData): Promise<void> {
+        if (page.blog)
+            await this.moduleRef
+                .get<BlogPublicReader>(BLOG_READER, { strict: false })
+                .assertCurrent(ctx, page.blog);
         const [mode, configuration, primary, record] = await Promise.all([
             this.pages.getAccessMode(ctx),
             this.seo.publishedConfiguration(ctx),
@@ -609,6 +654,20 @@ export class StorefrontPublicSeoService {
                     ),
                 ).map(id => ({ kind: 'article' as const, id })),
             ];
+            let blogReader: BlogPublicReader | undefined;
+            try {
+                blogReader = this.moduleRef.get<BlogPublicReader>(BLOG_READER, { strict: false });
+            } catch {
+                /* Optional plugin. */
+            }
+            const blogPaths = blogReader
+                ? await blogReader.sitemap(ctx.copy({ languageCode: LanguageCode.zh_Hans }))
+                : [];
+            if (blogPaths.length)
+                requests.push(
+                    { kind: 'blog', input: {} },
+                    ...blogPaths.map(item => ({ kind: 'blog' as const, input: {}, id: item.slug })),
+                );
             for (const code of settings.enabledLanguages) {
                 const localizedCtx = ctx.copy({ languageCode: code as LanguageCode });
                 for (const request of requests) {

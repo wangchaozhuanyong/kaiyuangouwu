@@ -1,0 +1,30 @@
+{
+    "name": "@vendure/news-blog-plugin",
+    "version": "0.1.0",
+    "private": true,
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "scripts": {
+        "build": "tsc --project tsconfig.build.json",
+        "check-types": "tsc --project tsconfig.json --noEmit",
+        "test": "vitest run"
+    },
+    "dependencies": {
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/graphql": "~13.4.4",
+        "@vendure/common": "3.7.2",
+        "@vendure/core": "3.7.2",
+        "graphql-tag": "^2.12.6",
+        "reflect-metadata": "^0.2.2",
+        "typeorm": "^0.3.21",
+        "@vendure/image-generation-plugin": "0.1.0",
+        "@vendure/storefront-content-plugin": "0.1.0",
+        "@vendure/store-management-plugin": "0.1.0",
+        "cheerio": "1.0.0",
+        "sharp": "0.35.5"
+    },
+    "devDependencies": {
+        "typescript": "5.8.2",
+        "vitest": "^4.1.11"
+    }
+}

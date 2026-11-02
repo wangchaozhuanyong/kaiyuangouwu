@@ -211,10 +211,10 @@ export function seedPublicPage(
     };
     if (includeConfig) set([...storefrontQueryKeys.config(market, language), 'public'], page.config);
     if (request) set(publicSeoQueryKey(market, language, request), page.seo ?? null);
-    if (request?.kind === 'article')
+    if (request?.kind === 'article' || request?.kind === 'blog')
         set(
             [...storefrontQueryKeys.scope(market, language), 'public-content', publicPageRequestKey(request)],
-            page.publicContent ?? null,
+            request.kind === 'article' ? (page.publicContent ?? null) : (page.blog ?? null),
         );
     set([...storefrontQueryKeys.content(market, language), 'public'], page.content);
     const collections = page.collections && storefrontNavigationCollections(page.collections);
