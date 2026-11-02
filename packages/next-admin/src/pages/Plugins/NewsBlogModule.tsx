@@ -132,9 +132,13 @@ export function NewsBlogModule() {
     const task = (kind: string, extra: Record<string, unknown> = {}) =>
         execute(
             () => request({ variables: { input: { kind, requestKey: crypto.randomUUID(), ...extra } } }),
-            query.data?.newsBlogSettings.freeMode
-                ? '免费任务已受理，可在运行记录查看结果；内容按当前自动发布设置处理。'
-                : '请求已受理，可在运行记录查看任务状态；文章需人工审核发布。',
+            kind === 'COLLECT' &&
+                typeof extra.historyStart === 'string' &&
+                typeof extra.historyEnd === 'string'
+                ? `已受理 ${extra.historyStart} 至 ${extra.historyEnd} 的免费历史回放，可在运行记录核对结果。`
+                : query.data?.newsBlogSettings.freeMode
+                  ? '免费任务已受理，可在运行记录查看结果；内容按当前自动发布设置处理。'
+                  : '请求已受理，可在运行记录查看任务状态；文章需人工审核发布。',
         );
     const articles = query.data?.newsBlogArticleList.items ?? [];
     const pageNumber = Math.max(1, Number(params.get('page')) || 1);
