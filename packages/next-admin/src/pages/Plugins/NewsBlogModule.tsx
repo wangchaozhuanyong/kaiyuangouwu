@@ -6,6 +6,7 @@ import { blogCategoryLabels } from '../../../../storefront-content-plugin/src/sh
 import { getAdminQueryScope } from '../../apollo';
 import { AdminButton, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SearchInput } from '../../components/SearchInput';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery } from '../../hooks/use-admin-query';
@@ -139,7 +140,10 @@ export function NewsBlogModule() {
         <section className="space-y-5" data-admin-page="news-blog">
             <header className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h1 className="text-xl font-semibold">新闻博客</h1>
+                    <h1 className="text-xl font-semibold">
+                        新闻博客
+                        <FeatureHelpButton title="新闻博客" topic="news-blog.overview" />
+                    </h1>
                     <p className="mt-1 text-sm text-slate-500">
                         新闻审核后发布；热门 Skill 按已启用的自动化设置每日更新。
                     </p>
@@ -283,7 +287,10 @@ export function NewsBlogModule() {
                     </AdminButton>
                     {query.data?.newsBlogSettings.skillEnabled && (
                         <section className="space-y-3">
-                            <h2 className="text-lg font-semibold">热门 Skill 候选</h2>
+                            <h2 className="text-lg font-semibold">
+                                热门 Skill 候选
+                                <FeatureHelpButton title="热门 Skill 候选" topic="news-blog.candidates" />
+                            </h2>
                             <p className="text-sm text-slate-500">
                                 {serviceMessageDisplay(
                                     query.data.newsBlogSettings.skillStatus || '候选资料尚在采集中。',
@@ -349,7 +356,10 @@ export function NewsBlogModule() {
                             </AdminButton>
                         </div>
                     ))}
-                    <h2 className="text-lg font-semibold">最近采集资讯</h2>
+                    <h2 className="text-lg font-semibold">
+                        最近采集资讯
+                        <FeatureHelpButton title="最近采集资讯" topic="news-blog.sources" />
+                    </h2>
                     {sources.data?.newsBlogSourceItems.length === 0 && (
                         <p role="status">尚无采集记录，可点击立即采集。</p>
                     )}

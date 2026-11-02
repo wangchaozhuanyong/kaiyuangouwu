@@ -11,6 +11,7 @@ import { getAdminQueryScope } from '../../apollo';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { ImageAssetUploadButton } from '../../components/ImageAssetUploadButton';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery } from '../../hooks/use-admin-query';
@@ -104,7 +105,10 @@ export function NewsBlogArticleEditor({
     return (
         <section className="space-y-4 rounded-xl border p-4">
             <header className="flex items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold">文章编辑与审核</h2>
+                <h2 className="text-lg font-semibold">
+                    文章编辑与审核
+                    <FeatureHelpButton title="文章编辑与审核" topic="news-blog.editor" />
+                </h2>
                 <div className="flex gap-2">
                     <AdminButton
                         disabled={query.loading || id === 'new'}
@@ -252,7 +256,10 @@ export function NewsBlogArticleEditor({
                     </AdminField>
                     {!!body.sourceImages?.length && (
                         <section className="space-y-3" aria-label="资讯原图候选">
-                            <h3 className="font-semibold">资讯原图候选</h3>
+                            <h3 className="font-semibold">
+                                资讯原图候选
+                                <FeatureHelpButton title="资讯原图候选" topic="news-blog.images" />
+                            </h3>
                             <p className="text-sm text-slate-500">
                                 核对原文与图片用途后选择，所选图片将在发布前确认使用依据。
                             </p>
@@ -425,7 +432,10 @@ export function NewsBlogArticleEditor({
                     </AdminButton>
                 </div>
                 <div className="min-w-0 space-y-4">
-                    <h3 className="font-semibold">图文预览与核对</h3>
+                    <h3 className="font-semibold">
+                        图文预览与核对
+                        <FeatureHelpButton title="图文预览与核对" topic="news-blog.preview" />
+                    </h3>
                     {body.cover && (
                         <img
                             className="aspect-video w-full rounded-lg object-cover"
@@ -456,7 +466,10 @@ export function NewsBlogArticleEditor({
                         </section>
                     ))}
                     <section className="space-y-2">
-                        <h3 className="font-semibold">来源依据</h3>
+                        <h3 className="font-semibold">
+                            来源依据
+                            <FeatureHelpButton title="来源依据" topic="news-blog.evidence" />
+                        </h3>
                         {body.sources.map((source, index) => (
                             <p key={index}>
                                 <a
@@ -480,7 +493,10 @@ export function NewsBlogArticleEditor({
                     </section>
                     {current.issues.length > 0 && (
                         <aside className="rounded-lg bg-amber-50 p-3" role="status">
-                            <h3 className="font-semibold">自动检查提示</h3>
+                            <h3 className="font-semibold">
+                                自动检查提示
+                                <FeatureHelpButton title="自动检查提示" topic="news-blog.issues" />
+                            </h3>
                             <ul>
                                 {current.issues.map(issue => (
                                     <li key={issue}>{issue}</li>

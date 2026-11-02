@@ -115,9 +115,12 @@ describe('AI Image Studio responsive generation flow', () => {
     });
 
     it('keeps active generation polling alive and shows real output progress', () => {
-        expect(pageSource).toContain('startImageGenerationPolling');
-        expect(pageSource).toContain("document.addEventListener('visibilitychange'");
-        expect(pageSource).toContain("window.addEventListener('online'");
+        expect(pageSource).toContain("'active-jobs', activeJobIds");
+        expect(pageSource).toContain('enabled: Boolean(customerId && activeJobIds.length && pageActive)');
+        expect(pageSource).toContain(
+            'refetchInterval: () => imageGenerationPollDelay(pollStartedAt.current)',
+        );
+        expect(pageSource).toContain('refetchIntervalInBackground: false');
         expect(pageSource).toContain('imageGenerationProgress(job)');
         expect(pageSource).toContain('imageGenerationElapsedSeconds(job.createdAt, progressClock)');
         expect(pageSource).toContain('progress.determinate');

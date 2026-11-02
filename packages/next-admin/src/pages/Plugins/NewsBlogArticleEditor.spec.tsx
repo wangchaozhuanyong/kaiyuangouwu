@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { adminSchema } from '../../../../news-blog-plugin/src/schema';
 import { emptyBlogDraft } from '../../../../storefront-content-plugin/src/shared/news-blog';
 import { ConfirmDialogProvider } from '../../components/ConfirmDialog';
+import { FeatureHelpProvider } from '../../components/FeatureHelp';
 import { AdminPermissionsContext } from '../../hooks/use-admin-permissions';
 import { NewsBlogArticleEditor } from './NewsBlogArticleEditor';
 const schema = buildASTSchema({
@@ -109,14 +110,16 @@ async function fixture(withImages = false) {
                         value={{ permissions: ['SuperAdmin'], hasAnyPermission: () => true }}
                     >
                         <ConfirmDialogProvider>
-                            <NewsBlogArticleEditor
-                                id="1"
-                                execute={async action => {
-                                    await action();
-                                }}
-                                onSaved={() => {}}
-                                onClose={() => {}}
-                            />
+                            <FeatureHelpProvider>
+                                <NewsBlogArticleEditor
+                                    id="1"
+                                    execute={async action => {
+                                        await action();
+                                    }}
+                                    onSaved={() => {}}
+                                    onClose={() => {}}
+                                />
+                            </FeatureHelpProvider>
                         </ConfirmDialogProvider>
                     </AdminPermissionsContext.Provider>
                 </MemoryRouter>
