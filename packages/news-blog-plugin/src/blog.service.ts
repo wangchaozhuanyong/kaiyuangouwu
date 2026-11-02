@@ -33,7 +33,7 @@ import {
     serializeDraft,
 } from './content';
 import { BlogArticle, BlogRevision, BlogRun, BlogSettings, BlogSource, BlogSourceItem } from './entities';
-import { freeDraftDigest } from './free-content';
+import { freeDraftDigest, freeSourceSufficient } from './free-content';
 import { historyDays, previousMonth } from './history';
 import { BlogSkill, BlogSkillRecommendation, BlogSkillState } from './skill-entities';
 import { sourceAllows, sourceCatalog } from './sources';
@@ -599,7 +599,16 @@ export class BlogService {
                     .find({ where: { channelId: tx.channelId, id: In(input.sourceIds) } });
                 if (
                     evidence.length !== input.sourceIds.length ||
-                    evidence.some(x => x.status !== 'READY' || x.body.length < 200)
+                    evidence.some(
+                        x =>
+                            x.status !== 'READY' ||
+                            (config.freeMode
+                                ? !freeSourceSufficient({
+                                      ...x,
+                                      evidenceMode: JSON.parse(x.metadataJson || '{}').evidenceMode,
+                                  })
+                                : x.body.length < 200),
+                    )
                 )
                     throw new Error('资讯资料不足或不属于当前店铺');
                 const eventKey = evidence[0].eventKey;

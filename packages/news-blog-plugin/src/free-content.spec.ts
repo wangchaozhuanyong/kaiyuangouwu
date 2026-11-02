@@ -46,6 +46,18 @@ describe('free source briefs and bounded historical replay', () => {
         expect(() => freeNewsDraft({ ...source, body: '' })).toThrow('原文不足');
         expect(() => freeNewsDraft({ ...source, sourceCode: 'unknown' })).toThrow('未知官方来源');
     });
+    it('uses a verified short official RSS summary without pretending to have read the full page', () => {
+        const body =
+            'Synthetic official feed summary with enough concrete source words for a short brief only. Additional supported details.';
+        expect(() => freeNewsDraft({ ...source, body })).toThrow('原文不足');
+        const brief = freeNewsDraft({ ...source, body, evidenceMode: 'OFFICIAL_RSS' });
+        expect(brief.body).toContain('全文页面暂不可读取');
+        expect(brief.facts[0].sourceUrl).toBe('https://openai.com/news/rss.xml');
+        expect(brief.sources.some(x => x.url === brief.facts[0].sourceUrl)).toBe(true);
+        expect(() =>
+            freeNewsDraft({ ...source, body: 'Only a title', evidenceMode: 'OFFICIAL_RSS' }),
+        ).toThrow('原文不足');
+    });
     it('keeps excerpts short for both English and Chinese sources', () => {
         expect(freeNewsDraft(source).facts[0].quote?.split(' ').length).toBeLessThanOrEqual(16);
         expect(

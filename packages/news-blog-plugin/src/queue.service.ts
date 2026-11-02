@@ -15,7 +15,7 @@ import { In, LessThan } from 'typeorm';
 import { BlogRunInput, BlogService } from './blog.service';
 import { contentIssues, hash, normalizeDraft, serializeDraft, verifyGeneratedDraft } from './content';
 import { BlogArticle, BlogRun, BlogSettings, BlogSource, BlogSourceItem } from './entities';
-import { freeDraftDigest, freeDraftIssues, freeNewsDraft } from './free-content';
+import { freeDraftDigest, freeDraftIssues, freeNewsDraft, freeSourceSufficient } from './free-content';
 import { dayStart, historyDays } from './history';
 import { BlogMediaService } from './media';
 import { SkillDeferred } from './skill-deferral';
@@ -219,6 +219,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
         value: CollectedItem,
         now: Date,
         tracked?: BlogSourceItem,
+        freeMode = false,
     ) {
         const repo = this.connection.getRepository(ctx, BlogSourceItem);
         const definition = sourceCatalog.find(x => x.code === code);
@@ -245,67 +246,90 @@ export class BlogQueueService implements OnApplicationBootstrap {
         let body = value.body;
         let metadata = prior?.metadataJson ? JSON.parse(prior.metadataJson) : { images: [] };
         if (definition.mode !== 'CHANGELOG') {
-            let response: Awaited<ReturnType<BlogSourceHttp['read']>>;
+            let response: Awaited<ReturnType<BlogSourceHttp['read']>> | undefined;
             try {
                 response = await this.http.read(code, value.url, prior ? metadata : {});
             } catch {
-                if (prior) {
-                    await repo.update(prior.id, {
-                        fetchedAt: now,
-                        metadataJson: JSON.stringify({
-                            ...metadata,
-                            lastSuccessAt: metadata.lastSuccessAt ?? prior.fetchedAt.toISOString(),
-                            readFailure: true,
-                        }),
-                    });
+                if (
+                    freeMode &&
+                    definition.mode === 'RSS' &&
+                    value.body.length >= 80 &&
+                    (!prior || prior.body.length < 200)
+                ) {
+                    metadata = {
+                        images: [],
+                        evidenceMode: 'OFFICIAL_RSS',
+                        indexUrl: definition.url,
+                        pageReadFailure: true,
+                        readFailure: false,
+                        lastSuccessAt: now.toISOString(),
+                    };
                 } else {
-                    await repo.save(
-                        new BlogSourceItem({
-                            channelId: ctx.channelId,
-                            identityKey,
-                            sourceCode: code,
-                            contentHash: hash(`${value.title}:source-read-failed`),
-                            eventKey: value.eventKey,
-                            url: value.url,
-                            title: value.title,
-                            category: value.category,
-                            body: '',
+                    if (prior) {
+                        await repo.update(prior.id, {
+                            fetchedAt: now,
                             metadataJson: JSON.stringify({
-                                images: [],
-                                entryKey: value.entryKey,
+                                ...metadata,
+                                lastSuccessAt: metadata.lastSuccessAt ?? prior.fetchedAt.toISOString(),
                                 readFailure: true,
                             }),
-                            sourcePublishedAt: value.publishedAt,
-                            fetchedAt: now,
-                            status: 'INSUFFICIENT',
-                        }),
-                    );
+                        });
+                    } else {
+                        await repo.save(
+                            new BlogSourceItem({
+                                channelId: ctx.channelId,
+                                identityKey,
+                                sourceCode: code,
+                                contentHash: hash(`${value.title}:source-read-failed`),
+                                eventKey: value.eventKey,
+                                url: value.url,
+                                title: value.title,
+                                category: value.category,
+                                body: '',
+                                metadataJson: JSON.stringify({
+                                    images: [],
+                                    entryKey: value.entryKey,
+                                    readFailure: true,
+                                }),
+                                sourcePublishedAt: value.publishedAt,
+                                fetchedAt: now,
+                                status: 'INSUFFICIENT',
+                            }),
+                        );
+                    }
+                    throw new Error('原文读取失败或超时');
                 }
-                throw new Error('原文读取失败或超时');
             }
-            if (response.status === 304) {
-                body = prior?.body ?? '';
-                metadata.readFailure = false;
-                metadata.lastSuccessAt = now.toISOString();
-            } else {
-                body = extractArticle(response.body);
-                metadata = {
-                    images: extractSourceImages(code, response.body, value.url),
-                    etag: response.etag,
-                    lastModified: response.lastModified,
-                    lastSuccessAt: now.toISOString(),
-                };
-            }
-            for (const image of metadata.images.slice(0, 3)) {
-                try {
-                    image.version =
-                        (await this.http.imageVersion?.(code, image.url, value.url)) || image.version || '';
-                } catch {
-                    /* An optional image must not fabricate or discard text evidence. */
+            if (response) {
+                if (response.status === 304) {
+                    body = prior?.body ?? '';
+                    metadata.readFailure = false;
+                    metadata.lastSuccessAt = now.toISOString();
+                } else {
+                    body = extractArticle(response.body);
+                    metadata = {
+                        images: extractSourceImages(code, response.body, value.url),
+                        etag: response.etag,
+                        lastModified: response.lastModified,
+                        lastSuccessAt: now.toISOString(),
+                    };
+                }
+                for (const image of metadata.images.slice(0, 3)) {
+                    try {
+                        image.version =
+                            (await this.http.imageVersion?.(code, image.url, value.url)) ||
+                            image.version ||
+                            '';
+                    } catch {
+                        /* An optional image must not fabricate or discard text evidence. */
+                    }
                 }
             }
         }
-        if (body.length < 200 && prior) {
+        const sufficient = freeMode
+            ? freeSourceSufficient({ body, sourceCode: code, evidenceMode: metadata.evidenceMode })
+            : body.length >= 200;
+        if (!sufficient && prior) {
             await repo.update(prior.id, { fetchedAt: now });
             return;
         }
@@ -315,7 +339,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
             return;
         }
         const duplicate =
-            !prior && body.length >= 200
+            !prior && sufficient
                 ? await repo.findOne({ where: { channelId: ctx.channelId, body, status: 'READY' } })
                 : null;
         await repo.save(
@@ -333,7 +357,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
                 metadataJson: JSON.stringify({ ...metadata, entryKey: value.entryKey }),
                 sourcePublishedAt: value.publishedAt,
                 fetchedAt: now,
-                status: body.length >= 200 ? 'READY' : 'INSUFFICIENT',
+                status: sufficient ? 'READY' : 'INSUFFICIENT',
             }),
         );
     }
@@ -416,7 +440,14 @@ export class BlogQueueService implements OnApplicationBootstrap {
                                 !JSON.parse(cachedItem.metadataJson || '{}').readFailure
                             )
                                 return;
-                            await this.ingest(ctx, source.code, value, now, cachedItem ?? undefined);
+                            await this.ingest(
+                                ctx,
+                                source.code,
+                                value,
+                                now,
+                                cachedItem ?? undefined,
+                                input.freeMode === true,
+                            );
                         }),
                     );
                     outcomes.forEach((outcome, index) => {
@@ -452,6 +483,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
                             },
                             now,
                             row,
+                            input.freeMode === true,
                         );
                     } catch {
                         failed.add(row.url);
@@ -468,7 +500,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
                         ? `${failed.size} 条原文读取失败或超时，已保留记录待重试；未生成无依据文章`
                         : response.status === 304
                           ? '索引无变化，已检查到期原文与待重试资料'
-                          : `发现 ${items.length} 条近期资讯，已按本轮上限读取原文`,
+                          : `发现 ${items.length} 条近期资讯，已按本轮上限核对原文或官方订阅摘要`,
                     etag: response.etag,
                     lastModified: response.lastModified,
                 });
@@ -583,6 +615,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
         ).filter(
             x =>
                 x.status === 'READY' &&
+                x.body.length >= 200 &&
                 rows.some(source => source.enabled && source.code === x.sourceCode) &&
                 (Date.now() - x.sourcePublishedAt.getTime() <= 72 * 3600000 ||
                     publishedEvents.has(x.eventKey)),
@@ -695,7 +728,19 @@ export class BlogQueueService implements OnApplicationBootstrap {
             await this.applyGenerated(ctx, original, sectionDraft, sectionIssues, original.version);
             return;
         }
-        if (!items.length || items.some(x => x.status !== 'READY' || x.body.length < 200))
+        if (
+            !items.length ||
+            items.some(
+                x =>
+                    x.status !== 'READY' ||
+                    (input.freeMode
+                        ? !freeSourceSufficient({
+                              ...x,
+                              evidenceMode: JSON.parse(x.metadataJson || '{}').evidenceMode,
+                          })
+                        : x.body.length < 200),
+            )
+        )
             throw new Error('资料不足');
         const evidence = items.map(x => ({
             title: x.title,
@@ -705,6 +750,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
         }));
         const freeSource = {
             ...items[0],
+            evidenceMode: JSON.parse(items[0].metadataJson || '{}').evidenceMode,
             category: items[0].category as BlogDraft['category'],
             fetchedAt: new Date(
                 JSON.parse(items[0].metadataJson || '{}').lastSuccessAt ?? items[0].fetchedAt,
@@ -737,11 +783,14 @@ export class BlogQueueService implements OnApplicationBootstrap {
             ...data,
             relatedProductIds: [],
             pinned: existing?.pinned ?? false,
-            sources: items.map(x => ({
-                label: x.title,
-                url: x.url,
-                accessedAt: JSON.parse(x.metadataJson || '{}').lastSuccessAt ?? x.fetchedAt.toISOString(),
-            })),
+            sources: input.freeMode
+                ? data.sources
+                : items.map(x => ({
+                      label: x.title,
+                      url: x.url,
+                      accessedAt:
+                          JSON.parse(x.metadataJson || '{}').lastSuccessAt ?? x.fetchedAt.toISOString(),
+                  })),
         });
         draft.cover = existing?.cover ?? null;
         draft.sourceImages = items.flatMap(x => JSON.parse(x.metadataJson || '{}').images ?? []).slice(0, 3);

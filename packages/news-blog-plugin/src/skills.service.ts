@@ -84,11 +84,14 @@ export class BlogSkillsService {
         const history = await this.connection
             .getRepository(ctx, BlogSkillRecommendation)
             .find({ where: { channelId: ctx.channelId } });
-        if (time < config.skillPublishTime && history.length) return;
         const today = history.find(x => x.day === day);
         if (today) {
             if (today.status === 'SELECTED') await this.queue(ctx, today);
             if (today.status === 'REVIEWING') await this.queueReview(ctx, today);
+            await this.refreshPublished(ctx, history, now);
+            return;
+        }
+        if (time < config.skillPublishTime && history.length) {
             await this.refreshPublished(ctx, history, now);
             return;
         }

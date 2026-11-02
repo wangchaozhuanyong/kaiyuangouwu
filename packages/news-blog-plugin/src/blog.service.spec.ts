@@ -1150,6 +1150,63 @@ describe('free source workflow', () => {
         await worker.process('1', String(image.id));
         expect(media.createCover).toHaveBeenCalledTimes(1);
     });
+    it('collects an official feed brief on a blocked article page, while preserving strict AI admission', async () => {
+        await enableFree();
+        const summary =
+            'Synthetic official feed summary with enough concrete evidence for a short news brief only. No invented details.';
+        const http = {
+            read: vi.fn((_code: string, url: string) =>
+                url.endsWith('/rss.xml')
+                    ? Promise.resolve({
+                          status: 200,
+                          body: [
+                              '<rss><channel><item><title>Synthetic official release</title>',
+                              '<link>https://openai.com/news/rss-fixture</link>',
+                              `<pubDate>${new Date().toISOString()}</pubDate><description>${summary}</description>`,
+                              '</item></channel></rss>',
+                          ].join(''),
+                      })
+                    : Promise.reject(new Error('HTTP 403')),
+            ),
+        };
+        const { provider, media } = freeWorker();
+        const worker = new BlogQueueService(
+            {} as never,
+            {
+                create: ({ channelOrToken }: any) => Promise.resolve(contextFor(Number(channelOrToken.id))),
+            } as never,
+            connection,
+            service,
+            http as never,
+            provider as never,
+            media as never,
+        );
+        const collection = await service.request(contextFor(), 'COLLECT', 'free-official-rss');
+        await worker.process('1', String(collection.id));
+        const evidence = await db
+            .getRepository('BlogSourceItem')
+            .findOneByOrFail({ url: 'https://openai.com/news/rss-fixture' });
+        expect(evidence.body).toBe(summary);
+        expect(evidence.status).toBe('READY');
+        expect(JSON.parse(evidence.metadataJson).evidenceMode).toBe('OFFICIAL_RSS');
+        const generation = await service.request(contextFor(), 'GENERATE', 'free-rss-generation', {
+            sourceIds: [String(evidence.id)],
+        });
+        await worker.process('1', String(generation.id));
+        const article = await db
+            .getRepository('BlogArticle')
+            .findOneByOrFail({ eventKey: evidence.eventKey });
+        expect(JSON.parse(article.draftJson).body).toContain('全文页面暂不可读取');
+        expect(JSON.parse(article.draftJson).facts[0].sourceUrl).toBe('https://openai.com/news/rss.xml');
+        expect(provider.text).not.toHaveBeenCalled();
+        const settings = await service.settings(contextFor());
+        await service.saveSettings(contextFor(), { ...defaultSettings, enabled: true }, settings.version);
+        await expect(
+            service.request(contextFor(), 'GENERATE', 'paid-must-reject-summary', {
+                sourceIds: [String(evidence.id)],
+            }),
+        ).rejects.toThrow('资料不足');
+    });
     it('protects human edits and rejects forged or cross-store historical task references', async () => {
         await enableFree();
         const { worker } = freeWorker();
