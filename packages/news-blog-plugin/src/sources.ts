@@ -62,7 +62,14 @@ export function sourceAllows(code: string, raw: string): boolean {
             !u.port &&
             !u.username &&
             !u.password &&
-            (source.hosts as readonly string[]).includes(u.hostname)
+            (source.hosts as readonly string[]).includes(u.hostname) &&
+            // These are observed taxonomy pages, never dated article evidence.
+            !(
+                code === 'anthropic' &&
+                /^\/news\/(?:announcements|features|product|policy|security|safeguards)\/?$/iu.test(
+                    u.pathname,
+                )
+            )
         );
     } catch {
         return false;
@@ -182,6 +189,9 @@ export function parseSource(code: string, html: string): CollectedItem[] {
         } else {
             $('a[href*="/news/"]').each((_, node) => {
                 const a = $(node);
+                // A card repeats its URL in descriptions and categories. Only its semantic heading is news.
+                const title = a.find('h2,h3,h4').first().text().trim();
+                if (!title) return;
                 let url: string;
                 try {
                     const href = a.attr('href');
@@ -199,14 +209,6 @@ export function parseSource(code: string, html: string): CollectedItem[] {
                         .match(
                             /(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+20\d{2}/iu,
                         )?.[0];
-                const title =
-                    a.find('h2,h3').first().text() ||
-                    a
-                        .text()
-                        .replace(
-                            /(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+20\d{2}/iu,
-                            '',
-                        );
                 const row = item(code, { url, title, date, body: '' });
                 if (row) rows.push(row);
             });

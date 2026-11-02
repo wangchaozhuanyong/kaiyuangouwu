@@ -48,6 +48,27 @@ describe('official news extraction', () => {
         expect(rows).toHaveLength(1);
         expect(rows[0].title).toBe('Introducing Claude');
     });
+    it('uses the dated article heading instead of sibling descriptions and category links', () => {
+        const rows = parseSource(
+            'anthropic',
+            `<li><a href="/news/synthetic-release"><h3>Introducing a synthetic Claude update</h3></a>
+            <a href="/news/synthetic-release"><p>A separate description must not replace the headline.</p></a>
+            <a href="/news/product">Product</a><time>Oct 22, 2026</time>
+            <div aria-hidden="true"><a href="/news/synthetic-release"><h3>Introducing a synthetic Claude update</h3></a>
+            <a href="/news/synthetic-release"><p>Repeated description</p></a></div></li>`,
+        );
+        expect(rows).toHaveLength(1);
+        expect(rows[0].title).toBe('Introducing a synthetic Claude update');
+        expect(rows[0].url).toBe('https://www.anthropic.com/news/synthetic-release');
+    });
+    it('rejects observed Anthropic category destinations while retaining the source index', () => {
+        for (const slug of ['announcements', 'features', 'product', 'policy', 'security', 'safeguards']) {
+            expect(sourceAllows('anthropic', `https://www.anthropic.com/news/${slug}`)).toBe(false);
+            expect(sourceAllows('anthropic', `https://anthropic.com/news/${slug}/?page=2`)).toBe(false);
+        }
+        expect(sourceAllows('anthropic', 'https://www.anthropic.com/news')).toBe(true);
+        expect(sourceAllows('anthropic', 'https://www.anthropic.com/news/synthetic-release')).toBe(true);
+    });
     it('rejects hostile XML and non-allowlisted destinations', () => {
         expect(() =>
             parseSource('openai', '<!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><rss/>'),
