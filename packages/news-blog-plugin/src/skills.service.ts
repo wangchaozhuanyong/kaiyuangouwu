@@ -64,12 +64,19 @@ export class BlogSkillsService {
         }
     }
     async scheduleHistory(ctx: RequestContext, parentRunId: string, days: string[]) {
-        await this.catalog.refresh();
+        const deferredUntil = await this.catalog.refresh(new Date(), true);
         for (const day of days)
             await this.schedule(ctx, new Date(dayStart(day).getTime() + 86400000 - 1), {
                 parentRunId,
                 beforeDay: days[0],
             });
+        if (deferredUntil) {
+            const recommendations = await this.connection
+                .getRepository(ctx, BlogSkillRecommendation)
+                .find({ where: { channelId: ctx.channelId } });
+            if (days.some(day => !recommendations.some(x => x.day === day)))
+                throw new SkillDeferred(deferredUntil);
+        }
     }
     async schedule(
         ctx: RequestContext,
@@ -106,16 +113,30 @@ export class BlogSkillsService {
                     !history.some(
                         h => h.identity === x.row.identity || x.evidence.aliases.includes(h.identity),
                     ) &&
-                    !history.some(
-                        h =>
-                            h.repositoryId === x.row.repositoryId &&
-                            Math.abs(dayStart(h.day).getTime() - dayStart(day).getTime()) < 7 * 86400000,
-                    ),
+                    (config.freeMode ||
+                        !history.some(
+                            h =>
+                                h.repositoryId === x.row.repositoryId &&
+                                Math.abs(dayStart(h.day).getTime() - dayStart(day).getTime()) < 7 * 86400000,
+                        )),
             )
-            .sort((a, b) => skillOrder(a.evidence, b.evidence));
+            .sort((a, b) => {
+                const recentRepo = (id: string) =>
+                    history.some(
+                        h =>
+                            h.repositoryId === id &&
+                            Math.abs(dayStart(h.day).getTime() - dayStart(day).getTime()) < 7 * 86400000,
+                    );
+                return (
+                    (config.freeMode
+                        ? Number(recentRepo(a.row.repositoryId)) - Number(recentRepo(b.row.repositoryId))
+                        : 0) || skillOrder(a.evidence, b.evidence)
+                );
+            });
         if (replay) {
             if (!config.freeMode) throw new Error('历史 Skill 回放仅使用免费模式');
             const resolved: typeof candidates = [];
+            let waiting: SkillDeferred | undefined;
             for (const item of candidates.filter(x =>
                 x.evidence.rankings.some(rank => rank.view === 'all-time'),
             )) {
@@ -127,9 +148,10 @@ export class BlogSkillsService {
                     });
                     break;
                 } catch (error) {
-                    if (error instanceof SkillDeferred) throw error;
+                    if (error instanceof SkillDeferred) waiting = error;
                 }
             }
+            if (!resolved.length && waiting) throw waiting;
             candidates = resolved;
         }
         if (
@@ -168,7 +190,8 @@ export class BlogSkillsService {
                         h =>
                             h.identity === x.row.identity ||
                             x.evidence.aliases.includes(h.identity) ||
-                            (h.repositoryId === x.row.repositoryId &&
+                            (!config.freeMode &&
+                                h.repositoryId === x.row.repositoryId &&
                                 Math.abs(dayStart(h.day).getTime() - dayStart(day).getTime()) < 7 * 86400000),
                     ),
             );
