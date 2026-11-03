@@ -3,6 +3,31 @@ import { describe, expect, it, vi } from 'vitest';
 import { StorefrontPromotionService } from './storefront-promotion.service';
 
 describe('promotion defaults across channels', () => {
+    it.each(['store-1', 'store-2', 'store-3'])(
+        'exposes the same public sharing metadata for the %s website without a promotion ticket',
+        async channelId => {
+            const service = new StorefrontPromotionService({} as never, {} as never, {} as never);
+            const bindings = {
+                'store.name': `${channelId} name`,
+                'store.description': 'Published description',
+                'store.shareTitle': `${channelId} headline`,
+                'store.shareDescription': `${channelId} introduction`,
+                'store.shareImageUrl': `/assets/source/${channelId}.png`,
+                'store.logoUrl': '/assets/logo.png',
+                'store.heroImageUrl': '/assets/hero.png',
+            };
+            const read = vi.spyOn(service as any, 'getBindings').mockResolvedValue(bindings);
+            const ctx = { channelId } as never;
+            expect(await service.publicShareMetadata(ctx)).toEqual({
+                siteName: `${channelId} name`,
+                title: `${channelId} headline`,
+                description: `${channelId} introduction`,
+                image: `/assets/source/${channelId}.png`,
+            });
+            expect(read).toHaveBeenCalledWith(ctx);
+        },
+    );
+
     it('uses shared neutral content until a channel publishes its own page', async () => {
         const render = vi.fn(() => '<html></html>');
         const service = new StorefrontPromotionService({} as never, {} as never, { render } as never);

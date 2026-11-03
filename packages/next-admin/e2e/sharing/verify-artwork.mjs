@@ -22,7 +22,14 @@ try {
     await editor().getByLabel('模板名称 *', { exact: true }).fill('圆形整图候选');
     await editor().getByLabel('中文分享文案 *', { exact: true }).fill('发现店铺好物');
     await editor().getByRole('combobox', { name: '完整设计图 *', exact: true }).selectOption('asset-1');
+    await expect(editor().getByRole('combobox', { name: '分享背景图', exact: true })).toBeVisible();
+    await expect(editor().getByRole('button', { name: '上传并设为分享背景图', exact: true })).toBeVisible();
+    await editor().getByRole('combobox', { name: '分享背景图', exact: true }).selectOption('asset-wide');
+    await expect(editor().getByRole('combobox', { name: '完整设计图 *', exact: true })).toHaveValue(
+        'asset-1',
+    );
     await expect(save()).toBeEnabled({ timeout: 20000 });
+    await page.screenshot({ path: path.join(output, 'separate-link-cover-desktop.png'), fullPage: true });
     await expect(editor().getByText(/当前店铺：分享测试店 A/)).toBeVisible();
     await expect(editor().getByText(/测试邀请码 PREVIEW/)).toBeVisible();
     const preview = editor().getByRole('img', { name: '当前文案的完整海报排版' });
@@ -112,10 +119,17 @@ try {
     expect(saved.enabled).toBe(false);
     expect(saved.design.canvas).toEqual({ width: 1080, height: 1920 });
     expect(saved.posterBackgroundAsset.id).toBe('asset-1');
+    expect(saved.shareBackgroundAsset.id).toBe('asset-wide');
+    checks.push(
+        'Artwork mode accepts and saves a separate landscape link cover while preserving the portrait poster',
+    );
     await card('圆形整图候选').getByRole('button', { name: '复制模板', exact: true }).click();
     await expect(editor().getByLabel('模板名称 *', { exact: true })).toHaveValue('圆形整图候选 · 本店');
     await expect(editor().getByRole('combobox', { name: '完整设计图 *', exact: true })).toHaveValue(
         'asset-1',
+    );
+    await expect(editor().getByRole('combobox', { name: '分享背景图', exact: true })).toHaveValue(
+        'asset-wide',
     );
     await expect(save()).toBeEnabled({ timeout: 20000 });
     await save().click();

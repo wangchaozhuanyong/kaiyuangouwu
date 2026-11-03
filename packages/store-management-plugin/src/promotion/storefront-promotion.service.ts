@@ -157,6 +157,17 @@ export class StorefrontPromotionService {
         });
     }
 
+    /** The website and promotion page consume the same current-store sharing settings. */
+    async publicShareMetadata(ctx: RequestContext) {
+        const bindings = await this.getBindings(ctx);
+        return {
+            siteName: bindings['store.name'],
+            title: bindings['store.shareTitle'] || bindings['store.name'],
+            description: bindings['store.shareDescription'] || bindings['store.description'],
+            image: bindings['store.shareImageUrl'] || null,
+        };
+    }
+
     private async findPage(ctx: RequestContext): Promise<StorefrontPromotionPage | null> {
         return this.connection.getRepository(ctx, StorefrontPromotionPage).findOne({
             where: { channelId: ctx.channelId },

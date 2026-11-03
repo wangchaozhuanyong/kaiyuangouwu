@@ -44,12 +44,14 @@ function fixture() {
     };
     const pages = { getAccessMode: vi.fn().mockResolvedValue('LIVE') };
     const content = { findPublished: vi.fn().mockResolvedValue([]) };
+    const sharing = { publicShareMetadata: vi.fn().mockResolvedValue(undefined) };
     const service = new StorefrontPublicSeoService(
         seo as never,
         connection as never,
         pages as never,
         content as never,
         {} as never,
+        sharing as never,
     );
     const page = {
         schemaVersion: 1,
@@ -74,10 +76,64 @@ function fixture() {
         },
         content: { blocks: [{ type: 'HERO', title: 'Published heading' }] },
     } as StorefrontPageData;
-    return { service, host, ctx, configuration, profile, seo, domains, profiles, pages, content, page };
+    return {
+        service,
+        host,
+        ctx,
+        configuration,
+        profile,
+        seo,
+        domains,
+        profiles,
+        pages,
+        content,
+        page,
+        sharing,
+    };
 }
 
 describe('request-local public SEO preparation', () => {
+    it.each([1, 2, 3])(
+        'uses only store %s sharing settings on its domain homepage in both languages',
+        async id => {
+            for (const languageCode of [LanguageCode.zh_Hans, LanguageCode.en]) {
+                const test = fixture();
+                const host = `store-${id}.example`;
+                const name = languageCode === LanguageCode.en ? `Store ${id}` : `店铺${id}`;
+                const ctx = {
+                    ...test.ctx,
+                    channelId: `channel-${id}`,
+                    channel: { code: `store-${id}` },
+                    languageCode,
+                    copy: (changes: Partial<RequestContext>) => ({ ...ctx, ...changes }) as RequestContext,
+                } as RequestContext;
+                test.domains.findOne.mockResolvedValue({ domain: host });
+                test.page.scope = { ...test.page.scope, host, channelCode: ctx.channel.code, languageCode };
+                test.page.config = {
+                    ...(test.page.config as object),
+                    customFields: { storefrontNameZh: `店铺${id}`, storefrontNameEn: `Store ${id}` },
+                    logoUrl: `/assets/logo-${id}.png`,
+                };
+                test.sharing.publicShareMetadata.mockResolvedValue({
+                    siteName: name,
+                    title: `${name} · 已保存的分享标题`,
+                    description: `${name}的分享介绍`,
+                    image: `/assets/source/store-${id}-share.png`,
+                });
+                const result = await test.service.enrich(ctx, host, test.page);
+                expect(test.sharing.publicShareMetadata).toHaveBeenCalledWith(ctx);
+                expect(result.seo).toMatchObject({
+                    siteName: name,
+                    title: name,
+                    shareTitle: `${name} · 已保存的分享标题`,
+                    shareDescription: `${name}的分享介绍`,
+                    image: `https://${host}/assets/source/store-${id}-share.png`,
+                    canonical: `https://${host}/${languageCode === LanguageCode.en ? 'en' : 'zh'}/`,
+                });
+                expect(result.seo?.image).not.toContain('logo');
+            }
+        },
+    );
     it.each(['terms', 'privacy'] as const)(
         'uses the published %s item body when the legal block overview is empty',
         async kind => {
@@ -249,7 +305,7 @@ describe('request-local public SEO preparation', () => {
         expect(enriched.seo?.title).toContain('审核后的具体更新');
         expect(enriched.seo?.shareTitle).toContain('审核后的具体更新');
         expect(enriched.seo?.description).toBe('文章说明');
-        expect(enriched.seo?.image).toBe('/assets/store-logo.webp');
+        expect(enriched.seo?.image).toBe('https://synthetic-store.invalid/assets/store-logo.webp');
         expect(enriched.seo?.indexable).toBe(false);
         expect(enriched.seo?.structuredData).toContainEqual(
             expect.objectContaining({
@@ -267,7 +323,7 @@ describe('request-local public SEO preparation', () => {
         expect(enriched.seo).toMatchObject({
             canonical: `https://${test.host}/en/`,
             version: 1,
-            title: 'Published store | Published store',
+            title: 'Published store',
         });
         expect(test.seo.publishedConfiguration).toHaveBeenCalledOnce();
         expect(test.domains.findOne).toHaveBeenCalledOnce();

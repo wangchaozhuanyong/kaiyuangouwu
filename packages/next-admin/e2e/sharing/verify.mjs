@@ -18,6 +18,7 @@ try {
     await page.goto(`${base}?legacy`);
     await expect(page.getByRole('heading', { name: /^分享设置/ })).toBeVisible();
     await expect(page.getByTestId('route')).toHaveText('/marketing/sharing');
+    await page.getByText(/选择系统模板\s*·\s*5\s*款/, { exact: true }).click();
     await expect(page.getByRole('article')).toHaveCount(6);
     expect(await page.evaluate(() => window.sharingFixture.operations.map(o => o.name))).toEqual([
         'AdminSharingSettings',
@@ -110,6 +111,7 @@ try {
     await expect(card('本店分享模板')).toBeVisible();
     checks.push('Changing stores clears open editor and loads the selected store settings');
     await page.goto(`${base}?readonly`);
+    await page.getByText(/选择系统模板\s*·\s*5\s*款/, { exact: true }).click();
     await expect(card('清透蓝白')).toBeVisible();
     for (const control of await page.getByRole('article').getByRole('button').all())
         await expect(control).toBeDisabled();
@@ -122,6 +124,7 @@ try {
         window.sharingFixture.faults.read = false;
     });
     await page.getByRole('button', { name: /重试/ }).click();
+    await page.getByText(/选择系统模板\s*·\s*5\s*款/, { exact: true }).click();
     await expect(card('清透蓝白')).toBeVisible();
     checks.push('Initial read failure and retry');
     await page.goto(`${base}?empty`);

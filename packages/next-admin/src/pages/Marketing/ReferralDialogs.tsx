@@ -698,26 +698,26 @@ export function PosterEditor({
                             onUploaded={uploaded => selectUploadedAsset('posterBackgroundAssetId', uploaded)}
                         />
                     </div>
-                    {!artwork && (
-                        <div>
-                            <FormSelect
-                                label="分享背景图"
-                                value={draft.shareBackgroundAssetId}
-                                onChange={shareBackgroundAssetId =>
-                                    selectAsset('shareBackgroundAssetId', shareBackgroundAssetId)
-                                }
-                                options={[['', '不使用图片'], ...assets.map(asset => [asset.id, asset.name])]}
-                            />
-                            <ImageAssetUploadButton
-                                className="mt-2"
-                                ariaLabel="上传并设为分享背景图"
-                                label="上传分享背景"
-                                onUploaded={uploaded =>
-                                    selectUploadedAsset('shareBackgroundAssetId', uploaded)
-                                }
-                            />
-                        </div>
-                    )}
+                    <div>
+                        <FormSelect
+                            label="分享背景图"
+                            value={draft.shareBackgroundAssetId}
+                            onChange={shareBackgroundAssetId =>
+                                selectAsset('shareBackgroundAssetId', shareBackgroundAssetId)
+                            }
+                            options={[['', '不使用图片'], ...assets.map(asset => [asset.id, asset.name])]}
+                        />
+                        <ImageAssetUploadButton
+                            className="mt-2"
+                            ariaLabel="上传并设为分享背景图"
+                            label="上传分享背景"
+                            onUploaded={uploaded => selectUploadedAsset('shareBackgroundAssetId', uploaded)}
+                        />
+                        <p className="mt-2 text-xs text-slate-500">
+                            用于网站链接的分享预览，建议使用约 1.91:1
+                            的横版封面，无需预留二维码。海报设计图单独管理。
+                        </p>
+                    </div>
                     {artwork && (
                         <>
                             <p className="sm:col-span-2 text-xs text-slate-500">

@@ -40,6 +40,7 @@ export class StorefrontLcpPreloadController {
         let ctx = request.ctx;
         let bootOnly = false;
         let authRoute: 'login' | 'register' | 'forgot-password' | undefined;
+        let toolRoute: 'two-factor' | undefined;
         const original = req.headers?.['x-storefront-original-uri'];
         if (original != null) {
             if (!trustedPublicPageHeaders(req) || typeof original !== 'string') {
@@ -51,6 +52,7 @@ export class StorefrontLcpPreloadController {
                 if (!parsed) {
                     bootOnly = true;
                     const pathname = new URL(original, 'https://storefront.invalid').pathname;
+                    if (pathname === '/two-factor' || pathname === '/two-factor/') toolRoute = 'two-factor';
                     if (
                         pathname === '/login' ||
                         pathname === '/register' ||
@@ -80,9 +82,11 @@ export class StorefrontLcpPreloadController {
         }
         // Origin/access failures are handled by the authoritative boundary, never by the URL parser.
         if (bootOnly) {
-            const boot = authRoute
-                ? await this.preloadService.renderBoot(ctx, request.host, authRoute)
-                : await this.preloadService.renderBoot(ctx, request.host);
+            const boot = toolRoute
+                ? await this.preloadService.renderBoot(ctx, request.host, undefined, toolRoute)
+                : authRoute
+                  ? await this.preloadService.renderBoot(ctx, request.host, authRoute)
+                  : await this.preloadService.renderBoot(ctx, request.host);
             if (boot) res.status(200).type('text/html').send(boot);
             else res.status(204).send();
             return;

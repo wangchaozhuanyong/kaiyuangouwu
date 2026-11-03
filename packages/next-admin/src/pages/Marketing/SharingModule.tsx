@@ -81,7 +81,7 @@ function SharingSettings({
                             <FeatureHelpButton
                                 topic="marketing.poster-templates"
                                 title="分享设置"
-                                description="管理客户端分享海报的默认模板、启停、背景与中英文文案"
+                                description="管理网站链接预览与客户端分享海报的默认模板、启停、图片与中英文文案"
                             />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
