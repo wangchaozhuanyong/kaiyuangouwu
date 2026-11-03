@@ -30,6 +30,12 @@ function assertRuntime(request, runningSha) {
     if (request.mode !== 'inspect')
         assert.equal(runningSha, request.expectedRuntimeSha, 'Runtime changed since inspection');
 }
+async function importEditorial(writer, cache, ctx, payload) {
+    const receipt = await writer.import(ctx, payload);
+    // Event subscribers run asynchronously; a short-lived worker must await the shared revision write.
+    await cache.invalidate(ctx.channelId);
+    return receipt;
+}
 async function worker(request) {
     // All credentials remain inside the existing runtime. Never return its environment.
     const runtime = createRequire(path.join(process.cwd(), 'package.json'));
@@ -53,6 +59,7 @@ async function worker(request) {
     const { app } = await core.bootstrapWorker(devConfig);
     try {
         const plugin = runtime('@vendure/news-blog-plugin');
+        const { StorefrontPublicCacheService } = runtime('@vendure/store-management-plugin');
         assert.equal(typeof plugin.BlogSkillEditorialService, 'function', 'Editorial runtime not deployed');
         const connection = app.get(core.TransactionalConnection);
         const channel = await connection.rawConnection
@@ -121,7 +128,12 @@ async function worker(request) {
                     JSON.stringify({ schemaVersion: 1, runtimeSha: request.runtimeSha, article: before }),
                     { mode: 0o600, flag: 'wx' },
                 );
-                const receipt = await app.get(plugin.BlogSkillEditorialService).import(ctx, payload);
+                const receipt = await importEditorial(
+                    app.get(plugin.BlogSkillEditorialService),
+                    app.get(StorefrontPublicCacheService),
+                    ctx,
+                    payload,
+                );
                 receipts.push({ requestKey: payload.requestKey, receipt });
             } catch (error) {
                 if (request.mode !== 'rewrite') throw error;
@@ -169,7 +181,7 @@ async function main() {
     assert.ok(receipt, 'Missing content publication receipt');
     process.stdout.write(receipt + '\n');
 }
-module.exports = { decodeRequest, assertRuntime };
+module.exports = { decodeRequest, assertRuntime, importEditorial };
 if (require.main === module)
     main().catch(error => {
         process.stderr.write(error.message + '\n');

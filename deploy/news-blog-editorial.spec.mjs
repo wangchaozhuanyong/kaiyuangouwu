@@ -5,12 +5,55 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { test } from 'node:test';
 
-const { decodeRequest, assertRuntime } = createRequire(import.meta.url)('./news-blog-editorial.cjs');
+const { decodeRequest, assertRuntime, importEditorial } = createRequire(import.meta.url)(
+    './news-blog-editorial.cjs',
+);
 const request = {
     mode: 'publish',
     expectedRuntimeSha: 'a'.repeat(40),
     payload: { requestKey: 'codex-skill:2026-11-03:verified' },
 };
+test('a content receipt waits for the store shared revision before the worker can close', async () => {
+    const receipt = { articleId: '4', version: 3 };
+    let releaseCache;
+    const pendingCache = new Promise(resolve => {
+        releaseCache = resolve;
+    });
+    const channels = [];
+    let finished = false;
+    const result = importEditorial(
+        { import: async () => receipt },
+        {
+            invalidate: id => {
+                channels.push(id);
+                return pendingCache;
+            },
+        },
+        { channelId: 'moyao-channel-id' },
+        request.payload,
+    ).then(value => {
+        finished = true;
+        return value;
+    });
+    await Promise.resolve();
+    assert.equal(finished, false);
+    assert.deepEqual(channels, ['moyao-channel-id']);
+    releaseCache();
+    assert.equal(await result, receipt);
+    await assert.rejects(
+        importEditorial(
+            { import: async () => receipt },
+            {
+                invalidate: async () => {
+                    throw new Error('shared cache unavailable');
+                },
+            },
+            { channelId: 'moyao-channel-id' },
+            request.payload,
+        ),
+        /shared cache unavailable/,
+    );
+});
 test('accepts only pinned content operations and bounded existing-article batches', () => {
     for (const mode of ['publish', 'rewrite']) {
         assertRuntime({ ...request, mode }, request.expectedRuntimeSha);
