@@ -1,6 +1,9 @@
 import { Channel, PaymentMethod, Role } from '@vendure/core';
+import { getAllEntities } from '@vendure/core/dist/bootstrap';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ShopAbuseBucket } from './abuse-protection/entities';
+import { ShopAbuseProtectionPlugin } from './abuse-protection/plugin';
 import {
     adjustReferralBalancePermission,
     manageReferralWithdrawalPermission,
@@ -9,6 +12,11 @@ import {
 import { StoreManagementPlugin } from './store-management.plugin';
 
 describe('StoreManagementPlugin promotion options', () => {
+    it('bootstraps the production plugin combination with one shared abuse bucket entity', () => {
+        const entities = getAllEntities({ plugins: [StoreManagementPlugin, ShopAbuseProtectionPlugin] });
+        expect(entities.filter(entity => entity.name === 'ShopAbuseBucket')).toEqual([ShopAbuseBucket]);
+        expect(new Set(entities.map(entity => entity.name)).size).toBe(entities.length);
+    });
     afterEach(() => {
         vi.unstubAllEnvs();
         StoreManagementPlugin.init({ enabled: false });
