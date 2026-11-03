@@ -15,6 +15,7 @@ import { BlogService } from './blog.service';
 import { blogEntities } from './entities';
 import { BlogMediaService } from './media';
 import { BlogQueueService, collectNewsBlogTask } from './queue.service';
+import { BlogSkillEditorialService } from './skill-editorial.service';
 import { BlogSkillsCatalog } from './skills-catalog';
 import { BlogSkillsHttp } from './skills-http';
 import { BlogSkillsService } from './skills.service';
@@ -25,6 +26,7 @@ import { BlogSourceHttp } from './source-http';
     providers: [
         BlogService,
         BlogSkillsService,
+        BlogSkillEditorialService,
         BlogSkillsCatalog,
         BlogSkillsHttp,
         BlogQueueService,
@@ -32,7 +34,7 @@ import { BlogSourceHttp } from './source-http';
         BlogSourceHttp,
         { provide: BLOG_READER, useExisting: BlogService },
     ],
-    exports: [BlogService, BLOG_READER],
+    exports: [BlogService, BlogSkillEditorialService, BLOG_READER],
     configuration: config => {
         config.authOptions.customPermissions.push(manageNewsBlog, publishNewsBlog);
         config.schedulerOptions.tasks.push(collectNewsBlogTask);

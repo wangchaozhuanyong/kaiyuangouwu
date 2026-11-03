@@ -30,7 +30,7 @@ afterEach(async () => {
     document.body.innerHTML = '';
     vi.unstubAllGlobals();
 });
-async function fixture(withImages = false) {
+async function fixture(withImages = false, withProfile = false) {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     let article = {
         id: '1',
@@ -68,6 +68,37 @@ async function fixture(withImages = false) {
         published: null,
         issues: [],
     };
+    if (withImages) article.draft.cover = article.draft.sourceImages[0]?.asset ?? null;
+    if (withProfile) {
+        article.draft.category = 'skills';
+        article.draft.format = 'SKILL';
+        article.draft.skill = {
+            identity: 'synthetic-skill',
+            name: 'document-helper',
+            repository: 'owner/repo',
+            repositoryId: '10',
+            repositoryUrl: 'https://github.com/owner/repo',
+            directoryUrl: 'https://github.com/owner/repo/tree/' + 'a'.repeat(40) + '/skills/document-helper',
+            stars: 1500,
+            trend: 'EVERGREEN',
+            rankingUrl: 'https://www.skills.sh/',
+            rankingLabel: 'All Time',
+            rank: 1,
+            observedAt: new Date().toISOString(),
+            sourceCommit: 'a'.repeat(40),
+        };
+        article.draft.skillProfile = {
+            domain: 'office',
+            displayName: article.draft.title,
+            purpose: '整理文档并保留来源',
+            audience: '需要整理文档的用户',
+            industries: [],
+            capabilities: ['整理文档内容', '保留来源链接'],
+            example: { input: '整理这些文档', output: '得到保留来源的整理结果' },
+            prerequisites: ['提供原始文档'],
+            limitations: ['仅依据原始文档'],
+        };
+    }
     const writes: string[] = [];
     const rootValue = {
         newsBlogArticle: () => article,
@@ -166,9 +197,8 @@ describe('news blog review editor with actual Apollo and server schema', () => {
         expect((button('保存草稿') as HTMLButtonElement).disabled).toBe(true);
         expect(f.writes).toEqual([]);
     });
-    it('selects imported source images and keeps their attribution and use confirmation in the saved draft', async () => {
+    it('preserves existing cover bindings and keeps body-image attribution and use confirmation', async () => {
         const f = await fixture(true);
-        await act(async () => button('选为封面').click());
         const label = [...document.querySelectorAll('label')].find(x =>
             x.textContent?.includes('已核对封面图片'),
         )!;
@@ -187,6 +217,23 @@ describe('news blog review editor with actual Apollo and server schema', () => {
             assetId: 'source-1',
             caption: '来源说明',
         });
+    });
+    it('edits structured Skill fields through the existing protected draft and save operation', async () => {
+        const f = await fixture(false, true);
+        const select = document.querySelector('section[aria-label="Skill 用途资料"] select');
+        expect(select).toBeInstanceOf(HTMLSelectElement);
+        await act(async () => {
+            if (select instanceof HTMLSelectElement) {
+                select.value = 'research';
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+        await act(async () => button('保存草稿').click());
+        await vi.waitFor(() => expect(f.writes).toEqual(['save']));
+        expect(f.current().draft.skillProfile?.domain).toBe('research');
+        expect(f.current().draft.body).toContain('预期输出：得到保留来源的整理结果');
+        expect(document.body.textContent).not.toContain('重做封面');
+        expect(document.body.textContent).not.toContain('上传替换封面');
     });
     it('saves the draft without triggering publication', async () => {
         const f = await fixture();

@@ -109,9 +109,26 @@ export function hasTrustedPullRequest(run, repository, api) {
     const references = run.pull_requests?.length
         ? run.pull_requests
         : api(`repos/${repository}/commits/${run.head_sha}/pulls?per_page=100`);
-    return references.some(pr => {
-        const current = api(`repos/${repository}/pulls/${pr.number}`);
-        return current.head.repo?.full_name === repository && current.head.sha === run.head_sha;
+    const candidates = references.map(pr => ({ pr, current: api(`repos/${repository}/pulls/${pr.number}`) }));
+    if (
+        candidates.some(
+            ({ current }) => current.head.repo?.full_name === repository && current.head.sha === run.head_sha,
+        )
+    )
+        return true;
+    // A normal follow-up commit must not discard immutable successful CI. Require both native
+    // commit association and GitHub's exact merge-base proof; rebases and forks stay untrusted.
+    return candidates.some(({ pr, current }) => {
+        if (current.head.repo?.full_name !== repository || !/^[a-f0-9]{40}$/u.test(current.head.sha))
+            return false;
+        const associated = api(`repos/${repository}/commits/${run.head_sha}/pulls?per_page=100`);
+        if (!Array.isArray(associated) || !associated.some(item => item.number === pr.number)) return false;
+        const comparison = api(`repos/${repository}/compare/${run.head_sha}...${current.head.sha}`);
+        return (
+            comparison.status === 'ahead' &&
+            comparison.base_commit?.sha === run.head_sha &&
+            comparison.merge_base_commit?.sha === run.head_sha
+        );
     });
 }
 

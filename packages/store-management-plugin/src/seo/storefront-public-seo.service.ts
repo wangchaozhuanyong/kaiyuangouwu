@@ -297,7 +297,8 @@ export class StorefrontPublicSeoService {
             completeLanguages = ['zh_Hans'];
             title = blog.article?.title ?? blog.title;
             description = blog.article?.seoDescription || blog.article?.summary || blog.description;
-            image = blog.article?.cover?.url ?? blog.featured?.cover?.url ?? image;
+            // Category artwork is rendered in HTML. Sharing uses the merchant's configured image.
+            image = settings?.shareImageUrl || image;
             if (blog.article)
                 structuredData.push({
                     '@context': 'https://schema.org',

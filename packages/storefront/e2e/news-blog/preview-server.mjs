@@ -128,6 +128,67 @@ articles.unshift({
         sourceCommit: 'synthetic',
     },
 });
+// Three distinct editorial profiles. All copy and metrics below are synthetic local QA.
+const profiles = [
+    {
+        domain: 'development',
+        displayName: '为 Next.js 项目配置缓存组件',
+        purpose: '帮助开发者配置缓存组件，并整理启用时需要处理的路由问题。',
+        audience: 'Next.js 前端开发者',
+        name: 'next-cache-components-adoption',
+        repository: 'vercel/next.js',
+    },
+    {
+        domain: 'media',
+        displayName: '把视频创意制作成 HTML 动画',
+        purpose: '把文字创意组织成场景、字幕和动画，检查预览后生成视频。',
+        audience: '视频创作者与动画设计人员',
+        name: 'hyperframes',
+        repository: 'heygen-com/hyperframes',
+    },
+    {
+        domain: 'office',
+        displayName: '制作可交互的演示文稿',
+        purpose: '将讲解内容组织为幻灯片，安排逐步展示、页面导航与演示结构。',
+        audience: '需要制作汇报和教学演示的人',
+        name: 'slideshow',
+        repository: 'heygen-com/hyperframes',
+    },
+];
+for (const [index, profile] of profiles.entries()) {
+    const base = articles.find(article => article.skill);
+    const skillProfile = {
+        ...profile,
+        industries: [],
+        capabilities: ['根据输入材料整理制作步骤', '按任务要求组织可检查的结果'],
+        example: { input: '以下输入与结果为合成验收示例', output: '用于检查页面排版的合成结果' },
+        prerequisites: ['先阅读原始项目文档'],
+        limitations: ['本地验收未运行这些第三方 Skill'],
+    };
+    articles.unshift({
+        ...base,
+        id: 'editorial-qa-' + index,
+        slug: 'local-editorial-' + profile.domain,
+        title: profile.displayName + '（本地合成验收）',
+        summary: profile.purpose,
+        cover: null,
+        skillProfile: { ...skillProfile, displayName: profile.displayName + '（本地合成验收）' },
+        body:
+            '## 解决什么问题\n' +
+            profile.purpose +
+            '\n## 能完成哪些任务\n本段只验证内容结构。\n## 使用示例\n输入和预期输出均为合成验收内容。\n## 如何开始\n查看原始文档。\n## 条件与限制\n本地验收未安装、执行或测试第三方 Skill。',
+        skill: {
+            ...base.skill,
+            name: profile.name,
+            repository: profile.repository,
+            repositoryUrl: 'https://github.com/' + profile.repository,
+        },
+        tags: [
+            { development: '软件开发', media: '视频音频', office: '办公效率' }[profile.domain],
+            { development: '缓存配置', media: '视频制作', office: '演示文稿' }[profile.domain],
+        ],
+    });
+}
 export function newsBlogFixture(url, host) {
     const page = syntheticPage('synthetic-a', 'zh_Hans', 'home', { host, origin: `http://${host}` });
     page.visualPreset = { presetId: visualPreset };
@@ -145,7 +206,7 @@ export function newsBlogFixture(url, host) {
     const filtered = articles.filter(
         x =>
             (!input.category || x.category === input.category) &&
-            (!input.term || x.title.includes(input.term)),
+            (!input.term || [x.title, x.summary, ...x.tags].join(' ').includes(input.term)),
     );
     page.request = {
         kind: 'blog',

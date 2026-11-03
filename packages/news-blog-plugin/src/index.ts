@@ -3,5 +3,6 @@ export { BlogService } from './blog.service';
 export * from './entities';
 export { NewsBlogPlugin } from './news-blog.plugin';
 
+export * from './skill-editorial.service';
 export * from './skill-entities';
 export { BlogSkillsService } from './skills.service';

@@ -59,6 +59,8 @@ export const isDocumentation = file =>
 // These files run in CI, not in the serving processes. They still require
 // control checks, but must not turn a later CSS release into a runtime release.
 export const isAutomationOnly = file =>
+    file === 'deploy/news-blog-editorial.cjs' ||
+    file === 'scripts/news-blog-editorial.mjs' ||
     file.startsWith('.github/') ||
     [
         'deploy/artifact-inputs.mjs',

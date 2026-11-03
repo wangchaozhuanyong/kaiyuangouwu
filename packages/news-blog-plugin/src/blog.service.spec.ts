@@ -10,8 +10,10 @@ import { SafeProviderUrlService } from '../../image-generation-plugin/src/securi
 import { BlogService } from './blog.service';
 import { budgetDate, defaultSettings } from './content';
 import { BlogRun } from './entities';
+import { previousMonth } from './history';
 import { BlogQueueService } from './queue.service';
 import { SkillDeferred, SourceTransientError } from './skill-deferral';
+import { BlogSkillEditorialService, type SkillEditorialInput } from './skill-editorial.service';
 import { BlogSkillsCatalog } from './skills-catalog';
 import { BlogSkillsHttp } from './skills-http';
 import { fingerprint, type SkillEvidence } from './skills-source';
@@ -303,6 +305,8 @@ beforeEach(async () => {
         enabled: true,
         settingsJson: JSON.stringify({
             ...defaultSettings,
+            skillEditorialMode: 'LEGACY',
+            coverMode: 'LEGACY',
             textProviderCode: 'configured',
             textModel: 'text-model',
             dailyBudgetMicros: 1000000,
@@ -314,6 +318,20 @@ beforeEach(async () => {
 afterEach(async () => {
     await db.destroy();
 });
+// Retained compatibility cases exercise already-persisted legacy queue snapshots.
+// Current settings writes never let operators reactivate that writer.
+async function saveLegacySettings(ctx: any, raw: Record<string, unknown>, version: number) {
+    const saved = await service.saveSettings(ctx, raw, version);
+    const row = await service.settings(ctx);
+    await db.getRepository('BlogSettings').update(row.id, {
+        settingsJson: JSON.stringify({
+            ...service.config(row),
+            coverMode: 'LEGACY',
+            skillEditorialMode: 'LEGACY',
+        }),
+    });
+    return saved;
+}
 describe('channel publication and budget boundaries', () => {
     it('keeps unpublished edits private and retains the reviewed snapshot until publication', async () => {
         const saved = await service.save(contextFor(), {
@@ -380,9 +398,16 @@ describe('channel publication and budget boundaries', () => {
         expect((await db.getRepository('BlogRun').find())[0].reservedMicros).toBe(600000);
     });
     it('does not enable paid writing with no budget and uses a zero-cost template cover', async () => {
-        await db
-            .getRepository('BlogSettings')
-            .update({ channelId: 1 }, { settingsJson: JSON.stringify(defaultSettings) });
+        await db.getRepository('BlogSettings').update(
+            { channelId: 1 },
+            {
+                settingsJson: JSON.stringify({
+                    ...defaultSettings,
+                    coverMode: 'LEGACY',
+                    skillEditorialMode: 'LEGACY',
+                }),
+            },
+        );
         await expect(
             service.request(contextFor(), 'GENERATE', 'unconfigured-request', { sourceIds: ['1'] }),
         ).rejects.toThrow('配置');
@@ -479,6 +504,8 @@ describe('paid worker recovery', () => {
             {
                 settingsJson: JSON.stringify({
                     ...defaultSettings,
+                    skillEditorialMode: 'LEGACY',
+                    coverMode: 'LEGACY',
                     imageProviderCode: 'configured',
                     imageModel: 'image-model',
                     dailyBudgetMicros: 1000000,
@@ -587,7 +614,7 @@ describe('discovery headroom', () => {
     });
 });
 
-describe('daily Skill recommendations with real database state', () => {
+describe('legacy daily Skill recommendation snapshots', () => {
     const evidence = (identity = 'skill-a', repo = '100'): SkillEvidence => ({
         repository: 'owner/repo' + repo,
         repositoryId: repo,
@@ -623,7 +650,7 @@ describe('daily Skill recommendations with real database state', () => {
     }
     async function enable(channel = 1) {
         const row = await service.settings(contextFor(channel));
-        await service.saveSettings(
+        await saveLegacySettings(
             contextFor(channel),
             {
                 enabled: true,
@@ -821,7 +848,7 @@ describe('daily Skill recommendations with real database state', () => {
         await ready();
         const { skills } = fixture();
         const row = await service.settings(contextFor());
-        await service.saveSettings(
+        await saveLegacySettings(
             contextFor(),
             { enabled: true, skillEnabled: true, dailyBudgetMicros: 0, textReserveMicros: 0 },
             row.version,
@@ -1103,13 +1130,15 @@ describe('source tracking and admin pagination regressions', () => {
     });
 });
 
-describe('free source workflow', () => {
+describe('legacy free source queue recovery', () => {
     async function enableFree() {
         const settings = await service.settings(contextFor());
-        return service.saveSettings(
+        return saveLegacySettings(
             contextFor(),
             {
                 ...defaultSettings,
+                skillEditorialMode: 'LEGACY',
+                coverMode: 'LEGACY',
                 enabled: true,
                 automationEnabled: true,
                 freeMode: true,
@@ -1265,6 +1294,29 @@ describe('free source workflow', () => {
         expect(await db.getRepository('BlogArticle').count()).toBe(0);
         expect(provider.text).not.toHaveBeenCalled();
         expect(provider.image).not.toHaveBeenCalled();
+        expect(media.createCover).not.toHaveBeenCalled();
+    });
+    it('publishes current source briefs directly with code artwork and no media or model work', async () => {
+        await enableFree();
+        const settings = await service.settings(contextFor());
+        await db.getRepository('BlogSettings').update(settings.id, {
+            settingsJson: JSON.stringify({
+                ...service.config(settings),
+                coverMode: 'CATEGORY',
+                skillEditorialMode: 'CODEX',
+            }),
+        });
+        const { worker, provider, media } = freeWorker();
+        const run = await service.request(contextFor(), 'GENERATE', 'current-free-no-images', {
+            sourceIds: ['1'],
+        });
+        await worker.process('1', String(run.id));
+        const article = await db.getRepository('BlogArticle').findOneByOrFail({ state: 'PUBLISHED' });
+        expect(JSON.parse(article.publishedJson).cover).toBeNull();
+        expect(await db.getRepository('BlogRun').countBy({ kind: 'MEDIA' })).toBe(0);
+        expect(provider.text).not.toHaveBeenCalled();
+        expect(provider.image).not.toHaveBeenCalled();
+        expect(media.importSource).not.toHaveBeenCalled();
         expect(media.createCover).not.toHaveBeenCalled();
     });
     it('publishes verified source briefs through the real database queue with zero model calls or budget', async () => {
@@ -1738,7 +1790,11 @@ describe('free source workflow', () => {
         expect(JSON.parse(article.draftJson).facts[0].sourceUrl).toBe('https://openai.com/news/rss.xml');
         expect(provider.text).not.toHaveBeenCalled();
         const settings = await service.settings(contextFor());
-        await service.saveSettings(contextFor(), { ...defaultSettings, enabled: true }, settings.version);
+        await saveLegacySettings(
+            contextFor(),
+            { ...defaultSettings, skillEditorialMode: 'LEGACY', coverMode: 'LEGACY', enabled: true },
+            settings.version,
+        );
         await expect(
             service.request(contextFor(), 'GENERATE', 'paid-must-reject-summary', {
                 sourceIds: [String(evidence.id)],
@@ -2086,7 +2142,7 @@ describe('free source workflow', () => {
                 settings.version,
             ),
         ).rejects.toThrow('版本、来源');
-        await service.saveSettings(contextFor(), { ...settings, freeAutoPublish: false }, settings.version);
+        await saveLegacySettings(contextFor(), { ...settings, freeAutoPublish: false }, settings.version);
         await expect(
             service.publishFree(
                 contextFor(),
@@ -2157,3 +2213,259 @@ it.skipIf(!process.env.BLOG_SKILL_AUDIT_DIR)(
     },
     180000,
 );
+
+describe('Codex editorial publication', () => {
+    it('does not start legacy Skill history when news collection is source-only', async () => {
+        const settings = await service.settings(contextFor());
+        await service.saveSettings(
+            contextFor(),
+            {
+                ...defaultSettings,
+                enabled: true,
+                automationEnabled: true,
+                freeMode: true,
+                freeAutoPublish: false,
+                skillEnabled: true,
+            },
+            settings.version,
+        );
+        const legacySkills = { scheduleHistory: vi.fn(() => Promise.resolve()) };
+        const worker = new BlogQueueService(
+            {} as never,
+            { create: () => Promise.resolve(contextFor()) } as never,
+            connection,
+            service,
+            { read: () => Promise.resolve({ status: 200, body: '<rss><channel></channel></rss>' }) } as never,
+            {} as never,
+            {} as never,
+            legacySkills as never,
+        );
+        const day = previousMonth().end;
+        const run = await service.request(contextFor(), 'COLLECT', 'codex-source-only-history', {
+            historyStart: day,
+            historyEnd: day,
+        });
+        await worker.process('1', String(run.id));
+        expect(legacySkills.scheduleHistory).not.toHaveBeenCalled();
+        expect((await db.getRepository('BlogRun').findOneByOrFail({ id: run.id })).state).toBe('SUCCEEDED');
+        expect(await db.getRepository('BlogArticle').count()).toBe(0);
+    });
+    const quote = 'Read supplied documents and retain their original sources.';
+    const evidence = (): SkillEvidence => ({
+        repository: 'owner/repo',
+        repositoryId: '100',
+        directory: 'skills/document-helper',
+        name: 'document-helper',
+        description: quote,
+        body: '---\nname: document-helper\ndescription: ' + quote + '\n---\n' + quote.repeat(8),
+        readme: '',
+        commit: 'a'.repeat(40),
+        stars: 2500,
+        rankings: [],
+        observedAt: new Date().toISOString(),
+        aliases: [],
+    });
+    const input = (): SkillEditorialInput => ({
+        requestKey: 'codex-skill:2026-11-03:document-helper:v1',
+        expectedVersion: 0,
+        repository: 'owner/repo',
+        directory: 'skills/document-helper',
+        commit: 'a'.repeat(40),
+        ranking: 'trending',
+        tags: ['文档整理'],
+        profile: {
+            domain: 'office',
+            displayName: '整理文档并保留参考来源',
+            purpose: '整理用户提供的文档，保留原始来源，方便继续核对。',
+            audience: '需要整理文档的办公人员',
+            industries: [],
+            capabilities: ['整理提供的文档', '保留原始参考来源'],
+            example: { input: '整理我提供的两份文档', output: '得到保留来源的文档整理结果' },
+            prerequisites: ['准备需要整理的原始文档'],
+            limitations: ['介绍范围限于提供的文档'],
+        },
+        claims: [
+            'purpose',
+            'audience',
+            'capabilities.0',
+            'capabilities.1',
+            'prerequisites.0',
+            'limitations.0',
+            'tags.0',
+        ].map(field => ({ field, quote })),
+    });
+    async function fixture() {
+        const settings = await service.settings(contextFor());
+        await db.getRepository('BlogSettings').update(settings.id, {
+            settingsJson: JSON.stringify({ ...defaultSettings, freeMode: true, skillEnabled: true }),
+        });
+        const catalog = { editorialSource: vi.fn(() => Promise.resolve(evidence())) };
+        const http = {
+            read: vi.fn(() =>
+                Promise.resolve(
+                    '<a href="/owner/repo/document-helper"><div>1</div><h3>document-helper</h3><div>1K</div></a>',
+                ),
+            ),
+        };
+        const events = { publish: vi.fn(() => Promise.resolve()) };
+        const writer = new BlogSkillEditorialService(
+            connection as never,
+            service,
+            catalog as never,
+            http as never,
+            events as never,
+        );
+        return { writer, catalog, http, events };
+    }
+    it('publishes without media, returns the same receipt on retry, and enforces the daily slot', async () => {
+        const { writer, catalog } = await fixture();
+        const payload = input();
+        const first = await writer.import(contextFor(), payload);
+        expect(first.action).toBe('PUBLISH');
+        expect(await writer.import(contextFor(), payload)).toEqual(first);
+        expect(catalog.editorialSource).toHaveBeenCalledTimes(1);
+        const article = await service.read(contextFor(), {}, first.slug);
+        expect(article.article?.cover).toBeNull();
+        expect(article.article?.skillProfile?.domain).toBe('office');
+        expect(article.article?.body).toContain('预期输出：');
+        expect(await db.getRepository('BlogRun').countBy({ kind: 'MEDIA' })).toBe(0);
+        const duplicate = { ...payload, requestKey: payload.requestKey + ':again' };
+        await expect(writer.import(contextFor(), duplicate)).rejects.toThrow('已有介绍');
+        const e = {
+            ...evidence(),
+            name: 'other-helper',
+            directory: 'skills/other-helper',
+            body: evidence().body.replaceAll('document-helper', 'other-helper'),
+        };
+        catalog.editorialSource.mockResolvedValueOnce(e);
+        const other = new BlogSkillEditorialService(
+            connection as never,
+            service,
+            catalog as never,
+            {
+                read: () =>
+                    Promise.resolve(
+                        '<a href="/owner/repo/other-helper"><div>1</div><h3>other-helper</h3><div>1K</div></a>',
+                    ),
+            } as never,
+            { publish: () => Promise.resolve() } as never,
+        );
+        await expect(
+            other.import(contextFor(), {
+                ...payload,
+                requestKey: payload.requestKey + ':other',
+                directory: e.directory,
+            }),
+        ).rejects.toThrow('今天已经');
+    });
+    it('does not recommend a moved Skill again on a later day without a legacy catalog entry', async () => {
+        const { writer, catalog } = await fixture();
+        const payload = input();
+        await writer.import(contextFor(), payload);
+        await db
+            .getRepository('BlogSkillRecommendation')
+            .update({ channelId: 1 }, { day: budgetDate(new Date(Date.now() - 86400000)) });
+        catalog.editorialSource.mockResolvedValueOnce({
+            ...evidence(),
+            directory: 'skills/moved-document-helper',
+        });
+        await expect(
+            writer.import(contextFor(), {
+                ...payload,
+                requestKey: payload.requestKey + ':moved',
+                directory: 'skills/moved-document-helper',
+            }),
+        ).rejects.toThrow('已有介绍');
+        expect(await db.getRepository('BlogArticle').count()).toBe(1);
+    });
+    it('rejects changed payloads, missing quotes and cross-channel edits', async () => {
+        const { writer } = await fixture();
+        const payload = input();
+        const first = await writer.import(contextFor(), payload);
+        await expect(writer.import(contextFor(), { ...payload, commit: 'b'.repeat(40) })).rejects.toThrow(
+            '同一请求号',
+        );
+        await expect(
+            writer.import(contextFor(), { ...payload, requestKey: payload.requestKey + ':bad', claims: [] }),
+        ).rejects.toThrow('原文依据');
+        const settings = await service.settings(contextFor(2));
+        await db.getRepository('BlogSettings').update(settings.id, {
+            enabled: true,
+            settingsJson: JSON.stringify({ ...defaultSettings, freeMode: true, skillEnabled: true }),
+        });
+        await expect(
+            writer.import(contextFor(2), {
+                ...payload,
+                requestKey: payload.requestKey + ':cross',
+                articleId: first.articleId,
+                expectedVersion: first.version,
+            }),
+        ).rejects.toThrow('不存在');
+        expect(await db.getRepository('BlogArticle').count()).toBe(1);
+    });
+    it('keeps existing URLs and initial publication time and refuses a concurrent human draft', async () => {
+        const { writer } = await fixture();
+        const payload = input();
+        const first = await writer.import(contextFor(), payload);
+        const update = {
+            ...payload,
+            requestKey: payload.requestKey + ':update',
+            articleId: first.articleId,
+            expectedVersion: first.version,
+            profile: { ...payload.profile, displayName: '整理文档与原文出处' },
+        };
+        const second = await writer.import(contextFor(), update);
+        expect(second.slug).toBe(first.slug);
+        expect(second.publishedAt).toBe(first.publishedAt);
+        const human = await service.save(contextFor(), {
+            id: first.articleId,
+            slug: first.slug,
+            expectedVersion: second.version,
+            draft: {
+                ...((await service.get(contextFor(), first.articleId)) &&
+                    JSON.parse((await service.get(contextFor(), first.articleId)).draftJson)),
+                title: '人工尚未发布的文档标题',
+            },
+        });
+        await expect(
+            writer.import(contextFor(), {
+                ...update,
+                requestKey: payload.requestKey + ':conflict',
+                expectedVersion: human.version,
+            }),
+        ).rejects.toThrow('编辑状态');
+        expect((await service.read(contextFor(), {}, first.slug)).article?.title).toBe('整理文档与原文出处');
+    });
+    it('recovers invalidation after a confirmed publication without publishing a second version', async () => {
+        const { writer, events } = await fixture();
+        events.publish.mockRejectedValueOnce(new Error('Synthetic invalidation failure'));
+        await expect(writer.import(contextFor(), input())).rejects.toThrow('invalidation');
+        const result = await writer.import(contextFor(), input());
+        expect(result.version).toBe(2);
+        expect(await db.getRepository('BlogRevision').count()).toBe(1);
+        expect(events.publish).toHaveBeenCalledTimes(2);
+    });
+    it('defaults to code artwork and stops legacy automatic Skill scheduling', async () => {
+        await fixture();
+        const catalog = { refresh: vi.fn() };
+        const skills = new BlogSkillsService(
+            connection as never,
+            service,
+            catalog as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+        await skills.tick();
+        expect(catalog.refresh).not.toHaveBeenCalled();
+        const noCover = { ...draft(), cover: null };
+        const saved = await service.save(contextFor(), {
+            slug: 'no-image-needed',
+            expectedVersion: 0,
+            draft: noCover,
+        });
+        expect(saved.issues).not.toContain('封面尚未准备完成');
+        expect(await db.getRepository('BlogRun').countBy({ kind: 'MEDIA' })).toBe(0);
+    });
+});

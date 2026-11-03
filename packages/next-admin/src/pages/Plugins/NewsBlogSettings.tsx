@@ -32,7 +32,7 @@ export function NewsBlogSettings({
         <section className="space-y-4">
             <p className="text-sm text-slate-500">
                 {draft.freeMode
-                    ? '关闭自动发布时，仅采集来源资料并保留待人工编辑，不生成模板文章、不自动翻译，不调用文本或图片模型。热门 Skill 按独立设置处理。'
+                    ? '关闭新闻自动发布时，仅采集来源资料、等待人工编辑，不生成模板文章或自动翻译。Skill 由 Codex 每天整理中文用途，通过校验后发布；网站不调用写作或配图模型。'
                     : 'AI 编辑模式使用平台供应商，不扣客户余额；未填写预算时不启动付费任务。'}
             </p>
             {server.sourceChanged && <DraftUpdateNotice onReload={server.reload} />}
@@ -72,11 +72,9 @@ export function NewsBlogSettings({
                 />
             </AdminField>
             <AdminField
-                label="每日自动发布热门 Skill"
+                label="接收 Codex 每日 Skill 精选"
                 description={
-                    draft.freeMode
-                        ? '每天一条，核对固定版本原文和采集时的仓库热度，通过免费来源规则复核后发布。'
-                        : '每天一条，自动核验原文与热度；AI 新闻文章仍需人工审核。未配置模型或预算时只采集资料。'
+                    'Codex 每天最多推荐一条，网站校验固定版本原文、热度和重复记录后发布；后台不自动写作。'
                 }
             >
                 <AdminInput
@@ -88,13 +86,9 @@ export function NewsBlogSettings({
             {source.skillStatus && (
                 <p className="text-sm text-slate-500">{serviceMessageDisplay(source.skillStatus)}</p>
             )}
-            <AdminField label="Skill 发布时间（马来西亚时间）">
-                <AdminInput
-                    type="time"
-                    value={draft.skillPublishTime ?? '09:00'}
-                    onChange={e => update({ skillPublishTime: e.target.value })}
-                />
-            </AdminField>
+            <p className="text-sm text-slate-500">
+                Skill 计划时间：每天 09:00（马来西亚时间），由 Codex 定时任务执行。封面使用分类主题渲染。
+            </p>
             <AdminField label="Skill 所属仓库最低 Star">
                 <AdminInput
                     type="number"

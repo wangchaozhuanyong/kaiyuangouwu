@@ -579,7 +579,7 @@ test('Vitest-only frontend checks retain their existing runner', () => {
     assert.deepEqual(frontendTestCommands([unit], [], cwd), [['bunx', 'vitest', 'run', unit]]);
 });
 
-test('a same-tree fork or superseded PR head cannot supply trusted release evidence', () => {
+test('a same-tree fork or unproven superseded PR head cannot supply trusted release evidence', () => {
     const run = { event: 'pull_request', head_sha: 'a'.repeat(40), pull_requests: [{ number: 1 }] };
     const api = (repository, sha) => () => ({ head: { repo: { full_name: repository }, sha } });
     assert.equal(hasTrustedPullRequest(run, 'owner/repo', api('owner/repo', run.head_sha)), true);
@@ -616,6 +616,30 @@ test('merged PRs with empty Actions associations resolve through the exact commi
         ),
         false,
     );
+});
+
+test('successful ancestor CI requires immutable PR association and exact GitHub merge-base proof', () => {
+    const old = 'a'.repeat(40);
+    const next = 'b'.repeat(40);
+    const run = { event: 'pull_request', head_sha: old, pull_requests: [{ number: 1 }] };
+    const api =
+        (comparison, associated = [{ number: 1 }]) =>
+        endpoint => {
+            if (endpoint.endsWith('/pulls/1'))
+                return { head: { repo: { full_name: 'owner/repo' }, sha: next } };
+            if (endpoint.includes('/commits/')) return associated;
+            if (endpoint.includes('/compare/')) return comparison;
+            assert.fail(endpoint);
+        };
+    const proof = { status: 'ahead', base_commit: { sha: old }, merge_base_commit: { sha: old } };
+    assert.equal(hasTrustedPullRequest(run, 'owner/repo', api(proof)), true);
+    assert.equal(hasTrustedPullRequest(run, 'owner/repo', api(proof, [])), false);
+    for (const invalid of [
+        { ...proof, status: 'diverged' },
+        { ...proof, base_commit: { sha: next } },
+        { ...proof, merge_base_commit: { sha: next } },
+    ])
+        assert.equal(hasTrustedPullRequest(run, 'owner/repo', api(invalid)), false);
 });
 
 test('frontend runner uses the test environment and stops before build when related tests fail', t => {
@@ -1632,7 +1656,7 @@ test('a narrow PR persists unchanged business origins before a broader productio
     // find can reuse this anchor and skip production checks/write: the PR's actual writer already persisted the locators.
 });
 
-test('linked PR proof keeps the existing owned-repository and exact-head provenance requirement', async () => {
+test('linked PR proof rejects foreign repositories and unproven head changes', async () => {
     for (const head of [
         { sha: 'f'.repeat(40), repo: { full_name: 'owner/repo' } },
         { sha: sourceSha, repo: { full_name: 'foreign/repo' } },
@@ -1641,7 +1665,12 @@ test('linked PR proof keeps the existing owned-repository and exact-head provena
         run.event = 'pull_request';
         run.pull_requests = [{ number: 10 }];
         const api = fixture.api;
-        fixture.api = endpoint => (endpoint === 'repos/owner/repo/pulls/10' ? { head } : api(endpoint));
+        fixture.api = endpoint =>
+            endpoint === 'repos/owner/repo/pulls/10'
+                ? { head }
+                : endpoint.includes('/commits/') && endpoint.endsWith('/pulls?per_page=100')
+                  ? []
+                  : api(endpoint);
         await assert.rejects(findInputCoverage(fixture), /Referenced PR source is untrusted/u);
     }
 });
