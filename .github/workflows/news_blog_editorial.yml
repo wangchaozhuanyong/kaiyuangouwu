@@ -67,6 +67,7 @@ jobs:
                   bundle = base64.b64encode(lzma.compress(json.dumps(files).encode())).decode()
                   unpack = "import base64,json,pathlib,sys,lzma; root=pathlib.Path(sys.argv[1]); files=json.loads(lzma.decompress(base64.b64decode(sys.argv[2]))); [(root.joinpath(k).parent.mkdir(parents=True,exist_ok=True),root.joinpath(k).write_bytes(base64.b64decode(v))) for k,v in files.items()]"
                   lines = ['set -Eeuo pipefail', 'umask 077', 'test -f /run/lock/vendure-production-deploy.lock',
+                           'install -d -o ubuntu -g ubuntu -m 0700 /var/www/kaiyuangouwu/backups/news-blog-editorial',
                            'task_dir="$(mktemp -d /var/www/kaiyuangouwu/backups/news-blog-editorial-run.XXXXXX)"',
                            'chmod 755 "$task_dir"',
                            "python3 -c " + __import__('shlex').quote(unpack) + ' "$task_dir" ' + __import__('shlex').quote(bundle),
@@ -97,7 +98,9 @@ jobs:
                   aws ssm get-command-invocation --command-id "$command_id" --instance-id i-01d6737449bc52460 --query '{Status:Status,ResponseCode:ResponseCode,Output:StandardOutputContent,Error:StandardErrorContent}' --output json > "$RUNNER_TEMP/editorial-result.json"
                   jq -e '.Status == "Success" and .ResponseCode == 0 and (.Output | contains("NEWS_BLOG_EDITORIAL_RESULT "))' "$RUNNER_TEMP/editorial-result.json"
             - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              if: always()
               with:
                   name: news-blog-editorial-result
                   path: ${{ runner.temp }}/editorial-result.json
                   retention-days: 30
+                  if-no-files-found: ignore
