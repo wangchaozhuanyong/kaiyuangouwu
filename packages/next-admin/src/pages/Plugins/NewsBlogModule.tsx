@@ -1,6 +1,8 @@
+// organize-imports-ignore -- Preserve ESLint import groups.
 import { useMutation } from '@apollo/client/react';
 import { useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { blogCategoryLabels } from '../../../../storefront-content-plugin/src/shared/news-blog';
 import { getAdminQueryScope } from '../../apollo';
@@ -11,10 +13,7 @@ import { SearchInput } from '../../components/SearchInput';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { NewsBlogArticleEditor } from './NewsBlogArticleEditor';
-import { NewsBlogHistoryReplay } from './NewsBlogHistoryReplay';
-import { NewsBlogRunRecovery } from './NewsBlogRunRecovery';
-import { NewsBlogSettings } from './NewsBlogSettings';
+
 import {
     type BlogAdminArticle,
     type BlogAdminItem,
@@ -23,6 +22,10 @@ import {
     type BlogAdminSource,
 } from './news-blog-types';
 import * as G from './news-blog.graphql';
+import { NewsBlogArticleEditor } from './NewsBlogArticleEditor';
+import { NewsBlogHistoryReplay } from './NewsBlogHistoryReplay';
+import { NewsBlogRunRecovery } from './NewsBlogRunRecovery';
+import { NewsBlogSettings } from './NewsBlogSettings';
 const labels: Record<string, string> = {
     DRAFT: '草稿',
     PENDING_REVIEW: '待审核',
@@ -33,7 +36,7 @@ const statusLabels: Record<string, string> = {
     NOT_COLLECTED: '未采集',
     OK: '正常',
     NO_DATED_ENTRIES: '暂无近期资讯',
-    READY: '可生成',
+    READY: '待编辑',
     INSUFFICIENT: '资料不足',
     FAILED: '失败',
     QUEUED: '等待执行',
@@ -60,12 +63,12 @@ const tabs = [
     ['runs', '运行记录'],
 ] as const;
 export function NewsBlogModule() {
-    const [params, setParams] = useSearchParams(),
-        tab = params.get('tab') ?? 'articles',
-        id = params.get('article'),
-        scope = getAdminQueryScope();
-    const { hasAnyPermission } = useAdminPermissions(),
-        isAdmin = hasAnyPermission(['SuperAdmin']);
+    const [params, setParams] = useSearchParams();
+    const tab = params.get('tab') ?? 'articles';
+    const id = params.get('article');
+    const scope = getAdminQueryScope();
+    const { hasAnyPermission } = useAdminPermissions();
+    const isAdmin = hasAnyPermission(['SuperAdmin']);
     const query = useAdminQuery<{
         newsBlogSettings: BlogAdminSettings;
         newsBlogArticleList: { items: BlogAdminArticle[]; totalItems: number };
@@ -87,12 +90,12 @@ export function NewsBlogModule() {
         skip: tab !== 'runs',
         pollInterval: 15000,
     });
-    const [sourceWrite, sourceState] = useMutation(G.SAVE_NEWS_BLOG_SOURCE),
-        [request, requestState] = useMutation(G.REQUEST_NEWS_BLOG_TASK);
+    const [sourceWrite, sourceState] = useMutation(G.SAVE_NEWS_BLOG_SOURCE);
+    const [request, requestState] = useMutation(G.REQUEST_NEWS_BLOG_TASK);
     const [retry, retryState] = useMutation(G.RETRY_NEWS_BLOG_TASK);
-    const [feedback, setFeedback] = useState({ scope, message: '', failed: false }),
-        pending = useRef(false),
-        busy = sourceState.loading || requestState.loading || retryState.loading;
+    const [feedback, setFeedback] = useState({ scope, message: '', failed: false });
+    const pending = useRef(false);
+    const busy = sourceState.loading || requestState.loading || retryState.loading;
     const change = (patch: Record<string, string | undefined>) =>
         setParams(old => {
             const next = new URLSearchParams(old);
@@ -137,7 +140,9 @@ export function NewsBlogModule() {
                 typeof extra.historyEnd === 'string'
                 ? `已受理 ${extra.historyStart} 至 ${extra.historyEnd} 的免费历史回放，可在运行记录核对结果。`
                 : query.data?.newsBlogSettings.freeMode
-                  ? '免费任务已受理，可在运行记录查看结果；内容按当前自动发布设置处理。'
+                  ? query.data.newsBlogSettings.freeAutoPublish
+                      ? '免费任务已受理，可在运行记录查看结果；内容按当前自动发布设置处理。'
+                      : '采集任务已受理，资料将保留在资讯来源，等待人工编辑。'
                   : '请求已受理，可在运行记录查看任务状态；文章需人工审核发布。',
         );
     const articles = query.data?.newsBlogArticleList.items ?? [];
@@ -393,16 +398,28 @@ export function NewsBlogModule() {
                             <p className="text-sm text-slate-500">
                                 {item.sourcePublishedAt} · {statusLabel(item.status)}
                             </p>
+                            <p className="text-sm text-slate-500">
+                                {item.evidenceMode === 'OFFICIAL_RSS'
+                                    ? '官方订阅摘要（正文尚未获取）；请点击标题核对来源全文。'
+                                    : '网页正文（自动提取）；请点击标题核对完整原文。'}
+                            </p>
                             <details>
-                                <summary>核对采集原文</summary>
+                                <summary>查看采集资料</summary>
                                 <p className="whitespace-pre-wrap break-words">{item.body}</p>
                             </details>
-                            <AdminButton
-                                disabled={busy || item.status !== 'READY'}
-                                onClick={() => void task('GENERATE', { sourceIds: [item.id] })}
-                            >
-                                生成待审图文
-                            </AdminButton>
+                            {query.data?.newsBlogSettings.freeMode &&
+                            !query.data.newsBlogSettings.freeAutoPublish ? (
+                                <p className="text-sm text-slate-500">
+                                    资料已保留，可核对来源后在“文章管理”中新建并编辑文章。
+                                </p>
+                            ) : (
+                                <AdminButton
+                                    disabled={busy || item.status !== 'READY'}
+                                    onClick={() => void task('GENERATE', { sourceIds: [item.id] })}
+                                >
+                                    生成待审图文
+                                </AdminButton>
+                            )}
                         </article>
                     ))}
                 </section>

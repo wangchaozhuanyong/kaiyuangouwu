@@ -1,4 +1,6 @@
+// organize-imports-ignore -- Preserve ESLint import groups.
 import { useMutation } from '@apollo/client/react';
+
 import { serviceMessageDisplay } from '../../../../common/src/display-localization';
 import { getAdminQueryScope } from '../../apollo';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
@@ -6,6 +8,7 @@ import { AdminField } from '../../components/AdminField';
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { useAdminQuery } from '../../hooks/use-admin-query';
 import { useServerDraft } from '../../hooks/use-server-draft';
+
 import { type BlogAdminAction, type BlogAdminSettings } from './news-blog-types';
 import * as G from './news-blog.graphql';
 export function NewsBlogSettings({
@@ -15,8 +18,8 @@ export function NewsBlogSettings({
     source: BlogAdminSettings;
     execute: BlogAdminAction;
 }) {
-    const scope = getAdminQueryScope(),
-        server = useServerDraft(`news-blog-settings:${scope}`, String(source.version), source);
+    const scope = getAdminQueryScope();
+    const server = useServerDraft(`news-blog-settings:${scope}`, String(source.version), source);
     const [save, state] = useMutation<{ saveNewsBlogSettings: BlogAdminSettings }>(G.SAVE_NEWS_BLOG_SETTINGS);
     const providers = useAdminQuery<{ newsBlogProviderOptions: Array<{ code: string; name: string }> }>(
         G.NEWS_BLOG_PROVIDERS,
@@ -29,7 +32,7 @@ export function NewsBlogSettings({
         <section className="space-y-4">
             <p className="text-sm text-slate-500">
                 {draft.freeMode
-                    ? '免费模式根据官方原文整理快讯，Skill 按固定版本说明介绍；不调用文本或图片模型。资料不足时保留待审，不补写未经证实的结论。'
+                    ? '关闭自动发布时，仅采集来源资料并保留待人工编辑，不生成模板文章、不自动翻译，不调用文本或图片模型。热门 Skill 按独立设置处理。'
                     : 'AI 编辑模式使用平台供应商，不扣客户余额；未填写预算时不启动付费任务。'}
             </p>
             {server.sourceChanged && <DraftUpdateNotice onReload={server.reload} />}
@@ -38,14 +41,14 @@ export function NewsBlogSettings({
                     value={draft.freeMode ? 'FREE' : 'AI'}
                     onChange={e => update({ freeMode: e.target.value === 'FREE' })}
                 >
-                    <option value="FREE">免费来源快讯（无需模型）</option>
+                    <option value="FREE">免费原文采集（无需模型）</option>
                     <option value="AI">AI 编辑（需配置供应商与预算）</option>
                 </AdminSelect>
             </AdminField>
             {draft.freeMode && (
                 <AdminField
                     label="免费快讯通过检查后自动发布"
-                    description="仅发布来源整理器的完整结果；人工修改或检查未通过的内容保留待审。"
+                    description="关闭时仅保存采集资料、等待人工编辑；开启后将生成并发布免费模板快讯，不提供自动翻译。"
                 >
                     <AdminInput
                         type="checkbox"
@@ -61,7 +64,7 @@ export function NewsBlogSettings({
                     onChange={e => update({ enabled: e.target.checked })}
                 />
             </AdminField>
-            <AdminField label={draft.freeMode ? '自动采集并整理资讯' : '自动采集并生成待审文章'}>
+            <AdminField label={draft.freeMode ? '自动采集资讯原文' : '自动采集并生成待审文章'}>
                 <AdminInput
                     type="checkbox"
                     checked={draft.automationEnabled}
