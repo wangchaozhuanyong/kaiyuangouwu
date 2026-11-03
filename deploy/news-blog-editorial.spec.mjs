@@ -116,13 +116,15 @@ test('workflow transports punctuation as data without creating shell commands', 
     mkdirSync(bin);
     mkdirSync(remote);
     writeFileSync(lock, '');
-    for (const name of ['install', 'chmod', 'python3', 'find', 'mktemp', 'flock']) {
+    for (const name of ['install', 'chmod', 'python3', 'find', 'mktemp', 'flock', 'sudo']) {
         const body =
             name === 'mktemp'
                 ? 'printf "%s\\n" "$TEST_REMOTE"'
                 : name === 'flock'
                   ? 'cat > "$TEST_CAPTURE"'
-                  : 'exit 0';
+                  : name === 'sudo'
+                    ? 'test "$1 $2 $3 $4" = "-n -H -u ubuntu" || exit 88; shift 4; exec "$@"'
+                    : 'exit 0';
         const file = path.join(bin, name);
         writeFileSync(file, '#!/bin/sh\n' + body + '\n');
         chmodSync(file, 0o755);
