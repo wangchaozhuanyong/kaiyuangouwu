@@ -1031,9 +1031,16 @@ export class BlogService {
             .find({ where: { channelId: ctx.channelId }, order: { createdAt: 'DESC' }, take: 100 });
     }
     async sourceItems(ctx: RequestContext) {
-        return this.connection
+        const items = await this.connection
             .getRepository(ctx, BlogSourceItem)
             .find({ where: { channelId: ctx.channelId }, order: { sourcePublishedAt: 'DESC' }, take: 100 });
+        return items.map(item => ({
+            ...item,
+            evidenceMode:
+                JSON.parse(item.metadataJson || '{}').evidenceMode === 'OFFICIAL_RSS'
+                    ? 'OFFICIAL_RSS'
+                    : 'PAGE_TEXT',
+        }));
     }
     private async publicEnabled(ctx: RequestContext, asset = false) {
         if (ctx.apiType === 'shop' && (await this.activation.getAccessMode(ctx)) === 'CLOSED')

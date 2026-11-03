@@ -608,6 +608,14 @@ export class BlogQueueService implements OnApplicationBootstrap {
         const settings = await this.blog.settings(ctx);
         if (!settings.automationEnabled && !days.length) return;
         const config = this.blog.config(settings);
+        if (config.freeMode && !config.freeAutoPublish) {
+            if (days.length && config.skillEnabled)
+                await this.skills?.scheduleHistory(ctx, String(run.id), days);
+            await this.connection.getRepository(ctx, BlogRun).update(run.id, {
+                message: '采集资料已保留在资讯来源，等待人工编辑；未生成或发布新闻文章',
+            });
+            return;
+        }
         if (config.freeMode) {
             const evidence = await this.connection.getRepository(ctx, BlogSourceItem).find({
                 where: { channelId: ctx.channelId, status: 'READY' },
@@ -775,6 +783,12 @@ export class BlogQueueService implements OnApplicationBootstrap {
     private async generate(ctx: RequestContext, run: BlogRun, input: BlogRunInput) {
         const settings = await this.blog.settings(ctx);
         const config = this.blog.config(settings);
+        if (config.freeMode && !config.freeAutoPublish) {
+            await this.connection.getRepository(ctx, BlogRun).update(run.id, {
+                message: '当前仅采集来源资料，已保留资料供人工编辑；未生成或发布文章',
+            });
+            return;
+        }
         const original = input.articleId ? await this.blog.get(ctx, input.articleId) : null;
         if (original && original.version !== input.expectedVersion) {
             const checkpoint = runTelemetry(

@@ -62,6 +62,7 @@ export const NEWS_BLOG_SOURCES = gql`
             status
             sourcePublishedAt
             fetchedAt
+            evidenceMode
         }
     }
 `;

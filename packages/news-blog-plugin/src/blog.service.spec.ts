@@ -1147,6 +1147,106 @@ describe('free source workflow', () => {
         );
         return { worker, provider, media };
     }
+    it.each([false, true])(
+        'retains source evidence without draft generation in collection-only mode (RSS fallback: %s)',
+        async rssOnly => {
+            const settings = await enableFree();
+            await service.saveSettings(
+                contextFor(),
+                {
+                    ...defaultSettings,
+                    enabled: true,
+                    automationEnabled: true,
+                    freeMode: true,
+                    freeAutoPublish: false,
+                    skillEnabled: false,
+                },
+                settings.version,
+            );
+            const evidenceText =
+                'Concrete official source evidence for manual editing. The source describes a product update and its availability. '.repeat(
+                    4,
+                );
+            const http = {
+                read: vi.fn((_code: string, url: string) => {
+                    if (url.endsWith('/rss.xml'))
+                        return Promise.resolve({
+                            status: 200,
+                            body:
+                                '<rss><channel><item><title>Collection-only fixture</title>' +
+                                '<link>https://openai.com/news/collection-only-fixture</link>' +
+                                `<pubDate>${new Date().toISOString()}</pubDate><description>${evidenceText}</description>` +
+                                '</item></channel></rss>',
+                        });
+                    if (rssOnly) return Promise.reject(new Error('HTTP 403'));
+                    return Promise.resolve({
+                        status: 200,
+                        body: `<article><h1>Collection-only fixture</h1><p>${evidenceText}</p></article>`,
+                    });
+                }),
+            };
+            const { provider, media } = freeWorker();
+            const worker = new BlogQueueService(
+                {} as never,
+                {
+                    create: ({ channelOrToken }: any) =>
+                        Promise.resolve(contextFor(Number(channelOrToken.id))),
+                } as never,
+                connection,
+                service,
+                http as never,
+                provider as never,
+                media as never,
+            );
+            const run = await service.request(contextFor(), 'COLLECT', `source-only-${rssOnly}`);
+            await worker.process('1', String(run.id));
+            const evidence = (await service.sourceItems(contextFor())).find(
+                x => x.url === 'https://openai.com/news/collection-only-fixture',
+            );
+            expect(evidence?.body).toContain('Concrete official source evidence');
+            expect(evidence?.evidenceMode).toBe(rssOnly ? 'OFFICIAL_RSS' : 'PAGE_TEXT');
+            expect(await db.getRepository('BlogRun').count({ where: { kind: 'GENERATE' } })).toBe(0);
+            expect(await db.getRepository('BlogArticle').count()).toBe(0);
+            expect(await db.getRepository('BlogRun').findOneByOrFail({ id: run.id })).toMatchObject({
+                state: 'SUCCEEDED',
+                reservedMicros: 0,
+                chargedMicros: 0,
+            });
+            expect(provider.text).not.toHaveBeenCalled();
+            expect(provider.image).not.toHaveBeenCalled();
+            expect(media.createCover).not.toHaveBeenCalled();
+        },
+    );
+    it('safely finishes an explicit free generation request without creating an article or media in collection-only mode', async () => {
+        const settings = await enableFree();
+        await service.saveSettings(
+            contextFor(),
+            {
+                ...defaultSettings,
+                enabled: true,
+                freeMode: true,
+                freeAutoPublish: false,
+            },
+            settings.version,
+        );
+        const { worker, provider, media } = freeWorker();
+        const run = await service.request(contextFor(), 'GENERATE', 'source-only-explicit-generation', {
+            sourceIds: ['1'],
+        });
+        await worker.process('1', String(run.id));
+        expect(await db.getRepository('BlogRun').findOneByOrFail({ id: run.id })).toMatchObject({
+            state: 'SUCCEEDED',
+            reservedMicros: 0,
+            chargedMicros: 0,
+            message: '当前仅采集来源资料，已保留资料供人工编辑；未生成或发布文章',
+        });
+        expect(await db.getRepository('BlogArticle').count()).toBe(0);
+        expect(await db.getRepository('BlogRun').count({ where: { kind: 'MEDIA' } })).toBe(0);
+        expect((await service.sourceItems(contextFor())).length).toBeGreaterThan(0);
+        expect(provider.text).not.toHaveBeenCalled();
+        expect(provider.image).not.toHaveBeenCalled();
+        expect(media.createCover).not.toHaveBeenCalled();
+    });
     it('blocks a previously cached category page before generating or publishing it', async () => {
         await enableFree();
         await db.getRepository('BlogSourceItem').update(1, {
