@@ -58,6 +58,13 @@ describe('public storefront browsing boundary', () => {
             expect(invoke(query, 'Mutation').run, query).toThrow();
         }
     });
+    it('admits the public environment lookup for guests while preserving the query-only boundary', () => {
+        const { run, next } = invoke('environmentNetworkReport');
+        expect(run).not.toThrow();
+        expect(next.handle).toHaveBeenCalledTimes(1);
+        expect(invoke('environmentNetworkReport', 'Mutation').run).toThrow();
+        expect(invoke('environmentMonitorSettings').run).toThrow();
+    });
     it('admits only the declared anonymous recharge operations before their service checks', () => {
         for (const field of ['gptRechargeConfig', 'gptRechargeTask']) {
             const { run, next } = invoke(field);

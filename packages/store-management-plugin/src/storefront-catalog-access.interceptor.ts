@@ -40,6 +40,8 @@ const publicQueries = new Set([
     'newsBlogArticle',
     'activeStoreCommerceMode',
     'imageStudioConfig',
+    // The service requires an active store, enabled plugin and shared lookup budgets.
+    'environmentNetworkReport',
     // The mail service authorizes each read with its query code and expiry.
     'icloudQueryMails',
     // Recharge reads are scoped by the active store and opaque task credentials.
