@@ -1,5 +1,5 @@
 // organize-imports-ignore -- Preserve ESLint type groups.
-import type { StorefrontActivationService } from '../../../store-management-plugin/src/storefront-activation.service';
+import type { StorefrontActivationService } from '../storefront-activation.service';
 import type { RequestContextService, TransactionalConnection } from '@vendure/core';
 import { Channel, CurrencyCode, LanguageCode, RequestContext } from '@vendure/core';
 import type { StorefrontContentService } from '@vendure/storefront-content-plugin';
@@ -11,16 +11,14 @@ import 'reflect-metadata';
 import { DataSource, EntitySchema } from 'typeorm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ShopAbuseBucket } from '../../../store-management-plugin/src/abuse-protection/entities';
-import { ShopAbuseStore } from '../../../store-management-plugin/src/abuse-protection/store';
-import {
-    EnvironmentMonitorResolver,
-    environmentMonitorSchema,
-} from '../../../store-management-plugin/src/environment-monitor/environment-monitor.resolver';
-import { EnvironmentMonitorService } from '../../../store-management-plugin/src/environment-monitor/environment-monitor.service';
-import { StorefrontClientPluginAccessService } from '../../../store-management-plugin/src/storefront-client-plugin-access.service';
-import { ShopApi } from '../../src/api';
-import { requestEnvironmentNetworkReport } from '../../src/api/environment-monitor';
+import { ShopApi } from '../../../storefront/src/api';
+import { requestEnvironmentNetworkReport } from '../../../storefront/src/api/environment-monitor';
+import { ShopAbuseBucket } from '../abuse-protection/entities';
+import { ShopAbuseStore } from '../abuse-protection/store';
+import { StorefrontClientPluginAccessService } from '../storefront-client-plugin-access.service';
+
+import { EnvironmentMonitorResolver, environmentMonitorSchema } from './environment-monitor.resolver';
+import { EnvironmentMonitorService } from './environment-monitor.service';
 
 // Isolated SQL.js and loopback HTTP. Published-store fixtures and IPQS responses are synthetic.
 // No dev .env, production database, real customer IP, or paid provider is used.
