@@ -636,13 +636,13 @@ description
         return result.confirmMyAfterSalesReplacement;
     }
 
+    private async reviewReader() {
+        const { ProductReviewReads } = await import('./product-review-reads');
+        return new ProductReviewReads(this.ctx);
+    }
+
     async reviewSettings(signal?: AbortSignal): Promise<{ enabled: boolean }> {
-        const result = await this.request<{ storefrontReviewSettings: { enabled: boolean } }>(
-            `query StorefrontReviewSettings { storefrontReviewSettings { enabled } }`,
-            undefined,
-            signal,
-        );
-        return result.storefrontReviewSettings;
+        return (await this.reviewReader()).reviewSettings(signal);
     }
 
     async productReviews(
@@ -650,64 +650,18 @@ description
         options: { skip?: number; take?: number } = { take: 20 },
         signal?: AbortSignal,
     ): Promise<StorefrontReviewList> {
-        const result = await this.request<{ storefrontProductReviews: StorefrontReviewList }>(
-            `
-                query StorefrontProductReviews($productId: ID!, $options: StorefrontReviewListOptions) {
-                    storefrontProductReviews(productId: $productId, options: $options) {
-                        totalItems
-                        averageRating
-                        items { ${storefrontReviewFields} }
-                    }
-                }
-            `,
-            { productId, options },
-            signal,
-        );
-        return result.storefrontProductReviews;
+        return (await this.reviewReader()).productReviews(productId, options, signal);
     }
 
     async myReviews(signal?: AbortSignal): Promise<StorefrontReview[]> {
-        const result = await this.request<{ myStorefrontReviews: StorefrontReview[] }>(
-            `
-                query MyStorefrontReviews {
-                    myStorefrontReviews { ${storefrontReviewFields} }
-                }
-            `,
-            undefined,
-            signal,
-        );
-        return result.myStorefrontReviews;
+        return (await this.reviewReader()).myReviews(signal);
     }
 
     async reviewCandidates(
         options: { skip?: number; take?: number } = {},
         signal?: AbortSignal,
     ): Promise<StorefrontReviewCandidate[]> {
-        const result = await this.request<{ myStorefrontReviewCandidates: StorefrontReviewCandidate[] }>(
-            `
-                query MyStorefrontReviewCandidates($options: StorefrontReviewListOptions) {
-                    myStorefrontReviewCandidates(options: $options) {
-                        orderLineId
-                        orderId
-                        orderCode
-                        orderState
-                        orderPlacedAt
-                        productId
-                        productVariantId
-                        productName
-                        variantName
-                        sku
-                        unitPriceWithTax
-                        currencyCode
-                        fulfillmentType
-                        imageUrl
-                    }
-                }
-            `,
-            { options },
-            signal,
-        );
-        return result.myStorefrontReviewCandidates;
+        return (await this.reviewReader()).reviewCandidates(options, signal);
     }
 
     async submitReview(input: SubmitStorefrontReviewInput): Promise<StorefrontReview> {

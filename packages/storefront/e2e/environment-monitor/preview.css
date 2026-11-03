@@ -1,0 +1,17 @@
+/* Test-only context lives outside the production page shell. */
+.environment-test-notice {
+    padding: var(--space-8) var(--experience-page-gutter-mobile);
+    color: var(--muted);
+}
+.environment-test-notice > summary {
+    width: fit-content;
+    cursor: pointer;
+}
+.environment-test-notice > p {
+    margin: var(--space-8) 0 0;
+}
+@media (min-width: 1024px) {
+    .environment-test-notice {
+        padding-inline: 0;
+    }
+}

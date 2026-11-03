@@ -10,6 +10,22 @@ import { preserveFrontendAssets } from '../frontend-asset-compatibility.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const source = readFileSync(path.join(repo, 'deploy/nginx/damatong.conf'), 'utf8');
+test('environment monitor allows only the two fixed browser IP observation origins on storefront HTML', () => {
+    const policies = [...source.matchAll(/add_header Content-Security-Policy "([^"]+)" always;/g)].map(
+        match => match[1],
+    );
+    const monitoringPolicies = policies.filter(policy => policy.includes('api.ipify.org'));
+    assert.equal(monitoringPolicies.length, 4);
+    for (const policy of monitoringPolicies) {
+        const connect = policy.split(';').find(directive => directive.trim().startsWith('connect-src'));
+        assert.ok(connect.includes('https://api.ipify.org'));
+        assert.ok(connect.includes('https://api64.ipify.org'));
+        assert.ok(!connect.includes('*'));
+        assert.ok(!connect.includes('https://ipwho.is'));
+        assert.ok(!connect.includes('https://free.freeipapi.com'));
+    }
+    assert.ok(!source.slice(source.indexOf('server_name console.moyaoai.com;')).includes('api.ipify.org'));
+});
 function block(label, after = 0) {
     const start = source.indexOf(label + ' {', after);
     assert.ok(start >= 0, 'Missing production Nginx block: ' + label);

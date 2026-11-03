@@ -80,3 +80,5 @@ export type { ManagedLegalContentBlock } from './shared/legal-content';
 export * from './shared/news-blog';
 
 export { storefrontAssetUrl } from './content-image';
+
+export type { EnvironmentNetworkReport } from './environment-monitor-contract';

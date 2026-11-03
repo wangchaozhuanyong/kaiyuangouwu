@@ -117,6 +117,10 @@ const toolCopy = {
         ['AI 图片工坊', '智能优化描述，选择模型快速生成图片', '开始创作'],
         ['AI Image Studio', 'Improve your prompt, choose a model, and create images', 'Create'],
     ],
+    'environment-monitor': [
+        ['环境监测', '浏览器与网络检测', '开始检测'],
+        ['Environment monitor', 'Browser and network checks', 'Open'],
+    ],
     'two-factor': [
         ['2FA 动态码', '密钥不上传，在当前浏览器本地生成', '立即使用'],
         ['2FA codes', 'Generate codes locally without uploading secrets', 'Open'],
@@ -145,6 +149,7 @@ function ToolEntryPlugin({
         coupons: TicketPercent,
         support: Headphones,
         'image-studio': WandSparkles,
+        'environment-monitor': WandSparkles,
         'mail-query': Mail,
         'two-factor': KeyRound,
         'gpt-recharge': KeyRound,
@@ -191,6 +196,7 @@ const clientPluginRenderers: Readonly<Record<string, ComponentType<ClientPluginC
         'icloud-mail-query-entry': toolEntry('mail-query'),
         'news-blog-entry': NewsBlogEntryPlugin,
         'gpt-recharge-entry': ToolEntryPlugin,
+        'environment-monitor-entry': toolEntry('environment-monitor'),
     };
 
 function itemPlacement(item: StorefrontContentItem): ClientPluginPlacement | null {
