@@ -22,7 +22,6 @@ import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { Like } from 'typeorm';
 
-import { ShopAbuseBucket } from './abuse-protection/entities';
 import { ShopAbuseStore } from './abuse-protection/store';
 import { AdminCapabilitiesResolver } from './admin-capabilities.resolver';
 import { AdminCapabilitiesService } from './admin-capabilities.service';
@@ -280,7 +279,6 @@ import {
         StoreDomainPlugin,
     ],
     entities: [
-        ShopAbuseBucket,
         AdministratorAccessProfile,
         AdministratorPermissionAudit,
         StorefrontPresence,
@@ -342,6 +340,7 @@ import {
     ],
     providers: [
         EnvironmentMonitorService,
+        // The production ShopAbuseProtectionPlugin owns registration of the shared entities.
         ShopAbuseStore,
         CatalogSyncSourceService,
         CatalogOwnershipSubscriber,
