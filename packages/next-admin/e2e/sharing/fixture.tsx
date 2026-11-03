@@ -87,7 +87,10 @@ const brokenAsset = {
     source: '/missing-artwork.png',
     preview: '/missing-artwork.png',
 };
-const assets = [asset, squareAsset, brokenAsset];
+const wideAsset = { ...asset, id: 'asset-wide', name: '横版链接分享封面', width: 1200, height: 630 };
+wideAsset.preview = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><rect width="1200" height="630" fill="#d9e7de"/></svg>')}`;
+wideAsset.source = wideAsset.preview;
+const assets = [asset, squareAsset, brokenAsset, wideAsset];
 Object.assign(window, {
     sharingFixture: {
         operations,

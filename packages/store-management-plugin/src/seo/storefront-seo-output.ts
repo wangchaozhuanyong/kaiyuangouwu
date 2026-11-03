@@ -22,6 +22,10 @@ export interface PublicSeoFacts {
     storeName: string;
     description: string;
     image: string | null;
+    /** A product's own image remains more specific than store-wide artwork. */
+    contentImage?: string | null;
+    shareTitle?: string;
+    shareDescription?: string;
     completeLanguages: StorefrontSeoLanguage[];
     structuredData: Array<Record<string, unknown>>;
 }
@@ -65,19 +69,23 @@ export function buildPublicSeoDocument(
     const path = publicPageRouteHref(request);
     const baseHost = facts.primaryHost ?? facts.host;
     const canonical = `https://${baseHost}${localized(path, facts.languageCode)}`;
+    const titleTemplate = settings?.titleTemplates[facts.languageCode] ?? '{title} | {store}';
     const title =
         document?.title.trim() ||
-        (settings?.titleTemplates[facts.languageCode] ?? '{title} | {store}')
-            .replace(/\{title\}/gu, facts.title || facts.storeName)
-            .replace(/\{store\}/gu, facts.storeName)
-            .replace(/^\s*\|\s*|\s*\|\s*$/gu, '')
-            .trim();
+        (facts.title === facts.storeName && titleTemplate === '{title} | {store}'
+            ? facts.storeName
+            : titleTemplate
+                  .replace(/\{title\}/gu, facts.title || facts.storeName)
+                  .replace(/\{store\}/gu, facts.storeName)
+                  .replace(/^\s*\|\s*|\s*\|\s*$/gu, '')
+                  .trim());
     const description =
         document?.description.trim() ||
         facts.description ||
         settings?.defaultDescriptions[facts.languageCode] ||
         '';
     const indexable = reasons.length === 0;
+    const image = document?.shareImageUrl || facts.contentImage || settings?.shareImageUrl || facts.image;
     return {
         schemaVersion: 1,
         published: settings !== null,
@@ -87,12 +95,13 @@ export function buildPublicSeoDocument(
         languageCode: facts.languageCode,
         requestKey: publicPageRequestKey(request),
         title,
+        siteName: facts.storeName,
         description,
         canonical,
-        shareTitle: document?.shareTitle.trim() || title,
-        shareDescription: document?.shareDescription.trim() || description,
+        shareTitle: document?.shareTitle.trim() || facts.shareTitle || title,
+        shareDescription: document?.shareDescription.trim() || facts.shareDescription || description,
         robots: indexable ? 'index, follow, max-image-preview:large' : 'noindex, follow',
-        image: document?.shareImageUrl || facts.image || settings?.shareImageUrl || null,
+        image: image ? new URL(image, `https://${baseHost}`).href : null,
         alternates: indexable
             ? facts.completeLanguages
                   .filter(language => settings?.enabledLanguages.includes(language))

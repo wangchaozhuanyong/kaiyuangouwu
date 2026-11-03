@@ -4,6 +4,9 @@ import {
     primaryStorefrontMedia,
     STOREFRONT_IMAGE_SIZES,
 } from '@vendure/storefront-content-plugin';
+import { load } from 'cheerio';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StorefrontClosedError } from './storefront-activation.service';
@@ -19,12 +22,14 @@ vi.mock('@vendure/storefront-content-plugin', async () => {
     const icons = await import('../../storefront-content-plugin/src/shared/storefront-icons.js');
     const pageData = await import('../../storefront-content-plugin/src/shared/public-page-data.js');
     const primaryMedia = await import('../../storefront-content-plugin/src/shared/primary-media.js');
+    const publicSeo = await import('../../storefront-content-plugin/src/shared/public-seo.js');
     const { storefrontContentPermission } = await import('../../storefront-content-plugin/src/constants.js');
     return {
         ...responsiveImage,
         ...icons,
         ...pageData,
         ...primaryMedia,
+        ...publicSeo,
         storefrontContentPermission,
         StorefrontContentService: class StorefrontContentService {},
         StorefrontAuthSettingsService: class StorefrontAuthSettingsService {},
@@ -46,6 +51,104 @@ function responseMock() {
 }
 
 describe('storefront LCP preload', () => {
+    it.each(['zh_Hans', 'en'])(
+        'describes the 2FA tool in the first HTML even on a cold %s boot cache',
+        async languageCode => {
+            const pages = { peekBoot: vi.fn().mockResolvedValue(undefined), read: vi.fn() };
+            const service = new StorefrontLcpPreloadService(pages as never, {} as never);
+            const fragment = await service.renderBoot(
+                { languageCode } as never,
+                'shop.example',
+                undefined,
+                'two-factor',
+            );
+            const template = readFileSync(join(__dirname, '../../storefront/index.html'), 'utf8');
+            const html = load(
+                template.replace('<!--# include virtual="/_storefront/lcp-preload" -->', fragment),
+            );
+            expect(html('meta[property="og:title"]')).toHaveLength(1);
+            expect(html('meta[property="og:title"]').attr('content')).toContain('2FA');
+            expect(html('meta[property="og:description"]').attr('content')).toContain(
+                languageCode === 'en' ? 'locally' : '本地生成',
+            );
+            expect(html('meta[property="og:url"]').attr('content')).toBe('https://shop.example/two-factor');
+            expect(html('meta[property="og:image"]').attr('content')).toBe(
+                'https://shop.example/storefront/two-factor-social-v1.png',
+            );
+            expect(html('meta[property="og:image:width"]').attr('content')).toBe('1731');
+            expect(html('meta[property="og:image:height"]').attr('content')).toBe('909');
+            expect(html('meta[name="twitter:card"]').attr('content')).toBe('summary_large_image');
+            expect(html('meta[name="robots"]').attr('content')).toBe('noindex, nofollow, noarchive');
+            expect(fragment).not.toContain('neutral-social');
+            expect(fragment).not.toContain('浏览店铺商品');
+            expect(pages.read).not.toHaveBeenCalled();
+        },
+    );
+
+    it('uses only a matching LIVE store brand and escapes share tags', async () => {
+        const boot = {
+            scope: { host: 'shop.example', channelCode: 'store-a', languageCode: 'zh_Hans' },
+            config: {
+                code: 'store-a',
+                accessMode: 'LIVE',
+                customFields: { storefrontNameZh: '测试店铺 <工具>' },
+            },
+        };
+        const pages = { peekBoot: vi.fn().mockResolvedValue(boot) };
+        const service = new StorefrontLcpPreloadService(pages as never, {} as never);
+        const render = () =>
+            service.renderBoot({ languageCode: 'zh_Hans' } as never, 'shop.example', undefined, 'two-factor');
+        const fragment = await render();
+        expect(load(fragment)('meta[property="og:site_name"]').attr('content')).toBe('测试店铺 <工具>');
+        expect(fragment).toContain('&lt;工具&gt;');
+        for (const mismatch of [
+            { ...boot, scope: { ...boot.scope, host: 'another.example' } },
+            { ...boot, config: { ...boot.config, code: 'store-b' } },
+            { ...boot, config: { ...boot.config, accessMode: 'PREVIEW' } },
+        ]) {
+            pages.peekBoot.mockResolvedValueOnce(mismatch);
+            const meta = load(await render());
+            expect(meta('meta[property="og:site_name"]')).toHaveLength(0);
+            expect(meta('meta[property="og:title"]').attr('content')).toBe('2FA 动态验证码工具');
+        }
+    });
+
+    it.each(['/two-factor?secret=discarded#private', '/two-factor/'])(
+        'passes only the trusted tool identity from %s, without URL inputs',
+        async path => {
+            const ctx = {
+                languageCode: 'zh_Hans',
+                channel: { availableCurrencyCodes: ['MYR'] },
+                copy: vi.fn(),
+            };
+            ctx.copy.mockReturnValue(ctx);
+            const renderBoot = vi.fn().mockResolvedValue('<meta property="og:title" content="2FA">');
+            const controller = new StorefrontLcpPreloadController(
+                { resolveRequest: vi.fn().mockResolvedValue({ ctx, host: 'shop.example' }) } as never,
+                { renderBoot } as never,
+            );
+            const res = responseMock();
+            await controller.preload(
+                {
+                    socket: { remoteAddress: '127.0.0.1' },
+                    headers: { 'x-storefront-original-uri': path },
+                } as never,
+                res as never,
+            );
+            expect(renderBoot).toHaveBeenCalledWith(ctx, 'shop.example', undefined, 'two-factor');
+            expect(res.send).toHaveBeenCalledWith('<meta property="og:title" content="2FA">');
+            renderBoot.mockClear();
+            await controller.preload(
+                {
+                    socket: { remoteAddress: '203.0.113.3' },
+                    headers: { 'x-storefront-original-uri': path },
+                } as never,
+                responseMock() as never,
+            );
+            expect(renderBoot).not.toHaveBeenCalled();
+        },
+    );
+
     it.each(['services', 'support'] as const)(
         'preloads the published %s hero rather than unrelated home artwork',
         async route => {

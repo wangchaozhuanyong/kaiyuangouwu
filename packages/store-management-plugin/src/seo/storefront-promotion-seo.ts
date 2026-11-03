@@ -59,6 +59,10 @@ export function resolvePromotionSeo(input: PromotionSeoInput): { seo: PublicSeoD
     if (input.legacyEntry) reasons.push('LEGACY_PROMO_ENTRY');
     const title = input.document?.title.trim() || renderedTitle;
     const description = input.document?.description.trim() || renderedDescription;
+    const image =
+        input.document?.shareImageUrl ||
+        input.settings?.shareImageUrl ||
+        dom('meta[property="og:image"]').attr('content');
     const seo: PublicSeoDocument = {
         schemaVersion: 1,
         published: Boolean(input.settings && input.document),
@@ -76,11 +80,7 @@ export function resolvePromotionSeo(input: PromotionSeoInput): { seo: PublicSeoD
             input.document?.shareDescription.trim() ||
             dom('meta[property="og:description"]').attr('content') ||
             description,
-        image:
-            input.document?.shareImageUrl ||
-            dom('meta[property="og:image"]').attr('content') ||
-            input.settings?.shareImageUrl ||
-            null,
+        image: image ? new URL(image, `https://${input.primaryHost ?? input.host}`).href : null,
         robots: reasons.length === 0 ? 'index, follow, max-image-preview:large' : 'noindex, follow',
         alternates: [],
         structuredData: [],

@@ -110,6 +110,75 @@ describe('runtime channel branding', () => {
         }
     });
 
+    it('keeps 2FA sharing specific to the tool across route changes and strips URL inputs', async () => {
+        window.history.replaceState({}, '', '/two-factor/?secret=discarded#private');
+        const root = createRoot(host);
+        const meta = (name: string) =>
+            document.querySelector(`meta[property="${name}"]`)?.getAttribute('content');
+        try {
+            act(() => root.render(<Fixture logo="/current-store.png" route={{ name: 'two-factor' }} />));
+            await settleMetadata();
+            expect(meta('og:title')).toBe('2FA 动态验证码工具 · 当前店铺');
+            expect(meta('og:description')).toContain('动态码在浏览器本地生成');
+            expect(meta('og:image')).toBe(
+                new URL('/storefront/two-factor-social-v1.png', window.location.origin).href,
+            );
+            expect(meta('og:image:width')).toBe('1731');
+            expect(meta('og:url')).toBe(new URL('/two-factor', window.location.origin).href);
+            expect(document.head.innerHTML).not.toContain('discarded');
+            window.history.replaceState({}, '', '/account');
+            act(() => root.render(<Fixture logo="/current-store.png" route={{ name: 'account' }} />));
+            await settleMetadata();
+            expect(meta('og:title')).toBe('我的账户 · 当前店铺');
+            expect(meta('og:image')).not.toContain('two-factor-social');
+            expect(meta('og:image:width')).toBeUndefined();
+            window.history.replaceState({}, '', '/two-factor');
+            act(() => root.render(<Fixture logo="/current-store.png" route={{ name: 'two-factor' }} />));
+            await settleMetadata();
+            expect(meta('og:title')).toBe('2FA 动态验证码工具 · 当前店铺');
+            expect(meta('og:description')).not.toContain('购物车');
+            window.history.replaceState({}, '', '/zh/product?id=p-1');
+            const seo: PublicSeoDocument = {
+                schemaVersion: 1,
+                published: true,
+                indexable: true,
+                host: window.location.host,
+                channelCode: 'store-a',
+                languageCode: 'zh_Hans',
+                requestKey: publicPageRequestKey({ kind: 'product', id: 'p-1' }),
+                title: '已发布商品',
+                description: '商品介绍',
+                canonical: new URL('/zh/product?id=p-1', window.location.origin).href,
+                robots: 'index, follow',
+                image: 'https://cdn.example/product.jpg',
+                alternates: [],
+                structuredData: [],
+                reasons: [],
+                version: 1,
+            };
+            act(() =>
+                root.render(
+                    <Fixture
+                        logo={null}
+                        scope="store-a"
+                        seo={seo}
+                        accessMode="LIVE"
+                        route={{ name: 'product', id: 'p-1' }}
+                    />,
+                ),
+            );
+            await settleMetadata();
+            expect(meta('og:title')).toBe('已发布商品');
+            expect(meta('og:image')).toBe(seo.image);
+            expect(meta('og:image:width')).toBeUndefined();
+            expect(meta('og:image:height')).toBeUndefined();
+            expect(meta('og:image:alt')).toBeUndefined();
+            expect(document.querySelector('meta[name="twitter:image:alt"]')).toBeNull();
+        } finally {
+            act(() => root.unmount());
+        }
+    });
+
     it('uses a published scoped server document and removes it on another route or preview', async () => {
         window.history.replaceState({}, '', '/zh/product?id=p-1&utm_source=ad');
         const seo: PublicSeoDocument = {

@@ -14,7 +14,11 @@ import {
     sitemapXml,
     type PublicSeoFacts,
 } from './storefront-seo-output';
-import { defaultStorefrontSeoSettings, publicStorefrontSeoSettings } from './storefront-seo.contract';
+import {
+    defaultStorefrontSeoDocument,
+    defaultStorefrontSeoSettings,
+    publicStorefrontSeoSettings,
+} from './storefront-seo.contract';
 
 const settings = () => ({
     ...publicStorefrontSeoSettings(defaultStorefrontSeoSettings()),
@@ -79,6 +83,61 @@ describe('one public SEO policy', () => {
             ).toBe(false);
             expect(template.shell).toBe(originalShell);
         }
+    });
+
+    it('honors page and store sharing overrides before the current-store fallback, with absolute URLs', () => {
+        const input = {
+            ...facts(),
+            image: '/assets/logo.png',
+            shareTitle: 'Saved sharing headline',
+            shareDescription: 'Saved sharing introduction',
+        };
+        const defaults = { ...settings(), shareImageUrl: '/assets/store-sharing.png' };
+        const home = buildPublicSeoDocument({ kind: 'home' }, input, defaults, null, 1);
+        expect(home.image).toBe('https://store-a.test/assets/store-sharing.png');
+        expect(home.shareTitle).toBe(input.shareTitle);
+        expect(home.shareDescription).toBe(input.shareDescription);
+        expect(home.siteName).toBe(input.storeName);
+        expect(load(renderPublicSeoHead(home))('meta[property="og:site_name"]').attr('content')).toBe(
+            input.storeName,
+        );
+        const document = {
+            ...defaultStorefrontSeoDocument('HOME'),
+            shareTitle: 'Page headline',
+            shareDescription: 'Page introduction',
+            shareImageUrl: '/assets/page-sharing.png',
+        };
+        const override = buildPublicSeoDocument({ kind: 'home' }, input, defaults, document, 1);
+        expect(override).toMatchObject({
+            shareTitle: 'Page headline',
+            shareDescription: 'Page introduction',
+            image: 'https://store-a.test/assets/page-sharing.png',
+        });
+        const product = buildPublicSeoDocument(
+            { kind: 'product', id: 'p1' },
+            { ...input, contentImage: '/assets/product.png' },
+            defaults,
+            null,
+            1,
+        );
+        expect(product.image).toBe('https://store-a.test/assets/product.png');
+        expect(buildPublicSeoDocument({ kind: 'home' }, input, null, null, 0).image).toBe(
+            'https://store-a.test/assets/logo.png',
+        );
+    });
+
+    it('avoids repeating the store name in the default homepage title while preserving custom templates', () => {
+        const input = { ...facts(), title: 'Current store', storeName: 'Current store' };
+        expect(buildPublicSeoDocument({ kind: 'home' }, input, settings(), null, 1).title).toBe(
+            'Current store',
+        );
+        const custom = {
+            ...settings(),
+            titleTemplates: { en: '{store} · Official website', zh_Hans: '{store} · 官网' },
+        };
+        expect(buildPublicSeoDocument({ kind: 'home' }, input, custom, null, 1).title).toBe(
+            'Current store · Official website',
+        );
     });
 
     it.each(['store-a', 'store-b'])('declares %s icons in the initial public HTML without SSI', code => {

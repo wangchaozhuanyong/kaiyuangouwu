@@ -1,14 +1,16 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { ID, RequestContext } from '@vendure/core';
+import { ID, LanguageCode, RequestContext } from '@vendure/core';
 import {
     isReusablePublicPageData,
     mediaDescriptor,
     primaryStorefrontMedia,
+    renderPublicShareHead,
     serializeStorefrontBootData,
     serializeStorefrontPageData,
     STOREFRONT_BOOT_DATA_ELEMENT_ID,
     STOREFRONT_PAGE_DATA_ELEMENT_ID,
     storefrontIcon,
+    storefrontToolShareMetadata,
     type MediaDescriptor,
     type PrimaryStorefrontMediaInput,
     type PrimaryStorefrontMediaRoute,
@@ -71,12 +73,48 @@ export class StorefrontLcpPreloadService {
         ctx: RequestContext,
         host: string,
         authRoute?: 'login' | 'register' | 'forgot-password',
+        toolRoute?: 'two-factor',
     ): Promise<string> {
         const boot = authRoute
             ? await this.pages.peekBoot(ctx, host, authRoute)
             : await this.pages.peekBoot(ctx, host);
         void this.warmer?.observe(ctx, host, { kind: 'home' }).catch(() => undefined);
-        if (!boot) return '';
+        const tool = toolRoute
+            ? storefrontToolShareMetadata(
+                  `/${toolRoute}`,
+                  ctx.languageCode === LanguageCode.en ? 'en' : 'zh_Hans',
+              )
+            : undefined;
+        const shareConfig = boot?.config as
+            | {
+                  code?: string;
+                  accessMode?: string;
+                  customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null };
+              }
+            | undefined;
+        const verifiedBrand =
+            boot?.scope?.host === host &&
+            boot.scope.languageCode === String(ctx.languageCode) &&
+            shareConfig?.accessMode === 'LIVE' &&
+            shareConfig.code === boot.scope.channelCode;
+        const siteName = verifiedBrand
+            ? (ctx.languageCode === LanguageCode.en
+                  ? shareConfig.customFields?.storefrontNameEn
+                  : shareConfig.customFields?.storefrontNameZh
+              )?.trim()
+            : undefined;
+        const shareHead = tool
+            ? renderPublicShareHead({
+                  ...tool,
+                  title: siteName ? `${tool.title} · ${siteName}` : tool.title,
+                  canonical: new URL('/two-factor', `https://${host}`).href,
+                  image: new URL(tool.image, `https://${host}`).href,
+                  languageCode: ctx.languageCode === LanguageCode.en ? 'en' : 'zh_Hans',
+                  siteName,
+              })
+            : '';
+        // A cold public boot cache must still describe the tool, without borrowing a store brand.
+        if (!boot) return shareHead;
         const config = boot.config as { logoUrl?: string | null };
         // Worker-prepared public hints only: SSI never assembles content or converts storage assets.
         const preload = authRoute
@@ -86,6 +124,7 @@ export class StorefrontLcpPreloadService {
                   .join('\n')
             : '';
         return [
+            shareHead,
             renderStorefrontIconLinks(config.logoUrl ?? null),
             preload,
             `<script id="${STOREFRONT_BOOT_DATA_ELEMENT_ID}" type="application/json">${serializeStorefrontBootData(boot)}</script>`,

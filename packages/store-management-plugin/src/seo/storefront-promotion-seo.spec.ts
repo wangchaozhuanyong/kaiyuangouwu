@@ -31,6 +31,22 @@ const fixture = (): PromotionSeoInput => ({
 });
 
 describe('promotion uses the shared publication and content gates', () => {
+    it('uses explicit store and page sharing images before inherited markup and resolves relative artwork URLs', () => {
+        const input = fixture();
+        input.html = input.html.replace(
+            '</head>',
+            '<meta property="og:image" content="/assets/old-logo.png"></head>',
+        );
+        if (!input.settings || !input.document) throw new Error('Expected published SEO fixture');
+        input.settings.shareImageUrl = '/assets/store-share.png';
+        expect(resolvePromotionSeo(input).seo.image).toBe('https://shop.test/assets/store-share.png');
+        input.document.shareImageUrl = '/assets/page-share.png';
+        expect(resolvePromotionSeo(input).seo.image).toBe('https://shop.test/assets/page-share.png');
+        input.settings = null;
+        input.document = null;
+        expect(resolvePromotionSeo(input).seo.image).toBe('https://shop.test/assets/old-logo.png');
+    });
+
     it('qualifies only a published language page and preserves the trusted script and entry form', () => {
         const output = resolvePromotionSeo(fixture());
         const dom = load(output.html);

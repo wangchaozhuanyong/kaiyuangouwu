@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import {
     Collection,
@@ -51,6 +51,7 @@ export type StorefrontPublicSeoInitial = {
     primary: string | null;
 };
 export type PreparedStorefrontPublicSeo = StorefrontPublicSeoInitial & {
+    sharing?: Awaited<ReturnType<StorefrontPromotionService['publicShareMetadata']>>;
     record: Awaited<ReturnType<StorefrontSeoService['publishedRecord']>>;
     profile: StoreProfile | null;
     scope: {
@@ -90,6 +91,7 @@ export class StorefrontPublicSeoService {
         private readonly pages: StorefrontPublicPageService,
         private readonly content: StorefrontContentService,
         private readonly moduleRef: ModuleRef,
+        @Optional() private readonly promotion?: StorefrontPromotionService,
     ) {}
 
     async primaryHost(ctx: RequestContext): Promise<string | null> {
@@ -127,13 +129,14 @@ export class StorefrontPublicSeoService {
         initial?: StorefrontPublicSeoInitial,
     ): Promise<PreparedStorefrontPublicSeo> {
         const scope = this.preparationScope(ctx, host, request);
-        const [configuration, primary, record, profile] = await Promise.all([
+        const [configuration, primary, record, profile, sharing] = await Promise.all([
             initial ? initial.configuration : this.seo.publishedConfiguration(ctx),
             initial ? initial.primary : this.primaryHost(ctx),
             this.seo.publishedRecord(ctx, identity(request, language(ctx))),
             this.connection.getRepository(ctx, StoreProfile).findOne({ where: { channelId: ctx.channelId } }),
+            this.promotion?.publicShareMetadata(ctx),
         ]);
-        return { scope, configuration, primary, record, profile };
+        return { scope, configuration, primary, record, profile, sharing };
     }
 
     private preparationScope(ctx: RequestContext, host: string, request: PublicPageRequest) {
@@ -159,7 +162,7 @@ export class StorefrontPublicSeoService {
         const scope = this.preparationScope(ctx, host, request);
         if ((Object.keys(scope) as Array<keyof typeof scope>).some(key => resolved.scope[key] !== scope[key]))
             throw new ServiceUnavailableException('Public SEO preparation scope changed');
-        const { configuration, primary: primaryHost, record: documentRecord, profile } = resolved;
+        const { configuration, primary: primaryHost, record: documentRecord, profile, sharing } = resolved;
         const settings = configuration?.payload ?? null;
         const document =
             request.kind === 'blog' && request.id && documentRecord?.payload
@@ -179,6 +182,7 @@ export class StorefrontPublicSeoService {
         let title = storeName;
         let description = plain(config.description);
         let image = config.logoUrl ?? null;
+        let contentImage: string | null = null;
         let completeLanguages: StorefrontSeoLanguage[] = [];
         const storeLanguages = (['zh_Hans', 'en'] as const).filter(
             candidate =>
@@ -230,7 +234,8 @@ export class StorefrontPublicSeoService {
             );
             title = product.name;
             description = plain(product.description);
-            image = product.featuredAsset?.preview ?? image;
+            contentImage = product.featuredAsset?.preview ?? null;
+            image = contentImage ?? image;
             const quoteOnly = product.customFields.pricingMode === 'QUOTE_ONLY';
             const variants = product.variants.filter(
                 variant => variant.currencyCode === page.scope.currencyCode,
@@ -431,7 +436,10 @@ export class StorefrontPublicSeoService {
                 title,
                 storeName,
                 description,
-                image,
+                image: sharing?.image || image,
+                contentImage,
+                shareTitle: request.kind === 'home' ? sharing?.title : undefined,
+                shareDescription: request.kind === 'home' ? sharing?.description : undefined,
                 completeLanguages,
                 structuredData,
             },

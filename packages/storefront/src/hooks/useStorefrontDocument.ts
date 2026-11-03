@@ -193,6 +193,7 @@ export function useStorefrontMetadata({
         const canonicalUrl = new URL(storefrontDocumentUrl());
         canonicalUrl.hash = '';
         canonicalUrl.search = '';
+        if (route.name === 'two-factor') canonicalUrl.pathname = '/two-factor';
         if (request) {
             const href = publicPageRouteHref(request);
             const publicUrl = new URL(
@@ -203,19 +204,22 @@ export function useStorefrontMetadata({
             canonicalUrl.search = publicUrl.search;
         }
 
-        document.title = title;
-        setMetaContent('meta[name="description"]', description);
+        // Keep the server's tool copy until the shared deferred writer is ready.
+        if (route.name !== 'two-factor') {
+            document.title = title;
+            setMetaContent('meta[name="description"]', description);
+        }
         setMetaContent('meta[name="robots"]', 'noindex, nofollow, noarchive');
 
         setCanonical(canonicalUrl.href);
         return deferMetadata({
             route,
+            isZh,
             storefrontName,
             title,
             description,
             product: selectedProduct,
             logoUrl,
-            isZh,
             canonical: canonicalUrl.href,
         });
     }, [
