@@ -74,7 +74,8 @@ jobs:
                            'find "$task_dir" -type d -exec chmod 755 {} +',
                            'find "$task_dir" -type f -exec chmod 644 {} +',
                            "printf '%s' '" + base64.b64encode(raw).decode() + "' | base64 -d | flock --exclusive --wait 300 /run/lock/vendure-production-deploy.lock node \"$task_dir/deploy/news-blog-editorial.cjs\""]
-                  parameters = json.dumps({'commands': lines})
+                  command = "/bin/bash <<'NEWS_BLOG_EDITORIAL_SCRIPT'\n" + '\n'.join(lines) + '\nNEWS_BLOG_EDITORIAL_SCRIPT'
+                  parameters = json.dumps({'commands': [command]})
                   assert len(parameters.encode()) <= 80000
                   Path(os.environ['RUNNER_TEMP'], 'editorial-ssm.json').write_text(parameters)
                   PY

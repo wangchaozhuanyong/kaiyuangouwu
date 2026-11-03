@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -107,6 +107,42 @@ test('workflow transports punctuation as data without creating shell commands', 
     assert.ok(Buffer.byteLength(script) < 80000);
     assert.ok(!script.includes('$(touch UNEXPECTED_FILE)'));
     assert.equal(spawnSync('bash', ['-n'], { input: script }).status, 0);
+    // SSM invokes /bin/sh. Exercise the actual command and its stdin framing, with host actions
+    // replaced by isolated test executables rather than touching a real lock, account or runtime.
+    const bin = path.join(directory, 'bin');
+    const remote = path.join(directory, 'remote');
+    const lock = path.join(directory, 'lock');
+    const captured = path.join(directory, 'captured.json');
+    mkdirSync(bin);
+    mkdirSync(remote);
+    writeFileSync(lock, '');
+    for (const name of ['install', 'chmod', 'python3', 'find', 'mktemp', 'flock']) {
+        const body =
+            name === 'mktemp'
+                ? 'printf "%s\\n" "$TEST_REMOTE"'
+                : name === 'flock'
+                  ? 'cat > "$TEST_CAPTURE"'
+                  : 'exit 0';
+        const file = path.join(bin, name);
+        writeFileSync(file, '#!/bin/sh\n' + body + '\n');
+        chmodSync(file, 0o755);
+    }
+    assert.ok(script.startsWith("/bin/bash <<'NEWS_BLOG_EDITORIAL_SCRIPT'\n"));
+    const invocation = spawnSync(
+        '/bin/sh',
+        ['-c', script.replaceAll('/run/lock/vendure-production-deploy.lock', lock)],
+        {
+            encoding: 'utf8',
+            env: {
+                ...process.env,
+                PATH: bin + path.delimiter + process.env.PATH,
+                TEST_REMOTE: remote,
+                TEST_CAPTURE: captured,
+            },
+        },
+    );
+    assert.equal(invocation.status, 0, invocation.stderr);
+    assert.deepEqual(JSON.parse(readFileSync(captured, 'utf8')).payload, payload);
     const encoded = /printf '%s' '([A-Za-z0-9+/=]+)'/.exec(script)[1];
     assert.deepEqual(JSON.parse(Buffer.from(encoded, 'base64').toString()).payload, payload);
 });
