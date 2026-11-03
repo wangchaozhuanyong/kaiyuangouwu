@@ -1,6 +1,7 @@
 import { BlogCategory } from '@vendure/storefront-content-plugin';
 import { load } from 'cheerio';
 
+import { markdownReleaseEntries } from './changelog-markdown';
 import { citationUrl, hash } from './content';
 export const sourceCatalog = [
     {
@@ -31,8 +32,9 @@ export const sourceCatalog = [
     {
         code: 'gemini-api',
         name: 'Gemini API 更新记录',
+        // Keep existing citation URLs stable; the safe transport follows Google's official Studio redirect.
         url: 'https://ai.google.dev/gemini-api/docs/changelog',
-        hosts: ['ai.google.dev'],
+        hosts: ['ai.google.dev', 'aistudio.google.com'],
         category: 'gemini',
         mode: 'CHANGELOG',
     },
@@ -63,6 +65,7 @@ export function sourceAllows(code: string, raw: string): boolean {
             !u.username &&
             !u.password &&
             (source.hosts as readonly string[]).includes(u.hostname) &&
+            (u.hostname !== 'aistudio.google.com' || /^\/docs\/changelog(?:\.md)?\/?$/u.test(u.pathname)) &&
             // These are observed taxonomy pages, never dated article evidence.
             !(
                 code === 'anthropic' &&
@@ -116,7 +119,23 @@ export function parseSource(code: string, html: string): CollectedItem[] {
     const source = sourceCatalog.find(x => x.code === code);
     if (!source) throw new Error('未知资讯源');
     const rows: CollectedItem[] = [];
-    if (code === 'gemini-blog' && /<uni-flex-card\b/iu.test(html)) {
+    if (source.mode === 'CHANGELOG' && !/^\s*</u.test(html)) {
+        for (const entry of markdownReleaseEntries(html)) {
+            const heading = entry.body
+                .split(/[:：\n]/u)[0]
+                .trim()
+                .slice(0, 180);
+            const url = `${source.url}#${entry.anchor}`;
+            const row = item(code, {
+                url,
+                entryKey: `${entry.anchor}:${heading.toLowerCase()}`,
+                title: heading,
+                date: entry.date,
+                body: entry.body,
+            });
+            if (row) rows.push({ ...row, url });
+        }
+    } else if (code === 'gemini-blog' && /<uni-flex-card\b/iu.test(html)) {
         const $ = load(html);
         $('uni-flex-card').each((_, node) => {
             const card = $(node);

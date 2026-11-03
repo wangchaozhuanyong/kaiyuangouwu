@@ -66,7 +66,9 @@ export class BlogSourceHttp {
                         'Accept-Encoding': 'gzip, br, deflate',
                         Accept: options.page
                             ? 'image/png,image/jpeg,image/webp,image/gif'
-                            : 'application/rss+xml,application/xml,text/html',
+                            : code === 'gemini-api'
+                              ? 'text/markdown,text/plain;q=0.9,text/html;q=0.8'
+                              : 'application/rss+xml,application/xml,text/html',
                         ...(options.conditional?.etag ? { 'If-None-Match': options.conditional.etag } : {}),
                         ...(options.conditional?.lastModified
                             ? { 'If-Modified-Since': options.conditional.lastModified }
