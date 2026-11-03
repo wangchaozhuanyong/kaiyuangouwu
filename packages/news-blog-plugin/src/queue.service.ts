@@ -13,12 +13,26 @@ import { BlogDraft, blogBodySections } from '@vendure/storefront-content-plugin'
 import { In, LessThan } from 'typeorm';
 
 import { BlogRunInput, BlogService } from './blog.service';
-import { contentIssues, hash, normalizeDraft, serializeDraft, verifyGeneratedDraft } from './content';
+import {
+    budgetDate,
+    contentIssues,
+    hash,
+    normalizeDraft,
+    serializeDraft,
+    verifyGeneratedDraft,
+} from './content';
 import { BlogArticle, BlogRun, BlogSettings, BlogSource, BlogSourceItem } from './entities';
 import { freeDraftDigest, freeDraftIssues, freeNewsDraft, freeSourceSufficient } from './free-content';
+import {
+    freeRecoveryCount,
+    freeRecoveryLimit,
+    isUnpaidFreeRun,
+    nextFreeRecovery,
+    runTelemetry,
+} from './free-recovery';
 import { dayStart, historyDays } from './history';
 import { BlogMediaService } from './media';
-import { SkillDeferred } from './skill-deferral';
+import { SkillDeferred, SourceTransientError } from './skill-deferral';
 import { BlogSkillsService } from './skills.service';
 import { BlogSourceHttp } from './source-http';
 import { extractSourceImages } from './source-images';
@@ -106,6 +120,31 @@ export class BlogQueueService implements OnApplicationBootstrap {
                 await repo.update(row.id, { lastCollectedAt: now, leaseUntil: null });
             }
         }
+        const runRepo = this.connection.rawConnection.getRepository(BlogRun);
+        const recoverable = await runRepo
+            .createQueryBuilder('run')
+            .where('run.reservedMicros = 0 AND run.chargedMicros = 0')
+            .andWhere('run.inputJson LIKE :free', { free: '%"freeMode":true%' })
+            .andWhere(
+                [
+                    '(run.state = :unknown OR (run.state = :running AND run.startedAt < :stale)',
+                    'OR (run.state = :failed AND (run.telemetryJson IS NULL OR run.telemetryJson NOT LIKE :handled)))',
+                ].join(' '),
+                {
+                    unknown: 'UNKNOWN',
+                    running: 'RUNNING',
+                    failed: 'FAILED',
+                    stale: new Date(Date.now() - 30 * 60000),
+                    handled: '%"freeRecoveryVersion":1%',
+                },
+            )
+            .orderBy('run.createdAt', 'ASC')
+            .take(100)
+            .getMany();
+        for (const run of recoverable) {
+            const ctx = await this.contextForChannel(String(run.channelId));
+            await this.blog.recoverFree(ctx, String(run.id));
+        }
         // Database outbox: process committed QUEUED runs even if the API crashed before queue.add.
         const queued = await this.connection.rawConnection
             .getRepository(BlogRun)
@@ -114,6 +153,31 @@ export class BlogQueueService implements OnApplicationBootstrap {
             if (run.state === 'DEFERRED') {
                 const t = JSON.parse(run.telemetryJson || '{}');
                 if (t.providerAttempted || !t.retryAfter || Date.parse(t.retryAfter) > Date.now()) continue;
+                if (
+                    isUnpaidFreeRun(run) &&
+                    run.kind === 'GENERATE' &&
+                    run.budgetDate !== budgetDate() &&
+                    !JSON.parse(run.inputJson).historyDay
+                ) {
+                    await runRepo.update(
+                        { id: run.id, state: 'DEFERRED' },
+                        {
+                            telemetryJson: JSON.stringify({ ...t, freeQuotaPending: true }),
+                        },
+                    );
+                    await this.blog.recoverFree(
+                        await this.contextForChannel(String(run.channelId)),
+                        String(run.id),
+                    );
+                    continue;
+                }
+                if (isUnpaidFreeRun(run) && t.freeQuotaPending) {
+                    await this.blog.recoverFree(
+                        await this.contextForChannel(String(run.channelId)),
+                        String(run.id),
+                    );
+                    continue;
+                }
                 const resumed = await this.connection.rawConnection
                     .getRepository(BlogRun)
                     .update(
@@ -125,11 +189,13 @@ export class BlogQueueService implements OnApplicationBootstrap {
             const ctx = await this.contextForChannel(String(run.channelId));
             await this.enqueue(ctx, run);
         }
-        // Interrupted paid requests retain their reservation and require manual reconciliation.
-        await this.connection.rawConnection
-            .getRepository(BlogRun)
-            .update(
-                { state: 'RUNNING', startedAt: LessThan(new Date(Date.now() - 30 * 60000)) },
+        // Free work recovers above. Only other interrupted requests need manual reconciliation.
+        const interrupted = await runRepo.find({
+            where: { state: 'RUNNING', startedAt: LessThan(new Date(Date.now() - 30 * 60000)) },
+        });
+        for (const run of interrupted.filter(x => !isUnpaidFreeRun(x)))
+            await runRepo.update(
+                { id: run.id, state: 'RUNNING', startedAt: run.startedAt ?? undefined },
                 { state: 'UNKNOWN', message: '任务中断或结果不明；保留预算，不自动重复收费请求' },
             );
     }
@@ -149,9 +215,11 @@ export class BlogQueueService implements OnApplicationBootstrap {
             if (input.freeMode)
                 await repo.update(run.id, {
                     telemetryJson: JSON.stringify({
+                        ...runTelemetry(run),
                         mode: 'FREE_SOURCE',
                         providerAttempted: false,
                         externalModelCalls: 0,
+                        freeRecoveryVersion: 1,
                     }),
                 });
             if (
@@ -187,6 +255,22 @@ export class BlogQueueService implements OnApplicationBootstrap {
         } catch (error) {
             const latest = await repo.findOne({ where: { id: run.id } });
             if (
+                latest &&
+                isUnpaidFreeRun(latest) &&
+                error instanceof SourceTransientError &&
+                freeRecoveryCount(latest) < freeRecoveryLimit
+            ) {
+                await repo.update(
+                    { id: run.id, state: 'RUNNING' },
+                    {
+                        state: 'DEFERRED',
+                        telemetryJson: JSON.stringify(nextFreeRecovery(latest)),
+                        message: '公开来源暂时不可用，免费任务将在退避后自动继续',
+                    },
+                );
+                return;
+            }
+            if (
                 error instanceof SkillDeferred &&
                 !JSON.parse(latest?.telemetryJson || '{}').providerAttempted
             ) {
@@ -195,6 +279,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
                     {
                         state: 'DEFERRED',
                         telemetryJson: JSON.stringify({
+                            ...runTelemetry(latest ?? run),
                             providerAttempted: false,
                             retryAfter: error.retryAfter.toISOString(),
                         }),
@@ -691,7 +776,23 @@ export class BlogQueueService implements OnApplicationBootstrap {
         const settings = await this.blog.settings(ctx);
         const config = this.blog.config(settings);
         const original = input.articleId ? await this.blog.get(ctx, input.articleId) : null;
-        if (original && original.version !== input.expectedVersion) throw new Error('文章版本变化');
+        if (original && original.version !== input.expectedVersion) {
+            const checkpoint = runTelemetry(
+                await this.connection.getRepository(ctx, BlogRun).findOneByOrFail({ id: run.id }),
+            ).freeArticleDigest;
+            const saved = JSON.parse(original.draftJson) as BlogDraft;
+            if (
+                input.freeMode &&
+                checkpoint &&
+                original.state === 'PENDING_REVIEW' &&
+                original.version === (input.expectedVersion ?? 0) + 1 &&
+                freeDraftDigest(saved) === checkpoint
+            ) {
+                await this.continueGenerated(ctx, input, original, saved, false, config.freeAutoPublish);
+                return;
+            }
+            throw new Error('文章版本变化');
+        }
         const existing = original ? (JSON.parse(original.draftJson) as BlogDraft) : null;
         const items = await this.connection
             .getRepository(ctx, BlogSourceItem)
@@ -792,7 +893,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
                 );
             return;
         }
-        const draft = normalizeDraft({
+        let draft = normalizeDraft({
             ...data,
             relatedProductIds: [],
             pinned: existing?.pinned ?? false,
@@ -822,35 +923,80 @@ export class BlogQueueService implements OnApplicationBootstrap {
                 : verifyGeneratedDraft(draft, evidence)),
         ];
         let article = original;
+        const runRepo = this.connection.getRepository(ctx, BlogRun);
+        const previousTelemetry = runTelemetry(await runRepo.findOneByOrFail({ id: run.id }));
         if (!article) {
             article = await this.connection
                 .getRepository(ctx, BlogArticle)
                 .findOne({ where: { channelId: ctx.channelId, eventKey: items[0].eventKey } });
-            if (article) return;
-            article = await this.connection.getRepository(ctx, BlogArticle).save(
-                new BlogArticle({
-                    channelId: ctx.channelId,
-                    eventKey: items[0].eventKey,
-                    slug: `${items[0].category}-${items[0].sourcePublishedAt.toISOString().slice(0, 10)}-${items[0].eventKey.slice(0, 10)}`,
-                    version: 1,
-                    state: 'PENDING_REVIEW',
-                    draftJson: serializeDraft(draft),
-                    issuesJson: JSON.stringify(issues),
-                    publishedJson: null,
-                    publishedAt: null,
-                }),
-            );
-        } else await this.applyGenerated(ctx, article, draft, issues, article.version);
+            if (article) {
+                if (article.publishedJson) return;
+                const saved = JSON.parse(article.draftJson) as BlogDraft;
+                if (
+                    !input.freeMode ||
+                    article.state !== 'PENDING_REVIEW' ||
+                    previousTelemetry.freeArticleDigest !== freeDraftDigest(saved)
+                )
+                    throw new Error('已有人工稿件或缺少安全恢复依据，保留现有文章');
+                draft = saved;
+            } else {
+                if (input.freeMode)
+                    await runRepo.update(run.id, {
+                        telemetryJson: JSON.stringify({
+                            ...previousTelemetry,
+                            freeArticleDigest: freeDraftDigest(draft),
+                        }),
+                    });
+                article = await this.connection.getRepository(ctx, BlogArticle).save(
+                    new BlogArticle({
+                        channelId: ctx.channelId,
+                        eventKey: items[0].eventKey,
+                        slug: `${items[0].category}-${items[0].sourcePublishedAt.toISOString().slice(0, 10)}-${items[0].eventKey.slice(0, 10)}`,
+                        version: 1,
+                        state: 'PENDING_REVIEW',
+                        draftJson: serializeDraft(draft),
+                        issuesJson: JSON.stringify(issues),
+                        publishedJson: null,
+                        publishedAt: null,
+                    }),
+                );
+            }
+        } else {
+            if (input.freeMode)
+                await runRepo.update(run.id, {
+                    telemetryJson: JSON.stringify({
+                        ...previousTelemetry,
+                        freeArticleDigest: freeDraftDigest(draft),
+                    }),
+                });
+            await this.applyGenerated(ctx, article, draft, issues, article.version);
+        }
         article = await this.blog.get(ctx, String(article.id));
+        await this.continueGenerated(ctx, input, article, draft, !original, config.freeAutoPublish);
+    }
+    private async continueGenerated(
+        ctx: RequestContext,
+        input: BlogRunInput,
+        article: BlogArticle,
+        draft: BlogDraft,
+        initial: boolean,
+        autoPublish: boolean,
+    ) {
         if (!draft.cover || draft.sourceImages?.length)
             await this.blog.request(ctx, 'MEDIA', `cover:${article.id}:${article.version}`, {
                 articleId: String(article.id),
                 expectedVersion: article.version,
                 candidatesOnly: Boolean(draft.cover),
-                ...(input.freeMode && !original && config.freeAutoPublish
-                    ? { freeDigest: freeDraftDigest(draft) }
-                    : {}),
+                ...(input.freeMode && initial && autoPublish ? { freeDigest: freeDraftDigest(draft) } : {}),
             });
+        else if (input.freeMode && initial && autoPublish && !article.publishedJson && input.settingsVersion)
+            await this.blog.publishFree(
+                ctx,
+                String(article.id),
+                article.version,
+                freeDraftDigest(draft),
+                input.settingsVersion,
+            );
     }
     private async applyGenerated(
         ctx: RequestContext,
@@ -873,8 +1019,38 @@ export class BlogQueueService implements OnApplicationBootstrap {
     private async image(ctx: RequestContext, run: BlogRun, input: BlogRunInput & { templateOnly?: boolean }) {
         if (!input.articleId) throw new Error('缺少文章编号');
         const row = await this.blog.get(ctx, input.articleId);
-        if (row.version !== input.expectedVersion) throw new Error('文章版本变化');
         const draft = JSON.parse(row.draftJson) as BlogDraft;
+        if (row.version !== input.expectedVersion) {
+            const checkpoint = runTelemetry(
+                await this.connection.getRepository(ctx, BlogRun).findOneByOrFail({ id: run.id }),
+            ).freeMediaDigest;
+            if (
+                input.freeMode &&
+                input.freeDigest &&
+                row.state === 'PUBLISHED' &&
+                freeDraftDigest(draft) === input.freeDigest
+            )
+                return;
+            if (
+                input.freeMode &&
+                checkpoint &&
+                row.state === 'PENDING_REVIEW' &&
+                draft.cover &&
+                row.version === (input.expectedVersion ?? 0) + 1 &&
+                freeDraftDigest(draft) === checkpoint
+            ) {
+                if (input.freeDigest && input.settingsVersion)
+                    await this.blog.publishFree(
+                        ctx,
+                        String(row.id),
+                        row.version,
+                        input.freeDigest,
+                        input.settingsVersion,
+                    );
+                return;
+            }
+            throw new Error('文章版本变化');
+        }
         const config = this.blog.config(await this.blog.settings(ctx));
         const candidates = [];
         for (const candidate of (draft.sourceImages ?? []).slice(0, 3)) {
@@ -884,10 +1060,13 @@ export class BlogQueueService implements OnApplicationBootstrap {
                 candidates.push(candidate);
             }
         }
-        const sourceCover = input.templateOnly ? undefined : candidates.find(x => x.asset)?.asset;
+        const sourceCover = input.templateOnly
+            ? undefined
+            : candidates.find(x => x.asset && (!input.freeMode || x.asset.rightsConfirmed === true))?.asset;
         let bytes: Buffer | undefined;
         if (
             !input.candidatesOnly &&
+            !input.freeMode &&
             !sourceCover &&
             !input.templateOnly &&
             run.reservedMicros > 0 &&
@@ -946,6 +1125,16 @@ export class BlogQueueService implements OnApplicationBootstrap {
             x => x !== '封面尚未准备完成' && x !== '请确认来源图片的使用依据',
         );
         if (cover?.kind === 'SOURCE' && !cover.rightsConfirmed) issues.push('请确认来源图片的使用依据');
+        if (input.freeMode) {
+            const repo = this.connection.getRepository(ctx, BlogRun);
+            const latest = await repo.findOneByOrFail({ id: run.id });
+            await repo.update(run.id, {
+                telemetryJson: JSON.stringify({
+                    ...runTelemetry(latest),
+                    freeMediaDigest: freeDraftDigest(next),
+                }),
+            });
+        }
         const result = await this.connection.getRepository(ctx, BlogArticle).update(
             { id: row.id, channelId: ctx.channelId, version: input.expectedVersion },
             {

@@ -3,7 +3,7 @@ import { TransactionalConnection } from '@vendure/core';
 import { EditorialProviderService } from '@vendure/image-generation-plugin';
 import { request } from 'node:https';
 
-import { SkillDeferred } from './skill-deferral';
+import { SkillDeferred, SourceTransientError } from './skill-deferral';
 import { BlogSkillState } from './skill-entities';
 import { decodeSourceResponse } from './source-response';
 
@@ -138,10 +138,10 @@ export class BlogSkillsHttp {
                             reset: String(res.headers['x-ratelimit-reset'] ?? ''),
                         }),
                     );
-                    res.on('error', () => reject(new Error('Skill 来源读取中断')));
+                    res.on('error', () => reject(new SourceTransientError()));
                 },
             );
-            req.on('error', () => reject(new Error('Skill 来源读取失败')));
+            req.on('error', () => reject(new SourceTransientError()));
             req.end();
         });
         if ([301, 302, 303, 307, 308].includes(result.status) && result.location)
@@ -160,6 +160,7 @@ export class BlogSkillsHttp {
         }
         if ([403, 429].includes(result.status) && u.hostname === 'api.github.com')
             throw new SkillDeferred((await this.state()).requestWindow ?? new Date(Date.now() + 3600000));
+        if ([408, 425, 429, 500, 502, 503, 504].includes(result.status)) throw new SourceTransientError();
         if (result.status !== 200) throw new Error(`Skill 来源暂不可用（HTTP ${result.status}）`);
         return decodeSourceResponse(result.body, result.encoding, 2000000).toString('utf8');
     }

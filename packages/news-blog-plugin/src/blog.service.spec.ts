@@ -8,10 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SafeProviderUrlService } from '../../image-generation-plugin/src/security/safe-provider-url.service';
 
 import { BlogService } from './blog.service';
-import { defaultSettings } from './content';
+import { budgetDate, defaultSettings } from './content';
 import { BlogRun } from './entities';
 import { BlogQueueService } from './queue.service';
-import { SkillDeferred } from './skill-deferral';
+import { SkillDeferred, SourceTransientError } from './skill-deferral';
 import { BlogSkillsCatalog } from './skills-catalog';
 import { BlogSkillsHttp } from './skills-http';
 import { fingerprint, type SkillEvidence } from './skills-source';
@@ -1174,7 +1174,8 @@ describe('free source workflow', () => {
         expect(run.reservedMicros).toBe(0);
         await worker.process('1', String(run.id));
         const image = await db.getRepository<BlogRun>('BlogRun').findOneByOrFail({ kind: 'MEDIA' });
-        expect(JSON.parse(image.inputJson)).toMatchObject({ templateOnly: true, freeMode: true });
+        expect(JSON.parse(image.inputJson)).toMatchObject({ freeMode: true });
+        expect(image.reservedMicros).toBe(0);
         expect((await service.read(contextFor(), {})).totalItems).toBe(0);
         await worker.process('1', String(image.id));
         const article = await db.getRepository('BlogArticle').findOneByOrFail({ state: 'PUBLISHED' });
@@ -1191,6 +1192,401 @@ describe('free source workflow', () => {
         expect(await db.getRepository('BlogRun').sum('chargedMicros')).toBe(0);
         await worker.process('1', String(image.id));
         expect(media.createCover).toHaveBeenCalledTimes(1);
+    });
+    async function overdue(worker: BlogQueueService, id: number | string) {
+        const repo = db.getRepository('BlogRun');
+        await repo.update(id, { state: 'RUNNING', startedAt: new Date(Date.now() - 31 * 60000) });
+        await db.getRepository('BlogSettings').update({ channelId: 1 }, { lastCollectedAt: new Date() });
+        await worker.tick();
+        expect((await repo.findOneByOrFail({ id })).state).toBe('DEFERRED');
+        const current = await repo.findOneByOrFail({ id });
+        await repo.update(id, {
+            telemetryJson: JSON.stringify({
+                ...JSON.parse(current.telemetryJson),
+                retryAfter: new Date(Date.now() - 1000).toISOString(),
+            }),
+        });
+        await worker.tick();
+        expect((await repo.findOneByOrFail({ id })).state).toBe('QUEUED');
+    }
+    it('re-admits legacy free failures without duplicate tasks, and does not retry newly rejected evidence', async () => {
+        await enableFree();
+        const { worker, provider } = freeWorker();
+        const first = await service.request(contextFor(), 'GENERATE', 'legacy-free-failure', {
+            sourceIds: ['1'],
+        });
+        await db.getRepository('BlogRun').update(first.id, {
+            state: 'FAILED',
+            telemetryJson: JSON.stringify({ providerAttempted: false }),
+        });
+        const resumed = await service.request(contextFor(), 'GENERATE', 'same-free-event', {
+            sourceIds: ['1'],
+        });
+        expect(resumed.id).toBe(first.id);
+        expect(resumed.state).toBe('DEFERRED');
+        expect(JSON.parse(resumed.telemetryJson ?? '{}').freeRecoveryCount).toBe(1);
+        await overdue(worker, first.id);
+        await worker.process('1', String(first.id));
+        expect(await db.getRepository('BlogArticle').count()).toBe(1);
+        const second = await service.request(contextFor(), 'GENERATE', 'invalid-free-evidence', {
+            sourceIds: ['2'],
+        });
+        await db
+            .getRepository('BlogSourceItem')
+            .update(2, { url: 'https://www.anthropic.com/news/product', sourceCode: 'anthropic' });
+        await worker.process('1', String(second.id));
+        await worker.tick();
+        expect((await db.getRepository('BlogRun').findOneByOrFail({ id: second.id })).state).toBe('FAILED');
+        expect(provider.text).not.toHaveBeenCalled();
+    });
+    it('resumes an interrupted generation after its article was saved, without creating a second article or cover job', async () => {
+        await enableFree();
+        const { worker, provider } = freeWorker();
+        const run = await service.request(contextFor(), 'GENERATE', 'partial-free-generation', {
+            sourceIds: ['1'],
+        });
+        await worker.process('1', String(run.id));
+        const saved = await db.getRepository('BlogArticle').findOneByOrFail({ eventKey: 'event-1' });
+        await db.getRepository('BlogSourceItem').update(1, { fetchedAt: new Date(Date.now() + 5000) });
+        await overdue(worker, run.id);
+        await worker.process('1', String(run.id));
+        expect(await db.getRepository('BlogArticle').count()).toBe(1);
+        expect((await db.getRepository('BlogArticle').findOneByOrFail({ id: saved.id })).draftJson).toBe(
+            saved.draftJson,
+        );
+        expect(await db.getRepository('BlogRun').countBy({ kind: 'MEDIA' })).toBe(1);
+        const media = await db.getRepository('BlogRun').findOneByOrFail({ kind: 'MEDIA' });
+        await worker.process('1', String(media.id));
+        expect((await service.read(contextFor(), {})).totalItems).toBe(1);
+        expect(provider.image).not.toHaveBeenCalled();
+    });
+    it('finishes a cover checkpoint interrupted before publication and preserves a later human draft', async () => {
+        await enableFree();
+        const { worker, media } = freeWorker();
+        const run = await service.request(contextFor(), 'GENERATE', 'partial-free-cover', {
+            sourceIds: ['1'],
+        });
+        await worker.process('1', String(run.id));
+        const image = await db.getRepository('BlogRun').findOneByOrFail({ kind: 'MEDIA' });
+        const publish = vi
+            .spyOn(service, 'publishFree')
+            .mockRejectedValueOnce(new Error('Synthetic process termination after saving cover'));
+        await worker.process('1', String(image.id));
+        publish.mockRestore();
+        expect((await service.read(contextFor(), {})).totalItems).toBe(0);
+        await overdue(worker, image.id);
+        await worker.process('1', String(image.id));
+        expect((await service.read(contextFor(), {})).totalItems).toBe(1);
+        expect(media.createCover).toHaveBeenCalledTimes(1);
+        const article = await db.getRepository('BlogArticle').findOneByOrFail({ state: 'PUBLISHED' });
+        const changed = {
+            ...JSON.parse(article.draftJson),
+            body: '## 人工内容\n' + '人工修改需保留。'.repeat(30),
+        };
+        await service.save(contextFor(), {
+            id: String(article.id),
+            slug: article.slug,
+            expectedVersion: article.version,
+            draft: changed,
+        });
+        await db
+            .getRepository('BlogRun')
+            .update(image.id, { state: 'RUNNING', startedAt: new Date(Date.now() - 31 * 60000) });
+        await worker.tick();
+        expect((await db.getRepository('BlogRun').findOneByOrFail({ id: image.id })).state).toBe('FAILED');
+        expect(
+            (await db.getRepository('BlogArticle').findOneByOrFail({ id: article.id })).draftJson,
+        ).toContain('人工修改需保留');
+    });
+    it('resumes a completed media checkpoint for a published article update without publishing or changing its draft again', async () => {
+        await enableFree();
+        const { worker, media } = freeWorker();
+        const first = await service.request(contextFor(), 'GENERATE', 'initial-for-update', {
+            sourceIds: ['1'],
+        });
+        await worker.process('1', String(first.id));
+        await worker.process(
+            '1',
+            String((await db.getRepository('BlogRun').findOneByOrFail({ kind: 'MEDIA' })).id),
+        );
+        const article = await db.getRepository('BlogArticle').findOneByOrFail({ state: 'PUBLISHED' });
+        await db.getRepository('BlogSourceItem').update(1, {
+            contentHash: 'changed-source',
+            metadataJson: JSON.stringify({
+                images: [
+                    {
+                        key: 'changed-image',
+                        sourceCode: 'openai',
+                        url: 'https://images.openai.com/updated.png',
+                        sourcePageUrl: 'https://openai.com/news/fixture-1',
+                    },
+                ],
+            }),
+        });
+        media.importSource.mockResolvedValue(draft().cover);
+        const changed = await service.request(contextFor(), 'GENERATE', 'changed-existing-event', {
+            sourceIds: ['1'],
+        });
+        await worker.process('1', String(changed.id));
+        const image = await db
+            .getRepository('BlogRun')
+            .findOneOrFail({ where: { kind: 'MEDIA', state: 'QUEUED' } });
+        expect(JSON.parse(image.inputJson).candidatesOnly).toBe(true);
+        await worker.process('1', String(image.id));
+        const saved = await db.getRepository('BlogArticle').findOneByOrFail({ id: article.id });
+        await overdue(worker, image.id);
+        await worker.process('1', String(image.id));
+        const recovered = await db.getRepository('BlogArticle').findOneByOrFail({ id: article.id });
+        expect(recovered).toMatchObject({
+            state: 'PENDING_REVIEW',
+            version: saved.version,
+            draftJson: saved.draftJson,
+            publishedJson: article.publishedJson,
+        });
+        expect(await db.getRepository('BlogArticle').count()).toBe(1);
+    });
+    it('releases article slots only for failed unpaid free events with no article, while preserving active and paid slots', async () => {
+        await enableFree();
+        const repo = db.getRepository('BlogRun');
+        await repo.save(
+            [1, 2, 3].map(index => ({
+                channelId: 1,
+                requestKey: `failed-free-${index}`,
+                kind: 'GENERATE',
+                state: 'FAILED',
+                budgetDate: budgetDate(),
+                reservedMicros: 0,
+                chargedMicros: 0,
+                inputJson: JSON.stringify({ freeMode: true, eventKey: `failed-${index}` }),
+                telemetryJson: JSON.stringify({ providerAttempted: false }),
+                message: '',
+            })),
+        );
+        expect(
+            (await service.request(contextFor(), 'GENERATE', 'admit-after-failures', { sourceIds: ['1'] }))
+                .state,
+        ).toBe('QUEUED');
+        await repo.save({
+            channelId: 1,
+            requestKey: 'unreconciled-paid-event',
+            kind: 'GENERATE',
+            state: 'FAILED',
+            budgetDate: budgetDate(),
+            reservedMicros: 10,
+            chargedMicros: 0,
+            inputJson: JSON.stringify({ freeMode: false, eventKey: 'paid-event' }),
+            telemetryJson: JSON.stringify({ providerAttempted: true }),
+            message: '',
+        });
+        expect(
+            (await service.request(contextFor(), 'GENERATE', 'admit-last-slot', { sourceIds: ['2'] })).state,
+        ).toBe('QUEUED');
+        await db.getRepository('BlogSourceItem').save({
+            ...(await db.getRepository('BlogSourceItem').findOneByOrFail({ id: 1 })),
+            id: 3,
+            identityKey: 'fresh-3',
+            eventKey: 'event-3',
+            contentHash: 'fresh-3',
+            url: 'https://openai.com/news/fresh-3',
+        });
+        await expect(
+            service.request(contextFor(), 'GENERATE', 'cannot-exceed-limit', { sourceIds: ['3'] }),
+        ).rejects.toThrow('数量已达上限');
+        const old = await repo.findOneByOrFail({ requestKey: 'failed-free-1' });
+        const settings = await service.settings(contextFor());
+        await repo.update(old.id, {
+            inputJson: JSON.stringify({
+                freeMode: true,
+                eventKey: 'failed-1',
+                settingsVersion: settings.version,
+            }),
+            telemetryJson: null,
+        });
+        await service.recoverFree(contextFor(), String(old.id));
+        const waiting = await repo.findOneByOrFail({ id: old.id });
+        expect(waiting.state).toBe('DEFERRED');
+        expect(JSON.parse(waiting.telemetryJson).freeQuotaPending).toBe(true);
+        expect((await repo.findOneByOrFail({ requestKey: 'unreconciled-paid-event' })).reservedMicros).toBe(
+            10,
+        );
+    });
+    it('retains a failed free event slot once its article exists', async () => {
+        await enableFree();
+        await db.getRepository('BlogSettings').update({ channelId: 1 }, { dailyMaxArticles: 1 });
+        await db.getRepository('BlogArticle').save({
+            channelId: 1,
+            slug: 'already-generated',
+            eventKey: 'failed-event',
+            version: 1,
+            state: 'DRAFT',
+            draftJson: JSON.stringify(draft()),
+            issuesJson: '[]',
+            publishedJson: null,
+            publishedAt: null,
+            publishedTitle: '',
+            publishedCategory: '',
+            publishedSearchText: null,
+            publishedPinned: false,
+        });
+        await db.getRepository('BlogRun').save({
+            channelId: 1,
+            requestKey: 'failed-after-save',
+            kind: 'GENERATE',
+            state: 'FAILED',
+            budgetDate: budgetDate(),
+            reservedMicros: 0,
+            chargedMicros: 0,
+            inputJson: JSON.stringify({ freeMode: true, eventKey: 'failed-event' }),
+            telemetryJson: JSON.stringify({ providerAttempted: false }),
+            message: '',
+        });
+        await expect(
+            service.request(contextFor(), 'GENERATE', 'no-extra-article', { sourceIds: ['1'] }),
+        ).rejects.toThrow('数量已达上限');
+    });
+    it('re-admits an overnight retry under the new day limit without consuming another recovery attempt', async () => {
+        await enableFree();
+        await db
+            .getRepository('BlogSettings')
+            .update({ channelId: 1 }, { dailyMaxArticles: 1, lastCollectedAt: new Date() });
+        const active = await service.request(contextFor(), 'GENERATE', 'today-active-slot', {
+            sourceIds: ['1'],
+        });
+        const settings = await service.settings(contextFor());
+        const repo = db.getRepository('BlogRun');
+        const retry = await repo.save({
+            channelId: 1,
+            requestKey: 'overnight-free-slot',
+            kind: 'GENERATE',
+            state: 'DEFERRED',
+            budgetDate: budgetDate(new Date(Date.now() - 86400000)),
+            reservedMicros: 0,
+            chargedMicros: 0,
+            inputJson: JSON.stringify({
+                freeMode: true,
+                eventKey: 'event-2',
+                sourceIds: ['2'],
+                settingsVersion: settings.version,
+            }),
+            telemetryJson: JSON.stringify({
+                providerAttempted: false,
+                freeRecoveryVersion: 1,
+                freeRecoveryCount: 3,
+                retryAfter: new Date(Date.now() - 1000).toISOString(),
+            }),
+            message: '',
+        });
+        const { worker } = freeWorker();
+        await worker.tick();
+        const waiting = await repo.findOneByOrFail({ id: retry.id });
+        expect(waiting.state).toBe('DEFERRED');
+        expect(JSON.parse(waiting.telemetryJson)).toMatchObject({
+            freeQuotaPending: true,
+            freeRecoveryCount: 3,
+        });
+        await repo.update(active.id, {
+            state: 'FAILED',
+            telemetryJson: JSON.stringify({ providerAttempted: false, freeRecoveryVersion: 1 }),
+        });
+        await repo.update(retry.id, {
+            telemetryJson: JSON.stringify({
+                ...JSON.parse(waiting.telemetryJson),
+                retryAfter: new Date(Date.now() - 1000).toISOString(),
+            }),
+        });
+        await worker.tick();
+        await worker.tick();
+        const resumed = await repo.findOneByOrFail({ id: retry.id });
+        expect(resumed).toMatchObject({ state: 'QUEUED', budgetDate: budgetDate() });
+        expect(JSON.parse(resumed.telemetryJson)).toMatchObject({
+            freeQuotaPending: false,
+            freeRecoveryCount: 3,
+        });
+        expect(await repo.countBy({ requestKey: 'overnight-free-slot' })).toBe(1);
+    });
+    it.each([true, false])(
+        'uses a confirmed source cover automatically and falls back when unconfirmed: %s',
+        async confirmed => {
+            await enableFree();
+            const { worker, provider, media } = freeWorker();
+            const source = {
+                key: 'original',
+                sourceCode: 'openai',
+                url: 'https://images.openai.com/original.png',
+                sourcePageUrl: 'https://openai.com/news/fixture-1',
+                alt: 'Original source image',
+            };
+            await db
+                .getRepository('BlogSourceItem')
+                .update(1, { metadataJson: JSON.stringify({ images: [source] }) });
+            media.importSource.mockResolvedValue({
+                ...draft().cover,
+                generated: false,
+                kind: 'SOURCE',
+                rightsConfirmed: confirmed,
+                originalUrl: source.url,
+                sourcePageUrl: source.sourcePageUrl,
+            });
+            const run = await service.request(contextFor(), 'GENERATE', 'source-cover-free', {
+                sourceIds: ['1'],
+            });
+            await worker.process('1', String(run.id));
+            const image = await db.getRepository('BlogRun').findOneByOrFail({ kind: 'MEDIA' });
+            await worker.process('1', String(image.id));
+            const article = await db.getRepository('BlogArticle').findOneByOrFail({ state: 'PUBLISHED' });
+            if (confirmed) {
+                expect(JSON.parse(article.publishedJson).cover).toMatchObject({
+                    kind: 'SOURCE',
+                    rightsConfirmed: true,
+                });
+                expect(media.createCover).not.toHaveBeenCalled();
+            } else expect(media.createCover).toHaveBeenCalledTimes(1);
+            expect(provider.image).not.toHaveBeenCalled();
+        },
+    );
+    it('bounds free recovery, keeps an active final attempt running, and never replays an interrupted paid call', async () => {
+        await enableFree();
+        const { worker, provider } = freeWorker();
+        const free = await service.request(contextFor(), 'GENERATE', 'bounded-free-recovery', {
+            sourceIds: ['1'],
+        });
+        const runs = db.getRepository('BlogRun');
+        await runs.update(free.id, {
+            state: 'RUNNING',
+            startedAt: new Date(),
+            telemetryJson: JSON.stringify({
+                freeRecoveryCount: 3,
+                freeRecoveryVersion: 1,
+                providerAttempted: false,
+            }),
+        });
+        expect(
+            (await service.request(contextFor(), 'GENERATE', 'same-active-event', { sourceIds: ['1'] }))
+                .state,
+        ).toBe('RUNNING');
+        await runs.update(free.id, { startedAt: new Date(Date.now() - 31 * 60000) });
+        const paid = await runs.save({
+            channelId: 1,
+            requestKey: 'interrupted-paid-call',
+            kind: 'GENERATE',
+            state: 'RUNNING',
+            startedAt: new Date(Date.now() - 31 * 60000),
+            budgetDate: budgetDate(),
+            reservedMicros: 100,
+            chargedMicros: 0,
+            inputJson: JSON.stringify({ freeMode: false }),
+            telemetryJson: JSON.stringify({ providerAttempted: true }),
+            message: '',
+        });
+        await db.getRepository('BlogSettings').update({ channelId: 1 }, { lastCollectedAt: new Date() });
+        await worker.tick();
+        expect((await runs.findOneByOrFail({ id: free.id })).state).toBe('FAILED');
+        expect(await runs.findOneByOrFail({ id: paid.id })).toMatchObject({
+            state: 'UNKNOWN',
+            reservedMicros: 100,
+        });
+        expect(await db.getRepository('BlogArticle').count()).toBe(0);
+        expect(provider.text).not.toHaveBeenCalled();
     });
     it('collects an official feed brief on a blocked article page, while preserving strict AI admission', async () => {
         await enableFree();
@@ -1323,30 +1719,104 @@ describe('free source workflow', () => {
                 throw new Error('Paid model called in free mode');
             }),
         };
-        const catalog = { verifyFree: vi.fn((e: SkillEvidence) => Promise.resolve(e)) };
+        const catalog = {
+            verifyFree: vi.fn((e: SkillEvidence) => Promise.resolve(e)),
+            refresh: vi.fn(() => Promise.resolve()),
+        };
         const skills = new BlogSkillsService(
             connection,
             service,
             catalog as never,
-            {} as never,
+            { create: () => Promise.resolve(contextFor()) } as never,
             provider as never,
             { createCover: () => Promise.resolve(draft().cover) } as never,
             { publish: vi.fn() } as never,
         );
-        const begin = vi.fn();
-        const telemetry = vi.fn();
+        const worker = new BlogQueueService(
+            {} as never,
+            { create: () => Promise.resolve(contextFor()) } as never,
+            connection,
+            service,
+            {} as never,
+            provider as never,
+            {} as never,
+            skills,
+        );
+        const begin = vi.spyOn(worker as any, 'beginPaidAttempt');
+        const telemetry = vi.spyOn(worker as any, 'telemetry');
         await skills.schedule(contextFor());
         const run = await db.getRepository<BlogRun>('BlogRun').findOneByOrFail({ kind: 'SKILL' });
-        await skills.process(contextFor(), run, JSON.parse(run.inputJson), begin, telemetry);
+        const runs = db.getRepository('BlogRun');
+        await runs.update(run.id, {
+            state: 'FAILED',
+            telemetryJson: JSON.stringify({ providerAttempted: false }),
+        });
+        await skills.schedule(contextFor());
+        const recovered = await runs.findOneByOrFail({ id: run.id });
+        expect(recovered.state).toBe('DEFERRED');
+        expect(await runs.countBy({ kind: 'SKILL' })).toBe(1);
+        await db.getRepository('BlogSettings').update({ channelId: 1 }, { lastCollectedAt: new Date() });
+        const makeDue = async (id: number | string) => {
+            const latest = await runs.findOneByOrFail({ id });
+            await runs.update(id, {
+                telemetryJson: JSON.stringify({
+                    ...JSON.parse(latest.telemetryJson),
+                    retryAfter: new Date(Date.now() - 1000).toISOString(),
+                }),
+            });
+            await worker.tick();
+        };
+        await makeDue(run.id);
+        catalog.verifyFree.mockRejectedValueOnce(new SourceTransientError());
+        await worker.process('1', String(run.id));
+        expect((await runs.findOneByOrFail({ id: run.id })).state).toBe('DEFERRED');
+        await makeDue(run.id);
+        await worker.process('1', String(run.id));
         expect(await db.getRepository('BlogArticle').countBy({ publishedCategory: 'skills' })).toBe(0);
         const review = await db.getRepository<BlogRun>('BlogRun').findOneByOrFail({ kind: 'SKILL_REVIEW' });
-        await skills.process(contextFor(), review, JSON.parse(review.inputJson), begin, telemetry);
+        await worker.process('1', String(review.id));
         expect(await db.getRepository('BlogArticle').countBy({ publishedCategory: 'skills' })).toBe(1);
-        expect(catalog.verifyFree).toHaveBeenCalledTimes(2);
+        expect(catalog.verifyFree).toHaveBeenCalledTimes(3);
         expect(provider.text).not.toHaveBeenCalled();
         expect(begin).not.toHaveBeenCalled();
         expect(telemetry).not.toHaveBeenCalled();
+        const article = await db
+            .getRepository('BlogArticle')
+            .findOneByOrFail({ publishedCategory: 'skills' });
+        const humanDraft = {
+            ...JSON.parse(article.draftJson),
+            body: JSON.parse(article.draftJson).body + '\n人工编辑内容需保留。',
+        };
+        await service.save(contextFor(), {
+            id: String(article.id),
+            slug: article.slug,
+            expectedVersion: article.version,
+            draft: humanDraft,
+        });
+        const updatedEvidence = {
+            ...evidence,
+            stars: 14000,
+            observedAt: new Date(Date.now() + 1000).toISOString(),
+            rankings: [{ view: 'hot', rank: 19, url: 'https://www.skills.sh/hot', displayCount: '14K' }],
+        };
+        await db
+            .getRepository('BlogSkill')
+            .update(
+                { identity: 'synthetic-identity' },
+                { evidenceJson: JSON.stringify(updatedEvidence), checkedAt: new Date() },
+            );
         await skills.schedule(contextFor());
+        const refreshed = await db.getRepository('BlogArticle').findOneByOrFail({ id: article.id });
+        expect(JSON.parse(refreshed.publishedJson).skill).toMatchObject({
+            stars: 14000,
+            rank: 19,
+            rankingLabel: 'Hot',
+            rankingUrl: 'https://www.skills.sh/hot',
+            trend: 'RECENT',
+            observedAt: updatedEvidence.observedAt,
+        });
+        expect(refreshed.state).toBe('DRAFT');
+        expect(refreshed.draftJson).toContain('人工编辑内容需保留');
         expect(await db.getRepository('BlogSkillRecommendation').count()).toBe(1);
     });
     it('keeps daily free recommendations available from the same high-star repository without repeating a Skill', async () => {

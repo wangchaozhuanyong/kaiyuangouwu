@@ -7,6 +7,13 @@ export type SkillRanking = {
     displayCount: string;
 };
 export type SkillDiscovery = { repository: string; slug: string; rankings: SkillRanking[] };
+export function preferredSkillRanking(evidence: Pick<SkillEvidence, 'rankings'>) {
+    return [...evidence.rankings].sort(
+        (a, b) =>
+            ['trending', 'hot', 'all-time'].indexOf(a.view) -
+                ['trending', 'hot', 'all-time'].indexOf(b.view) || a.rank - b.rank,
+    )[0];
+}
 export type SkillEvidence = {
     sourceSnapshotAt?: string;
     history?: { day: string; parentRunId: string };
