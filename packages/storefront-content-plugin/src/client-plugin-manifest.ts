@@ -86,6 +86,16 @@ export const storefrontClientPluginCatalog: readonly StorefrontClientPluginDefin
         version: '1.0.0',
         defaultPlacement: 'BUSINESS_SERVICES_MAIN',
     },
+    {
+        code: 'environment-monitor-entry',
+        name: '环境监测',
+        englishName: 'Environment monitor',
+        description: '检测浏览器语言、时区、字体、设备特征与当前网络环境。',
+        englishDescription:
+            'Check browser language, timezone, fonts, device signals and the current network.',
+        version: '1.0.0',
+        defaultPlacement: 'BUSINESS_SERVICES_MAIN',
+    },
 ] as const;
 
 export const storefrontClientPluginCodes = storefrontClientPluginCatalog.map(plugin => plugin.code);

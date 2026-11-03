@@ -4,6 +4,8 @@ import { storefrontManualChunks } from '../storefront-manual-chunks.js';
 
 describe('storefrontManualChunks', () => {
     it.each([
+        ['/workspace/packages/storefront/src/storefront-router.ts', 'storefront-routing'],
+        ['C:\\workspace\\packages\\storefront\\src\\storefront-router.ts', 'storefront-routing'],
         ['/workspace/node_modules/react/jsx-runtime.js', 'vendor-react'],
         ['/workspace/node_modules/react-dom/client.js', 'vendor-react'],
         ['/workspace/node_modules/scheduler/index.js', 'vendor-react'],

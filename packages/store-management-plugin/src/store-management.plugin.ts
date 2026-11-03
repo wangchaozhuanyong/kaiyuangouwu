@@ -22,6 +22,8 @@ import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { Like } from 'typeorm';
 
+import { ShopAbuseBucket } from './abuse-protection/entities';
+import { ShopAbuseStore } from './abuse-protection/store';
 import { AdminCapabilitiesResolver } from './admin-capabilities.resolver';
 import { AdminCapabilitiesService } from './admin-capabilities.service';
 import { AdministratorAccessInterceptor } from './administrator-access.interceptor';
@@ -117,6 +119,8 @@ import { StorefrontPromotionPage } from './entities/storefront-promotion-page.en
 import { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity';
 import { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity';
 import { SystemAnnouncement } from './entities/system-announcement.entity';
+import { EnvironmentMonitorResolver } from './environment-monitor/environment-monitor.resolver';
+import { EnvironmentMonitorService } from './environment-monitor/environment-monitor.service';
 import { fraudRiskOrderProcess } from './fraud-risk-order-process';
 import { FraudRiskService } from './fraud-risk.service';
 import { reconcileFraudRiskCasesTask } from './fraud-risk.tasks';
@@ -276,6 +280,7 @@ import {
         StoreDomainPlugin,
     ],
     entities: [
+        ShopAbuseBucket,
         AdministratorAccessProfile,
         AdministratorPermissionAudit,
         StorefrontPresence,
@@ -336,6 +341,8 @@ import {
         StorefrontPublicPageController,
     ],
     providers: [
+        EnvironmentMonitorService,
+        ShopAbuseStore,
         CatalogSyncSourceService,
         CatalogOwnershipSubscriber,
         CatalogGovernanceService,
@@ -591,6 +598,7 @@ import {
     shopApiExtensions: {
         schema: shopApiExtensions,
         resolvers: [
+            EnvironmentMonitorResolver,
             StoreNotificationShopResolver,
             StorefrontBrandingShopResolver,
             StorefrontRegionShopResolver,

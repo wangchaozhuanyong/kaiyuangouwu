@@ -21,6 +21,7 @@ const browsingRoutes = new Set<RouteName>([
     'announcements',
     'not-found',
     'two-factor',
+    'environment-monitor',
     'mail-query',
     'gpt-recharge',
 ]);

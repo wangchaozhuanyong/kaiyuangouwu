@@ -1,6 +1,12 @@
 export function storefrontManualChunks(id: string): string | undefined {
     const normalizedId = id.replace(/\\/g, '/');
 
+    // A shared routing module stays independently cacheable as optional tools grow.
+    // Overall initial-resource budgets continue to include this dependency.
+    if (normalizedId.endsWith('/packages/storefront/src/storefront-router.ts')) {
+        return 'storefront-routing';
+    }
+
     if (
         normalizedId.includes('/node_modules/react/') ||
         normalizedId.includes('/node_modules/react-dom/') ||

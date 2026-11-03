@@ -397,7 +397,7 @@
         text-align: left;
         opacity: 1;
     }
-    .desktop-store-layout .subpage-header button svg {
+    .desktop-store-layout .subpage-header :not([aria-haspopup]) > svg {
         width: 20px;
         height: 20px;
     }

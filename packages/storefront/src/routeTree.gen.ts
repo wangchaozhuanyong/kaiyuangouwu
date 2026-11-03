@@ -18,6 +18,7 @@ import { Route as CartRouteImport } from './routes/cart'
 import { Route as CategoryRouteImport } from './routes/category'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as CouponsRouteImport } from './routes/coupons'
+import { Route as EnvironmentMonitorRouteImport } from './routes/environment-monitor'
 import { Route as FavoritesRouteImport } from './routes/favorites'
 import { Route as FlashSaleRouteImport } from './routes/flash-sale'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
@@ -94,6 +95,11 @@ const CheckoutRoute = CheckoutRouteImport.update({
 const CouponsRoute = CouponsRouteImport.update({
   id: '/coupons',
   path: '/coupons',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EnvironmentMonitorRoute = EnvironmentMonitorRouteImport.update({
+  id: '/environment-monitor',
+  path: '/environment-monitor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FavoritesRoute = FavoritesRouteImport.update({
@@ -267,6 +273,7 @@ export interface FileRoutesByFullPath {
   '/category': typeof CategoryRoute
   '/checkout': typeof CheckoutRoute
   '/coupons': typeof CouponsRoute
+  '/environment-monitor': typeof EnvironmentMonitorRoute
   '/favorites': typeof FavoritesRoute
   '/flash-sale': typeof FlashSaleRoute
   '/forgot-password': typeof ForgotPasswordRoute
@@ -310,6 +317,7 @@ export interface FileRoutesByTo {
   '/category': typeof CategoryRoute
   '/checkout': typeof CheckoutRoute
   '/coupons': typeof CouponsRoute
+  '/environment-monitor': typeof EnvironmentMonitorRoute
   '/favorites': typeof FavoritesRoute
   '/flash-sale': typeof FlashSaleRoute
   '/forgot-password': typeof ForgotPasswordRoute
@@ -354,6 +362,7 @@ export interface FileRoutesById {
   '/category': typeof CategoryRoute
   '/checkout': typeof CheckoutRoute
   '/coupons': typeof CouponsRoute
+  '/environment-monitor': typeof EnvironmentMonitorRoute
   '/favorites': typeof FavoritesRoute
   '/flash-sale': typeof FlashSaleRoute
   '/forgot-password': typeof ForgotPasswordRoute
@@ -399,6 +408,7 @@ export interface FileRouteTypes {
     | '/category'
     | '/checkout'
     | '/coupons'
+    | '/environment-monitor'
     | '/favorites'
     | '/flash-sale'
     | '/forgot-password'
@@ -442,6 +452,7 @@ export interface FileRouteTypes {
     | '/category'
     | '/checkout'
     | '/coupons'
+    | '/environment-monitor'
     | '/favorites'
     | '/flash-sale'
     | '/forgot-password'
@@ -485,6 +496,7 @@ export interface FileRouteTypes {
     | '/category'
     | '/checkout'
     | '/coupons'
+    | '/environment-monitor'
     | '/favorites'
     | '/flash-sale'
     | '/forgot-password'
@@ -529,6 +541,7 @@ export interface RootRouteChildren {
   CategoryRoute: typeof CategoryRoute
   CheckoutRoute: typeof CheckoutRoute
   CouponsRoute: typeof CouponsRoute
+  EnvironmentMonitorRoute: typeof EnvironmentMonitorRoute
   FavoritesRoute: typeof FavoritesRoute
   FlashSaleRoute: typeof FlashSaleRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
@@ -626,6 +639,13 @@ declare module '@tanstack/react-router' {
       path: '/coupons'
       fullPath: '/coupons'
       preLoaderRoute: typeof CouponsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/environment-monitor': {
+      id: '/environment-monitor'
+      path: '/environment-monitor'
+      fullPath: '/environment-monitor'
+      preLoaderRoute: typeof EnvironmentMonitorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/favorites': {
@@ -865,6 +885,7 @@ const rootRouteChildren: RootRouteChildren = {
   CategoryRoute: CategoryRoute,
   CheckoutRoute: CheckoutRoute,
   CouponsRoute: CouponsRoute,
+  EnvironmentMonitorRoute: EnvironmentMonitorRoute,
   FavoritesRoute: FavoritesRoute,
   FlashSaleRoute: FlashSaleRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,

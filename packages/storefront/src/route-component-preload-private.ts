@@ -49,6 +49,10 @@ const routePreloaders = {
     'gpt-recharge': preload(() => import('./route-pages/gpt-recharge-route-page'), 'GptRecharge'),
     'image-studio': preload(contentRoutes, 'ImageStudio'),
     'two-factor': preload(contentRoutes, 'TwoFactor'),
+    'environment-monitor': preload(
+        () => import('./route-pages/environment-monitor-route-page'),
+        'EnvironmentMonitor',
+    ),
     'mail-query': preload(contentRoutes, 'MailQuery'),
     reviews: preload(contentRoutes, 'Reviews'),
 } satisfies Partial<Record<RouteName, RoutePreloader>>;

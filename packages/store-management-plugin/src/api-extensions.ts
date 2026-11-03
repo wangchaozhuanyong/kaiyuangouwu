@@ -11,6 +11,7 @@ import {
     customerServiceFeedbackShopSchema,
 } from './customer-service-feedback.schema';
 import { dataSubjectVerificationShopSchema } from './data-subject-verification.schema';
+import { environmentMonitorSchema } from './environment-monitor/environment-monitor.schema';
 import {
     storeNotificationAdminSchema,
     storeNotificationShopSchema,
@@ -1148,6 +1149,7 @@ export const adminApiExtensions = gql`
 `;
 
 export const shopApiExtensions = gql`
+    ${environmentMonitorSchema}
     ${dataSubjectVerificationShopSchema}
     ${storeNotificationShopSchema}
     ${trafficShopSchema}
