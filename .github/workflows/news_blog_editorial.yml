@@ -97,7 +97,9 @@ jobs:
                   aws ssm get-command-invocation --command-id "$command_id" --instance-id i-01d6737449bc52460 --query '{Status:Status,ResponseCode:ResponseCode,Output:StandardOutputContent,Error:StandardErrorContent}' --output json > "$RUNNER_TEMP/editorial-result.json"
                   jq -e '.Status == "Success" and .ResponseCode == 0 and (.Output | contains("NEWS_BLOG_EDITORIAL_RESULT "))' "$RUNNER_TEMP/editorial-result.json"
             - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              if: always()
               with:
                   name: news-blog-editorial-result
                   path: ${{ runner.temp }}/editorial-result.json
                   retention-days: 30
+                  if-no-files-found: ignore
