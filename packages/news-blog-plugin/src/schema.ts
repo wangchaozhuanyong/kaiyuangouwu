@@ -31,6 +31,7 @@ export const adminSchema = gql`
         status: String!
         sourcePublishedAt: DateTime!
         fetchedAt: DateTime!
+        evidenceMode: String!
     }
     type NewsBlogRun {
         id: ID!

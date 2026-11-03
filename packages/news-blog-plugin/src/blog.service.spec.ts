@@ -10,6 +10,7 @@ import { SafeProviderUrlService } from '../../image-generation-plugin/src/securi
 import { BlogService } from './blog.service';
 import { budgetDate, defaultSettings } from './content';
 import { BlogRun } from './entities';
+import { previousMonth } from './history';
 import { BlogQueueService } from './queue.service';
 import { SkillDeferred, SourceTransientError } from './skill-deferral';
 import { BlogSkillEditorialService, type SkillEditorialInput } from './skill-editorial.service';
@@ -1175,6 +1176,106 @@ describe('legacy free source queue recovery', () => {
         );
         return { worker, provider, media };
     }
+    it.each([false, true])(
+        'retains source evidence without draft generation in collection-only mode (RSS fallback: %s)',
+        async rssOnly => {
+            const settings = await enableFree();
+            await service.saveSettings(
+                contextFor(),
+                {
+                    ...defaultSettings,
+                    enabled: true,
+                    automationEnabled: true,
+                    freeMode: true,
+                    freeAutoPublish: false,
+                    skillEnabled: false,
+                },
+                settings.version,
+            );
+            const evidenceText =
+                'Concrete official source evidence for manual editing. The source describes a product update and its availability. '.repeat(
+                    4,
+                );
+            const http = {
+                read: vi.fn((_code: string, url: string) => {
+                    if (url.endsWith('/rss.xml'))
+                        return Promise.resolve({
+                            status: 200,
+                            body:
+                                '<rss><channel><item><title>Collection-only fixture</title>' +
+                                '<link>https://openai.com/news/collection-only-fixture</link>' +
+                                `<pubDate>${new Date().toISOString()}</pubDate><description>${evidenceText}</description>` +
+                                '</item></channel></rss>',
+                        });
+                    if (rssOnly) return Promise.reject(new Error('HTTP 403'));
+                    return Promise.resolve({
+                        status: 200,
+                        body: `<article><h1>Collection-only fixture</h1><p>${evidenceText}</p></article>`,
+                    });
+                }),
+            };
+            const { provider, media } = freeWorker();
+            const worker = new BlogQueueService(
+                {} as never,
+                {
+                    create: ({ channelOrToken }: any) =>
+                        Promise.resolve(contextFor(Number(channelOrToken.id))),
+                } as never,
+                connection,
+                service,
+                http as never,
+                provider as never,
+                media as never,
+            );
+            const run = await service.request(contextFor(), 'COLLECT', `source-only-${rssOnly}`);
+            await worker.process('1', String(run.id));
+            const evidence = (await service.sourceItems(contextFor())).find(
+                x => x.url === 'https://openai.com/news/collection-only-fixture',
+            );
+            expect(evidence?.body).toContain('Concrete official source evidence');
+            expect(evidence?.evidenceMode).toBe(rssOnly ? 'OFFICIAL_RSS' : 'PAGE_TEXT');
+            expect(await db.getRepository('BlogRun').count({ where: { kind: 'GENERATE' } })).toBe(0);
+            expect(await db.getRepository('BlogArticle').count()).toBe(0);
+            expect(await db.getRepository('BlogRun').findOneByOrFail({ id: run.id })).toMatchObject({
+                state: 'SUCCEEDED',
+                reservedMicros: 0,
+                chargedMicros: 0,
+            });
+            expect(provider.text).not.toHaveBeenCalled();
+            expect(provider.image).not.toHaveBeenCalled();
+            expect(media.createCover).not.toHaveBeenCalled();
+        },
+    );
+    it('safely finishes an explicit free generation request without creating an article or media in collection-only mode', async () => {
+        const settings = await enableFree();
+        await service.saveSettings(
+            contextFor(),
+            {
+                ...defaultSettings,
+                enabled: true,
+                freeMode: true,
+                freeAutoPublish: false,
+            },
+            settings.version,
+        );
+        const { worker, provider, media } = freeWorker();
+        const run = await service.request(contextFor(), 'GENERATE', 'source-only-explicit-generation', {
+            sourceIds: ['1'],
+        });
+        await worker.process('1', String(run.id));
+        expect(await db.getRepository('BlogRun').findOneByOrFail({ id: run.id })).toMatchObject({
+            state: 'SUCCEEDED',
+            reservedMicros: 0,
+            chargedMicros: 0,
+            message: '当前仅采集来源资料，已保留资料供人工编辑；未生成或发布文章',
+        });
+        expect(await db.getRepository('BlogArticle').count()).toBe(0);
+        expect(await db.getRepository('BlogRun').count({ where: { kind: 'MEDIA' } })).toBe(0);
+        expect((await service.sourceItems(contextFor())).length).toBeGreaterThan(0);
+        expect(provider.text).not.toHaveBeenCalled();
+        expect(provider.image).not.toHaveBeenCalled();
+        expect(media.createCover).not.toHaveBeenCalled();
+    });
     it('blocks a previously cached category page before generating or publishing it', async () => {
         await enableFree();
         await db.getRepository('BlogSourceItem').update(1, {
@@ -2114,6 +2215,41 @@ it.skipIf(!process.env.BLOG_SKILL_AUDIT_DIR)(
 );
 
 describe('Codex editorial publication', () => {
+    it('does not start legacy Skill history when news collection is source-only', async () => {
+        const settings = await service.settings(contextFor());
+        await service.saveSettings(
+            contextFor(),
+            {
+                ...defaultSettings,
+                enabled: true,
+                automationEnabled: true,
+                freeMode: true,
+                freeAutoPublish: false,
+                skillEnabled: true,
+            },
+            settings.version,
+        );
+        const legacySkills = { scheduleHistory: vi.fn(() => Promise.resolve()) };
+        const worker = new BlogQueueService(
+            {} as never,
+            { create: () => Promise.resolve(contextFor()) } as never,
+            connection,
+            service,
+            { read: () => Promise.resolve({ status: 200, body: '<rss><channel></channel></rss>' }) } as never,
+            {} as never,
+            {} as never,
+            legacySkills as never,
+        );
+        const day = previousMonth().end;
+        const run = await service.request(contextFor(), 'COLLECT', 'codex-source-only-history', {
+            historyStart: day,
+            historyEnd: day,
+        });
+        await worker.process('1', String(run.id));
+        expect(legacySkills.scheduleHistory).not.toHaveBeenCalled();
+        expect((await db.getRepository('BlogRun').findOneByOrFail({ id: run.id })).state).toBe('SUCCEEDED');
+        expect(await db.getRepository('BlogArticle').count()).toBe(0);
+    });
     const quote = 'Read supplied documents and retain their original sources.';
     const evidence = (): SkillEvidence => ({
         repository: 'owner/repo',

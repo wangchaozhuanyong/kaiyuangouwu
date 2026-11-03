@@ -56,6 +56,7 @@ export type BlogAdminItem = {
     body: string;
     status: string;
     sourcePublishedAt: string;
+    evidenceMode?: string;
 };
 export type BlogAdminRun = {
     id: string;
