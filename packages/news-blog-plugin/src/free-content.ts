@@ -1,7 +1,7 @@
 import { BlogDraft, emptyBlogDraft } from '@vendure/storefront-content-plugin';
 import { createHash } from 'node:crypto';
 
-import { SkillEvidence, skillSourceUrl } from './skills-source';
+import { preferredSkillRanking, SkillEvidence, skillSourceUrl } from './skills-source';
 
 export interface BriefSource {
     title: string;
@@ -109,6 +109,9 @@ export function freeNewsDraft(source: BriefSource, historyDay?: string): BlogDra
 }
 
 const purposes: Array<[RegExp, string]> = [
+    [/\b(?:Azure\s+)?(?:VMSS|VMs?|virtual machines?)\b/iu, '虚拟机与伸缩集管理'],
+    [/\bCache Components\b/iu, 'Next.js 缓存组件配置'],
+    [/\bAzure\b.{0,40}\bquotas?\b/iu, 'Azure 配额与用量管理'],
     [/frontend|front.end|web design|user interface|\bUI\b/iu, '前端界面设计'],
     [/browser|playwright|puppeteer/iu, '浏览器操作与网页测试'],
     [/\bpdf\b/iu, 'PDF 文档处理'],
@@ -117,24 +120,34 @@ const purposes: Array<[RegExp, string]> = [
     [/video|remotion|motion/iu, '视频与动效制作'],
     [/postgres|\bsql\b|database/iu, '数据库与 SQL'],
     [/security|vulnerability/iu, '安全检查'],
-    [/\btest|testing/iu, '软件测试'],
+    [/\b(?:tests?|testing)\b/iu, '软件测试'],
     [/code review/iu, '代码审查'],
     [/\bseo\b|search engine/iu, '网站搜索优化'],
 ];
+function skillPurpose(description: string) {
+    // Classify the subject in the leading sentence, rather than triggers and exclusions later in the text.
+    const lead = plain(description).split(
+        /[.!?。！？](?:\s|$)|\b(?:WHEN|DO NOT|NOT FOR)\s*:|\b(?:not for|do not use|does not)\b/iu,
+    )[0];
+    return purposes
+        .map(([pattern, label]) => ({ index: lead.search(pattern), label }))
+        .filter(x => x.index >= 0)
+        .sort((a, b) => a.index - b.index)[0]?.label;
+}
 export function freeSkillDraft(e: SkillEvidence, identity: string, historyDay?: string): BlogDraft {
     if (!/^[a-f0-9]{40}$/u.test(e.commit) || e.stars < 1000 || !e.description || e.body.length < 200)
         throw new Error('Skill 原文、版本或热度不足');
-    const purpose = purposes.find(([pattern]) => pattern.test(e.description))?.[1] ?? '可复用的工作流程';
+    const purpose = skillPurpose(e.description);
     const quote = excerpt(e.description);
     if (quote.length < 12) throw new Error('Skill 用途依据不足');
-    const rank = [...e.rankings].sort(
-        (a, b) =>
-            ['trending', 'hot', 'all-time'].indexOf(a.view) - ['trending', 'hot', 'all-time'].indexOf(b.view),
-    )[0];
+    const rank = preferredSkillRanking(e);
     if (!rank) throw new Error('缺少公开热度依据');
     const source = skillSourceUrl(e);
-    const title = `${e.name}：${purpose} Skill 的用途与来源`.slice(0, 160);
-    const summary = `本次介绍 ${e.name}，用途标签依据其固定版本说明整理。下方提供原文要点、适用前的检查项和 GitHub 仓库入口；仓库热度是采集时的收藏数，不代表该 Skill 的单独安装量或实际效果。`;
+    const title = `${e.name}：${purpose ? `${purpose} Skill 的用途与来源` : '原文用途与使用说明'}`.slice(
+        0,
+        160,
+    );
+    const summary = `本次依据固定版本说明介绍 ${e.name}。下方提供原文用途要点、适用前的检查项和 GitHub 仓库入口；仓库热度是采集时的收藏数，不代表该 Skill 的单独安装量或实际效果。`;
     const observed = day(e.observedAt);
     return {
         ...emptyBlogDraft(),
@@ -143,13 +156,19 @@ export function freeSkillDraft(e: SkillEvidence, identity: string, historyDay?: 
         category: 'skills',
         format: 'SKILL',
         tags: ['热门 Skill', '来源整理', ...(historyDay ? ['历史补录'] : [])],
-        candidateTitles: [title, `${e.name} 用途速览与固定版本原文`, `${purpose}相关 Skill：${e.name}`],
+        candidateTitles: [
+            title,
+            `${e.name} 用途速览与固定版本原文`,
+            `${purpose ?? '原文用途'}介绍：${e.name}`,
+        ],
         body: [
             `## 这是什么\n${e.name} 是 ${e.repository} 仓库中提供的 Skill 文档。本文以固定 GitHub 提交中的 SKILL.md 为依据整理，具体能力与限制应核对原文。`,
             `## 用途与适用场景\n说明中的用途要点（原文节选）：「${safe(quote)}」`,
-            `用途标签：${purpose}。这只是根据说明中的明确词语整理的标签，不替代完整使用文档，也不代表本站已经运行或测试该项目。`,
+            purpose
+                ? `用途标签：${purpose}。这只是根据主要用途说明整理的标签，不替代完整使用文档，也不代表本站已经运行或测试该项目。`
+                : '主要用途请核对上方原文与下方固定版本说明；本文没有为未明确的能力添加用途标签。',
             `## 使用前应核对什么\n先阅读仓库说明、依赖要求和授权许可，再检查所需工具、文件及执行权限。不要仅凭热度运行不理解的脚本或提交敏感资料。`,
-            `## 热度与来源\n截至${observed}，来源记录中的仓库收藏数为 ${e.stars} Star。该数字属于整个仓库；榜单记录为 ${rank.view} 第 ${rank.rank} 名，属于本次采集观察，不是历史某一天的热度快照。`,
+            `## 热度与来源\n截至${observed}，来源记录中的仓库收藏数为 ${e.stars} Star。该数字属于整个仓库；榜单记录为 ${rank.view} 第 ${rank.rank} 名，属于本次采集观察，不是历史某一天的热度快照。本段保留整理时的记录，最近采集的热度见本文来源卡片。`,
             `## 查看与开始使用\n[查看 GitHub 仓库](https://github.com/${e.repository})`,
             `[核对本次固定版本的 SKILL.md](${source})${historyNotice(historyDay, e.sourceSnapshotAt ?? '固定版本原文', observed)}`,
         ].join('\n\n'),

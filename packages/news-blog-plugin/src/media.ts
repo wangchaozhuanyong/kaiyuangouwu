@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import sharp from 'sharp';
 
-import { BlogSettings } from './entities';
+import { BlogArticle, BlogSettings } from './entities';
 import { BlogSourceHttp } from './source-http';
 const escape = (s: string) =>
     s.replace(
@@ -105,6 +105,27 @@ export class BlogMediaService {
             }
             return asset;
         });
+        const previous = await this.connection
+            .getRepository(ctx, BlogArticle)
+            .createQueryBuilder('article')
+            .where('article.channelId = :channelId', { channelId: ctx.channelId })
+            .andWhere('article.publishedJson LIKE :asset', {
+                asset: `%"assetId":"${String(importedAsset.id)}"%`,
+            })
+            .getMany();
+        const approved = previous
+            .flatMap(article => {
+                const snapshot = JSON.parse(article.publishedJson ?? 'null') as BlogDraft | null;
+                return snapshot ? [snapshot.cover, ...snapshot.illustrations] : [];
+            })
+            .find(
+                cover =>
+                    cover?.kind === 'SOURCE' &&
+                    cover.rightsConfirmed === true &&
+                    cover.assetId === String(importedAsset.id) &&
+                    cover.originalUrl === image.url &&
+                    cover.sourcePageUrl === image.sourcePageUrl,
+            );
         return {
             assetId: String(importedAsset.id),
             url: storefrontAssetUrl(importedAsset),
@@ -114,7 +135,7 @@ export class BlogMediaService {
             sourcePageUrl: image.sourcePageUrl,
             originalUrl: image.url,
             credit: image.credit,
-            rightsConfirmed: false,
+            rightsConfirmed: !!approved,
         };
     }
     async createCover(

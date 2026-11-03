@@ -34,6 +34,14 @@ import {
 } from './content';
 import { BlogArticle, BlogRevision, BlogRun, BlogSettings, BlogSource, BlogSourceItem } from './entities';
 import { freeDraftDigest, freeSourceSufficient } from './free-content';
+import {
+    freeRecoveryCount,
+    freeRecoveryDue,
+    freeRecoveryLimit,
+    isUnpaidFreeRun,
+    nextFreeRecovery,
+    runTelemetry,
+} from './free-recovery';
 import { historyDays, previousMonth } from './history';
 import { BlogSkill, BlogSkillRecommendation, BlogSkillState } from './skill-entities';
 import { sourceAllows, sourceCatalog } from './sources';
@@ -591,7 +599,6 @@ export class BlogService {
             input = {
                 ...input,
                 freeMode: config.freeMode,
-                ...(config.freeMode && kind === 'MEDIA' ? { templateOnly: true } : {}),
             };
             if (kind === 'GENERATE' && input.sourceIds?.length) {
                 let evidence = await this.connection
@@ -646,7 +653,7 @@ export class BlogService {
                     .getRepository(tx, BlogArticle)
                     .findOne({ where: { channelId: tx.channelId, eventKey } });
                 const prior = await repo.findOne({ where: { channelId: tx.channelId, requestKey } });
-                if (prior) return prior;
+                if (prior) return this.recoverFreeRun(tx, prior, settings);
                 if (article && !input.articleId) {
                     if (article.state !== 'PUBLISHED')
                         throw new Error('该事件已有待处理草稿，请从文章管理继续审核');
@@ -675,7 +682,7 @@ export class BlogService {
                 requestKey = `${kind.toLowerCase()}:${input.articleId}:${input.expectedVersion}:${input.sectionIndex ?? 'cover'}`;
             if (kind !== 'GENERATE' && input.retryOfRunId) requestKey += `:retry:${input.retryOfRunId}`;
             const existing = await repo.findOne({ where: { channelId: tx.channelId, requestKey } });
-            if (existing) return existing;
+            if (existing) return this.recoverFreeRun(tx, existing, settings);
             if (!settings.enabled) throw new Error('新闻博客尚未启用');
             if (input.articleId) {
                 const article = await this.get(tx, input.articleId);
@@ -697,11 +704,7 @@ export class BlogService {
                     ? config.imageReserveMicros
                     : 0;
             const runs = await repo.find({ where: { channelId: tx.channelId, budgetDate: today } });
-            const events = new Set(
-                runs
-                    .filter(x => x.kind === 'GENERATE')
-                    .map(x => JSON.parse(x.inputJson).eventKey ?? x.requestKey),
-            );
+            const events = await this.quotaEvents(tx, runs);
             if (
                 kind === 'GENERATE' &&
                 !events.has(input.eventKey) &&
@@ -758,6 +761,140 @@ export class BlogService {
         });
         if (run.state === 'QUEUED' && this.enqueue) await this.enqueue(ctx, run);
         return run;
+    }
+    private async quotaEvents(ctx: RequestContext, runs: BlogRun[]) {
+        const news = runs.filter(run => run.kind === 'GENERATE');
+        const keys = news.map(run => JSON.parse(run.inputJson).eventKey).filter(Boolean) as string[];
+        const articles = keys.length
+            ? await this.connection.getRepository(ctx, BlogArticle).find({
+                  where: { channelId: ctx.channelId, eventKey: In(keys) },
+                  select: { eventKey: true },
+              })
+            : [];
+        const created = new Set(articles.map(article => article.eventKey));
+        return new Set(
+            news
+                .filter(run => {
+                    const event = JSON.parse(run.inputJson).eventKey;
+                    if (isUnpaidFreeRun(run) && runTelemetry(run).freeQuotaPending === true) return false;
+                    return run.state !== 'FAILED' || !isUnpaidFreeRun(run) || created.has(event);
+                })
+                .map(run => JSON.parse(run.inputJson).eventKey ?? run.requestKey),
+        );
+    }
+    /** Recovery shares the normal store quota lock; a failed free event must re-admit its daily slot. */
+    async recoverFree(ctx: RequestContext, id: string, now = new Date()) {
+        return this.connection.withTransaction(ctx, async tx => {
+            await this.connection
+                .getRepository(tx, BlogSettings)
+                .createQueryBuilder()
+                .update()
+                .set({ version: () => 'version' })
+                .where('channelId = :id', { id: tx.channelId })
+                .execute();
+            const run = await this.connection
+                .getRepository(tx, BlogRun)
+                .findOneByOrFail({ id, channelId: tx.channelId });
+            return this.recoverFreeRun(tx, run, await this.settings(tx), now);
+        });
+    }
+    private async recoverFreeRun(
+        ctx: RequestContext,
+        run: BlogRun,
+        settings: BlogSettings,
+        now = new Date(),
+    ) {
+        const repo = this.connection.getRepository(ctx, BlogRun);
+        if (
+            isUnpaidFreeRun(run) &&
+            freeRecoveryCount(run) >= freeRecoveryLimit &&
+            (run.state === 'UNKNOWN' ||
+                (run.state === 'RUNNING' &&
+                    run.startedAt &&
+                    now.getTime() - run.startedAt.getTime() > 30 * 60000))
+        ) {
+            await repo.update(
+                { id: run.id, state: run.state },
+                {
+                    state: 'FAILED',
+                    completedAt: now,
+                    telemetryJson: JSON.stringify({ ...runTelemetry(run), freeRecoveryVersion: 1 }),
+                    message: '免费任务恢复次数已达上限，保留阶段结果供定向重试',
+                },
+            );
+            return repo.findOneByOrFail({ id: run.id, channelId: ctx.channelId });
+        }
+        if (!freeRecoveryDue(run, now)) return run;
+        const input = JSON.parse(run.inputJson) as BlogRunInput;
+        let valid =
+            settings.enabled && this.config(settings).freeMode && input.settingsVersion === settings.version;
+        if (input.articleId) {
+            const article = await this.get(ctx, input.articleId);
+            const digest =
+                input.freeDigest ?? runTelemetry(run).freeArticleDigest ?? runTelemetry(run).freeMediaDigest;
+            valid =
+                valid &&
+                (article.version === input.expectedVersion ||
+                    (!!digest &&
+                        article.version === (input.expectedVersion ?? 0) + 1 &&
+                        article.state === 'PENDING_REVIEW' &&
+                        freeDraftDigest(JSON.parse(article.draftJson)) === digest));
+        }
+        if (!valid) {
+            await repo.update(
+                { id: run.id, state: run.state },
+                {
+                    state: 'FAILED',
+                    completedAt: now,
+                    telemetryJson: JSON.stringify({ ...runTelemetry(run), freeRecoveryVersion: 1 }),
+                    message: '免费任务的配置或人工版本已变化，保留原稿供人工处理',
+                },
+            );
+            return repo.findOneByOrFail({ id: run.id, channelId: ctx.channelId });
+        }
+        const date = input.historyDay ?? budgetDate(now);
+        if (run.kind === 'GENERATE') {
+            const events = await this.quotaEvents(
+                ctx,
+                await repo.find({ where: { channelId: ctx.channelId, budgetDate: date } }),
+            );
+            if (!events.has(input.eventKey ?? run.requestKey) && events.size >= settings.dailyMaxArticles) {
+                await repo.update(
+                    { id: run.id, state: run.state },
+                    {
+                        state: 'DEFERRED',
+                        budgetDate: date,
+                        telemetryJson: JSON.stringify({
+                            ...(run.state === 'DEFERRED' ? runTelemetry(run) : nextFreeRecovery(run, now)),
+                            freeQuotaPending: true,
+                            retryAfter: new Date(now.getTime() + 5 * 60000).toISOString(),
+                        }),
+                        message: '免费文章名额已用完，保留任务等待名额恢复',
+                    },
+                );
+                return repo.findOneByOrFail({ id: run.id, channelId: ctx.channelId });
+            }
+        }
+        await repo.update(
+            {
+                id: run.id,
+                channelId: ctx.channelId,
+                state: run.state,
+                ...(run.state === 'RUNNING' && run.startedAt ? { startedAt: run.startedAt } : {}),
+            },
+            {
+                state: 'DEFERRED',
+                budgetDate: date,
+                completedAt: null,
+                telemetryJson: JSON.stringify(
+                    run.state === 'DEFERRED'
+                        ? { ...runTelemetry(run), freeQuotaPending: false, retryAfter: now.toISOString() }
+                        : nextFreeRecovery(run, now),
+                ),
+                message: '免费任务已保留阶段结果，将在退避后继续；不会调用收费接口',
+            },
+        );
+        return repo.findOneByOrFail({ id: run.id, channelId: ctx.channelId });
     }
     async publishFree(
         ctx: RequestContext,

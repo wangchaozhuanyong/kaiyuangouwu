@@ -60,12 +60,14 @@ describe('source image provenance and safe import', () => {
             .png()
             .toBuffer();
         let saved: any = null;
+        let published: any[] = [];
         const writes: any[] = [];
         const q: any = {
             innerJoin: () => q,
-            where: () => q,
+            where: vi.fn(() => q),
             andWhere: () => q,
             getOne: () => Promise.resolve(saved),
+            getMany: () => Promise.resolve(published),
         };
         const assets = {
             createFromFileStream: vi.fn(async (stream: any, name: string) => {
@@ -121,6 +123,27 @@ describe('source image provenance and safe import', () => {
             credit: 'Publisher',
         });
         expect(writes[0]).toMatchObject({ format: 'webp', width: 1200, height: 600 });
+        published = [
+            {
+                publishedJson: JSON.stringify({
+                    ...emptyBlogDraft(),
+                    cover: { ...cover, rightsConfirmed: true },
+                }),
+            },
+        ];
+        expect((await media.importSource({ channelId: 1 } as never, candidate)).rightsConfirmed).toBe(true);
+        expect(q.where).toHaveBeenCalledWith('article.channelId = :channelId', { channelId: 1 });
+        expect(
+            (
+                await media.importSource({ channelId: 1 } as never, {
+                    ...candidate,
+                    sourcePageUrl: 'https://openai.com/index/another-story/',
+                })
+            ).rightsConfirmed,
+        ).toBe(false);
+        published = [];
+        expect((await media.importSource({ channelId: 1 } as never, candidate)).rightsConfirmed).toBe(false);
+        expect(assets.createFromFileStream).toHaveBeenCalledTimes(1);
         return Promise.resolve();
     });
     it('rejects invalid image bytes before creating an asset', async () => {

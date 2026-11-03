@@ -19,6 +19,43 @@ const source = {
     fetchedAt: new Date('2026-11-02T08:00:00Z'),
 };
 describe('free source briefs and bounded historical replay', () => {
+    it.each([
+        ['Azure VM/VMSS router. WHEN: create a VM, dev/test, test workloads.', '虚拟机与伸缩集管理'],
+        [
+            'Make, edit, animate, or render a video, animation, or motion graphic. Do not use for a browser session.',
+            '视频与动效制作',
+        ],
+        [
+            'Turn on Cache Components in a Next.js app and resolve blocking routes. Use frontend tests later.',
+            'Next.js 缓存组件配置',
+        ],
+        ['Inspect an unfamiliar source artifact. Not for frontend, video or browser tests.', null],
+        ['Not for frontend design. Read the original workflow instructions.', null],
+    ])('uses the main purpose instead of incidental or excluded triggers: %s', (description, expected) => {
+        const result = freeSkillDraft(
+            {
+                name: 'synthetic-skill',
+                repository: 'owner/repo',
+                repositoryId: '123',
+                directory: 'skills/demo',
+                description,
+                body: 'Synthetic test instructions. '.repeat(20),
+                commit: 'a'.repeat(40),
+                stars: 2000,
+                rankings: [{ view: 'hot', rank: 2, url: 'https://www.skills.sh/hot', displayCount: '2K' }],
+                observedAt: new Date().toISOString(),
+                readme: '',
+                aliases: [],
+            },
+            'synthetic',
+        );
+        if (expected) expect(result.title).toContain(expected);
+        else {
+            expect(result.title).toBe('synthetic-skill：原文用途与使用说明');
+            expect(result.body).not.toContain('用途标签：');
+        }
+        expect(result.candidateTitles.join(' ')).not.toContain('undefined');
+    });
     it('retains actual publication/collection dates and discloses historical reconstruction', () => {
         const draft = freeNewsDraft(source, '2026-10-05');
         expect(draft.body).toContain('2026-10-04');
