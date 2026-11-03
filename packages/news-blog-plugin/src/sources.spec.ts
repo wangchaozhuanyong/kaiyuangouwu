@@ -40,6 +40,60 @@ describe('official news extraction', () => {
             parseSource('gemini-api', first.replace('navigation', 'changed navigation')).map(x => x.eventKey),
         ).toEqual(rows.map(x => x.eventKey));
     });
+    it('reads relocated Markdown release notes while preserving HTML entry identities', () => {
+        const html =
+            '<h2 id="11-02-2026">November 2, 2026</h2><ul><li>Model Alpha: First synthetic change.</li><li>Model Beta: Second synthetic change.</li></ul>';
+        const markdown = [
+            '> ## Agent context, not news',
+            '# Release notes',
+            '## November 2, 2026 {% id="11-02-2026" %}',
+            '* **Model Alpha**: First synthetic change.',
+            '* **Model Beta**: Second synthetic change.',
+        ].join('\n');
+        const rows = parseSource('gemini-api', markdown);
+        expect(rows).toHaveLength(2);
+        expect(rows.map(x => x.eventKey)).toEqual(parseSource('gemini-api', html).map(x => x.eventKey));
+        expect(rows[0]).toMatchObject({
+            title: 'Model Alpha',
+            body: 'Model Alpha: First synthetic change.',
+            url: 'https://ai.google.dev/gemini-api/docs/changelog#11-02-2026',
+        });
+    });
+    it('keeps Markdown continuations together and ignores code examples and undated sections', () => {
+        const rows = parseSource(
+            'gemini-api',
+            [
+                '```md',
+                '## November 1, 2026 {% id="not-real" %}',
+                '* Fake example: must not become news.',
+                '```',
+                '## November 2, 2026 {% id="11-02-2026" %}',
+                '* **Model `Alpha`**: Read the [official guide](/docs/alpha).',
+                '  Continued explanation.',
+                '  * A nested detail, not a separate release.',
+                '* **Model Beta**: A second change.',
+                '## Related documentation',
+                '* Undated navigation must not become news.',
+            ].join('\n'),
+        );
+        expect(rows).toHaveLength(2);
+        expect(rows[0].title).toBe('Model Alpha');
+        expect(rows[0].body).toContain('official guide');
+        expect(rows[0].body).toContain('Continued explanation');
+        expect(rows[0].body).toContain('nested detail');
+        expect(rows.some(x => /Fake example|Undated navigation/u.test(x.body))).toBe(false);
+    });
+    it('allows only the migrated official changelog paths on AI Studio', () => {
+        for (const path of ['/docs/changelog', '/docs/changelog.md'])
+            expect(sourceAllows('gemini-api', `https://aistudio.google.com${path}`)).toBe(true);
+        expect(sourceAllows('gemini-api', 'https://ai.google.dev/gemini-api/docs/changelog')).toBe(true);
+        for (const path of ['/app', '/api/private', '/docs/pricing'])
+            expect(sourceAllows('gemini-api', `https://aistudio.google.com${path}`)).toBe(false);
+        expect(sourceAllows('gemini-blog', 'https://aistudio.google.com/docs/changelog')).toBe(false);
+        expect(sourceAllows('gemini-api', 'https://aistudio.google.com.evil.test/docs/changelog')).toBe(
+            false,
+        );
+    });
     it('does not turn undated Anthropic navigation links into news', () => {
         const rows = parseSource(
             'anthropic',

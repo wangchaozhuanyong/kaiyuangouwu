@@ -16,6 +16,50 @@ vi.mock(
 );
 const directory = process.env.BLOG_SOURCE_AUDIT_DIR;
 it.skipIf(!directory)(
+    'reads the migrated Gemini API Markdown through the real safe transport',
+    async () => {
+        const source = sourceCatalog.find(x => x.code === 'gemini-api');
+        if (!source) throw new Error('Gemini API source is not configured');
+        const http = new BlogSourceHttp({ safeUrls: new SafeProviderUrlService() } as never);
+        const response = await http.read(source.code, 'https://aistudio.google.com/docs/changelog');
+        const entries = parseSource(source.code, response.body);
+        const legacy = await http.read(source.code, 'https://ai.google.dev/gemini-api/docs/changelog');
+        const legacyEntries = parseSource(source.code, legacy.body);
+        await mkdir(resolve(directory ?? ''), { recursive: true });
+        await writeFile(resolve(directory ?? '', 'gemini-api.source.md'), response.body);
+        await writeFile(
+            resolve(directory ?? '', 'gemini-api.entries.json'),
+            JSON.stringify(entries, null, 2),
+        );
+        await writeFile(
+            resolve(directory ?? '', 'gemini-api.receipt.json'),
+            JSON.stringify(
+                {
+                    observedAt: new Date().toISOString(),
+                    url: 'https://aistudio.google.com/docs/changelog',
+                    citationUrl: source.url,
+                    status: response.status,
+                    parsed: entries.length,
+                    legacyStatus: legacy.status,
+                    legacyParsed: legacyEntries.length,
+                    externalModelCalls: 0,
+                },
+                null,
+                2,
+            ),
+        );
+        expect(response.status).toBe(200);
+        expect(response.body).toMatch(/^##\s+\w+\s+\d{1,2},?\s+20\d{2}/mu);
+        expect(entries.length).toBeGreaterThan(0);
+        expect(entries.every(x => x.url.startsWith(source.url + '#'))).toBe(true);
+        expect(legacy.status).toBe(200);
+        expect(legacyEntries.some(x => x.eventKey === entries.at(-1)?.eventKey)).toBe(true);
+        const again = parseSource(source.code, response.body);
+        expect(again.map(x => x.eventKey)).toEqual(entries.map(x => x.eventKey));
+    },
+    45000,
+);
+it.skipIf(!directory)(
     'audits real public feeds with the deployed collector and no model calls',
     async () => {
         const out = resolve(directory ?? '');
