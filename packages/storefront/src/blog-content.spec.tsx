@@ -42,7 +42,8 @@ describe('news blog server-renderable content', () => {
     });
     it('renders reviewed content, sources and directory while escaping markup', () => {
         const html = renderToStaticMarkup(<BlogContent page={{ ...page, article }} />);
-        expect(html).toContain('href="#section-1"');
+        expect(html).toContain('id="section-1"');
+        expect(html).not.toContain('class="blog-toc"');
         expect(html).toContain('本地验收编辑');
         expect(html).toContain('https://openai.com/news/');
         expect(html).toContain('&lt;script&gt;');
@@ -59,7 +60,7 @@ describe('news blog server-renderable content', () => {
         expect(html).toContain('浏览全部文章');
         expect(html).not.toContain('aria-busy="true"');
     });
-    it('identifies original source images and credits their article without an AI label', () => {
+    it('uses category artwork instead of requesting a stored cover, and keeps body-image attribution', () => {
         const sourceArticle: BlogPublishedArticle = {
             ...article,
             cover: {
@@ -74,11 +75,24 @@ describe('news blog server-renderable content', () => {
                 rightsConfirmed: true,
             },
         };
+        if (!sourceArticle.cover) throw new Error('Missing synthetic cover');
         const list = renderToStaticMarkup(
             <BlogContent page={{ ...page, items: [sourceArticle], featured: sourceArticle }} />,
         );
-        expect(list).toContain('data-image-kind="SOURCE"');
-        const detail = renderToStaticMarkup(<BlogContent page={{ ...page, article: sourceArticle }} />);
+        expect(list).toContain('class="blog-theme"');
+        expect(list).not.toContain('<img');
+        expect(list).not.toContain('/assets/original.webp');
+        const detail = renderToStaticMarkup(
+            <BlogContent
+                page={{
+                    ...page,
+                    article: {
+                        ...sourceArticle,
+                        illustrations: [{ ...sourceArticle.cover, caption: '正文出处' }],
+                    },
+                }}
+            />,
+        );
         expect(detail).toContain('原文配图');
         expect(detail).toContain(' · OpenAI');
         expect(detail).toContain('href="https://openai.com/news/"');

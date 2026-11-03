@@ -1,9 +1,19 @@
-import { blogCategories, BlogDraft, emptyBlogDraft } from '@vendure/storefront-content-plugin';
+import {
+    blogCategories,
+    BlogDraft,
+    BlogSkillProfile,
+    emptyBlogDraft,
+    skillDomains,
+    skillProfileBody,
+} from '@vendure/storefront-content-plugin';
 import { createHash } from 'node:crypto';
 export const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 export const budgetDate = (date = new Date()) =>
     new Date(date.getTime() + 8 * 3600_000).toISOString().slice(0, 10);
 export interface EditorialSettings {
+    /** LEGACY only permits restoration/testing of historical queue snapshots; settings writes select the current flow. */
+    skillEditorialMode: 'CODEX' | 'LEGACY';
+    coverMode: 'CATEGORY' | 'LEGACY';
     freeMode: boolean;
     freeAutoPublish: boolean;
     skillEnabled: boolean;
@@ -21,6 +31,8 @@ export interface EditorialSettings {
     imageReserveMicros: number;
 }
 export const defaultSettings: EditorialSettings = {
+    skillEditorialMode: 'CODEX',
+    coverMode: 'CATEGORY',
     freeMode: false,
     freeAutoPublish: false,
     skillEnabled: false,
@@ -44,6 +56,44 @@ function text(value: unknown, max: number): string {
         .trim()
         .slice(0, max);
 }
+export function normalizeSkillProfile(raw: unknown): BlogSkillProfile {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('缺少 Skill 用途资料');
+    const value = raw as Record<string, unknown>;
+    if (!Object.hasOwn(skillDomains, String(value.domain))) throw new Error('Skill 领域无效');
+    const list = (key: string, min: number, max: number) => {
+        const items = Array.isArray(value[key])
+            ? [...new Set(value[key].map(x => text(x, 400)).filter(Boolean))]
+            : [];
+        if (items.length < min || items.length > max) throw new Error(`Skill ${key} 数量无效`);
+        return items;
+    };
+    const example = value.example as Record<string, unknown> | undefined;
+    const profile: BlogSkillProfile = {
+        domain: value.domain as BlogSkillProfile['domain'],
+        displayName: text(value.displayName, 80),
+        purpose: text(value.purpose, 300),
+        audience: text(value.audience, 200),
+        industries: list('industries', 0, 4),
+        capabilities: list('capabilities', 2, 6),
+        example: { input: text(example?.input, 600), output: text(example?.output, 600) },
+        prerequisites: list('prerequisites', 1, 6),
+        limitations: list('limitations', 1, 6),
+    };
+    for (const entry of [
+        profile.displayName,
+        profile.purpose,
+        profile.audience,
+        ...profile.capabilities,
+        profile.example.input,
+        profile.example.output,
+        ...profile.prerequisites,
+        ...profile.limitations,
+    ]) {
+        if (!/[\u3400-\u9fff]/u.test(entry) || /<[^>]+>|\u0000/u.test(entry))
+            throw new Error('用途资料须为清晰中文纯文本');
+    }
+    return profile;
+}
 export function citationUrl(raw: unknown): string {
     const url = new URL(text(raw, 2048));
     if (url.protocol !== 'https:' || url.username || url.password || url.port)
@@ -65,6 +115,15 @@ export function normalizeDraft(raw: unknown): BlogDraft {
         throw new Error('文章类型无效');
     draft.format = x.format as BlogDraft['format'];
     draft.pinned = x.pinned === true;
+    if (x.skillProfile !== undefined) {
+        if (draft.category !== 'skills') throw new Error('用途资料仅用于 Skill 文章');
+        draft.skillProfile = normalizeSkillProfile({
+            ...(x.skillProfile as object),
+            displayName: draft.title,
+            purpose: draft.summary,
+        });
+        draft.body = skillProfileBody(draft.skillProfile);
+    }
     for (const k of ['tags', 'candidateTitles', 'relatedProductIds'] as const)
         draft[k] = Array.isArray(x[k])
             ? [...new Set(x[k].map(v => text(v, 160)).filter(Boolean))].slice(
@@ -72,6 +131,14 @@ export function normalizeDraft(raw: unknown): BlogDraft {
                   k === 'candidateTitles' ? 3 : 12,
               )
             : [];
+    if (draft.skillProfile) {
+        const domains: string[] = Object.values(skillDomains);
+        draft.tags = [
+            skillDomains[draft.skillProfile.domain],
+            ...draft.skillProfile.industries,
+            ...draft.tags.filter(tag => !domains.includes(tag)),
+        ].slice(0, 12);
+    }
     draft.sources = Array.isArray(x.sources)
         ? x.sources.slice(0, 20).map(v => ({
               label: text(v.label, 200),
@@ -97,7 +164,6 @@ export function contentIssues(draft: BlogDraft): string[] {
     if (!draft.sources.length) issues.push('缺少可核对的官方来源');
     const urls = new Set(draft.sources.map(x => x.url));
     if (draft.facts.some(x => !urls.has(x.sourceUrl))) issues.push('事实引用不在本文来源内');
-    if (!draft.cover) issues.push('封面尚未准备完成');
     if ([draft.cover, ...draft.illustrations].some(x => x?.kind === 'SOURCE' && !x.rightsConfirmed))
         issues.push('请确认来源图片的使用依据');
     return issues;

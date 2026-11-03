@@ -61,6 +61,42 @@ export class BlogSkillsCatalog {
             throw new Error('Skill 原文核验失败');
         return { ...evidence, repository: repo.full_name, stars: repo.stargazers_count };
     }
+    async editorialSource(repository: string, directory: string, commit: string): Promise<SkillEvidence> {
+        if (
+            !/^[a-f0-9]{40}$/u.test(commit) ||
+            !/^[\w./-]*$/u.test(directory) ||
+            directory.split('/').some(x => x === '.' || x === '..') ||
+            directory.length > 1000 ||
+            directory.includes('//') ||
+            directory.startsWith('/') ||
+            directory.endsWith('/')
+        )
+            throw new Error('Skill 固定版本或目录无效');
+        const repo = await this.repository(repository);
+        const body = await this.http.document(
+            repo.full_name,
+            commit,
+            `${directory ? directory + '/' : ''}SKILL.md`,
+        );
+        const parsed = parseSkillDocument(body);
+        if (!parsed) throw new Error('固定版本 Skill 文件资料不足');
+        const evidence: SkillEvidence = {
+            repository: repo.full_name,
+            repositoryId: String(repo.id),
+            directory,
+            ...parsed,
+            body,
+            readme: '',
+            commit,
+            stars: repo.stargazers_count,
+            rankings: [],
+            observedAt: new Date().toISOString(),
+            aliases: [hash(`${repo.id}:${directory}`)],
+        };
+        if (Buffer.byteLength(JSON.stringify(evidence), 'utf8') > 60000)
+            throw new Error('Skill 原文超过可安全保存的资料大小');
+        return evidence;
+    }
     async verifyFree(evidence: SkillEvidence): Promise<SkillEvidence> {
         const age = Date.now() - Date.parse(evidence.observedAt);
         if (

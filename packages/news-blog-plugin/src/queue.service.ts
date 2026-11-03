@@ -229,6 +229,8 @@ export class BlogQueueService implements OnApplicationBootstrap {
             )
                 throw new Error('模型或预算配置已变化');
             if (run.kind === 'SKILL' || run.kind === 'SKILL_REVIEW') {
+                if (this.blog.config(settings).skillEditorialMode !== 'LEGACY')
+                    throw new Error('Skill 已改为 Codex 中文精选，请使用结构化内容导入');
                 if (!this.skills) throw new Error('Skill 服务未启用');
                 await this.skills.process(
                     ctx,
@@ -688,7 +690,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
             }
             if (days.length && Date.now() - (run.startedAt ?? run.createdAt).getTime() > 20 * 60000)
                 throw new SkillDeferred(new Date(Date.now() + 60000));
-            if (days.length && config.skillEnabled)
+            if (days.length && config.skillEnabled && config.skillEditorialMode === 'LEGACY')
                 await this.skills?.scheduleHistory(ctx, String(run.id), days);
             await this.connection.getRepository(ctx, BlogRun).update(run.id, {
                 message: `${days.length ? `历史回放 ${days[0]} 至 ${days.at(-1)}` : '免费采集'}：已安排 ${queued} 条来源快讯；无合格资讯的日期不凑数，详见来源与子任务记录`,
@@ -982,6 +984,17 @@ export class BlogQueueService implements OnApplicationBootstrap {
         initial: boolean,
         autoPublish: boolean,
     ) {
+        if (this.blog.config(await this.blog.settings(ctx)).coverMode === 'CATEGORY') {
+            if (input.freeMode && initial && autoPublish && !article.publishedJson && input.settingsVersion)
+                await this.blog.publishFree(
+                    ctx,
+                    String(article.id),
+                    article.version,
+                    freeDraftDigest(draft),
+                    input.settingsVersion,
+                );
+            return;
+        }
         if (!draft.cover || draft.sourceImages?.length)
             await this.blog.request(ctx, 'MEDIA', `cover:${article.id}:${article.version}`, {
                 articleId: String(article.id),
@@ -1018,6 +1031,23 @@ export class BlogQueueService implements OnApplicationBootstrap {
     }
     private async image(ctx: RequestContext, run: BlogRun, input: BlogRunInput & { templateOnly?: boolean }) {
         if (!input.articleId) throw new Error('缺少文章编号');
+        const settings = await this.blog.settings(ctx);
+        if (this.blog.config(settings).coverMode === 'CATEGORY') {
+            const current = await this.blog.get(ctx, input.articleId);
+            if (input.expectedVersion !== current.version) throw new Error('文章版本变化');
+            if (input.freeMode && input.freeDigest && input.settingsVersion && !current.publishedJson)
+                await this.blog.publishFree(
+                    ctx,
+                    String(current.id),
+                    current.version,
+                    input.freeDigest,
+                    input.settingsVersion,
+                );
+            await this.connection
+                .getRepository(ctx, BlogRun)
+                .update(run.id, { message: '使用分类主题渲染，无需制作封面', reservedMicros: 0 });
+            return;
+        }
         const row = await this.blog.get(ctx, input.articleId);
         const draft = JSON.parse(row.draftJson) as BlogDraft;
         if (row.version !== input.expectedVersion) {

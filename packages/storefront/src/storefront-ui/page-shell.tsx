@@ -202,10 +202,12 @@ export function SubHeader({
     action,
     actionVisibility = 'all',
     className,
+    back,
 }: {
     title: string;
     language: StorefrontLanguage;
-    onBack: () => void;
+    onBack?: () => void;
+    back?: ReactNode;
     backLabel?: string;
     action?: ReactNode;
     actionVisibility?: 'all' | 'mobile';
@@ -216,11 +218,13 @@ export function SubHeader({
             className={`topbar subpage-header${className ? ` ${className}` : ''}`}
             data-page-return={backLabel}
             data-action-visibility={actionVisibility}
-            data-desktop-actions={Boolean(action) && actionVisibility === 'all' ? true : undefined}
+            data-desktop-actions={(action && actionVisibility === 'all') || undefined}
         >
-            <PageBackButton onClick={onBack} label={backLabel ?? (language === 'zh' ? '返回' : 'Back')}>
-                {backLabel}
-            </PageBackButton>
+            {back ?? (
+                <PageBackButton onClick={onBack} label={backLabel ?? (language === 'zh' ? '返回' : 'Back')}>
+                    {backLabel}
+                </PageBackButton>
+            )}
             <strong>{title}</strong>
             <span className="subpage-header-actions">{action}</span>
         </header>

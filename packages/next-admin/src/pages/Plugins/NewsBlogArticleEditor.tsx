@@ -5,14 +5,16 @@ import {
     blogCategories,
     blogCategoryLabels,
     emptyBlogDraft,
+    skillDomains,
+    skillProfileBody,
     type BlogDraft,
+    type BlogSkillProfile,
 } from '../../../../storefront-content-plugin/src/shared/news-blog';
 import { getAdminQueryScope } from '../../apollo';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
-import { ImageAssetUploadButton } from '../../components/ImageAssetUploadButton';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery } from '../../hooks/use-admin-query';
 import { useServerDraft } from '../../hooks/use-server-draft';
@@ -74,6 +76,17 @@ export function NewsBlogArticleEditor({
         busy = saveState.loading || requestState.loading || publishState.loading || withdrawState.loading;
     const update = (patch: Partial<BlogDraft>) =>
         server.setDraft(value => (value ? { ...value, draft: { ...value.draft, ...patch } } : value));
+    const updateProfile = (patch: Partial<BlogSkillProfile>) => {
+        const profile = server.draft?.draft.skillProfile;
+        if (!profile) return;
+        const next = { ...profile, ...patch };
+        update({
+            skillProfile: next,
+            title: next.displayName,
+            summary: next.purpose,
+            body: skillProfileBody(next),
+        });
+    };
     const accept = (value?: BlogAdminArticle) => {
         if (value && getAdminQueryScope() === scope) {
             server.accept(value, String(value.version));
@@ -131,7 +144,14 @@ export function NewsBlogArticleEditor({
                         />
                     </AdminField>
                     <AdminField label="标题">
-                        <AdminInput value={body.title} onChange={e => update({ title: e.target.value })} />
+                        <AdminInput
+                            value={body.title}
+                            onChange={e =>
+                                body.skillProfile
+                                    ? updateProfile({ displayName: e.target.value })
+                                    : update({ title: e.target.value })
+                            }
+                        />
                     </AdminField>
                     {body.candidateTitles.length > 0 && (
                         <AdminField label="候选标题">
@@ -186,12 +206,94 @@ export function NewsBlogArticleEditor({
                         <AdminTextArea
                             rows={3}
                             value={body.summary}
-                            onChange={e => update({ summary: e.target.value })}
+                            onChange={e =>
+                                body.skillProfile
+                                    ? updateProfile({ purpose: e.target.value })
+                                    : update({ summary: e.target.value })
+                            }
                         />
                     </AdminField>
+                    {body.skillProfile && (
+                        <section className="space-y-4" aria-label="Skill 用途资料">
+                            <AdminField label="主要领域">
+                                <AdminSelect
+                                    value={body.skillProfile.domain}
+                                    onChange={e =>
+                                        updateProfile({
+                                            domain: e.target.value as BlogSkillProfile['domain'],
+                                        })
+                                    }
+                                >
+                                    {Object.entries(skillDomains).map(([key, label]) => (
+                                        <option key={key} value={key}>
+                                            {label}
+                                        </option>
+                                    ))}
+                                </AdminSelect>
+                            </AdminField>
+                            <AdminField label="适合谁">
+                                <AdminInput
+                                    value={body.skillProfile.audience}
+                                    onChange={e => updateProfile({ audience: e.target.value })}
+                                />
+                            </AdminField>
+                            <AdminField label="适用行业（逗号分隔）">
+                                <AdminInput
+                                    value={body.skillProfile.industries.join('，')}
+                                    onChange={e =>
+                                        updateProfile({
+                                            industries: e.target.value.split(/[,，]/u).filter(Boolean),
+                                        })
+                                    }
+                                />
+                            </AdminField>
+                            {(
+                                [
+                                    ['capabilities', '能完成的任务'],
+                                    ['prerequisites', '使用前准备'],
+                                    ['limitations', '条件与限制'],
+                                ] as const
+                            ).map(([key, label]) => (
+                                <AdminField key={key} label={label + '（每行一条）'} layout="stacked">
+                                    <AdminTextArea
+                                        rows={3}
+                                        value={body.skillProfile![key].join('\n')}
+                                        onChange={e => updateProfile({ [key]: e.target.value.split('\n') })}
+                                    />
+                                </AdminField>
+                            ))}
+                            <AdminField label="示例输入" layout="stacked">
+                                <AdminTextArea
+                                    value={body.skillProfile.example.input}
+                                    onChange={e =>
+                                        updateProfile({
+                                            example: { ...body.skillProfile!.example, input: e.target.value },
+                                        })
+                                    }
+                                />
+                            </AdminField>
+                            <AdminField label="预期输出（非实测）" layout="stacked">
+                                <AdminTextArea
+                                    value={body.skillProfile.example.output}
+                                    onChange={e =>
+                                        updateProfile({
+                                            example: {
+                                                ...body.skillProfile!.example,
+                                                output: e.target.value,
+                                            },
+                                        })
+                                    }
+                                />
+                            </AdminField>
+                            <p className="text-sm text-slate-500">
+                                正文随用途资料更新，修改后需重新核对来源依据并发布。
+                            </p>
+                        </section>
+                    )}
                     <AdminField label="正文（Markdown 标题与纯文本段落）" layout="stacked">
                         <AdminTextArea
                             rows={18}
+                            readOnly={Boolean(body.skillProfile)}
                             value={body.body}
                             onChange={e => update({ body: e.target.value })}
                         />
@@ -261,7 +363,7 @@ export function NewsBlogArticleEditor({
                                 <FeatureHelpButton title="资讯原图候选" topic="news-blog.images" />
                             </h3>
                             <p className="text-sm text-slate-500">
-                                核对原文与图片用途后选择，所选图片将在发布前确认使用依据。
+                                历史采集素材可作为正文配图，列表封面使用分类主题。
                             </p>
                             <div className="grid gap-3 md:grid-cols-2">
                                 {body.sourceImages.map(image => (
@@ -273,7 +375,7 @@ export function NewsBlogArticleEditor({
                                                 alt={image.alt}
                                             />
                                         ) : (
-                                            <p>此图片尚未导入，可重做封面后重试。</p>
+                                            <p>此历史图片没有本站素材，暂时无法加入正文。</p>
                                         )}
                                         <p className="text-sm">{image.caption || image.alt || '原文配图'}</p>
                                         <a
@@ -286,12 +388,6 @@ export function NewsBlogArticleEditor({
                                         </a>
                                         {image.credit && <p className="text-sm">{image.credit}</p>}
                                         <div className="flex flex-wrap gap-2">
-                                            <AdminButton
-                                                disabled={!image.asset || busy}
-                                                onClick={() => update({ cover: image.asset! })}
-                                            >
-                                                选为封面
-                                            </AdminButton>
                                             <AdminButton
                                                 disabled={
                                                     !image.asset ||
@@ -377,36 +473,7 @@ export function NewsBlogArticleEditor({
                             </AdminButton>
                         </div>
                     ))}
-                    <div className="flex flex-wrap gap-2">
-                        <ImageAssetUploadButton
-                            label="上传替换封面"
-                            tags={['新闻博客']}
-                            onUploaded={assets => {
-                                const asset = assets[0];
-                                if (asset)
-                                    update({
-                                        cover: {
-                                            assetId: asset.id,
-                                            url: asset.preview,
-                                            alt: body.title,
-                                            generated: false,
-                                        },
-                                    });
-                            }}
-                        />
-                        <AdminButton
-                            disabled={busy || !current.id || server.dirty || server.sourceChanged}
-                            onClick={() => void task('MEDIA')}
-                        >
-                            重做封面
-                        </AdminButton>
-                        <AdminButton
-                            disabled={busy || !current.id || server.dirty || server.sourceChanged}
-                            onClick={() => void task('MEDIA', { templateOnly: true })}
-                        >
-                            使用主题封面
-                        </AdminButton>
-                    </div>
+                    <p className="text-sm text-slate-500">封面按文章分类统一渲染，无需上传或生成图片。</p>
                     <AdminButton
                         className="bg-slate-900 text-white"
                         disabled={busy || server.sourceChanged}
@@ -436,13 +503,6 @@ export function NewsBlogArticleEditor({
                         图文预览与核对
                         <FeatureHelpButton title="图文预览与核对" topic="news-blog.preview" />
                     </h3>
-                    {body.cover && (
-                        <img
-                            className="aspect-video w-full rounded-lg object-cover"
-                            src={body.cover.url}
-                            alt={body.cover.alt}
-                        />
-                    )}
                     <h2 className="break-words text-xl font-semibold">{body.title || '文章标题'}</h2>
                     <p className="text-slate-500">{body.summary}</p>
                     {blogBodySections(body.body).map((section, index) => (

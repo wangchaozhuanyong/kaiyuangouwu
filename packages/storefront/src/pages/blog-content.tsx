@@ -5,6 +5,7 @@ import {
     blogBodySections,
     blogCategories,
     blogCategoryLabels,
+    skillDomains,
     type BlogCover,
     type BlogFormat,
     type BlogListInput,
@@ -12,8 +13,12 @@ import {
     type BlogPublishedArticle,
 } from '../../../storefront-content-plugin/src/shared/news-blog';
 import { publicLocalizedHref } from '../../../storefront-content-plugin/src/shared/public-page-data';
+import { PageBackLink } from '../components/common/page-back-link';
 import { SafeImage } from '../safe-image';
+import { SubHeader } from '../storefront-ui/page-shell';
 import '../styles/blog.css';
+
+import { BlogTheme } from './blog-theme';
 
 const href = (slug?: string) =>
     publicLocalizedHref(slug ? `/blog/${encodeURIComponent(slug)}` : '/blog', 'zh_Hans');
@@ -43,27 +48,26 @@ function ArticleLabels({ article, featured = false }: { article: BlogPublishedAr
     return (
         <div className="blog-labels">
             <span className="blog-category-tag type-helper">{blogCategoryLabels[article.category]}</span>
+            {article.skillProfile && (
+                <span className="blog-category-tag type-helper">
+                    {skillDomains[article.skillProfile.domain]}
+                </span>
+            )}
             <span className="blog-muted type-helper">
-                {featured ? '本期精选' : formatLabels[article.format]}
+                {article.skillProfile
+                    ? article.tags
+                          .filter(
+                              tag =>
+                                  tag !== article.skill?.name &&
+                                  tag !== skillDomains[article.skillProfile?.domain ?? 'general'],
+                          )
+                          .slice(0, 2)
+                          .join(' · ') || '用途指南'
+                    : featured
+                      ? '本期精选'
+                      : formatLabels[article.format]}
             </span>
         </div>
-    );
-}
-function Cover({ article, eager = false }: { article: BlogPublishedArticle; eager?: boolean }) {
-    return article.cover ? (
-        <SafeImage
-            src={article.cover.url}
-            alt={article.cover.alt}
-            loading={eager ? 'eager' : 'lazy'}
-            imageKind="hero"
-            width={1600}
-            height={900}
-        />
-    ) : (
-        <span className="blog-cover-placeholder" aria-hidden="true">
-            <BookOpen />
-            <span className="type-section">{blogCategoryLabels[article.category]}</span>
-        </span>
     );
 }
 function ImageCaption({ image }: { image: BlogCover }) {
@@ -118,14 +122,20 @@ export function BlogContent({
                 data-image-kind={article.cover?.kind}
                 aria-label={`阅读：${article.title}`}
             >
-                <Cover article={article} eager={isFeatured} />
+                <BlogTheme article={article} />
             </a>
             <div className="blog-card-copy">
                 <ArticleLabels article={article} featured={isFeatured} />
                 <h2 className={isFeatured ? 'type-page' : 'type-section'}>
-                    <a {...link(href(article.slug))}>{article.title}</a>
+                    <a {...link(href(article.slug))}>{article.skillProfile?.displayName ?? article.title}</a>
                 </h2>
-                <p className="blog-card-summary type-body">{article.summary}</p>
+                {article.skill && <p className="blog-skill-name type-meta">{article.skill.name}</p>}
+                <p className="blog-card-summary type-body">
+                    {article.skillProfile?.purpose ?? article.summary}
+                </p>
+                {article.skillProfile && (
+                    <p className="blog-muted type-helper">适合：{article.skillProfile.audience}</p>
+                )}
                 {article.skill && (
                     <p className="blog-skill-metric type-helper">
                         <span aria-hidden="true">★</span> 仓库 {article.skill.stars.toLocaleString('zh-CN')}{' '}
@@ -163,6 +173,18 @@ export function BlogContent({
         const updatedAt = article.updatedAt ?? article.reviewedAt ?? article.publishedAt;
         return (
             <main className="page subpage blog-page blog-detail-page" aria-label={article.title}>
+                <SubHeader
+                    title={article.skill ? 'Skill 介绍' : '资讯详情'}
+                    language="zh"
+                    back={
+                        <PageBackLink
+                            href={href() + `?category=${article.category}`}
+                            onClick={navigate(href() + `?category=${article.category}`)}
+                            label="返回新闻博客"
+                        />
+                    }
+                    backLabel="返回新闻博客"
+                />
                 <nav className="blog-breadcrumb type-label" aria-label="当前位置">
                     <a {...link(href())}>← 新闻博客</a>
                     <span aria-hidden="true">/</span>
@@ -175,40 +197,53 @@ export function BlogContent({
                 <article className="blog-article">
                     <header className="blog-article-header">
                         <ArticleLabels article={article} />
-                        <h1 className="type-page">{article.title}</h1>
+                        <h1 className="type-page">{article.skillProfile?.displayName ?? article.title}</h1>
+                        {article.skill && <p className="blog-skill-name type-helper">{article.skill.name}</p>}
                         <p className="blog-article-summary type-reading">{article.summary}</p>
+                        {article.skillProfile && (
+                            <p className="blog-profile-audience type-body">
+                                <strong>适合谁：</strong>
+                                {article.skillProfile.audience}
+                                {article.skillProfile.industries.length > 0 && (
+                                    <span> · 适用行业：{article.skillProfile.industries.join('、')}</span>
+                                )}
+                            </p>
+                        )}
                         <DateLine article={article} />
+                        {article.skill && (
+                            <a
+                                className="blog-detail-github blog-primary-link type-action"
+                                href={article.skill.repositoryUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                查看 GitHub 仓库 <ArrowUpRight aria-hidden="true" />
+                            </a>
+                        )}
                         <p className="blog-attribution type-helper">
                             {article.publicationMode === 'AUTOMATIC'
-                                ? '自动整理'
+                                ? article.skillProfile
+                                    ? '中文编辑整理'
+                                    : '自动整理'
                                 : `AI 整理 · ${article.reviewerName ?? '编辑'} 审核`}
                             <span>
                                 更新于 <time dateTime={updatedAt}>{dateLabel(updatedAt)}</time>
                             </span>
                         </p>
                     </header>
-                    {article.cover && (
-                        <figure className="blog-article-cover">
-                            <div className="blog-cover" data-image-kind={article.cover?.kind}>
-                                <Cover article={article} eager />
-                            </div>
-                            <figcaption className="blog-muted type-meta">
-                                <ImageCaption image={article.cover} />
-                            </figcaption>
-                        </figure>
-                    )}
+                    <div className="blog-article-cover">
+                        <BlogTheme article={article} />
+                    </div>
                     <aside className="blog-sidebar">
                         {article.skill && (
                             <section className="blog-skill-info" aria-label="Skill 来源与热度">
                                 <span className="blog-muted type-helper">
                                     {article.skill.trend === 'RECENT' ? '近期热门 Skill' : '长期热门 Skill'}
                                 </span>
-                                <h2 className="type-section">{article.skill.name}</h2>
                                 <p className="blog-muted type-body">{article.skill.repository}</p>
-                                <div className="blog-skill-stars">
-                                    <strong>{article.skill.stars.toLocaleString('zh-CN')}</strong>
-                                    <span className="blog-muted type-helper">仓库 Star</span>
-                                </div>
+                                <p className="blog-muted type-helper">
+                                    GitHub 仓库 {article.skill.stars.toLocaleString('zh-CN')} Star
+                                </p>
                                 <a
                                     className="blog-primary-link type-action"
                                     href={article.skill.repositoryUrl}
@@ -242,8 +277,8 @@ export function BlogContent({
                                 </p>
                             </section>
                         )}
-                        {headings.length > 0 && (
-                            <details className="blog-toc" open>
+                        {headings.length > 3 && (
+                            <details className="blog-toc">
                                 <summary className="type-label">
                                     文章目录{' '}
                                     <span className="blog-muted type-meta">{headings.length} 节</span>
@@ -373,9 +408,18 @@ export function BlogContent({
     return (
         <main className="page subpage blog-page" aria-label={page.title}>
             <h1 className="sr-only">{page.title}</h1>
-            <a className="blog-mobile-back type-label" {...link(publicLocalizedHref('/', 'zh_Hans'))}>
-                ← 返回首页
-            </a>
+            <SubHeader
+                title="新闻博客"
+                language="zh"
+                back={
+                    <PageBackLink
+                        href={publicLocalizedHref('/', 'zh_Hans')}
+                        onClick={navigate(publicLocalizedHref('/', 'zh_Hans'))}
+                        label="返回首页"
+                    />
+                }
+                backLabel="返回首页"
+            />
             <div className="blog-toolbar">
                 <nav className="blog-categories" aria-label="文章分类">
                     {['', ...blogCategories].map(category => (

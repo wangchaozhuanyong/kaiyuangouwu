@@ -6,7 +6,7 @@
     width: 100%;
     max-width: var(--experience-content-max);
     margin-inline: auto;
-    padding: var(--space-major) var(--experience-page-gutter-mobile) var(--space-48);
+    padding: 0 var(--experience-page-gutter-mobile) var(--space-48);
     color: var(--text);
 }
 .blog-page :where(h1, h2, h3, p, figure) {
@@ -112,14 +112,14 @@
 }
 .blog-feature {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     align-items: center;
     gap: var(--space-major);
     padding: var(--space-card);
 }
 .blog-cover {
     display: block;
-    aspect-ratio: 16 / 9;
+    height: 120px;
     min-width: 0;
     overflow: hidden;
     border-radius: var(--skin-control-radius);
@@ -207,6 +207,11 @@
 }
 .blog-card-footer-skill .blog-card-actions {
     flex-basis: 100%;
+    justify-content: space-between;
+    margin-inline-start: 0;
+}
+.blog-card-footer-skill .blog-primary-link {
+    margin-inline-start: auto;
 }
 .blog-read-link,
 .blog-primary-link,
@@ -344,7 +349,7 @@
     display: grid;
     grid-template-columns: minmax(0, var(--experience-reading-max)) 240px;
     justify-content: center;
-    grid-template-areas: 'intro sidebar' 'cover sidebar' 'body sidebar';
+    grid-template-areas: 'cover sidebar' 'intro sidebar' 'body sidebar';
     align-items: start;
     column-gap: var(--space-48);
     row-gap: var(--space-major);
@@ -534,7 +539,7 @@
     }
     .blog-article {
         grid-template-columns: minmax(0, 1fr);
-        grid-template-areas: 'intro' 'cover' 'sidebar' 'body';
+        grid-template-areas: 'cover' 'intro' 'body' 'sidebar';
         padding: var(--space-card);
     }
     .blog-sidebar {
@@ -587,7 +592,7 @@
         grid-template-columns: minmax(0, 1fr);
     }
     .blog-skill-info .blog-read-link {
-        justify-self: center;
+        justify-self: start;
     }
     .blog-pagination {
         gap: var(--space-8);
@@ -600,4 +605,93 @@
 
 .blog-cover[data-image-kind='SOURCE'] img {
     object-fit: contain;
+}
+
+/* Product/category artwork uses the shared semantic icon palette in both skins. */
+.blog-theme {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-16);
+    height: 120px;
+    padding: var(--space-24);
+    overflow: hidden;
+    color: var(--semantic-icon-foreground, var(--accent-ink));
+    background: color-mix(in srgb, var(--semantic-icon-foreground, var(--accent-ink)) 10%, var(--surface));
+    border-radius: var(--skin-control-radius);
+}
+.blog-theme-copy {
+    display: grid;
+    gap: var(--space-8);
+    min-width: 0;
+}
+.blog-theme-symbol {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 88px;
+    height: 88px;
+    border-radius: var(--skin-card-radius);
+    background: color-mix(in srgb, currentColor 8%, transparent);
+    transform: rotate(-8deg);
+}
+.blog-theme-symbol svg {
+    width: 60px;
+    height: 60px;
+}
+.blog-skill-name {
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+.blog-profile-audience {
+    padding: var(--space-12) var(--space-16);
+    background: var(--control-surface);
+    border-radius: var(--skin-control-radius);
+}
+.blog-card:has(.blog-card-footer-skill) .blog-card-summary {
+    display: block;
+}
+.blog-page > .subpage-header {
+    width: calc(100% + 2 * var(--experience-page-gutter-mobile));
+    margin-inline: calc(-1 * var(--experience-page-gutter-mobile));
+}
+.blog-detail-github {
+    display: none;
+}
+@media (min-width: 1024px) {
+    .blog-page > .subpage-header {
+        width: 100%;
+        margin-inline: 0;
+    }
+    .blog-feature {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    }
+    .blog-feature .blog-cover,
+    .blog-feature .blog-theme {
+        height: 100%;
+        min-height: 180px;
+    }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+    .blog-page > .subpage-header {
+        width: calc(100% + 2 * var(--experience-page-gutter-tablet));
+        margin-inline: calc(-1 * var(--experience-page-gutter-tablet));
+    }
+}
+@media (max-width: 1023px) {
+    .blog-detail-github {
+        display: inline-flex;
+        justify-self: start;
+    }
+    .blog-sidebar .blog-skill-info .blog-primary-link {
+        display: none;
+    }
+}
+@media (max-width: 390px) {
+    .blog-card-footer-skill .blog-primary-link {
+        padding-inline: var(--space-12);
+    }
+    .blog-card-footer-skill .blog-card-actions {
+        gap: var(--space-8);
+    }
 }

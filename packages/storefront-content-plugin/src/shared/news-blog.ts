@@ -50,8 +50,50 @@ export interface BlogSkillInfo {
     observedAt: string;
     sourceCommit: string;
 }
+export const skillDomains = {
+    development: '软件开发',
+    design: '设计创作',
+    media: '视频音频',
+    office: '办公效率',
+    marketing: '运营营销',
+    commerce: '电商经营',
+    data: '数据分析',
+    research: '教育科研',
+    general: '通用工具',
+} as const;
+/** Editorial copy is separate from machine-owned identity and popularity. */
+export interface BlogSkillProfile {
+    domain: keyof typeof skillDomains;
+    displayName: string;
+    purpose: string;
+    audience: string;
+    industries: string[];
+    capabilities: string[];
+    example: { input: string; output: string };
+    prerequisites: string[];
+    limitations: string[];
+}
+export function skillProfileBody(profile: BlogSkillProfile): string {
+    return [
+        '## 解决什么问题',
+        profile.purpose,
+        '适合：' + profile.audience,
+        '## 能完成哪些任务',
+        ...profile.capabilities.map((x, i) => `${i + 1}. ${x}`),
+        '## 使用示例',
+        '以下是根据文档整理的需求示例，并非本站实测结果。',
+        '输入需求：' + profile.example.input,
+        '预期输出：' + profile.example.output,
+        '## 如何开始',
+        ...profile.prerequisites,
+        '请从本页的 Skill 原文与 GitHub 入口查看安装和使用说明。',
+        '## 条件与限制',
+        ...profile.limitations,
+    ].join('\n\n');
+}
 export interface BlogDraft {
     skill?: BlogSkillInfo;
+    skillProfile?: BlogSkillProfile;
     sourceImages?: BlogSourceImage[];
     title: string;
     summary: string;

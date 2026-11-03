@@ -206,11 +206,15 @@ describe('request-local public SEO preparation', () => {
         expect(test.pages.getAccessMode).toHaveBeenCalledOnce();
     });
 
-    it('uses the reviewed blog article metadata and absolute image while retaining the store noindex rule', async () => {
+    it('uses article metadata and the store sharing image without reusing the legacy cover', async () => {
         const test = fixture();
         test.ctx.languageCode = LanguageCode.zh_Hans;
         test.page.request = { kind: 'blog', id: 'verified-update', input: {} };
-        test.page.config = { ...test.page.config, customFields: { storefrontNameZh: '测试店铺' } } as never;
+        test.page.config = {
+            ...test.page.config,
+            logoUrl: '/assets/store-logo.webp',
+            customFields: { storefrontNameZh: '测试店铺' },
+        } as never;
         test.profile.descriptionZh = '中文店铺说明';
         test.page.blog = {
             title: '栏目标题',
@@ -245,12 +249,12 @@ describe('request-local public SEO preparation', () => {
         expect(enriched.seo?.title).toContain('审核后的具体更新');
         expect(enriched.seo?.shareTitle).toContain('审核后的具体更新');
         expect(enriched.seo?.description).toBe('文章说明');
-        expect(enriched.seo?.image).toBe('/assets/cover.webp');
+        expect(enriched.seo?.image).toBe('/assets/store-logo.webp');
         expect(enriched.seo?.indexable).toBe(false);
         expect(enriched.seo?.structuredData).toContainEqual(
             expect.objectContaining({
                 '@type': 'BlogPosting',
-                image: [`https://${test.host}/assets/cover.webp`],
+                image: [`https://${test.host}/assets/store-logo.webp`],
             }),
         );
     });

@@ -108,29 +108,33 @@ export class BlogService {
     }
     async settingsView(ctx: RequestContext) {
         const row = await this.settings(ctx);
-        const skillStatus = this.config(row).skillEnabled
-            ? (
-                  await this.connection.rawConnection
-                      .getRepository(BlogSkillState)
-                      .findOneBy({ code: 'catalog' })
-              )?.message
-            : undefined;
+        const codex = this.config(row).skillEditorialMode === 'CODEX';
+        const skillStatus = codex
+            ? '由 Codex 每天整理一篇，来源校验通过后发布；结果见运行记录。'
+            : this.config(row).skillEnabled
+              ? (
+                    await this.connection.rawConnection
+                        .getRepository(BlogSkillState)
+                        .findOneBy({ code: 'catalog' })
+                )?.message
+              : undefined;
         return {
             historyWindow: previousMonth(),
             skillStatus,
-            skillCandidates: this.config(row).skillEnabled
-                ? (
-                      await this.connection.rawConnection
-                          .getRepository(BlogSkill)
-                          .find({ order: { checkedAt: 'DESC' }, take: 30 })
-                  ).map(x => ({
-                      name: x.name,
-                      repository: x.repository,
-                      status: x.status,
-                      message: x.message,
-                      stars: JSON.parse(x.evidenceJson).stars,
-                  }))
-                : [],
+            skillCandidates:
+                !codex && this.config(row).skillEnabled
+                    ? (
+                          await this.connection.rawConnection
+                              .getRepository(BlogSkill)
+                              .find({ order: { checkedAt: 'DESC' }, take: 30 })
+                      ).map(x => ({
+                          name: x.name,
+                          repository: x.repository,
+                          status: x.status,
+                          message: x.message,
+                          stars: JSON.parse(x.evidenceJson).stars,
+                      }))
+                    : [],
             ...this.config(row),
             enabled: row.enabled,
             automationEnabled: row.automationEnabled,
@@ -142,6 +146,8 @@ export class BlogService {
     async saveSettings(ctx: RequestContext, raw: Record<string, unknown>, expectedVersion: number) {
         const row = await this.settings(ctx);
         const config = this.config(row);
+        config.skillEditorialMode = 'CODEX';
+        config.coverMode = 'CATEGORY';
         config.freeMode = raw.freeMode === true;
         config.freeAutoPublish = config.freeMode && raw.freeAutoPublish === true;
         for (const key of [
@@ -444,7 +450,7 @@ export class BlogService {
                 }),
             );
         }
-        if (!draft.cover)
+        if (!draft.cover && this.config(await this.settings(ctx)).coverMode === 'LEGACY')
             await this.request(ctx, 'MEDIA', `template:${row.id}:${row.version}`, {
                 articleId: String(row.id),
                 expectedVersion: row.version,
@@ -661,6 +667,7 @@ export class BlogService {
                 }
             }
             if (kind === 'SKILL' || kind === 'SKILL_REVIEW') {
+                if (config.skillEditorialMode !== 'LEGACY') throw new Error('请使用 Codex 中文精选导入');
                 if (!config.skillEnabled || !input.recommendationId)
                     throw new Error('Skill 自动更新尚未启用或缺少推荐记录');
                 const rec = await this.connection
@@ -697,6 +704,7 @@ export class BlogService {
                 : kind === 'GENERATE' || kind === 'SECTION' || kind === 'SKILL' || kind === 'SKILL_REVIEW'
                   ? config.textReserveMicros
                   : kind === 'MEDIA' &&
+                      config.coverMode === 'LEGACY' &&
                       !input.candidatesOnly &&
                       !input.templateOnly &&
                       config.imageProviderCode &&

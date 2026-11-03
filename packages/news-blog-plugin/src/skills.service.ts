@@ -50,7 +50,9 @@ export class BlogSkillsService {
         const settings = await this.connection.rawConnection
             .getRepository(BlogSettings)
             .find({ where: { enabled: true } });
-        const enabled = settings.filter(x => this.blog.config(x).skillEnabled);
+        const enabled = settings.filter(
+            x => this.blog.config(x).skillEnabled && this.blog.config(x).skillEditorialMode === 'LEGACY',
+        );
         if (!enabled.length) return;
         await this.catalog.refresh(now);
         for (const row of enabled) {
@@ -92,6 +94,7 @@ export class BlogSkillsService {
     ) {
         const settings = await this.blog.settings(ctx);
         const config = this.blog.config(settings);
+        if (config.skillEditorialMode !== 'LEGACY') return;
         const { day, time } = skillWindow(now);
         if (!settings.enabled || !config.skillEnabled) return;
         // A just-enabled store can publish once before its normal time; a store with history waits for the configured slot.
