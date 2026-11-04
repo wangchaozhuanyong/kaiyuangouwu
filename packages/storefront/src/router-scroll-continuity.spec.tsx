@@ -12,7 +12,7 @@ import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 
 import { useStorefrontScrollContinuity } from './hooks/useStorefrontScrollContinuity';
-import { createStorefrontScrollRestorationKey } from './storefront-router';
+import { createStorefrontScrollRestorationKey, getStorefrontScrollRestorationKey } from './storefront-router';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 // jsdom runs in Node, but this regression exercises the browser implementation.
@@ -305,3 +305,121 @@ it.each(['restore', 'interaction', 'superseded', 'leave-pending'] as const)(
         }
     },
 );
+
+it.each([
+    'late-content',
+    'cached-content',
+    'saved-scroll',
+    'disabled',
+    'interaction',
+    'navigate-away',
+] as const)('restores an initial document anchor after content commits: %s', async outcome => {
+    let y = 0;
+    let reveal!: () => void;
+    const originalScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+        configurable: true,
+        value(this: HTMLElement) {
+            if (this.id === 'chapter') y = 600;
+        },
+    });
+    vi.spyOn(window, 'scrollY', 'get').mockImplementation(() => y);
+    vi.spyOn(window, 'scrollTo').mockImplementation((options: ScrollToOptions | number) => {
+        y = typeof options === 'object' ? (options.top ?? 0) : 0;
+    });
+    function ArticleBody() {
+        const [ready, setReady] = useState(outcome === 'cached-content');
+        useLayoutEffect(() => {
+            reveal = () => setReady(true);
+        }, []);
+        useLayoutEffect(() => {
+            if (ready) document.dispatchEvent(new Event('storefront:page-ready'));
+        }, [ready]);
+        return ready ? (
+            <article>
+                <h2 id="chapter">Chapter</h2>
+            </article>
+        ) : (
+            <article>Reading article</article>
+        );
+    }
+    function NextPage() {
+        useLayoutEffect(() => {
+            document.dispatchEvent(new Event('storefront:page-ready'));
+        }, []);
+        return (
+            <article>
+                <h2 id="chapter">Other page</h2>
+            </article>
+        );
+    }
+    const rootRoute = createRootRoute({
+        component: () => {
+            useStorefrontScrollContinuity();
+            return <Outlet />;
+        },
+    });
+    const history = createMemoryHistory({ initialEntries: ['/article#chapter'] });
+    if (outcome === 'disabled') history.replace('/article#chapter', { __hashScrollIntoViewOptions: false });
+    const router = createRouter({
+        routeTree: rootRoute.addChildren([
+            createRoute({ getParentRoute: () => rootRoute, path: '/article', component: ArticleBody }),
+            createRoute({ getParentRoute: () => rootRoute, path: '/next', component: NextPage }),
+        ]),
+        history,
+        scrollRestoration: true,
+        getScrollRestorationKey: getStorefrontScrollRestorationKey,
+    });
+    const host = document.createElement('div');
+    document.body.append(host);
+    let root = createRoot(host);
+    try {
+        await act(async () => {
+            await router.load();
+            root.render(<RouterProvider router={router} />);
+        });
+        await act(async () => new Promise(resolve => setTimeout(resolve, 20)));
+        if (outcome === 'saved-scroll') {
+            act(() => {
+                y = 850;
+                document.dispatchEvent(new Event('scroll'));
+                window.dispatchEvent(new Event('pagehide'));
+            });
+            act(() => root.unmount());
+            y = 0;
+            root = createRoot(host);
+            act(() => root.render(<RouterProvider router={router} />));
+        }
+        if (outcome === 'navigate-away') {
+            await act(async () => {
+                await router.navigate({ to: '/next' } as never);
+            });
+            expect(y).toBe(0);
+        } else {
+            if (outcome === 'interaction') {
+                y = 40;
+                document.dispatchEvent(new Event('wheel'));
+            }
+            act(() => reveal());
+            expect(y).toBe(
+                outcome === 'disabled'
+                    ? 0
+                    : outcome === 'interaction'
+                      ? 40
+                      : outcome === 'saved-scroll'
+                        ? 850
+                        : 600,
+            );
+        }
+        y = 25;
+        document.dispatchEvent(new Event('storefront:page-ready'));
+        expect(y).toBe(25);
+    } finally {
+        act(() => root.unmount());
+        host.remove();
+        if (originalScrollIntoView)
+            Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScrollIntoView);
+        else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
+        vi.restoreAllMocks();
+    }
+});

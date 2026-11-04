@@ -23,21 +23,28 @@ export function useStorefrontScrollContinuity() {
         id: 'category-results',
         getKey: getStorefrontScrollRestorationKey,
     });
-    const target = useRef({
-        key: router.state.location.state.__TSR_key,
-        viewport: targetViewport,
-        catalog: targetCatalog,
-    });
-    target.current = {
+    const destination = {
         key: router.state.location.state.__TSR_key,
         viewport: targetViewport,
         catalog: targetCatalog,
     };
+    const target = useRef(destination);
+    target.current = destination;
 
     useLayoutEffect(() => {
-        let requested: string | undefined;
+        const lastMatch = () => router.state.matches.at(-1);
+        const initialLocation = router.state.location;
+        // Router may render before an asynchronous body exposes the document anchor.
+        let initialHash =
+            initialLocation.hash &&
+            initialLocation.state.__hashScrollIntoViewOptions !== false &&
+            !document.getElementById(initialLocation.hash)
+                ? initialLocation.hash
+                : undefined;
+        let requested = initialHash && initialLocation.state.__TSR_key;
         const before = router.subscribe('onBeforeNavigate', event => {
-            sourceMatch.current = router.state.matches.at(-1)?.id;
+            initialHash = undefined;
+            sourceMatch.current = lastMatch()?.id;
             requested = event.toLocation.state.__TSR_key;
             // The installed Router snapshots tracked targets synchronously at
             // onBeforeLoad. Register them before that snapshot, including zero.
@@ -45,21 +52,22 @@ export function useStorefrontScrollContinuity() {
             document.querySelector(catalogSelector)?.dispatchEvent(new Event('scroll'));
         });
         const cancel = () => {
+            const { viewport: targetViewportEntry, catalog: targetCatalogEntry } = target.current;
             if (
                 requested &&
                 requested === target.current.key &&
-                router.state.matches.at(-1)?.pathname === router.state.location.pathname
+                lastMatch()?.pathname === router.state.location.pathname
             ) {
                 // An interaction on the target supersedes both our supplement
                 // and a Router restore that is still waiting for route code.
-                if (target.current.viewport)
-                    Object.assign(target.current.viewport, {
+                if (targetViewportEntry)
+                    Object.assign(targetViewportEntry, {
                         scrollX: window.scrollX,
                         scrollY: window.scrollY,
                     });
                 const element = document.querySelector<HTMLElement>(catalogSelector);
-                if (element && target.current.catalog)
-                    Object.assign(target.current.catalog, {
+                if (element && targetCatalogEntry)
+                    Object.assign(targetCatalogEntry, {
                         scrollX: element.scrollLeft,
                         scrollY: element.scrollTop,
                     });
@@ -67,11 +75,12 @@ export function useStorefrontScrollContinuity() {
             requested = undefined;
         };
         const ready = () => {
+            const match = lastMatch();
             if (
                 !requested ||
                 requested !== target.current.key ||
-                router.state.matches.at(-1)?.pathname !== router.state.location.pathname ||
-                router.state.matches.at(-1)?.status !== 'success'
+                match?.pathname !== router.state.location.pathname ||
+                match?.status !== 'success'
             )
                 return;
             requested = undefined;
@@ -82,6 +91,7 @@ export function useStorefrontScrollContinuity() {
                     top: targetViewportEntry.scrollY,
                     behavior: 'instant',
                 });
+            else if (initialHash) document.getElementById(initialHash)?.scrollIntoView();
             const element = document.querySelector<HTMLElement>(catalogSelector);
             if (element && targetCatalogEntry) {
                 element.scrollLeft = targetCatalogEntry.scrollX;
