@@ -84,6 +84,32 @@ function ImageCaption({ image }: { image: BlogCover }) {
         <span>{image.kind === 'TEMPLATE' ? '主题封面' : image.generated ? 'AI 示意图' : '文章配图'}</span>
     );
 }
+function ArticleDirectory({
+    headings,
+    className,
+}: {
+    headings: ReadonlyArray<{ id: string; title: string }>;
+    className: string;
+}) {
+    if (headings.length <= 3) return null;
+    return (
+        <details className={`blog-toc ${className}`}>
+            <summary className="type-label">
+                文章目录 <span className="blog-muted type-meta">{headings.length} 节</span>
+            </summary>
+            <nav aria-label="文章目录">
+                {headings.map((section, index) => (
+                    <a className="type-label" key={section.id} href={`#${section.id}`}>
+                        <span className="blog-toc-number type-meta" aria-hidden="true">
+                            {String(index + 1).padStart(2, '0')}
+                        </span>
+                        {section.title}
+                    </a>
+                ))}
+            </nav>
+        </details>
+    );
+}
 export function BlogContent({
     page,
     input = {},
@@ -249,6 +275,7 @@ export function BlogContent({
                             </span>
                         </p>
                     </header>
+                    <ArticleDirectory headings={headings} className="blog-toc-inline" />
                     <div className="blog-article-cover">
                         <BlogTheme article={article} />
                     </div>
@@ -295,24 +322,7 @@ export function BlogContent({
                                 </p>
                             </section>
                         )}
-                        {headings.length > 3 && (
-                            <details className="blog-toc">
-                                <summary className="type-label">
-                                    文章目录{' '}
-                                    <span className="blog-muted type-meta">{headings.length} 节</span>
-                                </summary>
-                                <nav aria-label="文章目录">
-                                    {headings.map((section, index) => (
-                                        <a className="type-label" key={section.id} href={`#${section.id}`}>
-                                            <span className="blog-toc-number type-meta" aria-hidden="true">
-                                                {String(index + 1).padStart(2, '0')}
-                                            </span>
-                                            {section.title}
-                                        </a>
-                                    ))}
-                                </nav>
-                            </details>
-                        )}
+                        <ArticleDirectory headings={headings} className="blog-toc-sidebar" />
                     </aside>
                     <div className="blog-reading-body">
                         {isSkill ? (
