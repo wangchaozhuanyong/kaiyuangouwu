@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import {
+    blogCategories,
     emptyBlogDraft,
     type BlogPublicPage,
     type BlogPublishedArticle,
@@ -39,6 +40,22 @@ describe('news blog server-renderable content', () => {
         expect(html).toContain('method="get"');
         expect(html).toContain('name="term"');
         expect(html).toContain('aria-label="文章分类"');
+    });
+    it('shares one local vector library across repeated covers and resolves each category in the initial HTML', () => {
+        const items = [...blogCategories, 'chatgpt' as const].map((category, index) => ({
+            ...article,
+            category,
+            id: String(index),
+        }));
+        const html = renderToStaticMarkup(<BlogContent page={{ ...page, items, featured: null }} />);
+        expect(html.match(/class="blog-theme-library"/g)).toHaveLength(1);
+        expect(html).not.toContain('id="blog-results-title"');
+        for (const category of blogCategories) {
+            for (const prefix of ['blog-paper-', 'blog-art-', 'blog-masthead-']) {
+                expect(html.match(new RegExp(`id="${prefix}${category}"`, 'g'))).toHaveLength(1);
+                expect(html).toContain(`#${prefix}${category}`);
+            }
+        }
     });
     it('renders reviewed content, sources and directory while escaping markup', () => {
         const html = renderToStaticMarkup(<BlogContent page={{ ...page, article }} />);
