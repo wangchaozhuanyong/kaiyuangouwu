@@ -102,8 +102,8 @@ function AiImageStudioEntryPlugin({ language, onNavigate }: Readonly<ClientPlugi
 
 const toolCopy = {
     blog: [
-        ['新闻博客', 'AI 资讯与指南', '阅读'],
-        ['News blog', 'AI news', 'Read'],
+        ['新闻博客', 'AI 资讯、实用指南与 Skill 推荐', '阅读'],
+        ['News blog', 'AI news, practical guides, and recommended Skills', 'Read'],
     ],
     coupons: [
         ['先领券，再选购', '查看可领取的优惠券', '去领券'],
@@ -118,8 +118,8 @@ const toolCopy = {
         ['AI Image Studio', 'Improve your prompt, choose a model, and create images', 'Create'],
     ],
     'environment-monitor': [
-        ['环境监测', '浏览器与网络检测', '开始检测'],
-        ['Environment monitor', 'Browser and network checks', 'Open'],
+        ['环境监测', 'Claude环境检测', '开始检测'],
+        ['Environment monitor', 'Claude environment check', 'Open'],
     ],
     'two-factor': [
         ['2FA 动态码', '密钥不上传，在当前浏览器本地生成', '立即使用'],

@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest';
 import {
     blogCategories,
     emptyBlogDraft,
+    skillProfileBody,
     type BlogPublicPage,
     type BlogPublishedArticle,
+    type BlogSkillProfile,
 } from '../../storefront-content-plugin/src/shared/news-blog';
 
 import { BlogContent } from './pages/blog-content';
@@ -34,6 +36,19 @@ const page: BlogPublicPage = {
     relatedArticles: [],
 };
 describe('news blog server-renderable content', () => {
+    it.each([
+        [null, '/zh/', '返回首页'],
+        [article, '/zh/blog?category=chatgpt', '返回新闻博客'],
+        [{ ...article, category: 'skills' as const }, '/zh/blog?category=skills', '返回新闻博客'],
+    ] as const)('uses a single native return above the shared content body', (entry, backHref, label) => {
+        const html = renderToStaticMarkup(<BlogContent page={{ ...page, article: entry }} />);
+        const header = html.match(/<header class="topbar subpage-header"[^>]*>(.*?)<\/header>/u)?.[1];
+        expect(header).toContain(`href="${backHref}"`);
+        expect(header).toContain(`aria-label="${label}"`);
+        expect(html.match(/class="page-back-button"/gu)).toHaveLength(1);
+        expect(html).toMatch(/<\/header><div[^>]*class="subpage-body"/u);
+        expect(html).not.toContain('← 新闻博客');
+    });
     it('renders real article links and a GET search form before JavaScript', () => {
         const html = renderToStaticMarkup(<BlogContent page={page} />);
         expect(html).toContain('/zh/blog/official-update');
@@ -62,9 +77,77 @@ describe('news blog server-renderable content', () => {
         expect(html).toContain('id="section-1"');
         expect(html).not.toContain('class="blog-toc"');
         expect(html).toContain('本地验收编辑');
+        expect(html).not.toContain('skill-modules');
         expect(html).toContain('https://openai.com/news/');
         expect(html).toContain('&lt;script&gt;');
         expect(html).not.toContain('<script>alert(1)</script>');
+    });
+    it('shows a published Skill as anchored modules with one overview, a task list and a paired example', () => {
+        const profile: BlogSkillProfile = {
+            displayName: '任务交接',
+            domain: 'office',
+            purpose: '整理既有进展。',
+            audience: '换班的同事',
+            industries: ['技术支持'],
+            capabilities: ['提取待办', '引用检查记录'],
+            example: { input: '交接 <ticket>。', output: '交接文件。' },
+            prerequisites: ['准备上下文。'],
+            limitations: ['移除敏感内容。'],
+        };
+        const html = renderToStaticMarkup(
+            <BlogContent
+                page={{
+                    ...page,
+                    article: {
+                        ...article,
+                        category: 'skills',
+                        format: 'SKILL',
+                        skillProfile: profile,
+                        summary: profile.purpose,
+                        body: skillProfileBody(profile) + '\n## 编辑补充\n保留本次新增的说明。',
+                    },
+                }}
+            />,
+        );
+        expect(html.split(profile.purpose)).toHaveLength(2);
+        expect(html.split(profile.audience)).toHaveLength(2);
+        expect(html).toContain('技术支持');
+        expect(html).toMatch(/<ol class="skill-task-list"[^>]*><li>/u);
+        expect(html).toContain('交接 &lt;ticket&gt;。');
+        expect(html).toContain('<dl class="skill-example-pair">');
+        expect(html).toContain('并非本站实测结果');
+        expect(html).toContain('准备上下文。');
+        expect(html).toContain('移除敏感内容。');
+        expect(html).toContain('保留本次新增的说明。');
+        for (let n = 1; n <= 6; n++) {
+            expect(html).toContain(`href="#section-${n}"`);
+            expect(html.split(`id="section-${n}"`)).toHaveLength(2);
+        }
+    });
+    it('preserves a legacy Skill with custom paragraphs and an example without a matching output', () => {
+        const html = renderToStaticMarkup(
+            <BlogContent
+                page={{
+                    ...page,
+                    article: {
+                        ...article,
+                        category: 'skills',
+                        format: 'SKILL',
+                        body: '无标题前言。\n## 自定义标题\n编辑原文。\n## 使用示例\n输入需求：尚未整理输出。',
+                    },
+                }}
+            />,
+        );
+        for (const copy of [
+            article.summary,
+            '无标题前言。',
+            '自定义标题',
+            '编辑原文。',
+            '输入需求：尚未整理输出。',
+        ]) {
+            expect(html).toContain(copy);
+        }
+        expect(html).not.toContain('skill-example-pair');
     });
     it('renders a resolved empty result with an actionable search state', () => {
         const html = renderToStaticMarkup(
