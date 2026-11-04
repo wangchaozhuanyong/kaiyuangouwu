@@ -748,6 +748,78 @@ void test('read-only storefront inspection accepts an older running ancestor but
     );
 });
 
+void test('inspection refreshes only Git objects before verifying ancestry', () => {
+    const calls = [];
+    operations.refreshInspectionHistory('b'.repeat(40), sourceSha, (command, args, options) => {
+        calls.push({ command, args, options });
+    });
+    assert.deepEqual(
+        calls.map(call => call.args.slice(7)),
+        [
+            [
+                '-c',
+                'credential.helper=',
+                '-c',
+                'core.askPass=/usr/bin/false',
+                'fetch',
+                '--no-tags',
+                'https://github.com/wangchaozhuanyong/kaiyuangouwu.git',
+                'main',
+            ],
+            ['merge-base', '--is-ancestor', 'b'.repeat(40), sourceSha],
+        ],
+    );
+    assert.ok(calls.every(call => call.command === 'sudo' && call.options.timeout === 30000));
+    assert.ok(
+        calls.every(
+            call => call.args.slice(0, 7).join(' ') === '-n -H -u ubuntu git -C /var/www/kaiyuangouwu',
+        ),
+    );
+});
+
+for (const [code, stderr, expected] of [
+    ['ETIMEDOUT', 'PRIVATE_GIT_ERROR', 'ETIMEDOUT'],
+    ['', 'Connection reset by peer PRIVATE_GIT_ERROR', 'ECONNRESET'],
+    ['', 'Could not resolve hostname github.com PRIVATE_GIT_ERROR', 'EAI_AGAIN'],
+    ['', 'The requested URL returned error: 503 PRIVATE_GIT_ERROR', 'HTTP 503'],
+    ['', 'Permission denied (publickey) PRIVATE_GIT_ERROR', 'Permission denied'],
+    ['', 'PRIVATE_GIT_ERROR', 'FETCH_FAILED'],
+]) {
+    void test(`inspection reports only the safe Git refresh category: ${expected}`, () => {
+        assert.throws(
+            () =>
+                operations.assertStorefrontInspectionRevision('b'.repeat(40), sourceSha, (before, after) =>
+                    operations.refreshInspectionHistory(before, after, () => {
+                        throw Object.assign(new Error('PRIVATE_GIT_ERROR'), {
+                            code,
+                            stderr: Buffer.from(stderr),
+                        });
+                    }),
+                ),
+            error => {
+                assert.equal(error.message, `Production inspection Git history refresh failed: ${expected}`);
+                assert.ok(!error.message.includes('PRIVATE_GIT_ERROR'));
+                return true;
+            },
+        );
+    });
+}
+
+for (const status of [1, 128]) {
+    void test(`inspection distinguishes ancestry mismatch from missing Git history: ${status}`, () => {
+        assert.throws(
+            () =>
+                operations.assertStorefrontInspectionRevision('b'.repeat(40), sourceSha, (before, after) =>
+                    operations.refreshInspectionHistory(before, after, (_command, args) => {
+                        if (args[7] === 'merge-base')
+                            throw Object.assign(new Error('PRIVATE_GIT_ERROR'), { status });
+                    }),
+                ),
+            status === 1 ? /not an ancestor/u : /history is unavailable/u,
+        );
+    });
+}
+
 void test('inspection forwards only fixed query failure codes and never raw stderr', () => {
     const failure =
         'STOREFRONT_CONFIGURATION_QUERY_FAILED operation=ConfigurationGuardContent reason=TIMEOUT';

@@ -1654,28 +1654,70 @@ function diagnose(request) {
     return result;
 }
 
+class InspectionGitError extends Error {}
+
+function refreshInspectionHistory(deployedSha, sourceSha, execute = execFileSync) {
+    // Refresh objects only; a diagnostic must never checkout or advance the server working tree.
+    for (const args of [
+        // The reviewed repository is public. Read its history without depending
+        // on a server SSH identity or forwarding credentials to a Git helper.
+        [
+            '-c',
+            'credential.helper=',
+            '-c',
+            'core.askPass=/usr/bin/false',
+            'fetch',
+            '--no-tags',
+            'https://github.com/wangchaozhuanyong/kaiyuangouwu.git',
+            'main',
+        ],
+        ['merge-base', '--is-ancestor', deployedSha, sourceSha],
+    ]) {
+        try {
+            execute('sudo', ['-n', '-H', '-u', 'ubuntu', 'git', '-C', '/var/www/kaiyuangouwu', ...args], {
+                timeout: 30000,
+                stdio: ['ignore', 'pipe', 'pipe'],
+            });
+        } catch (error) {
+            if (!args.includes('fetch')) {
+                if (error.status === 1)
+                    throw new InspectionGitError(
+                        'Running storefront revision is not an ancestor of the reviewed inspection source',
+                    );
+                throw new InspectionGitError('Production inspection Git history is unavailable');
+            }
+            // Never forward Git stderr: it can contain private repository URLs or credentials.
+            const detail = `${error.code ?? ''}\n${error.stderr ?? ''}`;
+            const httpStatus = /(?:HTTP|error[: ]+)\s*(502|503|504)\b/iu.exec(detail)?.[1];
+            const reason = /ETIMEDOUT|timed out/iu.test(detail)
+                ? 'ETIMEDOUT'
+                : /ECONNRESET|connection.*reset/iu.test(detail)
+                  ? 'ECONNRESET'
+                  : /EAI_AGAIN|Could not resolve (?:host|hostname)/iu.test(detail)
+                    ? 'EAI_AGAIN'
+                    : httpStatus
+                      ? `HTTP ${httpStatus}`
+                      : /Permission denied|Authentication failed|could not read Username|Repository not found/iu.test(
+                              detail,
+                          )
+                        ? 'Permission denied'
+                        : 'FETCH_FAILED';
+            throw new InspectionGitError(`Production inspection Git history refresh failed: ${reason}`);
+        }
+    }
+}
+
 function assertStorefrontInspectionRevision(
     deployedSha,
     sourceSha,
-    checkAncestry = (before, after) => {
-        // Refresh objects only; a diagnostic must never checkout or advance the server working tree.
-        for (const args of [
-            ['fetch', 'origin', 'main'],
-            ['merge-base', '--is-ancestor', before, after],
-        ]) {
-            execFileSync(
-                'sudo',
-                ['-n', '-H', '-u', 'ubuntu', 'git', '-C', '/var/www/kaiyuangouwu', ...args],
-                { timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'] },
-            );
-        }
-    },
+    checkAncestry = refreshInspectionHistory,
 ) {
     assert.match(deployedSha, /^[0-9a-f]{40}$/u);
     assert.match(sourceSha, /^[0-9a-f]{40}$/u);
     try {
         checkAncestry(deployedSha, sourceSha);
-    } catch {
+    } catch (error) {
+        if (error instanceof InspectionGitError) throw error;
         throw new Error('Running storefront revision is not an ancestor of the reviewed inspection source');
     }
 }
@@ -3239,6 +3281,7 @@ module.exports = {
     applyOffsiteFileBackupConfig,
     frontendRevisionEvidence,
     assertStorefrontInspectionRevision,
+    refreshInspectionHistory,
     encodeBeforeReport,
     inspectProductionReleases,
     inspectDeploymentCacheCleanup,
