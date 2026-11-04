@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { type BlogPublicPage } from '../../../storefront-content-plugin/src/shared/news-blog';
 import {
     type PublicPageRequest,
     publicPageRequestKey,
@@ -40,6 +41,27 @@ export function BlogPage({ slug }: { slug?: string }) {
         'public-content',
         publicPageRequestKey(request),
     ];
+    // Published editorial text and links contain no currency prices. Reuse only
+    // this channel/language/request, keeping its response age in the root cache.
+    const publishedRead = client
+        .getQueryCache()
+        .findAll({
+            predicate: cached => {
+                const [owner, scope, previousLanguage, kind, identity] = cached.queryKey;
+                return (
+                    cached.queryKey.length === key.length &&
+                    owner === key[0] &&
+                    typeof scope === 'string' &&
+                    scope.startsWith(`${market.code}:`) &&
+                    /^[A-Z]{3}$/u.test(scope.slice(market.code.length + 1)) &&
+                    previousLanguage === key[2] &&
+                    kind === key[3] &&
+                    identity === key[4] &&
+                    cached.state.data !== undefined
+                );
+            },
+        })
+        .sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt)[0];
     const query = useQuery({
         queryKey: key,
         queryFn: async ({ signal }) => {
@@ -61,6 +83,8 @@ export function BlogPage({ slug }: { slug?: string }) {
         staleTime: 30000,
         retry: storefrontQueryRetry,
         meta: publicQueryMeta(),
+        initialData: publishedRead?.state.data as BlogPublicPage | null | undefined,
+        initialDataUpdatedAt: publishedRead?.state.dataUpdatedAt,
         placeholderData: (previous, previousQuery) =>
             storefrontPlaceholderData(previous, previousQuery?.queryKey, key),
     });
