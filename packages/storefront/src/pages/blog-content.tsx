@@ -18,7 +18,7 @@ import { SafeImage } from '../safe-image';
 import { SubHeader } from '../storefront-ui/page-shell';
 import '../styles/blog.css';
 
-import { BlogTheme } from './blog-theme';
+import { BlogTheme, BlogThemeLibrary } from './blog-theme';
 
 const href = (slug?: string) =>
     publicLocalizedHref(slug ? `/blog/${encodeURIComponent(slug)}` : '/blog', 'zh_Hans');
@@ -173,6 +173,7 @@ export function BlogContent({
         const updatedAt = article.updatedAt ?? article.reviewedAt ?? article.publishedAt;
         return (
             <main className="page subpage blog-page blog-detail-page" aria-label={article.title}>
+                <BlogThemeLibrary />
                 <SubHeader
                     title={article.skill ? 'Skill 介绍' : '资讯详情'}
                     language="zh"
@@ -407,6 +408,7 @@ export function BlogContent({
     const totalPages = Math.max(1, Math.ceil(page.totalItems / 12));
     return (
         <main className="page subpage blog-page" aria-label={page.title}>
+            {(featured || items.length > 0) && <BlogThemeLibrary />}
             <h1 className="sr-only">{page.title}</h1>
             <SubHeader
                 title="新闻博客"
@@ -461,6 +463,11 @@ export function BlogContent({
                         }}
                     />
                     {input.category && <input type="hidden" name="category" value={input.category} />}
+                    {input.term && (
+                        <a className="blog-read-link type-label" {...link(listUrl({ term: '', skip: 0 }))}>
+                            清除搜索
+                        </a>
+                    )}
                     <button className="type-label" type="submit">
                         搜索
                     </button>
@@ -468,23 +475,7 @@ export function BlogContent({
             </div>
             {featured && card(featured, true)}
             {(items.length > 0 || !featured) && (
-                <section className="blog-results" aria-labelledby="blog-results-title">
-                    <div className="blog-section-heading">
-                        <div>
-                            <h2 className="type-section" id="blog-results-title">
-                                {resultTitle}
-                            </h2>
-                            <span className="blog-muted type-helper">共 {page.totalItems} 篇</span>
-                        </div>
-                        {input.term && (
-                            <a
-                                className="blog-read-link type-label"
-                                {...link(listUrl({ term: '', skip: 0 }))}
-                            >
-                                清除搜索
-                            </a>
-                        )}
-                    </div>
+                <section className="blog-results" aria-label={resultTitle}>
                     {items.length ? (
                         <div className="blog-grid">{items.map(x => card(x))}</div>
                     ) : (
