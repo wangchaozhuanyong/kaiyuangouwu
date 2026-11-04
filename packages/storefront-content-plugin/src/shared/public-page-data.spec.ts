@@ -9,6 +9,7 @@ import {
     publicPageRequestFromUrl,
     publicPageRequestKey,
     publicPageRouteHref,
+    publicUnlocalizedPathname,
     storefrontNavigationCollections,
 } from './public-page-data';
 
@@ -77,6 +78,21 @@ describe('canonical public route requests', () => {
             'product-help',
         );
     });
+
+    it.each([
+        ['/zh/environment-monitor', 'zh_Hans'],
+        ['/en/environment-monitor', 'en'],
+    ] as const)(
+        'recognizes the language of %s without treating a manual scan as snapshot data',
+        (path, language) => {
+            expect(publicLanguageFromUrl(path)).toBe(language);
+            expect(publicUnlocalizedPathname(path)).toBe('/environment-monitor');
+            expect(publicLocalizedHref(`${path}?source=services#environment-usage-guidance`, 'en')).toBe(
+                '/en/environment-monitor?source=services#environment-usage-guidance',
+            );
+            expect(publicPageRequestFromUrl(path)).toBeUndefined();
+        },
+    );
 
     it('round-trips catalog page identity without collapsing page two to page one', () => {
         const request = publicPageRequestFromUrl('/en/category?collectionId=cat&page=3');

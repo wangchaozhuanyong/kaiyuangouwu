@@ -7,6 +7,48 @@ import { normalizeRouteSearch, routeFromRouterLocation, routeHref } from './stor
 
 afterEach(() => window.history.replaceState({}, '', '/'));
 describe('shared public language routing', () => {
+    it.each([
+        ['/zh/environment-monitor', 'zh', 'en'],
+        ['/en/environment-monitor', 'en', 'zh'],
+        ['/environment-monitor', undefined, 'zh'],
+    ] as const)(
+        'loads %s through the existing monitor route and switches language without losing the anchor',
+        async (path, language, nextLanguage) => {
+            const root = createRootRoute();
+            const monitor = createRoute({
+                getParentRoute: () => root,
+                path: '/environment-monitor',
+                validateSearch: normalizeRouteSearch,
+            });
+            const router = createRouter({
+                routeTree: root.addChildren([monitor]),
+                history: createMemoryHistory({ initialEntries: [`${path}#environment-usage-guidance`] }),
+                rewrite: publicRouteRewrite,
+            });
+            await router.load();
+            expect(router.state.matches.at(-1)?.routeId).toBe('/environment-monitor');
+            expect(router.state.location.pathname).toBe('/environment-monitor');
+            expect(
+                routeFromRouterLocation(router.state.location.pathname, router.state.location.search),
+            ).toMatchObject({
+                name: 'environment-monitor',
+                ...(language ? { publicLanguage: language } : {}),
+            });
+            expect(router.state.location.search.__storefrontLanguage).toBe(language);
+            await router.navigate({
+                to: '/environment-monitor',
+                search: { __storefrontLanguage: nextLanguage },
+                hash: 'environment-usage-guidance',
+            });
+            expect(router.history.location.href).toBe(
+                `/${nextLanguage}/environment-monitor#environment-usage-guidance`,
+            );
+            expect(routeHref({ name: 'environment-monitor', publicLanguage: nextLanguage })).toBe(
+                `/${nextLanguage}/environment-monitor`,
+            );
+        },
+    );
+
     it('maps a public prefix to one existing route tree and emits its language URL without internal query fields', async () => {
         const root = createRootRoute();
         const product = createRoute({

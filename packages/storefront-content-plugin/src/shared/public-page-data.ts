@@ -34,6 +34,7 @@ const publicStorefrontPaths = new Set([
     '/category',
     '/search',
     '/services',
+    '/environment-monitor',
     '/support',
     '/announcements',
     '/legal',
