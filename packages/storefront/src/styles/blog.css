@@ -1,14 +1,4 @@
 /* Blog pages share the storefront canvas, card, control and reading roles. */
-.page.blog-page {
-    display: grid;
-    align-content: start;
-    gap: var(--space-major);
-    width: 100%;
-    max-width: var(--experience-content-max);
-    margin-inline: auto;
-    padding: 0 var(--experience-page-gutter-mobile) var(--space-48);
-    color: var(--text);
-}
 .blog-page :where(h1, h2, h3, p, figure) {
     margin: 0;
 }
@@ -24,12 +14,6 @@
 .blog-muted,
 .blog-meta {
     color: var(--muted);
-}
-.blog-mobile-back {
-    display: inline-flex;
-    align-items: center;
-    min-height: var(--experience-control-min);
-    justify-self: start;
 }
 .blog-toolbar,
 .blog-feature,
@@ -333,21 +317,6 @@
     width: 28px;
     height: 28px;
 }
-.blog-breadcrumb {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-12);
-}
-.blog-breadcrumb a {
-    display: inline-flex;
-    align-items: center;
-    min-height: var(--experience-control-min);
-}
-.blog-breadcrumb a:hover {
-    text-decoration: underline;
-    text-underline-offset: 4px;
-}
 .blog-article {
     display: grid;
     grid-template-columns: minmax(0, var(--experience-reading-max)) 240px;
@@ -523,19 +492,6 @@
 .blog-back-link {
     justify-self: start;
 }
-@media (min-width: 1024px) {
-    .blog-mobile-back {
-        display: none;
-    }
-    .page.blog-page {
-        padding-inline: 0;
-    }
-}
-@media (min-width: 768px) and (max-width: 1023px) {
-    .page.blog-page {
-        padding-inline: var(--experience-page-gutter-tablet);
-    }
-}
 @media (max-width: 1023px) {
     .blog-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -640,26 +596,12 @@
 .blog-card:has(.blog-card-footer-skill) .blog-card-summary {
     display: block;
 }
-.blog-page > .subpage-header {
-    width: calc(100% + 2 * var(--experience-page-gutter-mobile));
-    margin-inline: calc(-1 * var(--experience-page-gutter-mobile));
-}
 .blog-detail-github {
     display: none;
 }
 @media (min-width: 1024px) {
-    .blog-page > .subpage-header {
-        width: 100%;
-        margin-inline: 0;
-    }
     .blog-feature {
         grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-    }
-}
-@media (min-width: 768px) and (max-width: 1023px) {
-    .blog-page > .subpage-header {
-        width: calc(100% + 2 * var(--experience-page-gutter-tablet));
-        margin-inline: calc(-1 * var(--experience-page-gutter-tablet));
     }
 }
 @media (max-width: 1023px) {
@@ -677,5 +619,132 @@
     }
     .blog-card-footer-skill .blog-card-actions {
         gap: var(--space-8);
+    }
+}
+
+/* Skill guides keep the published section order and use a layout suited to each kind of content. */
+.blog-article[data-skill-guide] .blog-article-header {
+    gap: var(--space-8);
+}
+.blog-article[data-skill-guide] .blog-attribution {
+    padding-top: 0;
+}
+.skill-modules {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-16);
+}
+.skill-module {
+    grid-column: 1 / -1;
+    min-width: 0;
+    display: grid;
+    align-content: start;
+    gap: var(--space-12);
+    border: 1px solid var(--line-subtle);
+    border-radius: var(--skin-card-radius);
+    padding: var(--space-24);
+    background: var(--surface);
+}
+.skill-module h2 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    margin: 0;
+}
+.skill-module h2 svg {
+    color: var(--accent-ink);
+}
+.skill-module p + p {
+    margin: 0;
+}
+.skill-copy {
+    font-size: var(--type-reading-size);
+    line-height: var(--type-reading-leading);
+    font-weight: var(--font-weight-normal);
+}
+.skill-module[data-kind='overview'] {
+    border-inline-start: 3px solid var(--skin-tool-security-foreground, var(--accent-ink));
+}
+.skill-audience {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-4) var(--space-8);
+    padding-top: var(--space-12);
+    border-top: 1px solid var(--line-subtle);
+}
+.skill-audience span {
+    flex: 1 1 12rem;
+}
+.skill-audience svg {
+    align-self: start;
+    color: var(--muted);
+}
+.skill-task-list {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.skill-task-list li {
+    display: flex;
+    gap: var(--space-12);
+    align-items: baseline;
+    padding-block: var(--space-12);
+}
+.skill-task-list li + li {
+    border-top: 1px solid var(--line-subtle);
+}
+.skill-task-list li:first-child {
+    padding-top: 0;
+}
+.skill-task-list li:last-child {
+    padding-bottom: 0;
+}
+.skill-task-index {
+    flex-shrink: 0;
+    color: var(--skin-tool-security-foreground, var(--accent-ink));
+    font-variant-numeric: tabular-nums;
+}
+.skill-example-pair {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+    gap: var(--space-12);
+    margin: 0;
+}
+.skill-example-pair > div {
+    min-width: 0;
+    border-radius: var(--skin-control-radius);
+    padding: var(--space-16);
+    background: color-mix(in srgb, var(--semantic-icon-foreground) 7%, var(--surface));
+}
+.skill-example-pair dt {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    color: var(--semantic-icon-foreground);
+}
+.skill-example-pair dd {
+    margin: var(--space-8) 0 0;
+    white-space: pre-wrap;
+}
+.skill-module[data-kind='limits'] {
+    background: color-mix(in srgb, var(--warning) 5%, var(--surface));
+}
+.skill-module[data-kind='limits'] h2 svg {
+    color: var(--skin-tool-coupon-foreground, var(--warning));
+}
+@media (min-width: 768px) {
+    .skill-module[data-kind='start']:has(+ [data-kind='limits']),
+    .skill-module[data-kind='start'] + [data-kind='limits'] {
+        grid-column: span 1;
+    }
+}
+@media (max-width: 767px) {
+    .skill-modules {
+        gap: var(--space-12);
+    }
+    .skill-module {
+        padding: var(--space-16);
     }
 }

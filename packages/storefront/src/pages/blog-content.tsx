@@ -1,5 +1,5 @@
 import { ArrowRight, ArrowUpRight, BookOpen, Search } from 'lucide-react';
-import { type FormEvent, type MouseEvent } from 'react';
+import { type FormEvent, type MouseEvent, type ReactNode } from 'react';
 
 import {
     blogBodySections,
@@ -15,9 +15,10 @@ import {
 import { publicLocalizedHref } from '../../../storefront-content-plugin/src/shared/public-page-data';
 import { PageBackLink } from '../components/common/page-back-link';
 import { SafeImage } from '../safe-image';
-import { SubHeader } from '../storefront-ui/page-shell';
+import { SubHeader, SubpageBody } from '../storefront-ui/page-shell';
 import '../styles/blog.css';
 
+import { BlogSkillSections } from './blog-skill-sections';
 import { BlogTheme, BlogThemeLibrary } from './blog-theme';
 
 const href = (slug?: string) =>
@@ -106,6 +107,27 @@ export function BlogContent({
         }
     };
     const link = (url: string) => ({ href: url, onClick: navigate(url) });
+    function renderPage(content: ReactNode) {
+        const article = page.article;
+        const backHref = article
+            ? href() + `?category=${article.category}`
+            : publicLocalizedHref('/', 'zh_Hans');
+        const backLabel = article ? '返回新闻博客' : '返回首页';
+        return (
+            <main
+                className={article ? 'page subpage blog-page blog-detail-page' : 'page subpage blog-page'}
+                aria-label={article?.title ?? page.title}
+            >
+                <SubHeader
+                    title={article ? (article.skill ? 'Skill 介绍' : '资讯详情') : '新闻博客'}
+                    language="zh"
+                    back={<PageBackLink {...link(backHref)} label={backLabel} />}
+                    backLabel={backLabel}
+                />
+                <SubpageBody>{content}</SubpageBody>
+            </main>
+        );
+    }
     const listUrl = (patch: Partial<BlogListInput>) => {
         const state = { ...input, ...patch };
         const q = new URLSearchParams();
@@ -169,47 +191,42 @@ export function BlogContent({
     if (page.article) {
         const article = page.article;
         const sections = blogBodySections(article.body);
+        const isSkill = article.category === 'skills';
+        const overviewLines = isSkill
+            ? sections.find(section => section.title === '解决什么问题')?.paragraphs
+            : undefined;
+        const showAudience =
+            article.skillProfile && !overviewLines?.includes('适合：' + article.skillProfile.audience);
         const headings = sections.filter(section => section.title);
         const updatedAt = article.updatedAt ?? article.reviewedAt ?? article.publishedAt;
-        return (
-            <main className="page subpage blog-page blog-detail-page" aria-label={article.title}>
+        return renderPage(
+            <>
                 <BlogThemeLibrary />
-                <SubHeader
-                    title={article.skill ? 'Skill 介绍' : '资讯详情'}
-                    language="zh"
-                    back={
-                        <PageBackLink
-                            href={href() + `?category=${article.category}`}
-                            onClick={navigate(href() + `?category=${article.category}`)}
-                            label="返回新闻博客"
-                        />
-                    }
-                    backLabel="返回新闻博客"
-                />
-                <nav className="blog-breadcrumb type-label" aria-label="当前位置">
-                    <a {...link(href())}>← 新闻博客</a>
-                    <span aria-hidden="true">/</span>
-                    <a {...link(href() + `?category=${article.category}`)}>
-                        {blogCategoryLabels[article.category]}
-                    </a>
-                    <span aria-hidden="true">/</span>
-                    <span className="blog-muted">正文</span>
-                </nav>
-                <article className="blog-article">
+                <article className="blog-article" data-skill-guide={isSkill || undefined}>
                     <header className="blog-article-header">
                         <ArticleLabels article={article} />
                         <h1 className="type-page">{article.skillProfile?.displayName ?? article.title}</h1>
                         {article.skill && <p className="blog-skill-name type-helper">{article.skill.name}</p>}
-                        <p className="blog-article-summary type-reading">{article.summary}</p>
-                        {article.skillProfile && (
-                            <p className="blog-profile-audience type-body">
-                                <strong>适合谁：</strong>
-                                {article.skillProfile.audience}
-                                {article.skillProfile.industries.length > 0 && (
-                                    <span> · 适用行业：{article.skillProfile.industries.join('、')}</span>
-                                )}
-                            </p>
+                        {!overviewLines?.includes(article.summary) && (
+                            <p className="blog-article-summary type-reading">{article.summary}</p>
                         )}
+                        {article.skillProfile &&
+                            (showAudience || article.skillProfile.industries.length > 0) && (
+                                <p className="blog-profile-audience type-body">
+                                    {showAudience && (
+                                        <>
+                                            <strong>适合谁：</strong>
+                                            {article.skillProfile.audience}
+                                        </>
+                                    )}
+                                    {article.skillProfile.industries.length > 0 && (
+                                        <span>
+                                            {showAudience && ' · '}适用行业：
+                                            {article.skillProfile.industries.join('、')}
+                                        </span>
+                                    )}
+                                </p>
+                            )}
                         <DateLine article={article} />
                         {article.skill && (
                             <a
@@ -298,16 +315,20 @@ export function BlogContent({
                         )}
                     </aside>
                     <div className="blog-reading-body">
-                        {sections.map(section => (
-                            <section key={section.id} id={section.id}>
-                                {section.title && <h2 className="type-section">{section.title}</h2>}
-                                {section.paragraphs.map((paragraph, index) => (
-                                    <p className="type-reading" key={index}>
-                                        {paragraph}
-                                    </p>
-                                ))}
-                            </section>
-                        ))}
+                        {isSkill ? (
+                            <BlogSkillSections sections={sections} />
+                        ) : (
+                            sections.map(section => (
+                                <section key={section.id} id={section.id}>
+                                    {section.title && <h2 className="type-section">{section.title}</h2>}
+                                    {section.paragraphs.map((paragraph, index) => (
+                                        <p className="type-reading" key={index}>
+                                            {paragraph}
+                                        </p>
+                                    ))}
+                                </section>
+                            ))
+                        )}
                         {article.illustrations.map(image => (
                             <figure className="blog-inline-figure" key={image.assetId}>
                                 <SafeImage
@@ -388,7 +409,7 @@ export function BlogContent({
                         <div className="blog-grid">{page.relatedArticles.map(x => card(x))}</div>
                     </section>
                 )}
-            </main>
+            </>,
         );
     }
     const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -406,22 +427,10 @@ export function BlogContent({
     const resultTitle = input.term ? `“${input.term}”的搜索结果` : (categoryLabel ?? '最新发布');
     const currentPage = Math.floor((input.skip ?? 0) / 12) + 1;
     const totalPages = Math.max(1, Math.ceil(page.totalItems / 12));
-    return (
-        <main className="page subpage blog-page" aria-label={page.title}>
+    return renderPage(
+        <>
             {(featured || items.length > 0) && <BlogThemeLibrary />}
             <h1 className="sr-only">{page.title}</h1>
-            <SubHeader
-                title="新闻博客"
-                language="zh"
-                back={
-                    <PageBackLink
-                        href={publicLocalizedHref('/', 'zh_Hans')}
-                        onClick={navigate(publicLocalizedHref('/', 'zh_Hans'))}
-                        label="返回首页"
-                    />
-                }
-                backLabel="返回首页"
-            />
             <div className="blog-toolbar">
                 <nav className="blog-categories" aria-label="文章分类">
                     {['', ...blogCategories].map(category => (
@@ -533,6 +542,6 @@ export function BlogContent({
                     )}
                 </nav>
             )}
-        </main>
+        </>,
     );
 }
