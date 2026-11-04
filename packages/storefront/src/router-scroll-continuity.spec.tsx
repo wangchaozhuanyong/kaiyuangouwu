@@ -309,6 +309,7 @@ it.each(['restore', 'interaction', 'superseded', 'leave-pending'] as const)(
 it.each([
     'late-content',
     'cached-content',
+    'rendered-anchor-reset',
     'saved-scroll',
     'disabled',
     'interaction',
@@ -328,7 +329,9 @@ it.each([
         y = typeof options === 'object' ? (options.top ?? 0) : 0;
     });
     function ArticleBody() {
-        const [ready, setReady] = useState(outcome === 'cached-content');
+        const [ready, setReady] = useState(
+            outcome === 'cached-content' || outcome === 'rendered-anchor-reset',
+        );
         useLayoutEffect(() => {
             reveal = () => setReady(true);
         }, []);
@@ -400,7 +403,11 @@ it.each([
                 y = 40;
                 document.dispatchEvent(new Event('wheel'));
             }
+            if (outcome === 'rendered-anchor-reset') y = 0;
             act(() => reveal());
+            act(() => {
+                document.dispatchEvent(new Event('storefront:page-ready'));
+            });
             expect(y).toBe(
                 outcome === 'disabled'
                     ? 0

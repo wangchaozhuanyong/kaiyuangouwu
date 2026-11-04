@@ -36,9 +36,7 @@ export function useStorefrontScrollContinuity() {
         const initialLocation = router.state.location;
         // Router may render before an asynchronous body exposes the document anchor.
         let initialHash =
-            initialLocation.hash &&
-            initialLocation.state.__hashScrollIntoViewOptions !== false &&
-            !document.getElementById(initialLocation.hash)
+            initialLocation.hash && initialLocation.state.__hashScrollIntoViewOptions !== false
                 ? initialLocation.hash
                 : undefined;
         let requested = initialHash && initialLocation.state.__TSR_key;

@@ -15,6 +15,7 @@ import { fixtureStores, syntheticPage } from '../e2e/seo-public/fixtures.mjs';
 
 import { invalidatePublicPageReads } from './public-page-transport';
 import { createPublicSnapshotApp } from './public-snapshot';
+import { router as runtimeRouter } from './router';
 import {
     readInitialPublicPage,
     seedPublicPage,
@@ -105,7 +106,6 @@ it.each([
         page.catalog.totalItems = page.products.length;
     }
 
-    const { router: runtimeRouter } = await import('./router');
     const router = createRouter({
         ...runtimeRouter.options,
         history: createMemoryHistory({ initialEntries: [browserHref] }),
