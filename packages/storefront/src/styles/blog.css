@@ -417,6 +417,9 @@
 .blog-skill-info .blog-read-link {
     justify-self: start;
 }
+.blog-toc-inline {
+    display: none;
+}
 .blog-toc summary {
     min-height: var(--experience-control-min);
     align-content: center;
@@ -500,6 +503,19 @@
         grid-template-columns: minmax(0, 1fr);
         grid-template-areas: 'cover' 'intro' 'body' 'sidebar';
         padding: var(--space-card);
+    }
+    .blog-article:has(> .blog-toc-inline) {
+        grid-template-areas: 'cover' 'intro' 'directory' 'body' 'sidebar';
+    }
+    .blog-toc-inline {
+        display: block;
+        grid-area: directory;
+        width: 100%;
+        max-width: var(--experience-reading-max);
+        margin-inline: auto;
+    }
+    .blog-toc-sidebar {
+        display: none;
     }
     .blog-sidebar {
         position: static;

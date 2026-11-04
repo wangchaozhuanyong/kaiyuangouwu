@@ -75,12 +75,24 @@ describe('news blog server-renderable content', () => {
     it('renders reviewed content, sources and directory while escaping markup', () => {
         const html = renderToStaticMarkup(<BlogContent page={{ ...page, article }} />);
         expect(html).toContain('id="section-1"');
-        expect(html).not.toContain('class="blog-toc"');
+        expect(html).not.toContain('blog-toc');
         expect(html).toContain('本地验收编辑');
         expect(html).not.toContain('skill-modules');
         expect(html).toContain('https://openai.com/news/');
         expect(html).toContain('&lt;script&gt;');
         expect(html).not.toContain('<script>alert(1)</script>');
+    });
+    it('provides a native directory before the reading body without duplicating section IDs', () => {
+        const body = Array.from({ length: 4 }, (_, index) => `## 章节 ${index + 1}\n章节内容`).join('\n');
+        const html = renderToStaticMarkup(<BlogContent page={{ ...page, article: { ...article, body } }} />);
+        const directory = html.indexOf('class="blog-toc blog-toc-inline"');
+        const reading = html.indexOf('class="blog-reading-body"');
+        expect(directory).toBeGreaterThan(-1);
+        expect(directory).toBeLessThan(reading);
+        for (let n = 1; n <= 4; n++) {
+            expect(html).toContain(`href="#section-${n}"`);
+            expect(html.split(`id="section-${n}"`)).toHaveLength(2);
+        }
     });
     it('shows a published Skill as anchored modules with one overview, a task list and a paired example', () => {
         const profile: BlogSkillProfile = {
