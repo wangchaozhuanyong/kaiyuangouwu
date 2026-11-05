@@ -1,7 +1,7 @@
 /* eslint-disable import/order -- prettier-plugin-organize-imports places type-only imports after runtime imports. */
 import { useRouter } from '@tanstack/react-router';
 import { ArrowUpRight, Check, ChevronRight, Copy, Headphones, QrCode, Star, ThumbsUp } from 'lucide-react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import type { ShopApi } from '../api';
 import { storefrontVisitorId } from '../referral-attribution';
@@ -120,6 +120,10 @@ export function SupportContent({
     const [faqSearch, setFaqSearch] = useState('');
     const faqSearchId = useId();
     const [faqPage, setFaqPage] = useState(0);
+    const adoptFaqSearch = useCallback((input: HTMLInputElement | null) => {
+        // The server-rendered field may already contain text when React attaches.
+        if (input) setFaqSearch(input.value);
+    }, []);
     const isZh = language === 'zh';
     const copyOrderCode = async () => {
         if (!orderCode) return;
@@ -315,9 +319,10 @@ export function SupportContent({
                         </div>
                         <div className="support-faq-search">
                             <input
+                                ref={adoptFaqSearch}
                                 id={faqSearchId}
                                 type="search"
-                                value={faqSearch}
+                                defaultValue={faqSearch}
                                 onChange={event => {
                                     setFaqSearch(event.target.value);
                                     setFaqPage(0);

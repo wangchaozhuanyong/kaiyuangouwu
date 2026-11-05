@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { createRoot, hydrateRoot } from 'react-dom/client';
+import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { filterSupportFaqs, SupportContent } from './pages/support-page';
@@ -81,6 +81,57 @@ describe('support content', () => {
         expect(filterSupportFaqs([faq], 'checkout', 'zh')).toEqual([]);
         expect(filterSupportFaqs([faq], ' ', 'zh')).toEqual([faq]);
     });
+
+    it.each(['zh', 'en'] as const)('keeps FAQ text entered before hydration (%s)', language => {
+        const content = {
+            ...supportBlock,
+            settings: {
+                ...supportBlock.settings,
+                supportFaqs: [
+                    {
+                        id: 'delivery',
+                        enabled: true,
+                        questionZh: '如何确认运费？',
+                        answerZh: '结算时按地址计算。',
+                        questionEn: 'How is shipping calculated?',
+                        answerEn: 'It is calculated at checkout.',
+                    },
+                ],
+            },
+        };
+        const page = <SupportContent content={content} language={language} />;
+        const container = document.createElement('div');
+        container.innerHTML = renderToString(page);
+        document.body.append(container);
+        const onRecoverableError = vi.fn();
+        let root: ReturnType<typeof hydrateRoot> | undefined;
+        try {
+            const input = container.querySelector<HTMLInputElement>('input[type="search"]');
+            if (!input) throw new Error('Expected the server-rendered FAQ search');
+            expect(container.querySelectorAll('.support-faq-item')).toHaveLength(1);
+            input.value = 'unmatched';
+            act(() => {
+                root = hydrateRoot(container, page, { onRecoverableError });
+            });
+            expect(onRecoverableError).not.toHaveBeenCalled();
+            expect(container.querySelector('input[type="search"]')).toBe(input);
+            expect(input.value).toBe('unmatched');
+            expect(container.querySelectorAll('.support-faq-item')).toHaveLength(0);
+            expect(container.querySelector('.support-faq-card [role="status"]')?.textContent).toContain(
+                language === 'zh' ? '没有找到相关问题' : 'No matching questions',
+            );
+
+            act(() => {
+                Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, '');
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            expect(container.querySelectorAll('.support-faq-item')).toHaveLength(1);
+        } finally {
+            act(() => root?.unmount());
+            container.remove();
+        }
+    });
+
     it('reads service hours from settings and preserves channel order', () => {
         expect(supportPageTitle(supportBlock, 'zh')).toBe('客服配置');
         expect(supportPageTitle(undefined, 'en')).toBe('Customer support');

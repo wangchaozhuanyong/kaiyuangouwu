@@ -3,6 +3,7 @@ import 'reflect-metadata';
 import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { Logger, type RequestContext } from '@vendure/core';
 import type { StorefrontPageData } from '@vendure/storefront-content-plugin';
+import { load } from 'cheerio';
 import type { Request, Response } from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -452,6 +453,34 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
         expect(response.status).toHaveBeenCalledWith(200);
         expect(response.send).toHaveBeenCalledWith('<html>synthetic public body</html>');
         expect(errorLog).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['/zh/product?id=missing-product', 'zh-CN', '页面未找到', '/zh'],
+        ['/en/category?collectionId=missing-category', 'en', 'Page not found', '/en'],
+    ])('serves a localized recovery document for %s', async (path, lang, title, prefix) => {
+        const test = fixture();
+        test.pages.readForDocument.mockRejectedValue(new NotFoundException('Private diagnostic'));
+        const response = responseMock();
+
+        await test.controller.document(test.req(path), response as unknown as Response);
+
+        expect(response.status).toHaveBeenCalledWith(404);
+        expect(response.type).toHaveBeenCalledWith('html');
+        expect(response.setHeader).toHaveBeenCalledWith('X-Robots-Tag', 'noindex, follow');
+        expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
+        const body = response.send.mock.calls[0][0];
+        const $ = load(body);
+        expect($('html').attr('lang')).toBe(lang);
+        expect($('main h1').text()).toBe(title);
+        expect($('meta[name="robots"]').attr('content')).toBe('noindex, follow');
+        expect(
+            $('nav a')
+                .map((_index, link) => $(link).attr('href'))
+                .get(),
+        ).toEqual([`${prefix}/`, `${prefix}/category`]);
+        expect($('script')).toHaveLength(0);
+        expect(body).not.toMatch(/Private diagnostic|missing-(?:product|category)/u);
     });
 
     it.each(['read-page', 'resolve-seo', 'render-html', 'verify-publication'] as const)(

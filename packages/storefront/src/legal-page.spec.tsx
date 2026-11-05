@@ -71,6 +71,30 @@ describe('ManagedLegalPage', () => {
         expect(markup).not.toContain('<h1');
     });
 
+    it('renders policy headings and separators while keeping clauses and HTML literal', () => {
+        const legalBlock = createLegalBlock('privacy');
+        legalBlock.body =
+            '## Privacy Notice\r\n\r\n1. Existing clause #1\r\n---\r\n## Notis Privasi\r\n<img src=x>';
+
+        const markup = renderToStaticMarkup(
+            <ManagedLegalPage
+                kind="privacy"
+                language="en"
+                storefrontName="Demo Store"
+                contentBlocks={[legalBlock]}
+                onBack={vi.fn()}
+                onSelectDocument={vi.fn()}
+            />,
+        );
+
+        expect(markup).toContain('<h2><strong>Privacy Notice</strong></h2>');
+        expect(markup).toContain('1. Existing clause #1');
+        expect(markup).toContain('<hr/>');
+        expect(markup).toContain('<h2><strong>Notis Privasi</strong></h2>');
+        expect(markup).toContain('&lt;img src=x&gt;');
+        expect(markup).not.toContain('<img');
+    });
+
     it('自动展示经营主体和可点击的联系邮箱', () => {
         const legalBlock = createLegalBlock('privacy');
         legalBlock.body = '负责人：{{legalEntityName}}；隐私联系：{{privacyEmail}}';
