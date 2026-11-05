@@ -216,13 +216,6 @@
         padding-left: 20px;
     }
 
-    .homepage-modules {
-        --homepage-module-gap: var(--space-section);
-        --homepage-section-gap: var(--space-major);
-
-        padding-top: var(--homepage-module-gap);
-    }
-
     .homepage-modules > .notice-strip {
         width: 100%;
         margin-right: 0;

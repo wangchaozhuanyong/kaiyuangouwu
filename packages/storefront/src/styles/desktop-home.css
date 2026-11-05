@@ -20,9 +20,6 @@
         --homepage-module-gap: var(--space-section);
         --homepage-section-gap: var(--space-major);
     }
-    .desktop-store-layout .home-intro-grid {
-        display: contents;
-    }
     .desktop-store-layout .home-intro-grid.is-grouped-intro {
         display: grid;
         grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
@@ -294,6 +291,13 @@
     .desktop-store-layout .home-page .managed-content-section {
         /* An explicitly configured block background still takes precedence. */
         --store-background: transparent;
+    }
+    .home-page :is(.product-section, .category-promotion-section) > .section-header {
+        min-height: 44px;
+        align-items: center;
+    }
+    .home-page .category-promotion-section .section-header-title-row {
+        align-items: center;
     }
     .desktop-store-layout .home-page .coupon-hub-section {
         padding: 0;
