@@ -14,6 +14,7 @@
     "scripts": {
         "watch": "tsc -p ./tsconfig.build.json --watch",
         "build": "rimraf lib && tsc -p ./tsconfig.build.json",
+        "test": "vitest run src/middleware/query-complexity-plugin.spec.ts",
         "lint": "eslint --fix ."
     },
     "homepage": "https://www.vendure.io/",
