@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 
 import { ServiceUnavailableException } from '@nestjs/common';
-import { CurrencyCode, LanguageCode, type RequestContext } from '@vendure/core';
+import { CurrencyCode, LanguageCode, Product, type RequestContext } from '@vendure/core';
 import { StoreDomain } from '@vendure/store-domain-plugin';
 import type { PublicPageRequest, StorefrontPageData } from '@vendure/storefront-content-plugin';
 import { describe, expect, it, vi } from 'vitest';
@@ -35,22 +35,32 @@ function fixture() {
     const domains = { findOne: vi.fn().mockResolvedValue({ domain: host }) };
     const profile = { descriptionEn: 'Published description', descriptionZh: '' };
     const profiles = { findOne: vi.fn().mockResolvedValue(profile) };
+    const products = {
+        findOne: vi.fn().mockResolvedValue({
+            channels: [{ id: ctx.channelId }],
+            translations: [{ languageCode: LanguageCode.en, name: 'Bed', description: 'Solid wood bed.' }],
+        }),
+    };
     const connection = {
         getRepository: vi.fn((_ctx: RequestContext, entity: unknown) => {
             if (entity === StoreDomain) return domains;
             if (entity === StoreProfile) return profiles;
+            if (entity === Product) return products;
             throw new Error('Unexpected repository');
         }),
     };
     const pages = { getAccessMode: vi.fn().mockResolvedValue('LIVE') };
     const content = { findPublished: vi.fn().mockResolvedValue([]) };
     const sharing = { publicShareMetadata: vi.fn().mockResolvedValue(undefined) };
+    const reviews = {
+        findApprovedForProduct: vi.fn().mockResolvedValue({ totalItems: 0, averageRating: 0, items: [] }),
+    };
     const service = new StorefrontPublicSeoService(
         seo as never,
         connection as never,
         pages as never,
         content as never,
-        {} as never,
+        { get: () => reviews } as never,
         sharing as never,
     );
     const page = {
@@ -89,8 +99,98 @@ function fixture() {
         content,
         page,
         sharing,
+        reviews,
     };
 }
+
+function productFixture({
+    sku = 'FC-BED_01',
+    quoteOnly = false,
+    currencyCode = CurrencyCode.MYR,
+}: {
+    sku?: string;
+    quoteOnly?: boolean;
+    currencyCode?: CurrencyCode;
+} = {}) {
+    const test = fixture();
+    test.page.request = { kind: 'product', id: 'fixture-bed' };
+    test.page.product = {
+        id: 'fixture-bed',
+        name: 'Bed',
+        description: 'Solid wood bed.',
+        featuredAsset: { preview: '/assets/bed.webp' },
+        customFields: { pricingMode: quoteOnly ? 'QUOTE_ONLY' : null },
+        variants: [
+            {
+                id: 'fixture-variant',
+                sku,
+                priceWithTax: 12500,
+                currencyCode,
+                customFields: {},
+                saleableStockLevel: 2,
+            },
+        ],
+    };
+    return test;
+}
+
+describe('public Product structured data', () => {
+    it.each(['FC-BED_01', '床'.repeat(50)])('retains eligible SKU %s with its real offer', async sku => {
+        const test = productFixture({ sku });
+        const { seo } = await test.service.enrich(test.ctx, test.host, test.page);
+
+        expect(seo?.structuredData.find(item => item['@type'] === 'Product')).toMatchObject({
+            sku,
+            offers: {
+                '@type': 'Offer',
+                price: '125.00',
+                priceCurrency: 'MYR',
+                availability: 'https://schema.org/InStock',
+                url: `https://${test.host}/en/product?id=fixture-bed`,
+            },
+        });
+    });
+
+    it.each(['', 'WS 2102-WHITE', 'FC\u00a0BED', 'FC\n', 'FC\u200bBED', 'A'.repeat(51)])(
+        'omits incompatible SKU %j without removing its offer or changing the catalog value',
+        async sku => {
+            const test = productFixture({ sku });
+            const result = await test.service.enrich(test.ctx, test.host, test.page);
+            const product = result.seo?.structuredData.find(item => item['@type'] === 'Product');
+
+            expect(product).toHaveProperty('offers.price', '125.00');
+            expect(product).not.toHaveProperty('sku');
+            expect(result.product).toHaveProperty('variants.0.sku', sku);
+        },
+    );
+
+    it.each([{ quoteOnly: true }, { currencyCode: CurrencyCode.USD }])(
+        'omits incomplete Product markup and keeps the page discoverable for %j',
+        async options => {
+            const test = productFixture(options);
+            const { seo } = await test.service.enrich(test.ctx, test.host, test.page);
+
+            expect(seo?.indexable).toBe(true);
+            expect(seo?.structuredData.map(item => item['@type'])).not.toContain('Product');
+            expect(seo?.structuredData.map(item => item['@type'])).toContain('BreadcrumbList');
+        },
+    );
+
+    it('retains a product snippet supported by genuine public ratings on an inquiry page', async () => {
+        const test = productFixture({ quoteOnly: true });
+        test.reviews.findApprovedForProduct.mockResolvedValue({
+            totalItems: 1,
+            averageRating: 4,
+            items: [{ anonymous: true }],
+        });
+        const { seo } = await test.service.enrich(test.ctx, test.host, test.page);
+        const product = seo?.structuredData.find(item => item['@type'] === 'Product');
+
+        expect(product).toHaveProperty('aggregateRating.ratingValue', 4);
+        expect(product).toHaveProperty('aggregateRating.reviewCount', 1);
+        expect(product).not.toHaveProperty('offers');
+    });
+});
 
 describe('request-local public SEO preparation', () => {
     it.each([1, 2, 3])(

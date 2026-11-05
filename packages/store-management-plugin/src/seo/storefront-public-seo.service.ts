@@ -72,6 +72,12 @@ const language = (ctx: RequestContext): StorefrontSeoLanguage =>
     ctx.languageCode === LanguageCode.zh_Hans ? 'zh_Hans' : 'en';
 const SHARD_SIZE = 500;
 
+function publicProductSku(sku: string | undefined): string | undefined {
+    // Google maps Product.sku to the merchant item ID (1–50 characters).
+    // Keep the real SKU intact for inventory and omit incompatible values from JSON-LD.
+    return sku && Array.from(sku).length <= 50 && !/[^\p{L}\p{N}_-]/u.test(sku) ? sku : undefined;
+}
+
 function identity(request: PublicPageRequest, code: StorefrontSeoLanguage): StorefrontSeoIdentity {
     if (request.kind === 'blog') return { targetType: 'PAGE', targetId: 'blog', languageCode: code };
     if (request.kind === 'home') return { targetType: 'HOME', targetId: 'home', languageCode: code };
@@ -263,16 +269,21 @@ export class StorefrontPublicSeoService {
                           url: `${origin}/${code === 'zh_Hans' ? 'zh' : 'en'}/product?id=${encodeURIComponent(request.id)}`,
                       }
                     : undefined;
-            structuredData.push({
-                '@context': 'https://schema.org',
-                '@type': 'Product',
-                name: title,
-                description,
-                ...(image ? { image: [new URL(image, origin).href] } : {}),
-                ...(lowest?.sku ? { sku: lowest.sku } : {}),
-                ...(offers ? { offers } : {}),
-                ...(await this.productReviews(ctx, request.id)),
-            });
+            const reviews = await this.productReviews(ctx, request.id);
+            // A Product snippet needs a real offer, review, or aggregate rating.
+            if (offers || reviews.review || reviews.aggregateRating) {
+                const sku = publicProductSku(lowest?.sku);
+                structuredData.push({
+                    '@context': 'https://schema.org',
+                    '@type': 'Product',
+                    name: title,
+                    description,
+                    ...(image ? { image: [new URL(image, origin).href] } : {}),
+                    ...(sku ? { sku } : {}),
+                    ...(offers ? { offers } : {}),
+                    ...reviews,
+                });
+            }
         } else if (request.kind === 'catalog') {
             if (request.input.collectionId) {
                 const entity = await this.collection(ctx, request.input.collectionId);
