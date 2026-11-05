@@ -434,6 +434,7 @@ export class UserService {
             return false;
         const claim = new CustomerHistoryEntry({
             customer,
+            createdAt: now,
             type: HistoryEntryType.CUSTOMER_NOTE,
             isPublic: false,
         });

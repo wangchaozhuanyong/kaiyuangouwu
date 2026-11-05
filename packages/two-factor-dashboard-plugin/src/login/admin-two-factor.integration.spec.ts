@@ -119,7 +119,7 @@ describe.sequential('administrator login 2FA through real GraphQL and SQL', () =
                 logger: new DefaultLogger({ level: LogLevel.Error }),
                 authOptions: {
                     superadminCredentials: { identifier: username, password },
-                    tokenMethod: ['bearer', 'api-key'],
+                    tokenMethod: ['cookie', 'bearer', 'api-key'],
                 },
                 plugins: [OperationsDashboardPlugin, TwoFactorDashboardPlugin],
             }),

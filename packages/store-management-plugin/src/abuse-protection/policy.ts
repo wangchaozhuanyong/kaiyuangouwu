@@ -7,7 +7,7 @@ export const challengeActions = [
     'RECHARGE_SUBMIT',
 ] as const;
 export type ShopAbuseAction = (typeof challengeActions)[number];
-export type ShopAbuseOperation = ShopAbuseAction | 'RECHARGE_CONFIG' | 'RECHARGE_TASK';
+export type ShopAbuseOperation = ShopAbuseAction | 'PASSWORD_RECHECK' | 'RECHARGE_CONFIG' | 'RECHARGE_TASK';
 export interface AbuseOperation {
     action: ShopAbuseOperation;
     target: string;
@@ -21,6 +21,7 @@ export const requestLimits: Record<ShopAbuseOperation, number> = {
     REGISTER: 5,
     PASSWORD_RESET: 5,
     PASSWORD_UPDATE: 10,
+    PASSWORD_RECHECK: 5,
     RECHARGE_CODE: 20,
     RECHARGE_SUBMIT: 5,
     RECHARGE_CONFIG: 30,
@@ -77,6 +78,12 @@ export function protectedOperation(
         case 'requestUpdateCustomerEmailAddress':
             action = 'PASSWORD_UPDATE';
             target = activeUserId ? `user:${activeUserId}` : '';
+            break;
+        case 'exportMyPersonalData':
+        case 'requestMyAccountClosure':
+            if (!activeUserId || args.verification) return null;
+            action = 'PASSWORD_RECHECK';
+            target = `user:${activeUserId}`;
             break;
         case 'verifyGptRechargeCode':
         case 'queryGptRechargeCode':

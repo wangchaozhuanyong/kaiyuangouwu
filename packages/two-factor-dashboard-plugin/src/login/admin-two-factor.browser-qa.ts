@@ -18,13 +18,14 @@ export async function runAdminTwoFactorBrowserQa(apiUrl: string, username: strin
         import { client } from '/src/apollo.ts';
         import { LoginModule } from '/src/pages/Auth/LoginModule.tsx';
         import { TwoFactorSecurityCard } from '/src/pages/Auth/TwoFactorSecurityCard.tsx';
+        import { FeatureHelpProvider } from '/src/components/FeatureHelp.tsx';
         import { ThemeProvider } from '/src/theme/ThemeProvider.tsx';
         import '/src/index.css';
         const h = React.createElement;
-        createRoot(document.getElementById('root')).render(h(ApolloProvider,{client},h(ThemeProvider,null,h(BrowserRouter,null,h(Routes,null,
+        createRoot(document.getElementById('root')).render(h(ApolloProvider,{client},h(ThemeProvider,null,h(FeatureHelpProvider,null,h(BrowserRouter,null,h(Routes,null,
             h(Route,{path:'/login',element:h(LoginModule)}),
             h(Route,{path:'/dashboard',element:h('main',{style:{maxWidth:800,margin:'32px auto',padding:16}},h(TwoFactorSecurityCard))})
-        )))));
+        ))))));
     </script></body></html>`;
     const vite = await createServer({
         root,
@@ -77,8 +78,10 @@ export async function runAdminTwoFactorBrowserQa(apiUrl: string, username: strin
             .getByLabel('新验证器的 6 位动态码', { exact: true })
             .fill(totpAtStep(secret, Math.floor(Date.now() / 30000)));
         await page.getByRole('button', { name: '确认绑定', exact: true }).click();
-        await browserExpect(page.getByRole('heading', { name: '请保存一次性恢复码' })).toBeVisible();
-        const recoveryCodes = await page.getByRole('listitem').allTextContents();
+        await browserExpect(page.locator('dialog #recovery-title')).toBeVisible();
+        const recoveryCodes = await page
+            .locator('dialog[aria-labelledby="recovery-title"] ul.font-mono > li')
+            .allTextContents();
         browserExpect(recoveryCodes).toHaveLength(10);
         browserExpect(
             await page.evaluate(() => JSON.stringify(localStorage) + JSON.stringify(sessionStorage)),

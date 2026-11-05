@@ -1,9 +1,10 @@
 // Initialize the service's entity graph before loading authentication subclasses.
 import './user.service.js';
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { RequestContext } from '../../api/common/request-context';
+import { Administrator } from '../../entity/administrator/administrator.entity';
 import { NativeAuthenticationMethod } from '../../entity/authentication-method/native-authentication-method.entity';
 import { AuthenticatedSession } from '../../entity/session/authenticated-session.entity';
 import { User } from '../../entity/user/user.entity';
@@ -54,6 +55,7 @@ function fixture() {
             cache.delete(token);
         }),
     };
+    const administratorUserIds = new Set<number>();
     const sessionRepository = {
         existsBy: vi.fn(({ id, token }: { id: number; token: string }) =>
             Promise.resolve(rows.get(token)?.id === id && rows.get(token)?.invalidated === false),
@@ -115,7 +117,13 @@ function fixture() {
                   : userRepository,
         rawConnection: {
             subscribers: [],
-            getRepository: () => sessionRepository,
+            getRepository: (entity: unknown) =>
+                entity === Administrator
+                    ? {
+                          existsBy: ({ user: { id } }: { user: { id: number } }) =>
+                              Promise.resolve(administratorUserIds.has(id)),
+                      }
+                    : sessionRepository,
             options: { type: 'sqljs' },
         },
     };
@@ -130,7 +138,7 @@ function fixture() {
         },
     };
     const sessions = new SessionService(connection as any, config as any, {} as any, {} as any, {} as any);
-    for (const row of rows.values()) cache.set(row.token, sessions.serializeSession(row));
+    for (const row of rows.values()) cache.set(row.token, sessions.serializeSession(row, null));
     const checkPassword = vi.fn().mockResolvedValue(true);
     const verifyToken = vi.fn().mockResolvedValue(true);
     const service = new UserService(
@@ -155,6 +163,7 @@ function fixture() {
         savePassword,
         sessionCacheStrategy,
         sessionRepository,
+        administratorUserIds,
     };
 }
 
@@ -246,5 +255,50 @@ describe('UserService password change revokes sessions (F-02)', () => {
         ).rejects.toThrow('synthetic failed password save');
         expect(x.sessionRepository.remove).not.toHaveBeenCalled();
         expect(x.sessionCacheStrategy.delete).not.toHaveBeenCalled();
+    });
+});
+
+describe('administrator session expiration', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('requires reauthentication of a legacy administrator session retained in cache', async () => {
+        vi.useFakeTimers();
+        const now = Date.now();
+        const x = fixture();
+        const row = x.rows.get('synthetic-session-20');
+        if (!row) throw new Error('Missing fixture session');
+        row.createdAt = new Date(now - 1_000);
+        x.administratorUserIds.add(10);
+        x.cache.set(row.token, x.sessions.serializeSession(row));
+        await expect(x.sessions.getSessionFromToken(row.token)).resolves.toBeUndefined();
+        expect(x.sessionCacheStrategy.delete).toHaveBeenCalledWith(row.token);
+        await expect(x.sessions.getSessionFromToken('synthetic-session-22')).resolves.toBeDefined();
+    });
+
+    it('caps cached administrator renewal and never renews expiry for pushed events', async () => {
+        vi.useFakeTimers();
+        const now = Date.now();
+        const x = fixture();
+        const row = x.rows.get('synthetic-session-20');
+        if (!row) throw new Error('Missing fixture session');
+        const deadline = now + 9 * 60_000;
+        row.createdAt = new Date(deadline - 12 * 60 * 60_000);
+        row.expires = new Date(now + 2 * 60_000);
+        x.administratorUserIds.add(10);
+        x.cache.set(row.token, x.sessions.serializeSession(row, deadline));
+        await expect(
+            x.sessions.getSessionFromToken(row.token, { touchAdministrator: false }),
+        ).resolves.toMatchObject({ expires: row.expires });
+        expect(x.sessionRepository.update).not.toHaveBeenCalled();
+
+        await expect(x.sessions.getSessionFromToken(row.token)).resolves.toMatchObject({
+            expires: new Date(deadline),
+        });
+        expect(x.sessionRepository.update).toHaveBeenCalledWith(expect.anything(), {
+            expires: new Date(deadline),
+        });
+
+        vi.setSystemTime(deadline);
+        await expect(x.sessions.getSessionFromToken(row.token)).resolves.toBeUndefined();
     });
 });

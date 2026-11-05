@@ -191,6 +191,35 @@ describe('shared shop security admission and GraphQL boundary', () => {
             service.before(context('198.51.100.50', '21'), op('login', 'new@example.test')),
         ).rejects.toMatchObject({ code: 'SHOP_ABUSE_RATE_LIMITED' });
     });
+    it('shares password recheck admission and cooldown between export and closure across storefronts', async () => {
+        const now = new Date();
+        const exportData = protectedOperation('exportMyPersonalData', {}, 41);
+        const closeAccount = protectedOperation('requestMyAccountClosure', {}, 41);
+        const otherAccount = protectedOperation('requestMyAccountClosure', {}, 42);
+        if (!exportData || !closeAccount || !otherAccount) throw new Error('Missing password recheck policy');
+        expect(protectedOperation('exportMyPersonalData', { verification: {} }, 41)).toBeNull();
+        expect(exportData).toEqual(closeAccount);
+
+        for (let index = 0; index < 5; index++) {
+            const operation = index % 2 ? exportData : closeAccount;
+            const admitted = await service.before(
+                context(`198.51.100.${index + 1}`, String(index + 1)),
+                operation,
+                now,
+            );
+            await service.failed(admitted, now);
+        }
+        const otherSource = context('198.51.100.7', '11');
+        await expect(service.before(otherSource, exportData, now)).rejects.toMatchObject({
+            code: 'SHOP_ABUSE_RATE_LIMITED',
+            extensions: { action: 'PASSWORD_RECHECK', retryAfterSeconds: 60 },
+        });
+        await expect(service.before(otherSource, otherAccount, now)).resolves.toBeDefined();
+        await expect(
+            service.before(otherSource, closeAccount, new Date(now.getTime() + 61_000)),
+        ).resolves.toBeDefined();
+    });
+
     it('adds target and overall failure risk without permanently locking the victim account', async () => {
         const admission = await service.before(context(), op());
         for (let n = 0; n < 8; n++) await service.failed(admission);

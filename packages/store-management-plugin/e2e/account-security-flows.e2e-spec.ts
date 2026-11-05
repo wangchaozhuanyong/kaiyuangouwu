@@ -1,5 +1,5 @@
 import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
-import { LanguageCode } from '@vendure/common/lib/generated-types';
+import { CurrencyCode, LanguageCode } from '@vendure/common/lib/generated-types';
 import {
     ContentTranslationPlugin,
     type ContentTranslationProvider,
@@ -14,6 +14,7 @@ import {
     TransactionalConnection,
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
+import { StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontCatalogPlugin } from '@vendure/storefront-catalog-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
@@ -26,12 +27,12 @@ import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
+import { createOperatingStoreFixture } from '../../../e2e-common/operating-store-fixture';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
 import { AssetServerPlugin } from '../../asset-server-plugin/src/plugin';
 import { CommerceFulfillmentPlugin } from '../../commerce-fulfillment-plugin/src/commerce-fulfillment.plugin';
 import { CustomerProductActivity } from '../src/entities/customer-product-activity.entity';
 import { FraudRiskCase } from '../src/entities/fraud-risk-case.entity';
-import { StoreProfile } from '../src/entities/store-profile.entity';
 import { StoreManagementPlugin } from '../src/store-management.plugin';
 
 const translationProvider: ContentTranslationProvider = {
@@ -58,6 +59,7 @@ const accountTestConfig = mergeConfig(testConfig(), {
     },
     plugins: [
         OperationsDashboardPlugin,
+        StoreDomainPlugin,
         AssetServerPlugin.init({
             route: 'assets',
             assetUploadDir: path.resolve(
@@ -154,6 +156,29 @@ describe('authenticated account security API', () => {
         // The test harness reuses a cached SQL.js fixture created before new plugin entities existed.
         await server.app.get(TransactionalConnection).rawConnection.synchronize();
         await adminClient.asSuperAdmin();
+        const { updateGlobalSettings } = await adminClient.query(gql`
+            mutation {
+                updateGlobalSettings(input: { availableLanguages: [en, zh_Hans] }) {
+                    ... on GlobalSettings {
+                        availableLanguages
+                    }
+                    ... on ErrorResult {
+                        message
+                    }
+                }
+            }
+        `);
+        expect(updateGlobalSettings.availableLanguages, updateGlobalSettings.message).toContain(
+            LanguageCode.zh_Hans,
+        );
+        const primary = await createOperatingStoreFixture(server.app, {
+            code: `account-primary-${randomUUID().slice(0, 12)}`,
+            currencyCode: CurrencyCode.MYR,
+            defaultLanguageCode: LanguageCode.zh_Hans,
+            commerceMode: 'HYBRID',
+        });
+        shopClient.setChannelToken(primary.token);
+        // Read the customer seeded on the management Channel before entering the test store.
         const result = await adminClient.query(gql`
             query {
                 customers(options: { take: 1 }) {
@@ -165,6 +190,7 @@ describe('authenticated account security API', () => {
             }
         `);
         customerEmail = result.customers.items[0].emailAddress;
+        adminClient.setChannelToken(primary.token);
         secondCustomerEmail = `account-secondary-${randomUUID()}@example.test`;
         const second = await adminClient.query(
             gql`
@@ -335,6 +361,7 @@ describe('authenticated account security API', () => {
             accountTestConfig,
             `http://localhost:${accountTestConfig.apiOptions.port}/${accountTestConfig.apiOptions.shopApiPath}`,
         );
+        secondDeviceClient.setChannelToken(channelToken);
         await secondDeviceClient.asUserWithCredentials(customerEmail, 'test');
         expect((await secondDeviceClient.query(fields)).myCustomerProductActivity).toMatchObject({
             favoriteProductIds: [productId],
@@ -606,8 +633,13 @@ describe('authenticated account security API', () => {
             ]),
         );
 
+        const platformClient = new SimpleGraphQLClient(
+            accountTestConfig,
+            `http://localhost:${accountTestConfig.apiOptions.port}/${accountTestConfig.apiOptions.adminApiPath}`,
+        );
+        await platformClient.asSuperAdmin();
         const adminRows = (
-            await adminClient.query(gql`
+            await platformClient.query(gql`
                 query {
                     dataSubjectRequests {
                         id
@@ -947,34 +979,12 @@ describe('authenticated account security API', () => {
                 }
             `)
         ).activeChannel;
-        const secondaryToken = `account-isolation-${randomUUID().slice(0, 12)}`;
-        const secondary = await adminClient.query(
-            gql`
-                mutation ($input: CreateChannelInput!) {
-                    createChannel(input: $input) {
-                        ... on Channel {
-                            id
-                            token
-                        }
-                        ... on ErrorResult {
-                            message
-                        }
-                    }
-                }
-            `,
-            {
-                input: {
-                    code: secondaryToken,
-                    token: secondaryToken,
-                    defaultLanguageCode: LanguageCode.en,
-                    currencyCode: 'MYR',
-                    pricesIncludeTax: false,
-                    defaultTaxZoneId: currentChannel.defaultTaxZone.id,
-                    defaultShippingZoneId: currentChannel.defaultShippingZone.id,
-                },
-            },
-        );
-        expect(secondary.createChannel.id, secondary.createChannel.message).toBeTruthy();
+        const secondary = await createOperatingStoreFixture(server.app, {
+            code: `account-isolation-${randomUUID().slice(0, 12)}`,
+            currencyCode: CurrencyCode.MYR,
+            defaultLanguageCode: LanguageCode.en,
+            commerceMode: 'HYBRID',
+        });
         const activityProduct = await adminClient.query(
             gql`
                 mutation ($input: CreateProductInput!) {
@@ -1006,16 +1016,8 @@ describe('authenticated account security API', () => {
         const customer = await connection.getRepository(ctx, Customer).findOneByOrFail({ emailAddress });
         const secondaryCtx = await server.app.get(RequestContextService).create({
             apiType: 'admin',
-            channelOrToken: secondary.createChannel.token,
+            channelOrToken: secondary.token,
         });
-        await connection.getRepository(secondaryCtx, StoreProfile).save(
-            new StoreProfile({
-                channelId: secondaryCtx.channelId,
-                status: 'ACTIVE',
-                descriptionZh: '',
-                descriptionEn: '',
-            }),
-        );
         await server.app
             .get(ChannelService)
             .assignToChannels(ctx, Customer, customer.id, [secondaryCtx.channelId]);
@@ -1136,7 +1138,7 @@ describe('authenticated account security API', () => {
         const primaryAuthToken = shopClient.getAuthToken();
 
         try {
-            shopClient.setChannelToken(secondary.createChannel.token);
+            shopClient.setChannelToken(secondary.token);
             shopClient.setAuthToken('');
             shopClient.setRequestHeader('Authorization', null);
             await shopClient.asUserWithCredentials(emailAddress, password);
