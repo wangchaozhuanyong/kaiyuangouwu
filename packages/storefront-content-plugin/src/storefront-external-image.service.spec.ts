@@ -65,6 +65,24 @@ describe('StorefrontExternalImageService', () => {
         expect(assetService.createFromFileStream).not.toHaveBeenCalled();
     });
 
+    it('cancels a remote stream that exceeds the limit without declaring its length', async () => {
+        const stream = imageStream({ 'content-type': 'image/png' }, [Buffer.alloc(8), Buffer.alloc(1)]);
+        const service = new StorefrontExternalImageService(
+            {
+                importExportOptions: {
+                    assetImportStrategy: { getStreamFromPath: () => Promise.resolve(stream) },
+                },
+                assetOptions: { uploadMaxFileSize: 8 },
+            } as any,
+            { createFromFileStream: (source: Readable) => source.toArray() } as any,
+        );
+
+        await expect(service.import({} as any, 'https://cdn.example.com/large.png')).rejects.toBeInstanceOf(
+            UserInputError,
+        );
+        expect(stream.destroyed).toBe(true);
+    });
+
     it('normalizes stored Asset identifiers to the storefront asset route', () => {
         const service = new StorefrontExternalImageService({} as any, {} as any);
 

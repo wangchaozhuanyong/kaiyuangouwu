@@ -1,3 +1,5 @@
+import { ICLOUD_IMAP_ENDPOINT_ERROR, isIcloudImapEndpoint } from '../imap-endpoint';
+
 /** Shared business checks for both admin forms and all server write entry points. */
 export function validateIcloudInput(input: Record<string, unknown>): string | undefined {
     for (const field of ['email', 'aliasEmail']) {
@@ -59,19 +61,15 @@ export function validateIcloudInput(input: Record<string, unknown>): string | un
         'imapHost' in input &&
         (typeof input.imapHost !== 'string' ||
             !input.imapHost.trim() ||
-            input.imapHost.length > 255 ||
-            /\s/.test(input.imapHost.trim()))
+            !isIcloudImapEndpoint(input.imapHost))
     ) {
-        return 'IMAP 服务器地址无效';
+        return ICLOUD_IMAP_ENDPOINT_ERROR;
     }
     if (
         'imapPort' in input &&
-        (typeof input.imapPort !== 'number' ||
-            !Number.isInteger(input.imapPort) ||
-            input.imapPort < 1 ||
-            input.imapPort > 65535)
+        (typeof input.imapPort !== 'number' || !isIcloudImapEndpoint(undefined, input.imapPort))
     ) {
-        return 'IMAP 端口必须为 1 至 65535 的整数';
+        return ICLOUD_IMAP_ENDPOINT_ERROR;
     }
     return undefined;
 }

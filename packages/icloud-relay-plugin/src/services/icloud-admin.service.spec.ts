@@ -13,6 +13,34 @@ import { IcloudMailHistoryService } from './icloud-mail-history.service';
 import { IcloudOtpExtractorService } from './icloud-otp-extractor.service';
 
 describe('primary mailbox connection recovery', () => {
+    it('rejects a custom destination before creating or updating the mailbox', async () => {
+        const getRepository = vi.fn();
+        const service = new IcloudAdminService(
+            { getRepository } as unknown as TransactionalConnection,
+            {} as IcloudCipherService,
+            new IcloudAccessCodeService(),
+            {} as IcloudImapSyncService,
+            {} as IcloudMailHistoryService,
+            new IcloudOtpExtractorService(),
+        );
+        const ctx = {} as RequestContext;
+
+        await expect(
+            service.createPrimaryAccount(ctx, {
+                email: 'test@example.test',
+                appPassword: 'synthetic-test-value',
+                imapPort: 143,
+            }),
+        ).rejects.toThrow('iCloud IMAP');
+        await expect(
+            service.updatePrimaryAccount(ctx, {
+                id: 'primary-1',
+                imapHost: 'imap.example.test',
+            }),
+        ).rejects.toThrow('iCloud IMAP');
+        expect(getRepository).not.toHaveBeenCalled();
+    });
+
     it('clears a stale authentication error after a successful connection test', async () => {
         const account = new IcloudPrimaryAccount({
             id: 'primary-1',

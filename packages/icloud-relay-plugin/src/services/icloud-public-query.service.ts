@@ -15,6 +15,7 @@ import {
 } from '../types';
 
 import { IcloudAccessCodeService } from './icloud-access-code.service';
+import { IcloudCipherService } from './icloud-cipher.service';
 import { mailPreviewHtml } from './icloud-mail-sanitizer.service';
 import { IcloudOtpExtractorService } from './icloud-otp-extractor.service';
 
@@ -31,6 +32,7 @@ export class IcloudPublicQueryService {
         private readonly connection: TransactionalConnection,
         private readonly codeService: IcloudAccessCodeService,
         private readonly otpExtractor: IcloudOtpExtractorService,
+        private readonly cipher: IcloudCipherService,
     ) {}
 
     /**
@@ -313,7 +315,8 @@ export class IcloudPublicQueryService {
     ): Promise<void> {
         try {
             const log = new IcloudQueryAuditLog({
-                queryCode: queryCode.substring(0, 64),
+                // Keep the existing column and index. New entries contain only keyed fingerprints.
+                queryCode: this.cipher.fingerprintQueryCode(queryCode),
                 targetType: targetType || null,
                 targetId: targetId || null,
                 ipAddress,
@@ -322,8 +325,8 @@ export class IcloudPublicQueryService {
                 queriedAt: new Date(),
             });
             await repo.save(log);
-        } catch (err: any) {
-            Logger.error(`Failed to write audit log: ${err.message}`, loggerCtx);
+        } catch {
+            Logger.error('Failed to write iCloud query audit log', loggerCtx);
         }
     }
 

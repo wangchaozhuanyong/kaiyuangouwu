@@ -7,7 +7,7 @@ import {
     RequestContext,
     UserInputError,
 } from '@vendure/core';
-import { Readable, Transform } from 'node:stream';
+import { pipeline, Readable, Transform } from 'node:stream';
 
 import { storefrontAssetUrl } from './content-image';
 
@@ -32,11 +32,10 @@ export class StorefrontExternalImageService {
     ) {}
 
     async import(ctx: RequestContext, imageUrl: string): Promise<Asset> {
+        let source: RemoteImageStream | undefined;
         try {
-            const source =
-                (await this.configService.importExportOptions.assetImportStrategy.getStreamFromPath(
-                    imageUrl,
-                )) as RemoteImageStream;
+            source =
+                await this.configService.importExportOptions.assetImportStrategy.getStreamFromPath(imageUrl);
             const maxBytes = this.configService.assetOptions.uploadMaxFileSize;
             this.assertContentLength(source, maxBytes);
             const fileName = this.importFileName(imageUrl, source);
@@ -50,6 +49,8 @@ export class StorefrontExternalImageService {
             throw new UserInputError(
                 '外部图片导入失败。请确认地址可公开访问、未超过素材上传大小限制，并且是 JPG、PNG、WebP、GIF 或 AVIF 图片；也可以直接上传到素材库。',
             );
+        } finally {
+            source?.destroy();
         }
     }
 
@@ -96,7 +97,7 @@ export class StorefrontExternalImageService {
                 callback(null, chunk);
             },
         });
-        source.once('error', error => limiter.destroy(error));
-        return source.pipe(limiter);
+        pipeline(source, limiter, () => undefined);
+        return limiter;
     }
 }

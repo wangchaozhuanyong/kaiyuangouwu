@@ -35,6 +35,7 @@ import { IcloudVirtualEmail } from '../src/entities/icloud-virtual-email.entity'
 import { IcloudRelayPlugin } from '../src/icloud-relay.plugin';
 import { IcloudJobService } from '../src/jobs/icloud-job.service';
 import { IcloudAdminService } from '../src/services/icloud-admin.service';
+import { IcloudCipherService } from '../src/services/icloud-cipher.service';
 import { IcloudImapSyncService } from '../src/services/icloud-imap-sync.service';
 import { IcloudMailEventsService } from '../src/services/icloud-mail-events.service';
 import { IcloudMailHistoryService } from '../src/services/icloud-mail-history.service';
@@ -403,10 +404,14 @@ describe('iCloud admin contract persistence', () => {
                 .get(TransactionalConnection)
                 .getRepository(ctx, IcloudQueryAuditLog)
                 .findOne({
-                    where: { queryCode: code, result: IcloudAuditResult.DISABLED },
+                    where: {
+                        targetId: String(scenario === 'primary-master' ? primary.id : alias.id),
+                        result: IcloudAuditResult.DISABLED,
+                    },
                     order: { id: 'DESC' },
                 });
             expect(audit).toMatchObject({
+                queryCode: server.app.get(IcloudCipherService).fingerprintQueryCode(code),
                 targetType: scenario === 'primary-master' ? 'PRIMARY' : 'VIRTUAL',
                 targetId: String(scenario === 'primary-master' ? primary.id : alias.id),
             });

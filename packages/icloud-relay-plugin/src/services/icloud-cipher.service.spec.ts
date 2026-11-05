@@ -34,4 +34,18 @@ describe('IcloudCipherService', () => {
         expect(cipher.decrypt(enc1)).toBe(password);
         expect(cipher.decrypt(enc2)).toBe(password);
     });
+
+    it('correlates audit attempts across instances with the same key but not across different keys', () => {
+        const code = 'MSTR-AAAA-BBBB';
+        const fingerprint = cipher.fingerprintQueryCode(code);
+        expect(fingerprint).toMatch(/^[0-9a-f]{64}$/);
+        expect(
+            new IcloudCipherService({
+                encryptionKey: 'test-secret-key-for-unit-testing',
+            }).fingerprintQueryCode(code),
+        ).toBe(fingerprint);
+        expect(
+            new IcloudCipherService({ encryptionKey: 'another-synthetic-key' }).fingerprintQueryCode(code),
+        ).not.toBe(fingerprint);
+    });
 });

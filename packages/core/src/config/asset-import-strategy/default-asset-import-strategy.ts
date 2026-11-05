@@ -16,6 +16,7 @@ import { AssetImportStrategy } from './asset-import-strategy';
 
 const loggerCtx = 'DefaultAssetImportStrategy';
 const MAX_LOGGED_URL_LENGTH = 200;
+const ASSET_DOWNLOAD_TIMEOUT_MS = 5_000;
 
 function safeForLog(value: string): string {
     return value.replace(/[\x00-\x1f\x7f]/g, '?').slice(0, MAX_LOGGED_URL_LENGTH);
@@ -48,7 +49,6 @@ function fetchUrl(url: URL, pinned: PinnedAddress | null): Promise<Readable> {
                   path: `${url.pathname}${url.search}`,
                   family: pinned.family,
                   headers: { Host: hostHeader },
-                  timeout: 5000,
               }
             : {
                   // No pinned IP: caller opted into `allowPrivateNetworks`, fall
@@ -59,14 +59,20 @@ function fetchUrl(url: URL, pinned: PinnedAddress | null): Promise<Readable> {
                   port,
                   path: `${url.pathname}${url.search}`,
                   headers: { Host: hostHeader },
-                  timeout: 5000,
               };
+        // Node's socket timeout only emits an event. Abort bounds the whole transfer,
+        // including a response that sends headers promptly and then stalls or trickles.
+        requestOptions.signal = AbortSignal.timeout(ASSET_DOWNLOAD_TIMEOUT_MS);
         if (isHttps && pinned) {
             (requestOptions as https.RequestOptions).servername = url.hostname;
         }
         get(requestOptions, res => {
+            // Consumers still receive the stream error. A caller abandoning the response
+            // must not leave a late abort unhandled.
+            res.on('error', () => undefined);
             const { statusCode } = res;
             if (statusCode !== 200) {
+                res.destroy();
                 Logger.error(
                     `Failed to fetch "${safeForLog(url.toString())}", statusCode: ${statusCode ?? 'unknown'}`,
                     loggerCtx,

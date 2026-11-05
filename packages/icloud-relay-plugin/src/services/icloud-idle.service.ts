@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 
 import { ICLOUD_IDLE_UNSUPPORTED_ERROR, ICLOUD_RELAY_PLUGIN_OPTIONS } from '../constants';
 import { IcloudPrimaryAccount } from '../entities/icloud-primary-account.entity';
+import { DEFAULT_ICLOUD_IMAP_HOST, DEFAULT_ICLOUD_IMAP_PORT, isIcloudImapEndpoint } from '../imap-endpoint';
 import { IcloudAccountStatus, IcloudRelayPluginOptions } from '../types';
 
 import { IcloudCipherService } from './icloud-cipher.service';
@@ -205,7 +206,11 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
         try {
             const account = await this.repo().findOneBy({ id });
             if (watcher.stopped || this.stopped || this.watchers.get(id) !== watcher) return;
-            if (!account || account.status !== IcloudAccountStatus.ACTIVE) {
+            if (
+                !account ||
+                account.status !== IcloudAccountStatus.ACTIVE ||
+                !isIcloudImapEndpoint(account.imapHost, account.imapPort)
+            ) {
                 await this.stop(id, watcher);
                 return;
             }
@@ -231,8 +236,8 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
                 imapPort: account.imapPort,
             };
             const client = (watcher.client = new ImapFlow({
-                host: account.imapHost || 'imap.mail.me.com',
-                port: account.imapPort || 993,
+                host: DEFAULT_ICLOUD_IMAP_HOST,
+                port: DEFAULT_ICLOUD_IMAP_PORT,
                 secure: true,
                 auth: { user: account.email, pass: password },
                 logger: false,

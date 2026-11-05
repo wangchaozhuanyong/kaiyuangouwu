@@ -82,6 +82,16 @@ function fixture() {
     return { service, repo, sync, execute, account, builder };
 }
 describe('event-driven IMAP IDLE', () => {
+    it('does not open or retry a socket for a stored unsupported endpoint', async () => {
+        const f = fixture();
+        f.account.imapHost = 'imap.example.test';
+        await f.service.ensureWatching('1');
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(state.clients).toHaveLength(0);
+        expect(f.sync.syncAccount).not.toHaveBeenCalled();
+        await f.service.onModuleDestroy();
+    });
+
     it('a changed credential is not reported healthy by the old socket and only the current recovery replaces it', async () => {
         const f = fixture();
         await f.service.ensureWatching('1');

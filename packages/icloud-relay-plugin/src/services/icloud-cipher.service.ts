@@ -7,18 +7,27 @@ import { type IcloudRelayPluginOptions } from '../types';
 @Injectable()
 export class IcloudCipherService {
     private readonly key: Buffer;
+    private readonly queryAuditKey: Buffer;
 
     constructor(
         @Optional()
         @Inject(ICLOUD_RELAY_PLUGIN_OPTIONS)
         options?: IcloudRelayPluginOptions,
     ) {
-        const rawSecret =
+        const configuredSecret =
             options?.encryptionKey ||
             process.env.ICLOUD_RELAY_ENCRYPTION_KEY ||
-            process.env.VENDURE_COOKIE_SECRET ||
-            'vendure-icloud-relay-default-secret-key-32b';
+            process.env.VENDURE_COOKIE_SECRET;
+        const rawSecret = configuredSecret || 'vendure-icloud-relay-default-secret-key-32b';
         this.key = crypto.createHash('sha256').update(rawSecret).digest();
+        // Local installs without a configured secret still need an unguessable audit key.
+        this.queryAuditKey = configuredSecret
+            ? crypto.createHmac('sha256', configuredSecret).update('vendure:icloud-query-audit:v1').digest()
+            : crypto.randomBytes(32);
+    }
+
+    fingerprintQueryCode(queryCode: string): string {
+        return crypto.createHmac('sha256', this.queryAuditKey).update(queryCode).digest('hex');
     }
 
     encrypt(plainText: string): string {
