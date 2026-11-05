@@ -748,7 +748,7 @@ describe('public SEO with real isolated SQL publication and catalog membership',
         expect(productSchema(result)).toMatchObject({ offers: { price: '16.00', priceCurrency: 'MYR' } });
     });
 
-    it('preserves zero sale prices and omits offers for quote-only products with a public sale', async () => {
+    it('preserves zero sale prices and omits incomplete Product markup for quote-only products', async () => {
         const source = page(context());
         source.flashSales = [
             {
@@ -760,7 +760,7 @@ describe('public SEO with real isolated SQL publication and catalog membership',
         expect(productSchema(free)).toMatchObject({ offers: { price: '0.00' } });
         (source.product as { customFields: { pricingMode: string } }).customFields.pricingMode = 'QUOTE_ONLY';
         const quote = await publicSeo.enrich(context(), 'store-1.test', source);
-        expect(productSchema(quote)).not.toHaveProperty('offers');
+        expect(productSchema(quote)).toBeUndefined();
     });
 
     it('publishes the real public review aggregate and visible review text in both languages per store', async () => {
