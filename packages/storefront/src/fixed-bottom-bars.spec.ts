@@ -52,13 +52,14 @@ describe('actual fixed bottom clearance', () => {
             this: HTMLElement,
         ) {
             const height = Number(this.dataset.height ?? 800);
+            const top = Number(this.dataset.top ?? 0);
             return {
                 x: 0,
-                y: 0,
+                y: top,
                 left: 0,
-                top: 0,
+                top,
                 right: 390,
-                bottom: height,
+                bottom: top + height,
                 width: 390,
                 height,
                 toJSON: () => ({}),
@@ -137,5 +138,91 @@ describe('actual fixed bottom clearance', () => {
         cleanup();
         cleanup = undefined;
         expect(clearance()).toBe('');
+    });
+
+    it.each(['page-action-bar', 'traffic-consent-banner'])(
+        'reveals obscured mobile keyboard focus behind %s without changing clearance',
+        className => {
+            vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(390);
+            const surface = bar(60, 0, className);
+            surface.dataset.top = '770';
+            const button = document.createElement('button');
+            button.dataset.top = '780';
+            button.dataset.height = '44';
+            const scrollIntoView = (button.scrollIntoView = vi.fn());
+            page().append(button);
+            cleanup = trackFixedBottomBars();
+            const originalClearance = clearance();
+
+            button.focus();
+            flush();
+
+            expect(scrollIntoView).toHaveBeenCalledExactlyOnceWith({
+                block: 'center',
+                inline: 'nearest',
+                behavior: 'instant',
+            });
+            expect(clearance()).toBe(originalClearance);
+
+            button.blur();
+            button.dataset.top = '660';
+            button.focus();
+            flush();
+            expect(scrollIntoView).toHaveBeenCalledTimes(1);
+        },
+    );
+
+    it('leaves focus inside fixed surfaces, dialogs, and desktop content in place', () => {
+        const width = vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(390);
+        const surface = bar(60, 0);
+        const dialog = document.createElement('div');
+        dialog.setAttribute('role', 'dialog');
+        page().append(dialog);
+        cleanup = trackFixedBottomBars();
+        for (const container of [surface, dialog, page()]) {
+            if (container === page()) width.mockReturnValue(1440);
+            const button = document.createElement('button');
+            const scrollIntoView = (button.scrollIntoView = vi.fn());
+            container.append(button);
+            button.focus();
+            flush();
+            expect(scrollIntoView).not.toHaveBeenCalled();
+        }
+    });
+
+    it('temporarily lifts consent when a page-end control cannot scroll clear', () => {
+        const width = vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(390);
+        const banner = bar(180, 0, 'traffic-consent-banner');
+        banner.dataset.top = '580';
+        const consentChoice = document.createElement('button');
+        banner.append(consentChoice);
+        const feedback = document.createElement('button');
+        feedback.dataset.top = '613';
+        feedback.dataset.height = '32';
+        feedback.scrollIntoView = vi.fn();
+        page().append(feedback);
+        cleanup = trackFixedBottomBars();
+
+        const translate = () => banner.style.getPropertyValue('translate');
+        const focusFeedback = () => {
+            feedback.focus();
+            flush();
+            expect(translate()).toBe('0 -151px');
+            expect(clearance()).toBe('0px');
+        };
+        focusFeedback();
+        consentChoice.focus();
+        expect(translate()).toBe('');
+
+        focusFeedback();
+        feedback.blur();
+        flush();
+        expect(translate()).toBe('');
+
+        focusFeedback();
+        width.mockReturnValue(1440);
+        window.dispatchEvent(new Event('resize'));
+        flush();
+        expect(translate()).toBe('');
     });
 });

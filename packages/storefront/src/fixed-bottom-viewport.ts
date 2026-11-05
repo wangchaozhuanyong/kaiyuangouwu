@@ -77,10 +77,19 @@ export function trackFixedBottomViewport(): () => void {
 /** Actual fixed surfaces own clearance; keyboard positioning never changes document height. */
 export function trackFixedBottomBars(): () => void {
     const clearance = '--page-bottom-measured-clearance';
+    const barsSelector = '.page-action-bar, .address-use-bar, .storefront-bottom-nav';
+    const consentSelector = '.traffic-consent-banner';
+    const focusCoverSelector = `${barsSelector}, ${consentSelector}`;
     const pages = new Set<HTMLElement>();
     const observed = new Set<HTMLElement>();
     let frame = 0;
+    let focusFrame = 0;
     let disposed = false;
+    let displacedConsent: { banner: HTMLElement; target: HTMLElement } | undefined;
+    const restoreConsent = () => {
+        displacedConsent?.banner.style.removeProperty('translate');
+        displacedConsent = undefined;
+    };
     const visible = (element: HTMLElement) => {
         if (element.closest('[hidden]')) return false;
         const style = getComputedStyle(element);
@@ -108,11 +117,14 @@ export function trackFixedBottomBars(): () => void {
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(schedule);
     const update = () => {
         frame = 0;
-        const bars = [
-            ...document.querySelectorAll<HTMLElement>(
-                '.page-action-bar, .address-use-bar, .storefront-bottom-nav',
-            ),
-        ];
+        if (
+            displacedConsent &&
+            (!displacedConsent.banner.isConnected ||
+                document.activeElement !== displacedConsent.target ||
+                window.innerWidth >= 1024)
+        )
+            restoreConsent();
+        const bars = [...document.querySelectorAll<HTMLElement>(barsSelector)];
         const nextObserved = new Set(bars);
         for (const element of observed) {
             if (!nextObserved.has(element)) {
@@ -152,6 +164,53 @@ export function trackFixedBottomBars(): () => void {
             if (page.style.getPropertyValue(clearance) !== value) page.style.setProperty(clearance, value);
         }
     };
+    const overlaps = (rect: DOMRect, cover: DOMRect) =>
+        rect.left < cover.right &&
+        rect.right > cover.left &&
+        rect.top < cover.bottom &&
+        rect.bottom > cover.top;
+    const revealFocus = () => {
+        focusFrame = 0;
+        restoreConsent();
+        const target = document.activeElement;
+        if (
+            window.innerWidth >= 1024 ||
+            !(target instanceof HTMLElement) ||
+            !target.matches(':focus-visible') ||
+            !target.closest('.storefront-app') ||
+            target.closest(`${focusCoverSelector}, [role="dialog"], dialog`)
+        )
+            return;
+
+        const rect = target.getBoundingClientRect();
+        const covers = [...document.querySelectorAll<HTMLElement>(focusCoverSelector)].filter(
+            surface => visible(surface) && getComputedStyle(surface).position === 'fixed',
+        );
+        if (!covers.some(surface => overlaps(rect, surface.getBoundingClientRect()))) return;
+        target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+
+        // Near the end of a page there may be no scroll room left. Move only the
+        // consent notice, keeping its controls reachable and the page height intact.
+        const banner = covers.find(surface => surface.matches(consentSelector));
+        if (!banner) return;
+        const remaining = target.getBoundingClientRect();
+        const cover = banner.getBoundingClientRect();
+        if (!overlaps(remaining, cover)) return;
+        const lift = Math.floor(Math.min(cover.top, cover.bottom - remaining.top + 4));
+        if (lift <= 0) return;
+        displacedConsent = { banner, target };
+        banner.style.setProperty('translate', `0 -${lift}px`);
+    };
+    const scheduleFocus = (event?: FocusEvent) => {
+        if (event?.target instanceof Node && displacedConsent?.banner.contains(event.target))
+            restoreConsent();
+        // Measure after the browser's native focus scroll, and only after focus changes.
+        if (!focusFrame) focusFrame = window.requestAnimationFrame(revealFocus);
+    };
+    const resize = () => {
+        schedule();
+        if (displacedConsent) scheduleFocus();
+    };
     const mutations = new MutationObserver(schedule);
     mutations.observe(document.body, {
         childList: true,
@@ -159,16 +218,22 @@ export function trackFixedBottomBars(): () => void {
         attributes: true,
         attributeFilter: ['class', 'hidden', 'inert'],
     });
-    window.addEventListener('resize', schedule, { passive: true });
+    window.addEventListener('resize', resize, { passive: true });
     window.addEventListener('pageshow', schedule, { passive: true });
+    document.addEventListener('focusin', scheduleFocus);
+    document.addEventListener('focusout', scheduleFocus);
     update();
     return () => {
         disposed = true;
         window.cancelAnimationFrame(frame);
+        window.cancelAnimationFrame(focusFrame);
+        restoreConsent();
         mutations.disconnect();
         observer?.disconnect();
-        window.removeEventListener('resize', schedule);
+        window.removeEventListener('resize', resize);
         window.removeEventListener('pageshow', schedule);
+        document.removeEventListener('focusin', scheduleFocus);
+        document.removeEventListener('focusout', scheduleFocus);
         for (const page of pages) page.style.removeProperty(clearance);
     };
 }

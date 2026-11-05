@@ -143,9 +143,9 @@ export function ManagedLegalPage({
                         </dl>
                     ) : null}
                     {document ? (
-                        <ContentText as="div" className="legal-managed-body">
-                            {interpolateLegalProfileTokens(document.body, legalIdentity, language)}
-                        </ContentText>
+                        <LegalBody
+                            text={interpolateLegalProfileTokens(document.body, legalIdentity, language)}
+                        />
                     ) : (
                         <div className="legal-managed-empty" role="status">
                             <CircleAlert aria-hidden="true" />
@@ -163,6 +163,40 @@ export function ManagedLegalPage({
                 </article>
             </div>
         </main>
+    );
+}
+
+const legalHeadingTags = ['h2', 'h2', 'h3', 'h4', 'h5', 'h6'] as const;
+
+function LegalBody({ text }: { text: string }) {
+    const lines = text.split(/\r\n?|\n/u);
+    const body = lines.map((line, index) => {
+        const heading = /^(#{1,6})[ \t]+(\S.*)$/u.exec(line);
+        if (heading) {
+            const Heading = legalHeadingTags[heading[1].length - 1];
+            return (
+                <Heading key={index}>
+                    <strong>{heading[2]}</strong>
+                </Heading>
+            );
+        }
+        if (/^[ \t]*-{3,}[ \t]*$/u.test(line)) {
+            return <hr key={index} />;
+        }
+        return index < lines.length - 1 ? line + '\n' : line;
+    });
+
+    if (body.every(line => typeof line === 'string')) {
+        return (
+            <ContentText as="div" className="legal-managed-body">
+                {text}
+            </ContentText>
+        );
+    }
+    return (
+        <div className="content-text legal-managed-body" data-content-format="plain">
+            {body}
+        </div>
     );
 }
 
