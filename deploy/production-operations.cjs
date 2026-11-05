@@ -1805,6 +1805,33 @@ function validateStoreAutonomyAuditPayload(output) {
     assert.equal(typeof payload?.coverageComplete, 'boolean', 'Missing audit coverage status');
     assert.ok(Array.isArray(payload?.checks), 'Missing store isolation checks');
     assert.ok(Array.isArray(payload?.structure), 'Missing store isolation structure checks');
+    const hasExactKeys = (value, keys) =>
+        Boolean(value) &&
+        Object.keys(value).length === keys.length &&
+        keys.every(key => Object.hasOwn(value, key));
+    const readiness = payload.securityReadiness;
+    assert.ok(hasExactKeys(readiness, ['administratorMfa', 'icloudImap']), 'Invalid security readiness');
+    for (const [counts, total, subset] of [
+        [readiness.icloudImap, 'activeAccounts', 'incompatibleEndpoints'],
+        [readiness.administratorMfa, 'activeAdministrators', 'enrolledAdministrators'],
+    ]) {
+        assert.ok(hasExactKeys(counts, [total, subset, 'status']), 'Unexpected security readiness fields');
+        assert.ok(['COMPLETE', 'DATA_MISSING'].includes(counts.status), 'Invalid security readiness status');
+        if (counts.status === 'DATA_MISSING') {
+            assert.ok(
+                counts[total] === null && counts[subset] === null,
+                'Invalid unavailable readiness counts',
+            );
+        } else {
+            assert.ok(
+                Number.isSafeInteger(counts[total]) &&
+                    Number.isSafeInteger(counts[subset]) &&
+                    counts[subset] >= 0 &&
+                    counts[subset] <= counts[total],
+                'Invalid security readiness counts',
+            );
+        }
+    }
     const forbiddenKeys =
         /^(?:email|identifier|address|token|password|credential|customerId|orderId|fileName|root)$/iu;
     const visit = value => {

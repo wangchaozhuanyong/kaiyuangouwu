@@ -533,6 +533,56 @@ function requiredAggregate(row, field) {
     return safeInteger(value);
 }
 
+async function collectSecurityReadiness(adapter, schema) {
+    let icloudImap = { status: 'DATA_MISSING', activeAccounts: null, incompatibleEndpoints: null };
+    if (
+        await requirementsAvailable(schema, [['icloud_primary_account', ['status', 'imapHost', 'imapPort']]])
+    ) {
+        // Keep these defaults aligned with the supported Apple endpoint. Compare bytes so the
+        // database's collation cannot make a different hostname look compatible.
+        const [row] = await adapter.query(
+            `SELECT COUNT(*) AS total, COUNT(CASE WHEN
+                HEX(LOWER(TRIM(COALESCE(imapHost, '')))) NOT IN ('', HEX(?))
+                OR COALESCE(imapPort, ?) <> ?
+                THEN 1 END) AS incompatible
+             FROM icloud_primary_account WHERE status IN ('ACTIVE', 'SYNCING')`,
+            ['imap.mail.me.com', 993, 993],
+        );
+        icloudImap = {
+            status: 'COMPLETE',
+            activeAccounts: requiredAggregate(row, 'total'),
+            incompatibleEndpoints: requiredAggregate(row, 'incompatible'),
+        };
+    }
+
+    let administratorMfa = {
+        status: 'DATA_MISSING',
+        activeAdministrators: null,
+        enrolledAdministrators: null,
+    };
+    if (
+        await requirementsAvailable(schema, [
+            ['administrator', ['userId', 'deletedAt']],
+            ['user', ['id', 'deletedAt']],
+            ['admin_two_factor_credential', ['userId', 'enabledAt', 'encryptedSecret']],
+        ])
+    ) {
+        const [row] = await adapter.query(`SELECT COUNT(*) AS total, COUNT(CASE WHEN EXISTS (
+                SELECT 1 FROM admin_two_factor_credential factor
+                WHERE factor.userId = a.userId AND factor.enabledAt IS NOT NULL
+                    AND LENGTH(factor.encryptedSecret) > 0
+            ) THEN 1 END) AS enrolled
+            FROM administrator a INNER JOIN ${quoted('user')} u ON u.id = a.userId
+            WHERE a.deletedAt IS NULL AND u.deletedAt IS NULL`);
+        administratorMfa = {
+            status: 'COMPLETE',
+            activeAdministrators: requiredAggregate(row, 'total'),
+            enrolledAdministrators: requiredAggregate(row, 'enrolled'),
+        };
+    }
+    return { icloudImap, administratorMfa };
+}
+
 async function collectFixedStateCounts(adapter, schema, table, states) {
     if (!(await schema.columnExists(table, 'state')))
         return { status: 'DATA_MISSING', total: null, byState: null };
@@ -822,6 +872,7 @@ export async function collectStoreAutonomyAudit(adapter, options = {}) {
         coverage,
         perChannelCounts: await collectPerChannelCounts(adapter, schema, channels),
         generatedRecordCounts: await collectGeneratedRecordCounts(adapter, schema),
+        securityReadiness: await collectSecurityReadiness(adapter, schema),
         defaultChannelSeparation: await collectDefaultChannelSeparation(
             adapter,
             schema,

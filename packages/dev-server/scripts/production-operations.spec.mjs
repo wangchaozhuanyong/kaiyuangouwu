@@ -2322,6 +2322,14 @@ void test('store isolation audit validates sanitized output and stable runtime e
         coverageComplete: true,
         checks: [],
         structure: [],
+        securityReadiness: {
+            icloudImap: { status: 'COMPLETE', activeAccounts: 3, incompatibleEndpoints: 1 },
+            administratorMfa: {
+                status: 'DATA_MISSING',
+                activeAdministrators: null,
+                enrolledAdministrators: null,
+            },
+        },
     };
     const result = operations.runStoreIsolationAudit(request, {
         inspect: () => structuredClone(plan),
@@ -2351,6 +2359,7 @@ void test('store isolation audit validates sanitized output and stable runtime e
     assert.equal(result.runtimeSha, runtimeSha);
     assert.equal(result.migrationState.pendingCount, 0);
     assert.equal(result.audit.verdict, 'NO_GO');
+    assert.deepEqual(result.audit.securityReadiness, payload.securityReadiness);
     assert.throws(() => operations.validateMigrationAuditOutput('invalid'));
     assert.throws(() => operations.validateStoreAutonomyAuditPayload('{'));
     let pendingHealthChecks = 0;
@@ -2384,6 +2393,15 @@ void test('store isolation audit validates sanitized output and stable runtime e
     assert.throws(() =>
         operations.validateStoreAutonomyAuditPayload(JSON.stringify({ ...payload, customerId: 123 })),
     );
+    const unsafeReadiness = structuredClone(payload);
+    unsafeReadiness.securityReadiness.icloudImap.incompatibleEndpoints = 4;
+    assert.throws(
+        () => operations.validateStoreAutonomyAuditPayload(JSON.stringify(unsafeReadiness)),
+        /Invalid security readiness counts/u,
+    );
+    const nonAggregateReadiness = structuredClone(payload);
+    nonAggregateReadiness.securityReadiness.icloudImap.host = 'private-host.example.test';
+    assert.throws(() => operations.validateStoreAutonomyAuditPayload(JSON.stringify(nonAggregateReadiness)));
     assert.throws(
         () =>
             operations.runStoreIsolationAudit(request, {
