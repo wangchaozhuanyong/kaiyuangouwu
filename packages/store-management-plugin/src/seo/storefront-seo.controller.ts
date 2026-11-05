@@ -34,6 +34,44 @@ const trackingKeys = [
     'wbraid',
 ];
 
+function renderCatalogNotFound(code: 'zh_Hans' | 'en'): string {
+    const chinese = code === 'zh_Hans';
+    const path = chinese ? '/zh' : '/en';
+    const title = chinese ? '页面未找到' : 'Page not found';
+    const description = chinese
+        ? '这个商品或分类可能已下架，或者链接已经失效。'
+        : 'This product or category may have been removed, or its link may have changed.';
+    const home = chinese ? '返回商城首页' : 'Back to store home';
+    const catalog = chinese ? '浏览商品' : 'Browse products';
+    return `<!doctype html>
+<html lang="${chinese ? 'zh-CN' : 'en'}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, follow">
+    <title>${title}</title>
+    <style>
+        :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.5; }
+        body { margin: 0; padding: clamp(1rem, 6vw, 4rem); }
+        main { max-inline-size: 36rem; margin: 12vh auto 0; }
+        nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; }
+        a { display: inline-flex; align-items: center; min-block-size: 44px; }
+    </style>
+</head>
+<body>
+    <main>
+        <p aria-hidden="true">404</p>
+        <h1>${title}</h1>
+        <p>${description}</p>
+        <nav aria-label="${chinese ? '商城导航' : 'Store navigation'}">
+            <a href="${path}/">${home}</a>
+            <a href="${path}/category">${catalog}</a>
+        </nav>
+    </main>
+</body>
+</html>`;
+}
+
 export function normalizedPublicRedirectPath(raw: string): string | null {
     if (!raw.startsWith('/') || raw.startsWith('//') || raw.length > 4096 || /[\\\r\n#]/u.test(raw))
         return null;
@@ -210,9 +248,13 @@ export class StorefrontSeoController {
         } catch (error) {
             res.setHeader('X-Robots-Tag', 'noindex, follow');
             reportTiming();
-            if (error instanceof NotFoundException)
-                res.status(404).type('text/plain').send('Public page not found');
-            else if (error instanceof ServiceUnavailableException) {
+            if (error instanceof NotFoundException) {
+                if (request.kind === 'product' || request.kind === 'catalog') {
+                    res.status(404).type('html').send(renderCatalogNotFound(code));
+                } else {
+                    res.status(404).type('text/plain').send('Public page not found');
+                }
+            } else if (error instanceof ServiceUnavailableException) {
                 const requestId = randomUUID();
                 const ray = trustedPublicPageHeaders(req) ? req.headers['cf-ray'] : undefined;
                 res.setHeader('X-Request-Id', requestId);
