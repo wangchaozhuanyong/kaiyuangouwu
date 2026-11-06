@@ -76,7 +76,10 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
     writeFileSync(path.join(fixture, 'www/assets/current-87654321.js'), 'export const version = "new";');
     preserveFrontendAssets(path.join(fixture, 'prior'), path.join(fixture, 'www'));
     rmSync(path.join(fixture, 'prior'), { recursive: true });
-    writeFileSync(path.join(fixture, 'proxy_params'), 'proxy_set_header X-Forwarded-Proto $scheme;\n');
+    writeFileSync(
+        path.join(fixture, 'proxy_params'),
+        'proxy_set_header X-Forwarded-Proto $scheme;\nproxy_set_header Host $host;\n',
+    );
     const config = [
         'events {}',
         'http {',
@@ -90,11 +93,16 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         coopMap,
         block('map "$http_authorization|$http_cookie" $storefront_public_coupon_guest'),
         block('map "$status|$uri" $build_asset_cache_control'),
+        'map "$host|$http_x_storefront_original_uri" $environment_fixture_shell {',
+        'default 0;',
+        '"~^127[.]0[.]0[.]1[|](?:/(?:zh|en))?/environment-monitor/?(?:[?]|$)" 1;',
+        '}',
         'upstream vendure_backend { server 127.0.0.1:8081; }',
         'server { listen 8081;',
         'location = /storefront/redirect {',
         'if ($http_x_storefront_original_uri ~ "^/old-route(?:[?]|$)") { return 301 /en/category; }',
         'if ($http_x_storefront_original_uri ~ "^/backend-failure") { return 503; }',
+        'if ($environment_fixture_shell) { add_header X-Accel-Redirect /index.html; return 200; }',
         'return 404; }',
         'location = /storefront/html { default_type "text/html; charset=utf-8";',
         'return 200 "Published public page; guest=$http_x_storefront_public_coupon_guest; ' +
@@ -237,6 +245,35 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         const head = await fetch(origin + '/missing-page', { method: 'HEAD' });
         assert.equal(head.status, 404);
         assert.equal(await head.text(), '');
+    });
+    await t.test('serves the enabled tool with 200 and keeps disabled stores at 404', async () => {
+        for (const pathname of [
+            '/environment-monitor',
+            '/zh/environment-monitor?source=fixture',
+            '/en/environment-monitor/',
+        ]) {
+            for (const [host, status] of [
+                ['127.0.0.1', 200],
+                ['disabled.fixture', 404],
+            ]) {
+                // Send the synthetic Host directly through the production proxy directives.
+                const { response, body } = await new Promise((resolve, reject) => {
+                    get(origin + pathname, { headers: { host } }, incoming => {
+                        let text = '';
+                        incoming.setEncoding('utf8');
+                        incoming.on('data', chunk => (text += chunk));
+                        incoming.on('end', () => resolve({ response: incoming, body: text }));
+                        incoming.on('error', reject);
+                    }).on('error', reject);
+                });
+                assert.equal(response.statusCode, status, pathname);
+                assert.match(body, /recovery navigation/, pathname);
+                assert.match(response.headers['x-robots-tag'], /noindex/);
+                assert.match(response.headers['cache-control'], /no-store/);
+                assert.equal(response.headers.location, undefined);
+            }
+        }
+        assert.equal((await fetch(origin + '/zh/environment-monitor/missing')).status, 404);
     });
     await t.test(
         'mail document refresh uses the storefront shell while legacy scripts and console stay compatible',

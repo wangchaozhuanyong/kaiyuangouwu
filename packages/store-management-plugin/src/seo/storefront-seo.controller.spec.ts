@@ -69,6 +69,7 @@ function fixture() {
     const pages = {
         read: vi.fn().mockResolvedValue(page),
         readForDocument: vi.fn().mockResolvedValue(page),
+        isClientPluginPublished: vi.fn().mockResolvedValue(false),
     };
     const prepared = { requestLocal: true };
     const publicSeo = {
@@ -386,6 +387,43 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
         expect(response.status).toHaveBeenCalledWith(404);
         expect(response.redirect).not.toHaveBeenCalled();
         expect(response.send).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['/zh/environment-monitor?utm_source=fixture', 'zh_Hans'],
+        ['/en/environment-monitor/', 'en'],
+        ['/environment-monitor', 'en'],
+    ])('serves the app shell for an enabled tool at %s', async (path, language) => {
+        const test = fixture();
+        test.pages.isClientPluginPublished.mockResolvedValue(true);
+        const response = responseMock();
+        await test.controller.legacyRedirect(test.req(path), response as unknown as Response);
+        expect(test.pages.isClientPluginPublished).toHaveBeenCalledWith(
+            test.ctx,
+            'environment-monitor-entry',
+            language,
+        );
+        expect(response.setHeader).toHaveBeenCalledWith('X-Accel-Redirect', '/index.html');
+        expect(response.status).toHaveBeenCalledWith(200);
+        expect(response.redirect).not.toHaveBeenCalled();
+    });
+
+    it('preserves 404 for disabled, unknown and untrusted tool requests', async () => {
+        const test = fixture();
+        for (const [path, trusted, checkEnabled] of [
+            ['/zh/environment-monitor', true, true],
+            ['/en/environment-monitor/missing', true, false],
+            ['/zh/environment-monitor', false, false],
+        ] as const) {
+            test.pages.isClientPluginPublished.mockClear();
+            const response = responseMock();
+            const request = test.req(path, trusted);
+            if (!trusted) request.query.path = path;
+            await test.controller.legacyRedirect(request, response as unknown as Response);
+            expect(test.pages.isClientPluginPublished).toHaveBeenCalledTimes(checkEnabled ? 1 : 0);
+            expect(response.setHeader).not.toHaveBeenCalledWith('X-Accel-Redirect', expect.anything());
+            expect(response.status).toHaveBeenCalledWith(404);
+        }
     });
 
     it('normalizes locale and primary host while dropping private and unrelated parameters', async () => {

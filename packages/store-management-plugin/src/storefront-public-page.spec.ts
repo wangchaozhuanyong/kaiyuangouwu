@@ -1,5 +1,5 @@
 import { ServiceUnavailableException } from '@nestjs/common';
-import { Channel, ForbiddenError, PUBLIC_PRODUCT_SUMMARY_READER } from '@vendure/core';
+import { Channel, ForbiddenError, LanguageCode, PUBLIC_PRODUCT_SUMMARY_READER } from '@vendure/core';
 import {
     publicPageRequestKey,
     StorefrontAccountSettingsService,
@@ -413,6 +413,27 @@ function accessHarness(initial: 'LIVE' | 'PREVIEW' | 'CLOSED' = 'LIVE', worker =
         ctx: setup().ctx as never,
     };
 }
+
+it('checks the enabled tool in the current channel and language publication', async () => {
+    const h = accessHarness();
+    const block = {
+        enabled: true,
+        code: 'storefront-client-plugins',
+        type: 'CLIENT_PLUGINS',
+        items: [{ enabled: true, settings: { pluginCode: 'environment-monitor-entry' } }],
+    };
+    h.sources.content.findPublished
+        .mockResolvedValueOnce([{ ...block, items: [{ ...block.items[0], enabled: false }] }])
+        .mockResolvedValueOnce([block]);
+    await expect(
+        h.service.isClientPluginPublished(h.ctx, 'environment-monitor-entry', LanguageCode.zh_Hans),
+    ).resolves.toBe(false);
+    await expect(
+        h.service.isClientPluginPublished(h.ctx, 'environment-monitor-entry', LanguageCode.en),
+    ).resolves.toBe(true);
+    expect(h.sources.content.findPublished).toHaveBeenNthCalledWith(1, h.ctx, false, LanguageCode.zh_Hans);
+    expect(h.sources.content.findPublished).toHaveBeenNthCalledWith(2, h.ctx, false, LanguageCode.en);
+});
 
 describe('public page inline artwork', () => {
     afterEach(() => {
