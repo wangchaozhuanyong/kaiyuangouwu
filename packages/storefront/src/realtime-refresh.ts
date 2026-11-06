@@ -1,5 +1,6 @@
-import type { Query, QueryClient, QueryKey } from '@tanstack/react-query';
+// organize-imports-ignore -- Preserve the repository's ESLint order for type-only imports.
 import type { StorefrontRealtimeEvent, StorefrontRealtimeScope } from './realtime-updates';
+import type { Query, QueryClient, QueryKey } from '@tanstack/react-query';
 
 /** Recover active account reads whose invalidation may have been missed while the stream was down. */
 export function refreshStorefrontPrivateRealtimeReads(
