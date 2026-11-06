@@ -29,9 +29,7 @@ import { StorefrontContext } from './StorefrontContext';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import { type ActiveCustomer } from './types';
 
-const StorefrontUpdatePrompt = lazy(() =>
-    import('./StorefrontUpdatePrompt').then(module => ({ default: module.StorefrontUpdatePrompt })),
-);
+type StorefrontUpdatePromptComponent = typeof import('./StorefrontUpdatePrompt').StorefrontUpdatePrompt;
 
 const StorefrontTrafficPreference = lazy(() =>
     import('./storefront-ui/storefront-traffic-preference').then(module => ({
@@ -164,6 +162,24 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
         previewEmbedded || !state.storefrontUnavailable,
         readinessIdentity,
     );
+    const showUpdatePrompt =
+        !previewEmbedded && deferredUiReady && shouldShowStorefrontUpdatePrompt(renderedRouteName);
+    const [UpdatePrompt, setUpdatePrompt] = useState<StorefrontUpdatePromptComponent>();
+    useEffect(() => {
+        if (!showUpdatePrompt || UpdatePrompt || !online || navigator.onLine === false) return;
+        let active = true;
+        void import('./StorefrontUpdatePrompt')
+            .then(({ StorefrontUpdatePrompt }) => {
+                if (active) setUpdatePrompt(() => StorefrontUpdatePrompt);
+            })
+            .catch(() => {
+                // A disconnect can interrupt this optional import after the idle check.
+                // Keep the page usable and allow the next online transition to load it.
+            });
+        return () => {
+            active = false;
+        };
+    }, [showUpdatePrompt, UpdatePrompt, online]);
 
     useEffect(() => {
         if (deferredUiReady && !customer) {
@@ -320,17 +336,13 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                 desktop && customer && !authRoute ? <DesktopAccountNavigation /> : undefined
                             }
                             deferred={
-                                !previewEmbedded &&
-                                deferredUiReady &&
-                                shouldShowStorefrontUpdatePrompt(renderedRouteName) ? (
+                                showUpdatePrompt && UpdatePrompt ? (
                                     <StorefrontErrorBoundary fallback={null}>
-                                        <Suspense fallback={null}>
-                                            <StorefrontUpdatePrompt
-                                                language={language}
-                                                route={renderedRouteName}
-                                                initialAssetReferences={initialStorefrontAssetReferences}
-                                            />
-                                        </Suspense>
+                                        <UpdatePrompt
+                                            language={language}
+                                            route={renderedRouteName}
+                                            initialAssetReferences={initialStorefrontAssetReferences}
+                                        />
                                     </StorefrontErrorBoundary>
                                 ) : undefined
                             }
