@@ -399,6 +399,18 @@
 .environment-gauge.is-running {
     color: var(--skin-tool-security-foreground, var(--coupon-blue-ink));
 }
+.environment-gauge.is-running .environment-gauge-fill {
+    animation: environment-gauge-pulse 1.8s ease-in-out infinite;
+}
+.environment-gauge.is-indeterminate .environment-gauge-fill {
+    animation: environment-operation-spin 1.5s linear infinite;
+    transform-origin: center;
+}
+@keyframes environment-gauge-pulse {
+    50% {
+        opacity: 0.6;
+    }
+}
 .environment-gauge-value {
     position: absolute;
     inset: 0;

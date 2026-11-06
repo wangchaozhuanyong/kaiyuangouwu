@@ -261,7 +261,14 @@ export function EnvironmentMonitorPage({
     const findings = diagnose(report, networkState, networkReport, failureReason);
     const networkFindings = findings.filter(finding => finding.scope === 'network');
     const networkDone = networkState === 'ready' || networkState === 'error';
-    const percent = retryingCheck !== null ? 0 : Math.round(((completed + Number(networkDone)) / 13) * 100);
+    const percent = Math.round(((completed + Number(networkDone)) / 13) * 100);
+    const waitingForNetwork = networkBusy && (!busy || completed === 12 || localError);
+    const waitingLabel =
+        retryingCheck !== null
+            ? t('正在重试此项', 'Retrying this signal')
+            : waitingForNetwork
+              ? t('正在查询网络', 'Checking network')
+              : null;
     const current = checks[retryingCheck ?? Math.min(completed, 11)];
     const formattedTime = (value: Date) =>
         value.toLocaleTimeString(zh ? 'zh-CN' : 'en-GB', { hour12: false });
@@ -650,7 +657,9 @@ export function EnvironmentMonitorPage({
                                     {t('12 项信号 · 10 项评分', '12 signals · 10 scored')}
                                 </span>
                             </div>
-                            <div className={`environment-gauge${running ? ' is-running' : ''}`}>
+                            <div
+                                className={`environment-gauge${running ? ' is-running' : ''}${waitingLabel ? ' is-indeterminate' : ''}`}
+                            >
                                 <svg viewBox="0 0 200 200" aria-hidden="true">
                                     <circle className="environment-gauge-track" cx="100" cy="100" r="86" />
                                     <circle
@@ -659,7 +668,7 @@ export function EnvironmentMonitorPage({
                                         cy="100"
                                         r="86"
                                         pathLength="100"
-                                        strokeDasharray={`${running ? percent : (score ?? 0)} 100`}
+                                        strokeDasharray={`${waitingLabel ? 22 : running ? percent : (score ?? 0)} 100`}
                                     />
                                 </svg>
                                 <div className="environment-gauge-value">
@@ -668,43 +677,48 @@ export function EnvironmentMonitorPage({
                                             ? t('检测进度', 'Progress')
                                             : t('环境风险参考分', 'Environment risk reference score')}
                                     </span>
-                                    <strong className="environment-metric">
-                                        {running ? percent : (score ?? '—')}
-                                        <small className="type-helper">
-                                            {running ? '%' : score !== null ? '/ 100' : ''}
-                                        </small>
-                                    </strong>
-                                    <span
-                                        className={`environment-gauge-status type-helper ${running ? 'is-pending' : 'is-signal'}`}
-                                    >
-                                        {running ? (
-                                            <LoaderCircle className="environment-spinner" />
-                                        ) : score !== null ? (
-                                            <CheckCheck />
-                                        ) : null}
-                                        {running
-                                            ? t('检查中', 'Checking')
-                                            : score === null
-                                              ? report
-                                                  ? t('信号不完整', 'Incomplete signals')
-                                                  : t('等待开始', 'Ready when you are')
-                                              : level === 'low'
-                                                ? t('区域特征较少', 'Fewer regional signals')
-                                                : level === 'medium'
-                                                  ? t('区域特征中等', 'Some regional signals')
-                                                  : t('区域特征较多', 'More regional signals')}
-                                    </span>
+                                    {waitingLabel ? (
+                                        <strong className="type-label">{waitingLabel}</strong>
+                                    ) : (
+                                        <>
+                                            <strong className="environment-metric">
+                                                {running ? percent : (score ?? '—')}
+                                                <small className="type-helper">
+                                                    {running ? '%' : score !== null ? '/ 100' : ''}
+                                                </small>
+                                            </strong>
+                                            <span
+                                                className={`environment-gauge-status type-helper ${running ? 'is-pending' : 'is-signal'}`}
+                                            >
+                                                {running ? (
+                                                    <LoaderCircle className="environment-spinner" />
+                                                ) : score !== null ? (
+                                                    <CheckCheck />
+                                                ) : null}
+                                                {running
+                                                    ? t('检查中', 'Checking')
+                                                    : score === null
+                                                      ? report
+                                                          ? t('信号不完整', 'Incomplete signals')
+                                                          : t('等待开始', 'Ready when you are')
+                                                      : level === 'low'
+                                                        ? t('区域特征较少', 'Fewer regional signals')
+                                                        : level === 'medium'
+                                                          ? t('区域特征中等', 'Some regional signals')
+                                                          : t('区域特征较多', 'More regional signals')}
+                                            </span>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                             <div className="environment-scan-message" aria-live="polite">
                                 <p className="type-body">
                                     {running
-                                        ? retryingCheck !== null || completed < 12
-                                            ? `${t('正在检查：', 'Checking: ')}${copy(current.title)}`
-                                            : t(
-                                                  '本地检测已完成，正在查询网络信息',
-                                                  'Local checks complete. Waiting for network details.',
-                                              )
+                                        ? waitingForNetwork
+                                            ? completed === 12
+                                                ? t('本地检测已完成', 'Local checks complete')
+                                                : t('正在查询网络信息', 'Looking up network details')
+                                            : `${t('正在检查：', 'Checking: ')}${copy(current.title)}`
                                         : localError
                                           ? t(
                                                 '浏览器信息读取失败，请重新检测；已保留其他可用结果。',
