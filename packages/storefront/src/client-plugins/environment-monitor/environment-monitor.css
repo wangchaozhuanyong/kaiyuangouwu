@@ -577,22 +577,109 @@
     height: 16px;
     flex: none;
 }
+.environment-tool-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-8);
+    width: 100%;
+}
 .environment-external-check {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-8);
+    gap: var(--space-4);
     width: 100%;
+    min-width: 0;
     min-height: var(--experience-control-min);
-    padding: var(--space-12) var(--space-16);
+    padding: var(--space-12) var(--space-4);
+    border: 0;
     border-radius: var(--skin-control-radius);
     color: var(--text);
     background: var(--control-surface);
     text-decoration: none;
+    text-align: center;
+}
+.environment-external-check > span {
+    text-wrap: balance;
 }
 .environment-external-check:hover {
     color: var(--interaction-ink);
     background: var(--interaction-hover);
+}
+.environment-proxy-guide {
+    display: grid;
+    gap: var(--space-12);
+    padding: var(--space-16);
+    min-width: 0;
+}
+.environment-proxy-guide :is(p, h3, h4, h5, pre, ul) {
+    margin: 0;
+}
+.environment-proxy-guide .environment-proxy-notes {
+    padding-inline-start: var(--space-24);
+    list-style: disc;
+}
+.environment-proxy-guide code {
+    overflow-wrap: anywhere;
+}
+.environment-proxy-guide .environment-proxy-warning {
+    padding: var(--space-12);
+    border-radius: var(--skin-control-radius);
+    color: var(--warning-text);
+    background: color-mix(in srgb, var(--coupon-gold-surface) 50%, var(--surface));
+}
+.environment-proxy-platform {
+    display: grid;
+    gap: var(--space-8);
+    padding-block-start: var(--space-12);
+    border-block-start: 1px solid var(--line-subtle);
+}
+.environment-proxy-step {
+    display: grid;
+    gap: var(--space-4);
+    min-width: 0;
+}
+.environment-proxy-step > a {
+    justify-self: start;
+}
+.environment-proxy-platform li + li {
+    margin-block-start: var(--space-8);
+}
+.environment-proxy-examples {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 224px), 1fr));
+    gap: var(--space-12);
+    margin-block-start: var(--space-4);
+}
+.environment-proxy-examples figure {
+    display: grid;
+    gap: var(--space-8);
+    align-content: start;
+    min-width: 0;
+    margin: 0;
+    padding: var(--space-12);
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+}
+.environment-proxy-examples img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+.environment-proxy-command {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    margin-block-start: var(--space-8);
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+}
+.environment-proxy-command pre {
+    padding: var(--space-8);
+    white-space: pre-wrap;
+}
+.environment-proxy-command button {
+    white-space: nowrap;
 }
 .environment-text-button {
     display: inline-flex;

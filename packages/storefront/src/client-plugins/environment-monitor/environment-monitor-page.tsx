@@ -10,6 +10,7 @@ import {
     ChevronDown,
     CircleAlert,
     Copy as CopyIcon,
+    Eraser,
     ExternalLink,
     Info,
     LoaderCircle,
@@ -41,6 +42,7 @@ import {
 } from './detection';
 import './environment-monitor.css';
 import { diagnose, type NetworkView, scanFeedback } from './guidance';
+import { ProxyCleanupGuide } from './proxy-cleanup-guide';
 
 interface MonitorSession {
     local?: BrowserReport;
@@ -222,6 +224,7 @@ export function EnvironmentMonitorPage({
     const networkReport = data?.network ? networkView(data.network) : null;
     const checkedAt = data?.checkedAt ? new Date(data.checkedAt) : null;
     const [preferencesOpen, setPreferencesOpen] = useState(false);
+    const [cleanupOpen, setCleanupOpen] = useState(false);
     const [busy, setBusy] = useState(false);
     const [retryingCheck, setRetryingCheck] = useState<number | null>(null);
     const [completed, setCompleted] = useState(data?.local ? 12 : 0);
@@ -814,15 +817,26 @@ export function EnvironmentMonitorPage({
                                         </div>
                                     </aside>
                                 )}
-                                <a
-                                    className="environment-external-check type-action"
-                                    href="https://ip.net.coffee/claude/"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                >
-                                    <span>{t('Claude AI IP 检测', 'Claude AI IP check')}</span>
-                                    <ExternalLink aria-hidden="true" />
-                                </a>
+                                <div className="environment-tool-actions">
+                                    <a
+                                        className="environment-external-check type-action"
+                                        href="https://ip.net.coffee/claude/"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        <span>{t('Claude AI IP 检测', 'Claude AI IP check')}</span>
+                                        <ExternalLink aria-hidden="true" />
+                                    </a>
+                                    <button
+                                        className="environment-external-check type-action"
+                                        type="button"
+                                        aria-haspopup="dialog"
+                                        onClick={() => setCleanupOpen(true)}
+                                    >
+                                        <span>{t('删除中转 API 变量', 'Remove relay API variables')}</span>
+                                        <Eraser aria-hidden="true" />
+                                    </button>
+                                </div>
                             </div>
                             {report && !running && (
                                 <p className="environment-next-step type-helper">
@@ -1518,6 +1532,9 @@ export function EnvironmentMonitorPage({
                         </span>
                     </footer>
                 </SubpageBody>
+                {cleanupOpen && (
+                    <ProxyCleanupGuide language={language} onClose={() => setCleanupOpen(false)} />
+                )}
                 {preferencesOpen && localeSettings && (
                     <LocalePreferencesSheet
                         language={language}

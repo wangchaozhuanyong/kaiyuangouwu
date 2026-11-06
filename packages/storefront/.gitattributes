@@ -1,0 +1,3 @@
+# Preserve the byte-for-byte vendor attachments, including the PowerShell BOM.
+public/tools/claude-proxy/clean-claude-proxy.ps1 -text
+public/tools/claude-proxy/clean-claude-proxy.sh -text
