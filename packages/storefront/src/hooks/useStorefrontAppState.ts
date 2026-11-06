@@ -305,18 +305,27 @@ export function useStorefrontAppState() {
         // browser state. Do not download the optional stream while actually offline.
         if (!storefrontContextResolved || !online || navigator.onLine === false) return;
         const controller = new AbortController();
+        const scope = {
+            marketCode: storefrontQueryKeys.market(market),
+            languageCode: vendureLanguageCode,
+        };
         const scheduler = publicRefreshScheduler(
-            () => {
-                void refreshStorefrontQueries(queryClient, {
-                    marketCode: storefrontQueryKeys.market(market),
-                    languageCode: vendureLanguageCode,
-                });
+            reconnected => {
+                void refreshStorefrontQueries(queryClient, scope);
+                if (reconnected && customerAuthenticated && customer?.id) {
+                    void import('../realtime-refresh')
+                        .then(({ refreshStorefrontPrivateRealtimeReads }) => {
+                            if (!controller.signal.aborted)
+                                return refreshStorefrontPrivateRealtimeReads(queryClient, {
+                                    ...scope,
+                                    customerId: customer.id,
+                                });
+                        })
+                        .catch(() => undefined);
+                }
             },
             () => {
-                void refreshStorefrontAssociations(queryClient, {
-                    marketCode: storefrontQueryKeys.market(market),
-                    languageCode: vendureLanguageCode,
-                });
+                void refreshStorefrontAssociations(queryClient, scope);
             },
         );
         void api
@@ -325,11 +334,7 @@ export function useStorefrontAppState() {
                     void invalidateStorefrontRealtimeQueries(
                         queryClient,
                         event,
-                        {
-                            marketCode: storefrontQueryKeys.market(market),
-                            languageCode: vendureLanguageCode,
-                            customerId: customer?.id,
-                        },
+                        { ...scope, customerId: customer?.id },
                         controller.signal,
                     ).catch(() => {
                         if (!controller.signal.aborted) scheduler.connection(false);

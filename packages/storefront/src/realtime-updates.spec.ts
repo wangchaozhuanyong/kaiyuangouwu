@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { storefrontQueryKeys } from './query-client';
+import { storefrontRealtimeQueryMatches } from './realtime-refresh';
 import {
     consumeStorefrontRealtimeStream,
     parseStorefrontRealtimeFrame,
     StorefrontRealtimeEvent,
-    storefrontRealtimeQueryMatches,
 } from './realtime-updates';
 
 const scope = { marketCode: 'store-a', languageCode: 'zh_Hans', customerId: 'customer-1' };
