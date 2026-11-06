@@ -36,6 +36,27 @@ describe('IMAP sync error state', () => {
         return { account, service, update };
     }
 
+    it.each([
+        ['imap.example.test', 993],
+        ['imap.mail.me.com', 143],
+    ])('never connects to a stored unsupported endpoint %s:%s', async (host, port) => {
+        const connect = vi
+            .spyOn(ImapFlow.prototype, 'connect')
+            .mockRejectedValue(new Error('unexpected socket'));
+        const { account, service, update } = fixture();
+        account.imapHost = host;
+        account.imapPort = port;
+
+        await expect(service.testConnection(account)).resolves.toMatchObject({ success: false });
+        await expect(service.syncAccount({} as never, account)).resolves.toMatchObject({
+            success: false,
+            syncedCount: 0,
+        });
+        await expect(service.readRecipientHeaders(account, [])).resolves.toEqual(new Map());
+        expect(connect).not.toHaveBeenCalled();
+        expect(update).not.toHaveBeenCalled();
+    });
+
     it('keeps transient connection failures retryable instead of marking the password invalid', async () => {
         vi.spyOn(ImapFlow.prototype, 'connect').mockRejectedValue(
             Object.assign(new Error('connect ETIMEDOUT'), { code: 'ETIMEDOUT' }),

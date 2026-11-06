@@ -61,7 +61,7 @@ export function LoginModule() {
                 });
                 result = response.data?.adminCompleteTwoFactorLogin;
             } else {
-                prepareAuthSession(rememberMe);
+                prepareAuthSession();
                 const response = await client.mutate<{ adminBeginLogin: AdminLoginResult }>({
                     mutation: ADMIN_BEGIN_LOGIN,
                     variables: { username: username.trim(), password, rememberMe },

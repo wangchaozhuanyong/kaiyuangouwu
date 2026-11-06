@@ -40,11 +40,13 @@ function createService() {
     };
     const customerRepository = { findOne: vi.fn().mockResolvedValue(customer) };
     const emptyRepository = { find: vi.fn().mockResolvedValue([]) };
+    const fraudRepository = { find: vi.fn().mockResolvedValue([]) };
     const connection = {
         rawConnection: { options: { type: 'mysql' }, entityMetadatas: [] },
         getRepository: vi.fn((_ctx, target) => {
             if (target === DataSubjectRequest) return requestRepository;
             if (target === Customer) return customerRepository;
+            if (target === FraudRiskCase) return fraudRepository;
             return emptyRepository;
         }),
     };
@@ -54,6 +56,7 @@ function createService() {
         authService,
         customer,
         requestRepository,
+        fraudRepository,
         requests,
         service: new DataSubjectService(
             connection as never,
@@ -144,6 +147,47 @@ describe('DataSubjectService', () => {
         expect(exported.request.resultSummaryJson).toContain('"orderCount":0');
         expect(exported.request.resultSummaryJson).not.toContain('customer@example.com');
         expect(exported.content).not.toContain('password');
+    });
+
+    it('keeps customer appeal information without disclosing the underlying fraud evaluation', async () => {
+        const test = createService();
+        const date = new Date('2026-09-20T00:00:00.000Z');
+        test.fraudRepository.find.mockResolvedValue([
+            {
+                id: 21,
+                createdAt: date,
+                channelId: 6,
+                orderId: 83,
+                caseCode: 'CASE-21',
+                status: 'OPEN',
+                riskScore: 999,
+                ruleVersion: 'private-rules-v3',
+                signalsJson: '{"internalLimit": 99}',
+                decisionReason: 'private analyst note',
+                events: [{ id: 4, createdAt: date, eventType: 'CREATED', note: 'private event note' }],
+                appeals: [
+                    {
+                        id: 7,
+                        createdAt: date,
+                        reason: 'Customer statement',
+                        response: 'Customer-visible decision',
+                    },
+                ],
+            },
+        ]);
+
+        const exported = await test.service.exportMine(ctx, 'password');
+        const [riskCase] = JSON.parse(exported.content).fraudPrevention.cases;
+        expect(riskCase).toMatchObject({
+            orderId: '83',
+            status: 'OPEN',
+            appeals: [{ reason: 'Customer statement', response: 'Customer-visible decision' }],
+        });
+        expect(riskCase).not.toHaveProperty('signalsJson');
+        expect(riskCase).not.toHaveProperty('ruleVersion');
+        expect(riskCase).not.toHaveProperty('riskScore');
+        expect(riskCase).not.toHaveProperty('decisionReason');
+        expect(riskCase.events[0]).not.toHaveProperty('note');
     });
 
     it('cancels an active closure request but keeps its audit row', async () => {

@@ -2,8 +2,10 @@ import { AssetStorageStrategy } from '@vendure/core';
 import { Request } from 'express';
 import { ReadStream } from 'fs';
 import fs from 'fs-extra';
+import { randomUUID } from 'node:crypto';
 import path from 'path';
 import { Stream } from 'stream';
+import { pipeline } from 'stream/promises';
 
 /**
  * @description
@@ -30,16 +32,23 @@ export class LocalAssetStorageStrategy implements AssetStorageStrategy {
         encoding?: BufferEncoding | null,
     ): Promise<string> {
         const filePath = path.join(this.uploadPath, fileName);
-        await fs.ensureDir(path.dirname(filePath));
-        const writeStream = fs.createWriteStream(
-            filePath,
-            encoding === undefined ? 'binary' : encoding === null ? undefined : encoding,
-        );
-        return new Promise<string>((resolve, reject) => {
-            data.pipe(writeStream);
-            writeStream.on('close', () => resolve(this.filePathToIdentifier(filePath)));
-            writeStream.on('error', reject);
-        });
+        const directory = path.dirname(filePath);
+        await fs.ensureDir(directory);
+        const temporaryPath = path.join(directory, `.upload-${randomUUID()}`);
+        try {
+            await pipeline(
+                data,
+                fs.createWriteStream(temporaryPath, {
+                    encoding: encoding === undefined ? 'binary' : (encoding ?? undefined),
+                    flags: 'wx',
+                }),
+            );
+            await fs.rename(temporaryPath, filePath);
+            return this.filePathToIdentifier(filePath);
+        } catch (error) {
+            await fs.remove(temporaryPath).catch(() => undefined);
+            throw error;
+        }
     }
 
     async writeFileFromBuffer(fileName: string, data: Buffer): Promise<string> {

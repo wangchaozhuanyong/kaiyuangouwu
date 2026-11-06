@@ -7,6 +7,7 @@ import { ICLOUD_IDLE_UNSUPPORTED_ERROR } from '../constants';
 import { IcloudPrimaryAccount } from '../entities/icloud-primary-account.entity';
 import { IcloudReceivedMail } from '../entities/icloud-received-mail.entity';
 import { IcloudVirtualEmail } from '../entities/icloud-virtual-email.entity';
+import { DEFAULT_ICLOUD_IMAP_HOST, DEFAULT_ICLOUD_IMAP_PORT } from '../imap-endpoint';
 import {
     BatchCreateVirtualEmailsInput,
     CreatePrimaryAccountInput,
@@ -136,8 +137,8 @@ export class IcloudAdminService {
             email,
             encryptedAppPassword: this.cipher.encrypt(input.appPassword.trim()),
             note: input.note || null,
-            imapHost: input.imapHost || 'imap.mail.me.com',
-            imapPort: input.imapPort || 993,
+            imapHost: DEFAULT_ICLOUD_IMAP_HOST,
+            imapPort: DEFAULT_ICLOUD_IMAP_PORT,
             status: IcloudAccountStatus.ACTIVE,
             masterQueryCode: masterCode,
             codeExpiresAt,
@@ -167,8 +168,8 @@ export class IcloudAdminService {
             patch.encryptedAppPassword = this.cipher.encrypt(input.appPassword.trim());
         if (input.note !== undefined) patch.note = input.note;
         if (input.status !== undefined) patch.status = input.status;
-        if (input.imapHost !== undefined) patch.imapHost = input.imapHost.trim();
-        if (input.imapPort !== undefined) patch.imapPort = input.imapPort;
+        if (input.imapHost !== undefined) patch.imapHost = DEFAULT_ICLOUD_IMAP_HOST;
+        if (input.imapPort !== undefined) patch.imapPort = DEFAULT_ICLOUD_IMAP_PORT;
         if (input.masterQueryCode !== undefined) patch.masterQueryCode = input.masterQueryCode.trim();
         if (
             input.codeResetIntervalDays !== undefined &&

@@ -4,8 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RATE_LIMIT_LOCKOUT_MS } from '../constants';
 
 import { IcloudAccessCodeService } from './icloud-access-code.service';
+import { IcloudCipherService } from './icloud-cipher.service';
 import { IcloudOtpExtractorService } from './icloud-otp-extractor.service';
 import { IcloudPublicQueryService } from './icloud-public-query.service';
+
+const auditCipher = new IcloudCipherService({ encryptionKey: 'synthetic-audit-test-secret' });
 
 describe('public mail recipient mapping', () => {
     it('returns stable alias IDs and the actual masked recipient for master queries', async () => {
@@ -18,8 +21,9 @@ describe('public mail recipient mapping', () => {
             { id: 'm2', virtualEmailId: 'v2' },
             { id: 'm3', virtualEmailId: null },
         ];
+        const saveAudit = vi.fn();
         const repos: Record<string, unknown> = {
-            IcloudQueryAuditLog: { save: vi.fn() },
+            IcloudQueryAuditLog: { save: saveAudit },
             IcloudVirtualEmail: {
                 findOne: vi.fn().mockResolvedValue(null),
                 find: vi.fn().mockResolvedValue(virtuals),
@@ -35,6 +39,7 @@ describe('public mail recipient mapping', () => {
             connection as unknown as TransactionalConnection,
             new IcloudAccessCodeService(),
             new IcloudOtpExtractorService(),
+            auditCipher,
         );
         const result = await service.queryByCode({} as RequestContext, 'MSTR-TEST-TEST', '127.0.0.1');
         expect(result.items.map(item => [item.virtualEmailId, item.targetEmail])).toEqual([
@@ -46,6 +51,13 @@ describe('public mail recipient mapping', () => {
         expect(result.items[0].bodyHtml).toContain("default-src 'none'");
         expect(result.items[0].bodyHtml).toContain('<p>Historical public mail</p>');
         expect(mails[0].bodyHtml).toBe('<p>Historical public mail</p>');
+        expect(saveAudit).toHaveBeenCalledWith(
+            expect.objectContaining({
+                queryCode: auditCipher.fingerprintQueryCode('MSTR-TEST-TEST'),
+                result: 'SUCCESS',
+            }),
+        );
+        expect(JSON.stringify(saveAudit.mock.calls)).not.toContain('MSTR-TEST-TEST');
     });
 });
 
@@ -95,6 +107,7 @@ describe('public mail verification codes', () => {
                 connection as unknown as TransactionalConnection,
                 new IcloudAccessCodeService(),
                 new IcloudOtpExtractorService(),
+                auditCipher,
             );
 
             const result = await service.queryByCode({} as RequestContext, 'TEST-QUERY', '127.0.0.1');
@@ -111,16 +124,19 @@ describe('public mail verification codes', () => {
 
 describe('shared public mail authorization', () => {
     function fixture(virtual: unknown = null, primary: unknown = null) {
-        const repos: Record<string, any> = {
+        const repos = {
             IcloudQueryAuditLog: { save: vi.fn() },
             IcloudVirtualEmail: { findOne: vi.fn().mockResolvedValue(virtual) },
             IcloudPrimaryAccount: { findOne: vi.fn().mockResolvedValue(primary) },
             IcloudReceivedMail: { find: vi.fn() },
         };
         const service = new IcloudPublicQueryService(
-            { getRepository: (_ctx: unknown, entity: { name: string }) => repos[entity.name] } as never,
+            {
+                getRepository: (_ctx: unknown, entity: { name: keyof typeof repos }) => repos[entity.name],
+            } as never,
             new IcloudAccessCodeService(),
             new IcloudOtpExtractorService(),
+            auditCipher,
         );
         return {
             service,
@@ -159,7 +175,10 @@ describe('shared public mail authorization', () => {
         for (let i = 0; i < 5; i++) await f.authorize();
         expect((await f.authorize()).error).toContain('秒后再试');
         expect(f.repos.IcloudVirtualEmail.findOne).toHaveBeenCalledTimes(5);
-        expect(f.repos.IcloudQueryAuditLog.save.mock.calls.at(-1)[0].result).toBe('RATE_LIMITED');
+        expect(f.repos.IcloudQueryAuditLog.save.mock.calls.at(-1)?.[0].result).toBe('RATE_LIMITED');
+        const fingerprints = f.repos.IcloudQueryAuditLog.save.mock.calls.map(([audit]) => audit.queryCode);
+        expect(new Set(fingerprints)).toEqual(new Set([auditCipher.fingerprintQueryCode('BUY-AAAA-BBBB')]));
+        expect(fingerprints[0]).toMatch(/^[0-9a-f]{64}$/);
     });
 });
 
@@ -193,6 +212,7 @@ describe('bounded public mail failed-source tracking', () => {
             } as unknown as TransactionalConnection,
             new IcloudAccessCodeService(),
             new IcloudOtpExtractorService(),
+            auditCipher,
         );
         const records = Reflect.get(service, 'failedAttempts') as Map<
             string,

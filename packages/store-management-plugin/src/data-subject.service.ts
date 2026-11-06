@@ -21,6 +21,7 @@ import {
 import { createHash } from 'node:crypto';
 import { In, LessThanOrEqual } from 'typeorm';
 
+import { DataSubjectPasswordError } from './abuse-protection/error';
 import { DataRetentionService } from './data-retention.service';
 import { DataSubjectVerification, DataSubjectVerificationService } from './data-subject-verification.service';
 import { BeforeAccountAnonymizationEvent } from './data-subject.events';
@@ -795,10 +796,6 @@ export class DataSubjectService {
                 'updatedAt',
                 'channelId',
                 'segment',
-                'churnRisk',
-                'recencyScore',
-                'frequencyScore',
-                'monetaryScore',
                 'recencyDays',
                 'orderCount',
                 'currencyCode',
@@ -814,8 +811,6 @@ export class DataSubjectService {
                 'lastServiceAt',
                 'nextFollowUpAt',
                 'doNotContact',
-                'reasonsJson',
-                'evaluationVersion',
                 'lastEvaluatedAt',
             ]),
             this.optionalCustomerRows(ctx, 'CustomerFollowUp', customerId, [
@@ -823,16 +818,10 @@ export class DataSubjectService {
                 'createdAt',
                 'updatedAt',
                 'channelId',
-                'profileId',
                 'status',
                 'source',
                 'priority',
-                'reasonCode',
-                'title',
-                'note',
                 'dueAt',
-                'outcomeCode',
-                'outcomeNote',
                 'completedAt',
             ]),
             this.optionalCustomerRows(ctx, 'CustomerFollowUpEvent', customerId, [
@@ -842,9 +831,6 @@ export class DataSubjectService {
                 'followUpId',
                 'eventType',
                 'actorType',
-                'actorLabel',
-                'note',
-                'payloadJson',
             ]),
             orders.length
                 ? this.connection.getRepository(ctx, StorefrontOrderAttribution).find({
@@ -1024,24 +1010,15 @@ export class DataSubjectService {
                     channelId: String(riskCase.channelId),
                     caseCode: riskCase.caseCode,
                     subjectType: riskCase.subjectType,
-                    subjectId: riskCase.subjectId,
                     orderId: riskCase.orderId == null ? null : String(riskCase.orderId),
                     status: riskCase.status,
-                    severity: riskCase.severity,
-                    riskScore: riskCase.riskScore,
-                    ruleVersion: riskCase.ruleVersion,
-                    signalsJson: riskCase.signalsJson,
-                    recommendedAction: riskCase.recommendedAction,
                     dueAt: iso(riskCase.dueAt),
-                    decisionCode: riskCase.decisionCode,
-                    decisionReason: riskCase.decisionReason,
                     decidedAt: iso(riskCase.decidedAt),
                     events: (riskCase.events ?? []).map(event => ({
                         id: String(event.id),
                         createdAt: iso(event.createdAt),
                         eventType: event.eventType,
                         actorType: event.actorType,
-                        note: event.note,
                     })),
                     appeals: (riskCase.appeals ?? []).map(appeal => ({
                         id: String(appeal.id),
@@ -1216,7 +1193,7 @@ export class DataSubjectService {
     private async verifyPassword(ctx: RequestContext, password: string): Promise<void> {
         if (!ctx.activeUserId || !password) throw new UserInputError('请输入当前账户密码');
         const result = await this.authService.verifyUserPassword(ctx, ctx.activeUserId, password);
-        if (result !== true) throw new UserInputError('当前账户密码不正确');
+        if (result !== true) throw new DataSubjectPasswordError();
     }
 
     private async activeCustomerOrThrow(ctx: RequestContext): Promise<Customer> {

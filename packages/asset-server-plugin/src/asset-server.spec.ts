@@ -6,6 +6,7 @@ import { Server } from 'http';
 import os from 'os';
 import path from 'path';
 import sharp from 'sharp';
+import { Readable } from 'stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AssetServer } from './asset-server';
@@ -41,6 +42,25 @@ describe('SVG asset responses', () => {
             server = undefined;
         }
         await fs.remove(root);
+    });
+
+    it('removes an aborted upload without exposing or replacing the asset', async () => {
+        const name = 'source/asset.png';
+        await storage.writeFileFromBuffer(name, Buffer.from('original'));
+        const stream = Readable.from(
+            (function* () {
+                yield Buffer.from('partial');
+                throw new Error('download aborted');
+            })(),
+        );
+
+        await expect(storage.writeFileFromStream(name, stream)).rejects.toThrow('download aborted');
+        expect(await storage.readFileToBuffer(name)).toEqual(Buffer.from('original'));
+        expect(await fs.readdir(path.join(root, 'source'))).toEqual(['asset.png']);
+        await expect(
+            storage.writeFileFromStream(name, Readable.from([Buffer.from('complete')])),
+        ).resolves.toBe(name);
+        expect(await storage.readFileToBuffer(name)).toEqual(Buffer.from('complete'));
     });
 
     async function start(strategies: ImageTransformStrategy[] = []) {

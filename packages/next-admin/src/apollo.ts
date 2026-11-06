@@ -40,7 +40,22 @@ export const getServerHealthUrl = () => {
     return apiUrl.toString();
 };
 
-const getAuthToken = () => sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY);
+const usesCrossOriginAdminApi = () => {
+    const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
+    return new URL(ADMIN_API_URL, origin).origin !== origin;
+};
+
+const getAuthToken = () => {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_PERSISTENCE_KEY);
+    sessionStorage.removeItem(AUTH_PERSISTENCE_KEY);
+    // Same-origin deployments already use the HttpOnly session cookie.
+    if (!usesCrossOriginAdminApi()) {
+        sessionStorage.removeItem(AUTH_TOKEN_KEY);
+        return null;
+    }
+    return sessionStorage.getItem(AUTH_TOKEN_KEY);
+};
 
 export const getActiveChannelToken = () => sessionStorage.getItem(ACTIVE_CHANNEL_TOKEN_KEY);
 
@@ -69,24 +84,13 @@ export const setInitialActiveChannel = (channelToken: string) => {
     if (channelToken.trim()) replaceActiveChannelToken(channelToken);
 };
 
-const persistAuthToken = (token: string) => {
-    const persistence = sessionStorage.getItem(AUTH_PERSISTENCE_KEY);
-    if (persistence === 'session') {
-        sessionStorage.setItem(AUTH_TOKEN_KEY, token);
-        localStorage.removeItem(AUTH_TOKEN_KEY);
-    } else {
-        localStorage.setItem(AUTH_TOKEN_KEY, token);
-        sessionStorage.removeItem(AUTH_TOKEN_KEY);
-    }
-};
-
-export const prepareAuthSession = (rememberMe: boolean) => {
+export const prepareAuthSession = () => {
     channelRevision++;
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(ACTIVE_CHANNEL_TOKEN_KEY);
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
     sessionStorage.removeItem(ACTIVE_CHANNEL_TOKEN_KEY);
-    sessionStorage.setItem(AUTH_PERSISTENCE_KEY, rememberMe ? 'local' : 'session');
+    sessionStorage.removeItem(AUTH_PERSISTENCE_KEY);
 };
 
 export const clearAuthSession = () => {
@@ -106,7 +110,7 @@ const vendureFetch: typeof fetch = async (input, init) => {
     });
     if (revision !== channelRevision) throw new Error('店铺已切换，旧请求结果已取消');
     const authToken = response.headers.get(AUTH_TOKEN_HEADER);
-    if (authToken) persistAuthToken(authToken);
+    if (authToken && usesCrossOriginAdminApi()) sessionStorage.setItem(AUTH_TOKEN_KEY, authToken);
     return response;
 };
 

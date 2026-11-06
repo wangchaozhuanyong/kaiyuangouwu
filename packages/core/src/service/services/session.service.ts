@@ -2,7 +2,16 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import crypto from 'crypto';
 import ms, { type StringValue } from 'ms';
-import { Brackets, EntitySubscriberInterface, InsertEvent, RemoveEvent, UpdateEvent } from 'typeorm';
+import {
+    And,
+    Brackets,
+    EntitySubscriberInterface,
+    InsertEvent,
+    LessThan,
+    MoreThan,
+    RemoveEvent,
+    UpdateEvent,
+} from 'typeorm';
 
 import { RequestContext } from '../../api/common/request-context';
 import { Instrument } from '../../common/instrument-decorator';
@@ -10,6 +19,7 @@ import { API_KEY_AUTH_STRATEGY_DEFAULT_DURATION_MS, API_KEY_AUTH_STRATEGY_NAME, 
 import { ConfigService } from '../../config/config.service';
 import { CachedSession, SessionCacheStrategy } from '../../config/session-cache/session-cache-strategy';
 import { TransactionalConnection } from '../../connection/transactional-connection';
+import { Administrator } from '../../entity/administrator/administrator.entity';
 import { ApiKey } from '../../entity/api-key/api-key.entity';
 import { Channel } from '../../entity/channel/channel.entity';
 import { Order } from '../../entity/order/order.entity';
@@ -24,6 +34,10 @@ import { RequestContextService } from '../helpers/request-context/request-contex
 import { getUserChannelsPermissions } from '../helpers/utils/get-user-channels-permissions';
 
 import { OrderService } from './order.service';
+
+const administratorSessionIdleMs = ms('30m');
+const administratorSessionMaxMs = ms('12h');
+const administratorSessionRefreshIntervalMs = ms('1m');
 
 /**
  * @description
@@ -116,11 +130,15 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
         const existingOrder = await this.orderService.getActiveOrderForUser(ctx, user.id);
         const activeOrder = await this.orderService.mergeOrders(ctx, user, guestOrder, existingOrder);
 
-        const expires = this.getExpiryDate(
-            authenticationStrategyName === API_KEY_AUTH_STRATEGY_NAME
-                ? API_KEY_AUTH_STRATEGY_DEFAULT_DURATION_MS
-                : this.sessionDurationInMs,
-        );
+        const isApiKey = authenticationStrategyName === API_KEY_AUTH_STRATEGY_NAME;
+        const isAdministrator =
+            !isApiKey && (ctx.apiType === 'admin' || (await this.isAdministratorUser(user.id)));
+        const duration = isApiKey
+            ? API_KEY_AUTH_STRATEGY_DEFAULT_DURATION_MS
+            : isAdministrator
+              ? Math.min(this.sessionDurationInMs, administratorSessionIdleMs)
+              : this.sessionDurationInMs;
+        const expires = this.getExpiryDate(duration);
 
         const authenticatedSession = await this.connection.getRepository(ctx, AuthenticatedSession).save(
             new AuthenticatedSession({
@@ -132,7 +150,12 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
                 invalidated: false,
             }),
         );
-        await this.withTimeout(this.sessionCacheStrategy.set(this.serializeSession(authenticatedSession)));
+        const deadline = isAdministrator
+            ? authenticatedSession.createdAt.getTime() + administratorSessionMaxMs
+            : null;
+        await this.withTimeout(
+            this.sessionCacheStrategy.set(this.serializeSession(authenticatedSession, deadline)),
+        );
         return authenticatedSession;
     }
 
@@ -159,40 +182,124 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
      * @description
      * Returns the cached session object matching the given session token.
      */
-    async getSessionFromToken(sessionToken: string): Promise<CachedSession | undefined> {
-        let serializedSession = await this.withTimeout(this.sessionCacheStrategy.get(sessionToken));
-        const stale = !!(serializedSession && serializedSession.cacheExpiry < new Date().getTime() / 1000);
-        const expired = !!(serializedSession && serializedSession.expires < new Date());
-        if (serializedSession?.user && !stale && !expired) {
-            // Cache invalidation may be local to an API instance. Check the lightweight
-            // session row before trusting cached authentication after a password reset
-            // or permission change, while still caching the expensive user/role joins.
-            const stillValid = await this.connection.rawConnection.getRepository(Session).existsBy({
-                id: serializedSession.id,
-                token: sessionToken,
-                invalidated: false,
-            });
-            if (!stillValid) serializedSession = undefined;
-        }
-        if (!serializedSession || stale || expired) {
-            const session = await this.findSessionByToken(sessionToken);
-            if (session) {
-                serializedSession = this.serializeSession(session);
-                await this.withTimeout(this.sessionCacheStrategy.set(serializedSession));
-                return serializedSession;
-            } else {
-                await this.withTimeout(this.sessionCacheStrategy.delete(sessionToken));
-                return;
+    async getSessionFromToken(
+        sessionToken: string,
+        { touchAdministrator = true }: { touchAdministrator?: boolean } = {},
+    ): Promise<CachedSession | undefined> {
+        const cached = await this.withTimeout(this.sessionCacheStrategy.get(sessionToken));
+        const now = new Date();
+        if (cached && cached.cacheExpiry >= now.getTime() / 1000 && cached.expires > now) {
+            if (!cached.user) return cached;
+
+            const deadline = cached.administratorSessionDeadline;
+            const hasKnownPolicy =
+                deadline !== undefined || cached.authenticationStrategy === API_KEY_AUTH_STRATEGY_NAME;
+            // Recheck persisted expiry and invalidation. Cache entries can outlive
+            // server-side revocation or an expiry update made by another instance.
+            const stillValid =
+                hasKnownPolicy &&
+                (await this.connection.rawConnection.getRepository(Session).existsBy({
+                    id: cached.id,
+                    token: sessionToken,
+                    invalidated: false,
+                    expires: MoreThan(now),
+                }));
+            if (stillValid) {
+                if (deadline == null) return cached;
+                const expires = await this.checkAdministratorExpiry(
+                    cached,
+                    deadline,
+                    now,
+                    touchAdministrator,
+                );
+                if (expires) {
+                    if (expires !== cached.expires) {
+                        const refreshed = { ...cached, expires };
+                        await this.withTimeout(this.sessionCacheStrategy.set(refreshed));
+                        return refreshed;
+                    }
+                    return cached;
+                }
             }
         }
-        return serializedSession;
+
+        const session = await this.findSessionByToken(sessionToken);
+        if (session) {
+            const isAdministrator =
+                this.isAuthenticatedSession(session) &&
+                session.authenticationStrategy !== API_KEY_AUTH_STRATEGY_NAME &&
+                (await this.isAdministratorUser(session.user.id));
+            const deadline = isAdministrator ? session.createdAt.getTime() + administratorSessionMaxMs : null;
+            if (deadline == null) {
+                await this.updateSessionExpiry(session);
+            } else {
+                const expires = await this.checkAdministratorExpiry(
+                    session,
+                    deadline,
+                    now,
+                    touchAdministrator,
+                );
+                if (!expires) {
+                    await this.withTimeout(this.sessionCacheStrategy.delete(sessionToken));
+                    return;
+                }
+                session.expires = expires;
+            }
+            const serialized = this.serializeSession(session, deadline);
+            await this.withTimeout(this.sessionCacheStrategy.set(serialized));
+            return serialized;
+        }
+
+        await this.withTimeout(this.sessionCacheStrategy.delete(sessionToken));
+    }
+
+    private isAdministratorUser(userId: ID): Promise<boolean> {
+        return this.connection.rawConnection.getRepository(Administrator).existsBy({ user: { id: userId } });
+    }
+
+    private async checkAdministratorExpiry(
+        session: Pick<CachedSession, 'id' | 'token' | 'expires'>,
+        deadline: number,
+        now: Date,
+        touch: boolean,
+    ): Promise<Date | undefined> {
+        const currentExpiry = session.expires.getTime();
+        // Legacy administrator sessions were issued with the general (typically
+        // one-year) duration. Require fresh authentication rather than renew them.
+        if (currentExpiry <= now.getTime() || currentExpiry > deadline) return;
+        const idleDuration = Math.min(this.sessionDurationInMs, administratorSessionIdleMs);
+        const nextExpiry = new Date(Math.min(deadline, now.getTime() + idleDuration));
+        const minimumExtension = Math.min(administratorSessionRefreshIntervalMs, idleDuration / 2);
+        if (!touch || nextExpiry.getTime() - currentExpiry < minimumExtension) {
+            return session.expires;
+        }
+
+        const result = await this.connection.rawConnection.getRepository(Session).update(
+            {
+                id: session.id,
+                token: session.token,
+                invalidated: false,
+                expires: And(MoreThan(now), LessThan(nextExpiry)),
+            },
+            { expires: nextExpiry },
+        );
+        // Concurrent requests cannot shorten a renewed expiry or revive a revoked row.
+        if (result.affected === 1) return nextExpiry;
+        const row = await this.connection.rawConnection.getRepository(Session).findOne({
+            select: { expires: true },
+            where: { id: session.id, token: session.token, invalidated: false, expires: MoreThan(now) },
+        });
+        if (row && row.expires.getTime() <= deadline) return row.expires;
     }
 
     /**
      * @description
      * Serializes a {@link Session} instance into a simplified plain object suitable for caching.
      */
-    serializeSession(session: AuthenticatedSession | AnonymousSession): CachedSession {
+    serializeSession(
+        session: AuthenticatedSession | AnonymousSession,
+        administratorSessionDeadline?: number | null,
+    ): CachedSession {
         const { sessionCacheTTL } = this.configService.authOptions;
         const sessionCacheTTLSeconds =
             typeof sessionCacheTTL === 'string' ? ms(sessionCacheTTL as StringValue) / 1000 : sessionCacheTTL;
@@ -208,6 +315,7 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
         };
         if (this.isAuthenticatedSession(session)) {
             serializedSession.authenticationStrategy = session.authenticationStrategy;
+            serializedSession.administratorSessionDeadline = administratorSessionDeadline;
             const { user } = session;
             serializedSession.user = {
                 id: user.id,
@@ -246,10 +354,7 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
             .andWhere('session.invalidated = false')
             .getOne();
 
-        if (session && session.expires > new Date()) {
-            await this.updateSessionExpiry(session);
-            return session;
-        }
+        if (session && session.expires > new Date()) return session;
     }
 
     /**
@@ -268,7 +373,10 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
         if (session) {
             session.activeOrder = order;
             await this.connection.getRepository(ctx, Session).save(session, { reload: false });
-            const updatedSerializedSession = this.serializeSession(session);
+            const updatedSerializedSession = this.serializeSession(
+                session,
+                serializedSession.administratorSessionDeadline,
+            );
             await this.withTimeout(this.sessionCacheStrategy.set(updatedSerializedSession));
             return updatedSerializedSession;
         }
@@ -288,7 +396,10 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
             if (session) {
                 session.activeOrder = null;
                 await this.connection.getRepository(ctx, Session).save(session);
-                const updatedSerializedSession = this.serializeSession(session);
+                const updatedSerializedSession = this.serializeSession(
+                    session,
+                    serializedSession.administratorSessionDeadline,
+                );
                 await this.configService.authOptions.sessionCacheStrategy.set(updatedSerializedSession);
                 return updatedSerializedSession;
             }
@@ -308,7 +419,10 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
         if (session) {
             session.activeChannel = channel;
             await this.connection.rawConnection.getRepository(Session).save(session, { reload: false });
-            const updatedSerializedSession = this.serializeSession(session);
+            const updatedSerializedSession = this.serializeSession(
+                session,
+                serializedSession.administratorSessionDeadline,
+            );
             await this.withTimeout(this.sessionCacheStrategy.set(updatedSerializedSession));
             return updatedSerializedSession;
         }

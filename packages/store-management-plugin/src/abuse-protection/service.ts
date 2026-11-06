@@ -118,6 +118,20 @@ export class ShopAbuseProtectionService {
                 operation,
                 now,
             );
+            if (operation.action === 'PASSWORD_RECHECK' && admission.targetHash) {
+                const targetBlocked = await this.store.blockedFor(admission.targetHash, now);
+                if (targetBlocked > 0) {
+                    throw new ShopAbuseError('SHOP_ABUSE_RATE_LIMITED', operation.action, targetBlocked);
+                }
+                // Reserve a shared account slot before password verification, even for concurrent requests.
+                await this.budget(
+                    this.digest('recheck-request', admission.targetHash),
+                    requestLimits.PASSWORD_RECHECK,
+                    minute,
+                    operation,
+                    now,
+                );
+            }
             if (!isChallengeAction(operation.action)) return admission;
             const sourceFailures = await this.store.count(admission.ipHash, now);
             const targetFailures = admission.targetHash
@@ -174,7 +188,20 @@ export class ShopAbuseProtectionService {
     }
     async failed(admission: AbuseAdmission, now = new Date()): Promise<void> {
         const sourceCount = await this.store.signal(admission.ipHash, riskWindow, now);
-        if (admission.targetHash) await this.store.signal(admission.targetHash, riskWindow, now);
+        if (admission.targetHash) {
+            const count = await this.store.signal(admission.targetHash, riskWindow, now);
+            if (admission.operation.action === 'PASSWORD_RECHECK') {
+                const targetDuration =
+                    count >= requestLimits.PASSWORD_RECHECK ? Math.max(minute, cooldownMs(count)) : 0;
+                if (targetDuration) {
+                    await this.store.cooldown(
+                        admission.targetHash,
+                        new Date(now.getTime() + targetDuration),
+                        now,
+                    );
+                }
+            }
+        }
         const globalCount = await this.store.signal(admission.globalHash, minute, now);
         const duration = cooldownMs(sourceCount);
         if (duration) await this.store.cooldown(admission.ipHash, new Date(now.getTime() + duration), now);

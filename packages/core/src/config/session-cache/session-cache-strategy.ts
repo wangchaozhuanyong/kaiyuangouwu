@@ -39,6 +39,8 @@ export type CachedSession = {
     expires: Date;
     activeOrderId?: ID;
     authenticationStrategy?: string;
+    /** Administrator session absolute expiration in milliseconds, or null for other authenticated sessions. */
+    administratorSessionDeadline?: number | null;
     user?: CachedSessionUser;
     activeChannelId?: ID;
 };

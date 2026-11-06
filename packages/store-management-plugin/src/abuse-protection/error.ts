@@ -22,3 +22,10 @@ export class ShopAbuseError extends UserInputError {
         this.extensions.retryAfterSeconds = Math.min(900, Math.max(0, Math.ceil(retryAfterMs / 1000)));
     }
 }
+
+/** Only an incorrect password is counted against an account's recheck cooldown. */
+export class DataSubjectPasswordError extends UserInputError {
+    constructor() {
+        super('当前账户密码不正确');
+    }
+}

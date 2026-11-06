@@ -8,6 +8,12 @@ import { ICLOUD_IDLE_UNSUPPORTED_ERROR, loggerCtx } from '../constants';
 import { IcloudPrimaryAccount } from '../entities/icloud-primary-account.entity';
 import { IcloudReceivedMail } from '../entities/icloud-received-mail.entity';
 import { IcloudVirtualEmail } from '../entities/icloud-virtual-email.entity';
+import {
+    DEFAULT_ICLOUD_IMAP_HOST,
+    DEFAULT_ICLOUD_IMAP_PORT,
+    ICLOUD_IMAP_ENDPOINT_ERROR,
+    isIcloudImapEndpoint,
+} from '../imap-endpoint';
 import { IcloudAccountStatus } from '../types';
 
 import { IcloudCipherService } from './icloud-cipher.service';
@@ -58,14 +64,17 @@ export class IcloudImapSyncService {
         account: IcloudPrimaryAccount,
         plainPasswordOverride?: string,
     ): Promise<TestConnectionResult> {
+        if (!isIcloudImapEndpoint(account.imapHost, account.imapPort)) {
+            return { success: false, message: ICLOUD_IMAP_ENDPOINT_ERROR };
+        }
         const plainPassword = plainPasswordOverride || this.cipher.decrypt(account.encryptedAppPassword);
         if (!plainPassword) {
             return { success: false, message: '专用密码未配置或解密失败' };
         }
 
         const client = new ImapFlow({
-            host: account.imapHost || 'imap.mail.me.com',
-            port: account.imapPort || 993,
+            host: DEFAULT_ICLOUD_IMAP_HOST,
+            port: DEFAULT_ICLOUD_IMAP_PORT,
             secure: true,
             auth: {
                 user: account.email,
@@ -97,6 +106,9 @@ export class IcloudImapSyncService {
         account: IcloudPrimaryAccount,
         existingClient?: ImapFlow,
     ): Promise<SyncAccountResult> {
+        if (!isIcloudImapEndpoint(account.imapHost, account.imapPort)) {
+            return { success: false, syncedCount: 0, error: ICLOUD_IMAP_ENDPOINT_ERROR };
+        }
         const plainPassword = this.cipher.decrypt(account.encryptedAppPassword);
         if (!plainPassword) {
             return { success: false, syncedCount: 0, error: '专用密码解密失败' };
@@ -105,8 +117,8 @@ export class IcloudImapSyncService {
         const client =
             existingClient ??
             new ImapFlow({
-                host: account.imapHost || 'imap.mail.me.com',
-                port: account.imapPort || 993,
+                host: DEFAULT_ICLOUD_IMAP_HOST,
+                port: DEFAULT_ICLOUD_IMAP_PORT,
                 secure: true,
                 auth: {
                     user: account.email,
@@ -295,11 +307,12 @@ export class IcloudImapSyncService {
         mails: IcloudReceivedMail[],
     ): Promise<Map<string, string[]>> {
         const recovered = new Map<string, string[]>();
+        if (!isIcloudImapEndpoint(account.imapHost, account.imapPort)) return recovered;
         const password = this.cipher.decrypt(account.encryptedAppPassword);
         if (!password) return recovered;
         const client = new ImapFlow({
-            host: account.imapHost || 'imap.mail.me.com',
-            port: account.imapPort || 993,
+            host: DEFAULT_ICLOUD_IMAP_HOST,
+            port: DEFAULT_ICLOUD_IMAP_PORT,
             secure: true,
             auth: { user: account.email, pass: password },
             logger: false,

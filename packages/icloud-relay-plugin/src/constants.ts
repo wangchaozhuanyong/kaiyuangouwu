@@ -10,8 +10,7 @@ export const manageIcloudRelayPermission = new CrudPermissionDefinition(
     operation => `${operation} iCloud mailbox relay accounts, aliases, messages, and query codes`,
 );
 
-export const DEFAULT_ICLOUD_IMAP_HOST = 'imap.mail.me.com';
-export const DEFAULT_ICLOUD_IMAP_PORT = 993;
+export { DEFAULT_ICLOUD_IMAP_HOST, DEFAULT_ICLOUD_IMAP_PORT } from './imap-endpoint';
 export const DEFAULT_CODE_RESET_INTERVAL_DAYS = 30;
 
 export const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute

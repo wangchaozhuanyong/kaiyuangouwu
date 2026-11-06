@@ -176,7 +176,6 @@ describe('admin channel request routing', () => {
             credentials: 'include',
             headers: {
                 'vendure-token': 'store-b',
-                authorization: 'Bearer test-session',
                 'Last-Event-ID': 'instance:12',
                 accept: 'text/event-stream',
             },
@@ -189,6 +188,18 @@ describe('admin channel request routing', () => {
         const url = new URL(getLocalizedAdminApiUrl(), 'http://localhost');
         expect(url.searchParams.get('languageCode')).toBe('zh_Hans');
         expect(url.searchParams.get('displayLanguageCode')).toBe('zh_Hans');
+    });
+
+    it('uses same-origin cookies without saving an authentication response header in script-readable storage', async () => {
+        vi.stubGlobal('window', { location: { origin: 'https://admin.example.test' } });
+        localStorage.setItem('vendure-auth-token', 'legacy-local-token');
+        request.mockResolvedValue(new Response(null, { headers: { 'vendure-auth-token': 'fresh-token' } }));
+
+        await openAdminOrderEvents('store-a', new AbortController().signal);
+
+        expect(request.mock.calls[0][1]?.headers).not.toHaveProperty('authorization');
+        expect(localStorage.getItem('vendure-auth-token')).toBeNull();
+        expect(sessionStorage.getItem('vendure-auth-token')).toBeNull();
     });
 
     it('keeps entity fields and server messages English on an English Admin page', () => {
@@ -222,7 +233,6 @@ describe('admin channel request routing', () => {
         ).toBe('zh_Hans');
         expect(init.headers).toEqual({
             'vendure-token': 'store-a',
-            authorization: 'Bearer test-session',
             'Apollo-Require-Preflight': 'true',
         });
         expect(init.credentials).toBe('include');
@@ -282,7 +292,6 @@ describe('admin channel request routing', () => {
         );
         expect(request.mock.calls[0][1]?.headers).toMatchObject({
             'vendure-token': 'store-shared',
-            authorization: 'Bearer test-session',
         });
         expect(sessionStorage.getItem('vendure-active-channel-token')).toBe('store-a');
     });
@@ -302,7 +311,6 @@ describe('admin channel request routing', () => {
         });
         expect(request.mock.calls[0][1]?.headers).toMatchObject({
             'vendure-token': 'store-b',
-            authorization: 'Bearer test-session',
         });
         expect(sessionStorage.getItem('vendure-active-channel-token')).toBe('store-a');
     });
@@ -370,7 +378,7 @@ describe('admin channel request routing', () => {
     });
 
     it('clears tab-scoped and legacy shared selections when authentication changes', () => {
-        prepareAuthSession(false);
+        prepareAuthSession();
         expect(sessionStorage.getItem('vendure-active-channel-token')).toBeNull();
         expect(localStorage.getItem('vendure-active-channel-token')).toBeNull();
 

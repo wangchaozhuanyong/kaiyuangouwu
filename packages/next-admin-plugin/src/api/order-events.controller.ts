@@ -60,7 +60,9 @@ export class OrderEventsController {
                 .then(async () => {
                     if (closed) return;
                     // Recheck only when delivering an event, so logout/permission revocation cannot leak later orders.
-                    const session = await this.sessions.getSessionFromToken(sessionToken);
+                    const session = await this.sessions.getSessionFromToken(sessionToken, {
+                        touchAdministrator: false,
+                    });
                     const permission = session?.user?.channelPermissions.find(
                         channel => String(channel.id) === channelId,
                     );

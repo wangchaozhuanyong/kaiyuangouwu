@@ -112,7 +112,7 @@ export class CustomerAdminEntityResolver {
         const publicOnly = apiType === 'shop';
         const options: HistoryEntryListOptions = { ...args.options };
         if (!options.sort) {
-            options.sort = { createdAt: SortOrder.ASC };
+            options.sort = { createdAt: SortOrder.ASC, id: SortOrder.ASC };
         }
         return this.historyService.getHistoryForCustomer(ctx, order.id, publicOnly, options);
     }
