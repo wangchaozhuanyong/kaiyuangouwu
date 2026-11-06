@@ -267,13 +267,10 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
         // Legacy administrator sessions were issued with the general (typically
         // one-year) duration. Require fresh authentication rather than renew them.
         if (currentExpiry <= now.getTime() || currentExpiry > deadline) return;
-        const nextExpiry = new Date(
-            Math.min(
-                deadline,
-                now.getTime() + Math.min(this.sessionDurationInMs, administratorSessionIdleMs),
-            ),
-        );
-        if (!touch || nextExpiry.getTime() - currentExpiry < administratorSessionRefreshIntervalMs) {
+        const idleDuration = Math.min(this.sessionDurationInMs, administratorSessionIdleMs);
+        const nextExpiry = new Date(Math.min(deadline, now.getTime() + idleDuration));
+        const minimumExtension = Math.min(administratorSessionRefreshIntervalMs, idleDuration / 2);
+        if (!touch || nextExpiry.getTime() - currentExpiry < minimumExtension) {
             return session.expires;
         }
 
