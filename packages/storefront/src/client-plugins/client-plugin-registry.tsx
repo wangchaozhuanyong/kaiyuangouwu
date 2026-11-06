@@ -118,8 +118,8 @@ const toolCopy = {
         ['AI Image Studio', 'Improve your prompt, choose a model, and create images', 'Create'],
     ],
     'environment-monitor': [
-        ['环境监测', 'Claude环境检测', '开始检测'],
-        ['Environment monitor', 'Claude environment check', 'Open'],
+        ['环境检测', 'Claude环境检测', '开始检测'],
+        ['Environment check', 'Claude environment check', 'Open'],
     ],
     'two-factor': [
         ['2FA 动态码', '密钥不上传，在当前浏览器本地生成', '立即使用'],

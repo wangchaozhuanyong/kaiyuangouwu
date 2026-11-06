@@ -45,6 +45,7 @@ const api = {
                 provider: basic ? 'REQUEST' : params.has('ipqs') ? 'IPQS' : 'IPDB',
                 checkedAt: new Date().toISOString(),
                 ip: params.has('ipv6') ? '2001:db8:1234:5678:90ab:cdef:1234:5678' : '198.51.100.24',
+                ipv6: params.has('dual') ? '2001:db8::8' : null,
                 maskedIp: '198.51.*.*',
                 cached: false,
                 lookupIssue: quota ? 'DAILY_LIMIT' : basic ? 'UNAVAILABLE' : null,
@@ -75,8 +76,7 @@ function Fixture() {
     useStorefrontBrandColors(undefined, preset);
     useEffect(() => {
         document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
-        document.title =
-            language === 'zh' ? '环境监测 · 本地验收' : 'Environment monitor · Local verification';
+        document.title = language === 'zh' ? '环境检测 · 本地验收' : 'Environment check · Local verification';
     }, [language]);
     return (
         <QueryClientProvider client={client}>

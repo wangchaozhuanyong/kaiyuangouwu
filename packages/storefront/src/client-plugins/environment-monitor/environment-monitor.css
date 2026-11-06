@@ -87,6 +87,9 @@
     border-radius: var(--skin-card-radius);
     background: color-mix(in srgb, var(--success) 4%, var(--surface));
 }
+.environment-network .environment-section-heading > .environment-state {
+    margin-inline-start: auto;
+}
 .environment-state {
     display: inline-flex;
     align-items: center;
@@ -495,7 +498,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--space-4);
+    gap: var(--space-12);
     width: 100%;
     max-width: 420px;
     margin-top: 0;
@@ -538,6 +541,58 @@
 .environment-primary:disabled {
     opacity: 0.78;
     cursor: wait;
+}
+.environment-ipv6-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-12);
+    width: 100%;
+    padding: var(--space-16);
+    border-radius: var(--skin-control-radius);
+    color: var(--warning-text);
+    background: color-mix(in srgb, var(--coupon-gold-surface) 50%, var(--surface));
+    text-align: start;
+}
+.environment-ipv6-notice > svg {
+    width: 20px;
+    height: 20px;
+    flex: none;
+}
+.environment-ipv6-notice > div {
+    min-width: 0;
+}
+.environment-ipv6-notice a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-height: var(--experience-control-min);
+    margin-top: var(--space-4);
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.environment-ipv6-notice a > svg,
+.environment-external-check > svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+}
+.environment-external-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-8);
+    width: 100%;
+    min-height: var(--experience-control-min);
+    padding: var(--space-12) var(--space-16);
+    border-radius: var(--skin-control-radius);
+    color: var(--text);
+    background: var(--control-surface);
+    text-decoration: none;
+}
+.environment-external-check:hover {
+    color: var(--interaction-ink);
+    background: var(--interaction-hover);
 }
 .environment-text-button {
     display: inline-flex;
