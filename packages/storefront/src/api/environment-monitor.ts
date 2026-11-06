@@ -3,6 +3,13 @@ import type { ShopApi } from '../api';
 
 import { readBrowserNetworkAddresses, type BrowserNetworkAddresses } from './browser-network-addresses';
 
+const networkIssueCodes = ['DAILY_LIMIT', 'RATE_LIMIT', 'ADDRESS_UNAVAILABLE'] as const;
+
+export function environmentNetworkIssue(error: unknown) {
+    const message = error instanceof Error ? error.message : '';
+    return networkIssueCodes.find(code => message.includes(code)) ?? 'UNAVAILABLE';
+}
+
 export async function requestEnvironmentNetworkReport(
     api: Pick<ShopApi, 'request'>,
     signal?: AbortSignal,

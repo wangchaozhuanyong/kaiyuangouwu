@@ -21,7 +21,7 @@ import {
     type BrowserNetworkAddresses,
     readBrowserNetworkAddresses,
 } from '../../api/browser-network-addresses';
-import { requestEnvironmentNetworkReport } from '../../api/environment-monitor';
+import { environmentNetworkIssue, requestEnvironmentNetworkReport } from '../../api/environment-monitor';
 import { LocalePreferencesSheet, LocalePreferencesTrigger } from '../../components/common/locale-preferences';
 import { languageCodeFor } from '../../i18n';
 import { OverlayHost } from '../../overlay-host';
@@ -75,13 +75,6 @@ export function networkView(report: EnvironmentNetworkReport): NetworkView {
         utcOffset: offsetAt(report.timezone, report.checkedAt),
         source: report.provider === 'IPDB' ? 'IP-DB' : report.provider === 'IPQS' ? 'IPQS' : 'REQUEST',
     };
-}
-function errorCode(error: unknown): string {
-    const message = error instanceof Error ? error.message : '';
-    return (
-        ['DAILY_LIMIT', 'RATE_LIMIT', 'ADDRESS_UNAVAILABLE'].find(code => message.includes(code)) ??
-        'UNAVAILABLE'
-    );
 }
 function ColorIcon({ name, small = false }: { name: IconName; small?: boolean }) {
     const paths: Record<IconName, ReactNode> = {
@@ -293,7 +286,7 @@ export function EnvironmentMonitorPage({
             return { state, report: networkView(raw) };
         } catch (error) {
             if (request.signal.aborted || !mounted.current) throw error;
-            const issue = errorCode(error);
+            const issue = environmentNetworkIssue(error);
             setNetworkError(issue);
             setNetworkState('error');
             patch({ networkIssue: issue });
