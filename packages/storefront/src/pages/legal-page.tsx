@@ -181,7 +181,7 @@ function LegalBody({ text }: { text: string }) {
             );
         }
         if (/^[ \t]*-{3,}[ \t]*$/u.test(line)) {
-            return <div key={index} className="legal-document-break" role="separator" />;
+            return <div key={index} role="separator" style={{ blockSize: 1 }} />;
         }
         return index < lines.length - 1 ? line + '\n' : line;
     });
