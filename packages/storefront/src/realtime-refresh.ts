@@ -1,10 +1,35 @@
-import type { Query, QueryClient } from '@tanstack/react-query';
+// organize-imports-ignore -- Preserve the repository's ESLint order for type-only imports.
+import type { StorefrontRealtimeEvent, StorefrontRealtimeScope } from './realtime-updates';
+import type { Query, QueryClient, QueryKey } from '@tanstack/react-query';
 
-import {
-    storefrontRealtimeQueryMatches,
-    type StorefrontRealtimeEvent,
-    type StorefrontRealtimeScope,
-} from './realtime-updates';
+/** Recover active account reads whose invalidation may have been missed while the stream was down. */
+export function refreshStorefrontPrivateRealtimeReads(
+    queryClient: QueryClient,
+    scope: StorefrontRealtimeScope,
+) {
+    if (!scope.customerId) return Promise.resolve();
+    const prefix = ['storefront', scope.marketCode, scope.languageCode, 'private'];
+    return queryClient.refetchQueries(
+        {
+            type: 'active',
+            predicate: ({ queryKey }) =>
+                matchesPrefix(queryKey, prefix) &&
+                (queryKey[4] === 'cart' ||
+                    (queryKey[4] === 'customer' &&
+                        queryKey[5] === scope.customerId &&
+                        [
+                            'coupon-campaigns',
+                            'coupons',
+                            'coupon-usage-records',
+                            'orders',
+                            'order',
+                            'order-counts',
+                            'after-sales',
+                        ].includes(String(queryKey[6])))),
+        },
+        { cancelRefetch: false },
+    );
+}
 
 const realtimeRefreshes = new WeakMap<
     QueryClient,
@@ -165,6 +190,110 @@ async function applyStorefrontRealtimeQueries(
         },
         { cancelRefetch: false },
     );
+}
+
+export function storefrontRealtimeQueryMatches(
+    query: Pick<Query, 'queryKey'>,
+    event: StorefrontRealtimeEvent,
+    scope: StorefrontRealtimeScope,
+): boolean {
+    const key = query.queryKey;
+    const topics = new Set(event.topics);
+    if (
+        topics.has('config') &&
+        matchesPrefix(key, ['storefront', scope.marketCode]) &&
+        key[2] === 'commerce-mode'
+    ) {
+        return true;
+    }
+    if (!matchesPrefix(key, ['storefront', scope.marketCode, scope.languageCode])) return false;
+    const section = key[3];
+    if (
+        ['flash-sales', 'flash-sale-associations'].includes(String(section)) &&
+        (topics.has('catalog') || topics.has('content'))
+    )
+        return true;
+    if (section === 'daily-recommendations' && (topics.has('catalog') || topics.has('orders'))) return true;
+
+    if (topics.has('config') && (section === 'config' || section === 'review-settings')) return true;
+    if (
+        topics.has('content') &&
+        (section === 'content' || section === 'visual-preset' || couponCampaignQueryMatches(key, scope))
+    ) {
+        return true;
+    }
+    if (topics.has('catalog') && catalogQueryMatches(key, event)) return true;
+    if (topics.has('reviews') && section === 'product-reviews') {
+        const ids = new Set(event.entityIds ?? []);
+        return event.entityType !== 'Product' || ids.size === 0 || ids.has(String(key[4]));
+    }
+    if ((topics.has('referral') || topics.has('content')) && section === 'referral-program') return true;
+    if (section !== 'private') return false;
+
+    const privateSection = key[4];
+    if (topics.has('catalog') && privateSection === 'cart') return true;
+    if (topics.has('coupons') && privateSection === 'coupon-campaigns') return true;
+    if (topics.has('cart') && privateSection === 'cart') return true;
+    if (topics.has('customer') && privateSection === 'customer' && key.length === 5) return true;
+    if (topics.has('orders') && (privateSection === 'order' || privateSection === 'order-by-code'))
+        return true;
+    if (!scope.customerId || privateSection !== 'customer' || String(key[5]) !== scope.customerId) {
+        return false;
+    }
+    const customerSection = key[6];
+    if (
+        topics.has('orders') &&
+        ['orders', 'order', 'order-counts', 'after-sales', 'review-candidates'].includes(
+            String(customerSection),
+        )
+    ) {
+        return true;
+    }
+    if (
+        topics.has('coupons') &&
+        ['coupon-campaigns', 'coupons', 'coupon-usage-records'].includes(String(customerSection))
+    ) {
+        return true;
+    }
+    if (topics.has('reviews') && ['reviews', 'review-candidates'].includes(String(customerSection))) {
+        return true;
+    }
+    return topics.has('referral') && customerSection === 'referral';
+}
+
+function couponCampaignQueryMatches(key: QueryKey, scope: StorefrontRealtimeScope): boolean {
+    if (key[3] !== 'private') return false;
+    if (key[4] === 'coupon-campaigns') return key[5] === 'anonymous';
+    return (
+        Boolean(scope.customerId) &&
+        key[4] === 'customer' &&
+        String(key[5]) === scope.customerId &&
+        key[6] === 'coupon-campaigns'
+    );
+}
+
+function catalogQueryMatches(key: QueryKey, event: StorefrontRealtimeEvent): boolean {
+    const section = key[3];
+    if (
+        [
+            'products',
+            'catalog',
+            'collections',
+            'native-catalog',
+            'native-catalog-sales',
+            'home-best-seller-sales',
+        ].includes(String(section))
+    )
+        return true;
+    const ids = new Set(event.entityIds ?? []);
+    if (section === 'product') {
+        return event.entityType !== 'Product' || ids.size === 0 || ids.has(String(key[4]));
+    }
+    if (section === 'products-by-ids') {
+        const queryIds = Array.isArray(key[4]) ? key[4].map(String) : [];
+        return event.entityType !== 'Product' || ids.size === 0 || queryIds.some(id => ids.has(id));
+    }
+    return false;
 }
 
 function matchesPrefix(value: readonly unknown[], prefix: readonly unknown[]): boolean {

@@ -8,7 +8,8 @@ import {
     normalizeStorefrontVisualPreset,
 } from '../../storefront-content-plugin/src/visual-presets';
 
-import { storefrontRealtimeQueryMatches, type StorefrontRealtimeEvent } from './realtime-updates';
+import { storefrontRealtimeQueryMatches } from './realtime-refresh';
+import { type StorefrontRealtimeEvent } from './realtime-updates';
 import { applyStorefrontVisualPreset, readStorefrontPreviewPreset } from './use-storefront-visual-preset';
 
 describe('storefront visual preset lifecycle', () => {

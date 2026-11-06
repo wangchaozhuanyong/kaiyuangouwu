@@ -1,12 +1,16 @@
 /** One visible-page fallback for aggregate data. The supplied refresh already merges concurrent reads. */
-export function publicRefreshScheduler(refresh: () => void, reconcile?: () => void) {
+export function publicRefreshScheduler(refresh: (reconnected: boolean) => void, reconcile?: () => void) {
     let connected = false;
     let hasConnected = false;
+    let reconnectPending = false;
     let visible = document.visibilityState !== 'hidden';
     let disposed = false;
     const run = (aggregate = true) => {
         if (!disposed && navigator.onLine && document.visibilityState !== 'hidden') {
-            if (aggregate) refresh();
+            if (aggregate) {
+                refresh(connected && reconnectPending);
+                if (connected) reconnectPending = false;
+            }
             reconcile?.();
         }
     };
@@ -27,7 +31,10 @@ export function publicRefreshScheduler(refresh: () => void, reconcile?: () => vo
         connection(next: boolean) {
             const reconnected = next && !connected;
             connected = next;
-            if (reconnected && hasConnected) run();
+            if (reconnected && hasConnected) {
+                reconnectPending = true;
+                run();
+            }
             if (next) hasConnected = true;
         },
         dispose() {

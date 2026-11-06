@@ -66,4 +66,36 @@ describe('one public refresh owner', () => {
         vi.advanceTimersByTime(60_000);
         expect(refresh).toHaveBeenCalledTimes(2);
     });
+    it('catches up once after each successful reconnect, waiting for a hidden tab to return', () => {
+        vi.useFakeTimers();
+        const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        const catchUp = vi.fn();
+        const owner = publicRefreshScheduler(reconnected => {
+            if (reconnected) catchUp();
+        });
+        try {
+            owner.connection(true);
+            owner.connection(false);
+            vi.advanceTimersByTime(60_000);
+            expect(catchUp).not.toHaveBeenCalled();
+
+            owner.connection(true);
+            owner.connection(true);
+            expect(catchUp).toHaveBeenCalledTimes(1);
+
+            visibility.mockReturnValue('hidden');
+            document.dispatchEvent(new Event('visibilitychange'));
+            owner.connection(false);
+            owner.connection(true);
+            vi.advanceTimersByTime(60_000);
+            expect(catchUp).toHaveBeenCalledTimes(1);
+
+            visibility.mockReturnValue('visible');
+            document.dispatchEvent(new Event('visibilitychange'));
+            vi.advanceTimersByTime(60_000);
+            expect(catchUp).toHaveBeenCalledTimes(2);
+        } finally {
+            owner.dispose();
+        }
+    });
 });
