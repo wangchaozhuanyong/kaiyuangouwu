@@ -88,8 +88,8 @@ export const storefrontClientPluginCatalog: readonly StorefrontClientPluginDefin
     },
     {
         code: 'environment-monitor-entry',
-        name: '环境监测',
-        englishName: 'Environment monitor',
+        name: '环境检测',
+        englishName: 'Environment check',
         description: '检测浏览器语言、时区、字体、设备特征与当前网络环境。',
         englishDescription:
             'Check browser language, timezone, fonts, device signals and the current network.',

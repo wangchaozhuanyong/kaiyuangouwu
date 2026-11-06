@@ -46,8 +46,8 @@ export function EnvironmentMonitorRoutePage() {
                 state="error"
                 error={
                     runtime.language === 'zh'
-                        ? '当前店铺尚未开启环境监测'
-                        : 'Environment monitor is not enabled in this store'
+                        ? '当前店铺尚未开启环境检测'
+                        : 'Environment check is not enabled in this store'
                 }
                 language={runtime.language}
                 onBack={runtime.goBack}

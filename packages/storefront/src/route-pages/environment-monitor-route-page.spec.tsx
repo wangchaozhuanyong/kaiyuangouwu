@@ -112,7 +112,7 @@ it('denies a direct page visit when the published plugin entry is disabled', asy
             );
             return Promise.resolve();
         });
-        expect(host.textContent).toContain('当前店铺尚未开启环境监测');
+        expect(host.textContent).toContain('当前店铺尚未开启环境检测');
         expect(runtime.api.request).not.toHaveBeenCalled();
     } finally {
         act(() => root.unmount());

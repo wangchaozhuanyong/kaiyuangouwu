@@ -18,6 +18,9 @@ try {
         ['mobile-basic-zh', 390, '?basic'],
         ['desktop-basic-en', 1440, '?en&basic'],
         ['mobile-ipqs-zh', 390, '?ipqs'],
+        ['mobile-ipv6-zh', 390, '?ipv6'],
+        ['desktop-ipv6-en', 1440, '?ipv6&en&skin=neo-minimalist'],
+        ['mobile-dual-zh', 360, '?dual'],
     ]) {
         const page = await browser.newPage({
             viewport: { width, height: 900 },
@@ -42,6 +45,14 @@ try {
         );
         assert.notEqual(actionStyle.background, actionStyle.foreground, 'primary action text is visible');
         assert.equal(await page.evaluate(() => document.documentElement.dataset.networkCalls), undefined);
+        await expect(page.locator('.environment-ipv6-notice')).toHaveCount(0);
+        const externalCheck = page.getByRole('link', {
+            name: en ? 'Claude AI IP check' : 'Claude AI IP 检测',
+            exact: true,
+        });
+        await expect(externalCheck).toHaveAttribute('href', 'https://ip.net.coffee/claude/');
+        await expect(externalCheck).toHaveAttribute('target', '_blank');
+        await expect(externalCheck).toHaveAttribute('rel', 'noopener noreferrer');
         await page.screenshot({ path: `${output}${name}-initial.png`, fullPage: true });
         const heading = await page.locator('.environment-network .environment-section-heading').boundingBox();
         const status = await page
@@ -55,6 +66,24 @@ try {
         ).toBeEnabled();
         const score = page.locator('.environment-gauge-value strong');
         await expect(score).not.toHaveText('—');
+        if (query.includes('ipv6') || query.includes('dual')) {
+            const notice = page.locator('.environment-ipv6-notice');
+            await expect(notice).toBeVisible();
+            await expect(notice).toContainText(en ? 'IPv6 was detected' : '当前为 IPv6 环境');
+            await expect(notice.getByRole('link')).toHaveAttribute(
+                'href',
+                'https://ip.net.coffee/claude/ipv6.html',
+            );
+            const primaryBox = await page.locator('.environment-primary').boundingBox();
+            const noticeBox = await notice.boundingBox();
+            const externalBox = await externalCheck.boundingBox();
+            assert.ok(noticeBox.y >= primaryBox.y + primaryBox.height);
+            assert.ok(externalBox.y >= noticeBox.y + noticeBox.height);
+            assert.ok(Math.abs(primaryBox.width - noticeBox.width) < 1);
+            assert.ok(Math.abs(primaryBox.width - externalBox.width) < 1);
+        } else {
+            await expect(page.locator('.environment-ipv6-notice')).toHaveCount(0);
+        }
         if (query.includes('fail')) {
             await expect(page.getByRole('button', { name: '仅重试网络', exact: true })).toBeVisible();
             const original = await score.innerText();

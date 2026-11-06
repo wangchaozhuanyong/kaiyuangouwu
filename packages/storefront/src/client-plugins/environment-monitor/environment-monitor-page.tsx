@@ -10,10 +10,12 @@ import {
     ChevronDown,
     CircleAlert,
     Copy as CopyIcon,
+    ExternalLink,
     Info,
     LoaderCircle,
     RotateCcw,
     ScanLine,
+    TriangleAlert,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
@@ -611,7 +613,7 @@ export function EnvironmentMonitorPage({
                 data-running={running}
             >
                 <SubHeader
-                    title={t('环境监测', 'Environment monitor')}
+                    title={t('环境检测', 'Environment check')}
                     language={language}
                     onBack={onBack}
                     backLabel={t('返回上一层', 'Back')}
@@ -785,6 +787,42 @@ export function EnvironmentMonitorPage({
                                           : t('开始检测', 'Start check')}
                                     {!running && <ArrowRight />}
                                 </button>
+                                {!networkBusy && (data?.network?.ipv6 || data?.network?.ip.includes(':')) && (
+                                    <aside className="environment-ipv6-notice" role="status">
+                                        <TriangleAlert aria-hidden="true" />
+                                        <div>
+                                            <p className="type-helper">
+                                                {networkState === 'error'
+                                                    ? t(
+                                                          '最近一次检测到 IPv6。当前网络查询未完成，请重新检测确认。',
+                                                          'IPv6 was detected in the last result. The current network check is incomplete. Check again to confirm.',
+                                                      )
+                                                    : t(
+                                                          '当前为 IPv6 环境，不建议采用 IPv6 访问 Claude Code。部分检测结果可能不完整。',
+                                                          'IPv6 was detected. Using IPv6 to access Claude Code is not recommended. Some check results may be incomplete.',
+                                                      )}
+                                            </p>
+                                            <a
+                                                className="type-helper"
+                                                href="https://ip.net.coffee/claude/ipv6.html"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                {t('了解为什么不建议用 IPv6', 'Why IPv6 is not recommended')}
+                                                <ExternalLink aria-hidden="true" />
+                                            </a>
+                                        </div>
+                                    </aside>
+                                )}
+                                <a
+                                    className="environment-external-check type-action"
+                                    href="https://ip.net.coffee/claude/"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    <span>{t('Claude AI IP 检测', 'Claude AI IP check')}</span>
+                                    <ExternalLink aria-hidden="true" />
+                                </a>
                             </div>
                             {report && !running && (
                                 <p className="environment-next-step type-helper">
@@ -1475,7 +1513,7 @@ export function EnvironmentMonitorPage({
                             )}
                         </p>
                         <span className="type-meta">
-                            {t('环境监测', 'Environment monitor')} ·{' '}
+                            {t('环境检测', 'Environment check')} ·{' '}
                             {t('浏览器与网络检测', 'Browser and network check')}
                         </span>
                     </footer>
@@ -1486,7 +1524,7 @@ export function EnvironmentMonitorPage({
                         currencyCodes={localeSettings.currencyCodes}
                         selectedCurrencyCode={localeSettings.currencyCode}
                         currencyLoading={localeSettings.currencyLoading ?? false}
-                        storefrontLabel={t('环境监测', 'Environment monitor')}
+                        storefrontLabel={t('环境检测', 'Environment check')}
                         onToggleLanguage={localeSettings.onToggleLanguage}
                         onSelectCurrency={localeSettings.onCurrencyChange}
                         onClose={() => setPreferencesOpen(false)}

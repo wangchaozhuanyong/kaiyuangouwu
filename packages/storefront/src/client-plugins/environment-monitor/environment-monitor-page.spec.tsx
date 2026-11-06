@@ -100,6 +100,50 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 describe('manual live environment page', () => {
+    it('shows the IPv6 guidance for dual-stack and IPv6-only results, and clears it after an IPv4 recheck', async () => {
+        const f = fixture();
+        expect(f.node.textContent).toContain('环境检测');
+        expect(f.node.querySelector('.environment-ipv6-notice')).toBeNull();
+        const external = f.node.querySelector<HTMLAnchorElement>('.environment-external-check');
+        expect(external?.href).toBe('https://ip.net.coffee/claude/');
+        expect(external?.target).toBe('_blank');
+        expect(external?.rel).toBe('noopener noreferrer');
+        expect(external?.textContent).toContain('Claude AI IP 检测');
+
+        f.api.request.mockResolvedValueOnce({
+            environmentNetworkReport: { ...network, ipv4: network.ip, ipv6: '2001:db8::8' },
+        });
+        await f.click('开始检测');
+        expect(f.node.querySelector('.environment-ipv6-notice')?.textContent).toContain('当前为 IPv6 环境');
+        const why = f.node.querySelector<HTMLAnchorElement>('.environment-ipv6-notice a');
+        expect(why?.href).toBe('https://ip.net.coffee/claude/ipv6.html');
+        expect(why?.target).toBe('_blank');
+        expect(why?.rel).toBe('noopener noreferrer');
+
+        f.render('store-a:MYR', 'en');
+        await f.flush();
+        expect(f.node.querySelector('.environment-ipv6-notice')?.textContent).toContain('IPv6 was detected');
+        expect(f.node.textContent).not.toMatch(/\p{Script=Han}/u);
+        f.render();
+        f.api.request.mockResolvedValueOnce({
+            environmentNetworkReport: { ...network, ip: '2001:db8::8' },
+        });
+        await f.click('重新检测');
+        expect(f.node.querySelector('.environment-ipv6-notice')).not.toBeNull();
+
+        f.api.request.mockRejectedValueOnce(new Error('Unavailable'));
+        await f.click('重新检测');
+        expect(f.node.querySelector('.environment-ipv6-notice')?.textContent).toContain(
+            '最近一次检测到 IPv6',
+        );
+        expect(f.node.querySelector('.environment-ipv6-notice')?.textContent).not.toContain(
+            '当前为 IPv6 环境',
+        );
+
+        await f.click('重新检测');
+        expect(f.node.querySelector('.environment-ipv6-notice')).toBeNull();
+        expect(f.node.querySelector('.environment-external-check')).not.toBeNull();
+    });
     it('labels public IP versions separately and copies the chosen full address without mixing location fields', async () => {
         const f = fixture();
         f.api.request.mockResolvedValueOnce({

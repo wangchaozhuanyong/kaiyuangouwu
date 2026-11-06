@@ -14,7 +14,7 @@ describe('environment monitor storefront registration', () => {
         const entry = storefrontClientPluginCatalog.find(
             plugin => plugin.code === 'environment-monitor-entry',
         );
-        expect(entry).toMatchObject({ name: '环境监测', defaultPlacement: 'BUSINESS_SERVICES_MAIN' });
+        expect(entry).toMatchObject({ name: '环境检测', defaultPlacement: 'BUSINESS_SERVICES_MAIN' });
         expect(routePath('environment-monitor')).toBe('/environment-monitor');
         expect(isPublicStorefrontRoute('environment-monitor')).toBe(true);
         expect(desktopPageFamily('environment-monitor')).toBe('tools');
@@ -37,7 +37,7 @@ describe('environment monitor storefront registration', () => {
         const plugins = resolveClientPlugins(block, 'BUSINESS_SERVICES_MAIN');
         expect(plugins).toHaveLength(1);
         const Entry = plugins[0].Component;
-        expect(renderToStaticMarkup(<Entry language="zh" onNavigate={vi.fn()} />)).toContain('环境监测');
+        expect(renderToStaticMarkup(<Entry language="zh" onNavigate={vi.fn()} />)).toContain('环境检测');
         expect(resolveClientPlugins({ ...block, enabled: false }, 'BUSINESS_SERVICES_MAIN')).toEqual([]);
         expect(
             resolveClientPlugins(
