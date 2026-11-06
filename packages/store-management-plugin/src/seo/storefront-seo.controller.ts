@@ -280,7 +280,7 @@ export class StorefrontSeoController {
         }
     }
 
-    /** Missing extensionless paths may have a published legacy mapping; SPA fallback stays in Nginx. */
+    /** Resolve published redirects and explicitly enabled tool documents before Nginx falls back. */
     @Get('redirect')
     async legacyRedirect(@Req() req: Request, @Res() res: Response) {
         res.setHeader('Cache-Control', 'no-store');
@@ -289,12 +289,33 @@ export class StorefrontSeoController {
             res.status(404).end();
             return;
         }
-        const raw = trustedPublicPageHeaders(req) ? req.headers['x-storefront-original-uri'] : req.query.path;
+        const trusted = trustedPublicPageHeaders(req);
+        const raw = trusted ? req.headers['x-storefront-original-uri'] : req.query.path;
         const path = typeof raw === 'string' ? normalizedPublicRedirectPath(raw) : null;
         const settings = await this.seo.publishedSettings(verified.ctx);
         const redirect = path && settings?.redirects.find(item => item.from === path);
-        if (redirect) res.redirect(redirect.status, publicRedirectTracking(redirect.to, raw as string));
-        else res.status(404).end();
+        if (redirect) {
+            res.redirect(redirect.status, publicRedirectTracking(redirect.to, raw as string));
+            return;
+        }
+        const tool = trusted && path && /^(?:\/(zh|en))?\/environment-monitor\/?(?:[?]|$)/u.exec(path);
+        if (tool) {
+            const language =
+                tool[1] === 'zh'
+                    ? LanguageCode.zh_Hans
+                    : tool[1] === 'en'
+                      ? LanguageCode.en
+                      : verified.ctx.languageCode;
+            if (
+                await this.pages.isClientPluginPublished(verified.ctx, 'environment-monitor-entry', language)
+            ) {
+                // Serve the current shell at the requested URL using its existing noindex and security headers.
+                res.setHeader('X-Accel-Redirect', '/index.html');
+                res.status(200).end();
+                return;
+            }
+        }
+        res.status(404).end();
     }
 
     @Get('robots')

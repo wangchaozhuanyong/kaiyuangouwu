@@ -27,6 +27,7 @@ import {
     primaryStorefrontMedia,
     publicPageRequestKey,
     publicPageRouteHref,
+    STOREFRONT_CLIENT_PLUGINS_CODE,
     StorefrontAccountSettingsService,
     StorefrontAuthSettingsService,
     StorefrontContentService,
@@ -119,6 +120,21 @@ export class StorefrontPublicPageService {
         // v2 default-category snapshots contain all-store results. Do not adopt
         // that payload under the corrected effective query when a runtime changes.
         return `page:v3:${host}:${publicPageRequestKey(request)}`;
+    }
+
+    async isClientPluginPublished(
+        ctx: RequestContext,
+        pluginCode: string,
+        languageCode: RequestContext['languageCode'],
+    ) {
+        const blocks = await this.content.findPublished(ctx, false, languageCode);
+        return blocks.some(
+            block =>
+                block.enabled &&
+                block.code === STOREFRONT_CLIENT_PLUGINS_CODE &&
+                block.type === 'CLIENT_PLUGINS' &&
+                block.items.some(item => item.enabled && item.settings?.pluginCode === pluginCode),
+        );
     }
 
     /** Do not cache this decision: a reused context must see a committed status/domain change. */
