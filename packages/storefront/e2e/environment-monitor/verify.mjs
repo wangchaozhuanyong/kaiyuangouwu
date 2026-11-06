@@ -1,6 +1,6 @@
 import { chromium, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 const output = fileURLToPath(new URL('../../../../reports/environment-monitor-20261101/', import.meta.url));
@@ -53,6 +53,86 @@ try {
         await expect(externalCheck).toHaveAttribute('href', 'https://ip.net.coffee/claude/');
         await expect(externalCheck).toHaveAttribute('target', '_blank');
         await expect(externalCheck).toHaveAttribute('rel', 'noopener noreferrer');
+        const cleanup = page.getByRole('button', {
+            name: en ? 'Remove relay API variables' : '删除中转 API 变量',
+            exact: true,
+        });
+        const [externalBounds, cleanupBounds] = await Promise.all([
+            externalCheck.boundingBox(),
+            cleanup.boundingBox(),
+        ]);
+        assert.ok(Math.abs(externalBounds.y - cleanupBounds.y) < 1, 'tool buttons share a row');
+        assert.ok(Math.abs(externalBounds.width - cleanupBounds.width) < 1, 'tool buttons have equal width');
+        if (name === 'small-zh' || name === 'desktop-en') {
+            await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], {
+                origin: new URL(base).origin,
+            });
+            await cleanup.click();
+            const guide = page.getByRole('dialog', {
+                name: en ? 'Remove relay API variables' : '删除中转 API 变量',
+            });
+            await expect(guide).toBeVisible();
+            await expect(guide).toContainText(
+                en ? '1.1 Follow the Windows or Mac instructions' : '1.1 根据windows或者mac电脑流程操作',
+            );
+            await expect(
+                guide.getByRole('heading', {
+                    name: en ? '1.2 How to tell if cleanup worked' : '1.2 怎么样算干净',
+                }),
+            ).toBeVisible();
+            await expect(guide).toContainText(
+                en ? 'Compare your sign-in screen' : '可以查看自己登录界面窗口是否删除干净',
+            );
+            const examples = guide.locator('.environment-proxy-examples img');
+            await expect(examples).toHaveCount(2);
+            await expect
+                .poll(() =>
+                    examples.evaluateAll(images =>
+                        images.every(image => image.complete && image.naturalWidth > 0),
+                    ),
+                )
+                .toBe(true);
+            await expect(guide.locator('a:not([download])')).toHaveCount(0);
+            for (const [zhLabel, enLabel, command] of [
+                [
+                    '复制 Windows 执行权限命令',
+                    'Copy Windows execution policy command',
+                    'Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass',
+                ],
+                [
+                    '复制 Windows 命令',
+                    'Copy Windows command',
+                    '& "$env:USERPROFILE\\Desktop\\clean-claude-proxy.ps1"',
+                ],
+                ['复制 Windows 登录命令', 'Copy Windows sign-in command', 'claude'],
+                [
+                    '复制 macOS 执行权限命令',
+                    'Copy macOS execute permission command',
+                    'chmod +x ~/Downloads/clean-claude-proxy.sh',
+                ],
+                ['复制 macOS 命令', 'Copy macOS command', '~/Downloads/clean-claude-proxy.sh'],
+                ['复制 macOS Bash 命令', 'Copy macOS Bash command', 'bash ~/Downloads/clean-claude-proxy.sh'],
+                ['复制 macOS 登录命令', 'Copy macOS sign-in command', 'claude'],
+                ['复制退出命令', 'Copy sign-out command', '/logout'],
+            ]) {
+                await guide.getByRole('button', { name: en ? enLabel : zhLabel, exact: true }).click();
+                await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
+            }
+            for (const filename of ['clean-claude-proxy.ps1', 'clean-claude-proxy.sh']) {
+                const download = guide.locator(`a[download="${filename}"]`);
+                await expect(download).toHaveAttribute('href', `/tools/claude-proxy/${filename}`);
+                const [file] = await Promise.all([page.waitForEvent('download'), download.click()]);
+                assert.equal(file.suggestedFilename(), filename);
+                assert.equal(await file.failure(), null);
+                const source = new URL(`../../public/tools/claude-proxy/${filename}`, import.meta.url);
+                assert.deepEqual(await readFile(await file.path()), await readFile(source));
+            }
+            assert.ok(await guide.evaluate(element => element.scrollWidth <= element.clientWidth + 1));
+            await page.screenshot({ path: `${output}${name}-proxy-guide.png` });
+            await page.keyboard.press('Escape');
+            await expect(guide).toHaveCount(0);
+            await expect(cleanup).toBeFocused();
+        }
         await page.screenshot({ path: `${output}${name}-initial.png`, fullPage: true });
         const heading = await page.locator('.environment-network .environment-section-heading').boundingBox();
         const status = await page
@@ -76,11 +156,11 @@ try {
             );
             const primaryBox = await page.locator('.environment-primary').boundingBox();
             const noticeBox = await notice.boundingBox();
-            const externalBox = await externalCheck.boundingBox();
+            const toolsBox = await page.locator('.environment-tool-actions').boundingBox();
             assert.ok(noticeBox.y >= primaryBox.y + primaryBox.height);
-            assert.ok(externalBox.y >= noticeBox.y + noticeBox.height);
+            assert.ok(toolsBox.y >= noticeBox.y + noticeBox.height);
             assert.ok(Math.abs(primaryBox.width - noticeBox.width) < 1);
-            assert.ok(Math.abs(primaryBox.width - externalBox.width) < 1);
+            assert.ok(Math.abs(primaryBox.width - toolsBox.width) < 1);
         } else {
             await expect(page.locator('.environment-ipv6-notice')).toHaveCount(0);
         }
