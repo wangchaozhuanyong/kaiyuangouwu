@@ -87,6 +87,8 @@ async function createFixture({
     violations = false,
     generatedRecords = false,
     zeroOrders = false,
+    securityReadiness = false,
+    missingSecurityColumns = false,
 } = {}) {
     const { default: initialize } = await import('sql.js');
     const SQL = await initialize();
@@ -223,6 +225,37 @@ async function createFixture({
         `);
     }
     if (zeroOrders) database.run('DELETE FROM order_channels_channel; DELETE FROM `order`;');
+    if (securityReadiness) {
+        database.run(`
+            CREATE TABLE icloud_primary_account (id INTEGER PRIMARY KEY, status TEXT, imapHost TEXT, imapPort INTEGER);
+            INSERT INTO icloud_primary_account VALUES
+                (1, 'ACTIVE', ' IMAP.MAIL.ME.COM ', 993),
+                (2, 'SYNCING', '', NULL),
+                (3, 'ACTIVE', 'private-host.example.test', 993),
+                (4, 'ACTIVE', 'imap.mail.me.com', 143),
+                (5, 'ACTIVE', NULL, 993),
+                (6, 'DISABLED', 'private-host.example.test', 143);
+            INSERT INTO \`user\` VALUES
+                (11, 'private-admin-one@example.test', NULL), (12, 'private-admin-two@example.test', NULL),
+                (13, 'private-admin-three@example.test', NULL), (14, 'private-deleted-user@example.test', '2026-11-01'),
+                (15, 'private-deleted-admin@example.test', NULL), (16, 'private-incomplete-mfa@example.test', NULL);
+            CREATE TABLE administrator (id INTEGER PRIMARY KEY, userId INTEGER, deletedAt TEXT);
+            INSERT INTO administrator VALUES
+                (21, 11, NULL), (22, 12, NULL), (23, 13, NULL), (24, 14, NULL),
+                (25, 15, '2026-11-01'), (26, 16, NULL);
+            CREATE TABLE admin_two_factor_credential (userId INTEGER PRIMARY KEY, enabledAt TEXT, encryptedSecret TEXT);
+            INSERT INTO admin_two_factor_credential VALUES
+                (11, '2026-11-01', 'private-factor-ciphertext'),
+                (12, NULL, 'private-factor-ciphertext'),
+                (14, '2026-11-01', 'private-factor-ciphertext'),
+                (15, '2026-11-01', 'private-factor-ciphertext'),
+                (16, '2026-11-01', NULL);
+        `);
+        if (missingSecurityColumns) {
+            database.run(`ALTER TABLE icloud_primary_account DROP COLUMN imapPort;
+                ALTER TABLE admin_two_factor_credential DROP COLUMN enabledAt;`);
+        }
+    }
     const query = async (sql, parameters = []) => {
         assert.match(sql.trim(), /^(SELECT|PRAGMA)\b/u, 'Audit attempted a database write');
         const statement = database.prepare(sql);
@@ -288,6 +321,46 @@ test('complete synthetic multi-store state passes without exposing customer, ord
         }
     } finally {
         fixture.close();
+    }
+});
+
+test('security readiness reports only IMAP and active administrator MFA counts without changing isolation verdict', async () => {
+    const fixture = await createFixture({ securityReadiness: true });
+    try {
+        const report = await collectStoreAutonomyAudit(fixture.adapter, { auditKey: 'fixture-key' });
+        assert.equal(report.verdict, 'GO');
+        assert.deepEqual(report.securityReadiness, {
+            icloudImap: { status: 'COMPLETE', activeAccounts: 5, incompatibleEndpoints: 2 },
+            administratorMfa: { status: 'COMPLETE', activeAdministrators: 4, enrolledAdministrators: 1 },
+        });
+        const serialized = JSON.stringify(report);
+        assert.deepEqual(validateStoreAutonomyAuditPayload(serialized), report);
+        for (const forbidden of ['private-host', 'private-admin', 'private-factor-ciphertext']) {
+            assert.equal(serialized.includes(forbidden), false);
+        }
+    } finally {
+        fixture.close();
+    }
+});
+
+test('missing security readiness tables or columns yield unknown counts without changing isolation verdict', async () => {
+    for (const options of [{}, { securityReadiness: true, missingSecurityColumns: true }]) {
+        const fixture = await createFixture(options);
+        try {
+            const report = await collectStoreAutonomyAudit(fixture.adapter, { auditKey: 'fixture-key' });
+            assert.equal(report.verdict, 'GO');
+            assert.deepEqual(report.securityReadiness, {
+                icloudImap: { status: 'DATA_MISSING', activeAccounts: null, incompatibleEndpoints: null },
+                administratorMfa: {
+                    status: 'DATA_MISSING',
+                    activeAdministrators: null,
+                    enrolledAdministrators: null,
+                },
+            });
+            assert.deepEqual(validateStoreAutonomyAuditPayload(JSON.stringify(report)), report);
+        } finally {
+            fixture.close();
+        }
     }
 });
 

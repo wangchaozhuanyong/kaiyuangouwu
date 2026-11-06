@@ -1,4 +1,4 @@
-import { ApolloServerPlugin, GraphQLRequestListener, GraphQLRequestContext } from '@apollo/server';
+import { ApolloServerPlugin, GraphQLRequestContext, GraphQLRequestListener } from '@apollo/server';
 import { InternalServerError, Logger } from '@vendure/core';
 import {
     getNamedType,
@@ -20,9 +20,9 @@ import { HardenPluginOptions } from '../types';
 export class QueryComplexityPlugin implements ApolloServerPlugin {
     constructor(private options: HardenPluginOptions) {}
 
-    async requestDidStart(context: GraphQLRequestContext<any>): Promise<GraphQLRequestListener<any>> {
+    requestDidStart(context: GraphQLRequestContext<any>): Promise<GraphQLRequestListener<any>> {
         const maxQueryComplexity = this.options.maxQueryComplexity ?? 1000;
-        return {
+        return Promise.resolve({
             didResolveOperation: async ({ request, document }) => {
                 if (isAdminApi(context.schema)) {
                     // We don't want to apply the cost analysis on the
@@ -63,7 +63,7 @@ export class QueryComplexityPlugin implements ApolloServerPlugin {
                         loggerCtx,
                     );
                 }
-                if (complexity >= maxQueryComplexity) {
+                if (!Number.isFinite(complexity) || complexity >= maxQueryComplexity) {
                     Logger.error(
                         `Query complexity of "${
                             request.operationName ?? 'anonymous'
@@ -73,7 +73,7 @@ export class QueryComplexityPlugin implements ApolloServerPlugin {
                     throw new InternalServerError('Query is too complex');
                 }
             },
-        };
+        });
     }
 }
 
@@ -111,13 +111,17 @@ export function defaultVendureComplexityEstimator(
             if (isObjectType(namedType)) {
                 const isPaginatedList = !!namedType.getInterfaces().find(i => i.name === 'PaginatedList');
                 if (isPaginatedList) {
-                    const take = args.options?.take ?? 1000;
-                    result = childComplexity + Math.round(Math.log(childComplexity) * take);
+                    // Match ListQueryBuilder's lower bound so a sibling cannot offset other costs.
+                    const take = Math.max(0, args.options?.take ?? 1000);
+                    result = childComplexity + Math.round(Math.log(Math.max(1, childComplexity)) * take);
                 }
             }
             if (isListType(getNullableType(field.type))) {
                 result = childComplexity * 5;
             }
+        }
+        if (!Number.isFinite(result) || result < 0) {
+            throw new InternalServerError('Query is too complex');
         }
         if (logFieldScores) {
             Logger.debug(

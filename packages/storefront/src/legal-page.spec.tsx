@@ -89,7 +89,7 @@ describe('ManagedLegalPage', () => {
 
         expect(markup).toContain('<h2><strong>Privacy Notice</strong></h2>');
         expect(markup).toContain('1. Existing clause #1');
-        expect(markup).toContain('<hr/>');
+        expect(markup).toContain('role="separator"');
         expect(markup).toContain('<h2><strong>Notis Privasi</strong></h2>');
         expect(markup).toContain('&lt;img src=x&gt;');
         expect(markup).not.toContain('<img');

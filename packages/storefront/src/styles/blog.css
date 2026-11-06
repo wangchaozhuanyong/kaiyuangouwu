@@ -679,15 +679,14 @@
     font-weight: var(--font-weight-normal);
 }
 .skill-module[data-kind='overview'] {
-    border-inline-start: 3px solid var(--skin-tool-security-foreground, var(--accent-ink));
+    padding-inline-start: calc(var(--space-24) + 2px);
 }
 .skill-audience {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
     gap: var(--space-4) var(--space-8);
-    padding-top: var(--space-12);
-    border-top: 1px solid var(--line-subtle);
+    padding-top: calc(var(--space-12) + 1px);
 }
 .skill-audience span {
     flex: 1 1 12rem;
@@ -709,7 +708,7 @@
     padding-block: var(--space-12);
 }
 .skill-task-list li + li {
-    border-top: 1px solid var(--line-subtle);
+    padding-block-start: calc(var(--space-12) + 1px);
 }
 .skill-task-list li:first-child {
     padding-top: 0;
@@ -762,5 +761,8 @@
     }
     .skill-module {
         padding: var(--space-16);
+    }
+    .skill-module[data-kind='overview'] {
+        padding-inline-start: calc(var(--space-16) + 2px);
     }
 }
