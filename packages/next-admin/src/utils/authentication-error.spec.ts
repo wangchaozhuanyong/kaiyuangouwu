@@ -1,5 +1,7 @@
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
+import { GraphQLError } from 'graphql';
 import { describe, expect, it } from 'vitest';
-import { isAuthenticationRequiredError } from './authentication-error';
+import { isAuthenticationRequiredError, isMissingAdminSession } from './authentication-error';
 
 describe('isAuthenticationRequiredError', () => {
     it.each([
@@ -60,4 +62,24 @@ describe('isAuthenticationRequiredError', () => {
         expect(isAuthenticationRequiredError(new Error('Failed to fetch'))).toBe(false);
         expect(isAuthenticationRequiredError(undefined)).toBe(false);
     });
+});
+
+it('recognizes denied authenticated-only configuration without treating business fields as session proof', () => {
+    expect(
+        isAuthenticationRequiredError({
+            errors: [{ path: ['globalSettings'], extensions: { code: 'FORBIDDEN' } }],
+        }),
+    ).toBe(true);
+    expect(
+        isAuthenticationRequiredError({
+            errors: [{ path: ['globalSettings', 'serverConfig'], extensions: { code: 'FORBIDDEN' } }],
+        }),
+    ).toBe(false);
+    expect(isMissingAdminSession(undefined, { statusCode: 401 })).toBe(true);
+    expect(isMissingAdminSession(undefined, { statusCode: 403 })).toBe(false);
+    const error = new CombinedGraphQLErrors({
+        errors: [new GraphQLError('denied', { path: ['globalSettings'], extensions: { code: 'FORBIDDEN' } })],
+    });
+    expect(isMissingAdminSession(undefined, error)).toBe(false);
+    expect(isMissingAdminSession({ me: { id: 'valid' } }, { statusCode: 401 })).toBe(false);
 });

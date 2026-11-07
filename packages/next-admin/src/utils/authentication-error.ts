@@ -27,7 +27,9 @@ export function isAuthenticationRequiredError(error: unknown): boolean {
                 return (
                     item.extensions?.code === 'FORBIDDEN' &&
                     item.path?.length === 1 &&
-                    (item.path[0] === 'me' || item.path[0] === 'merchantInitialPasswordStatus')
+                    (item.path[0] === 'me' ||
+                        item.path[0] === 'merchantInitialPasswordStatus' ||
+                        item.path[0] === 'globalSettings')
                 );
             });
         }
@@ -44,6 +46,10 @@ export function isMissingAdminSession(
 ) {
     if (data?.me) return false;
     if (!error) return data?.me === null;
+    if (typeof error === 'object') {
+        const candidate = error as AuthenticationError;
+        if (candidate.statusCode === 401 || candidate.networkError?.statusCode === 401) return true;
+    }
     return (
         CombinedGraphQLErrors.is(error) &&
         error.errors.length > 0 &&

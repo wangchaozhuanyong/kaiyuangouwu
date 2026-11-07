@@ -17,6 +17,8 @@ const extensionState = vi.hoisted(() => ({
     load: vi.fn(async () => {}),
 }));
 vi.mock('./apollo', () => ({
+    ADMIN_SESSION_REVALIDATION_EVENT: 'vendure:admin-session-revalidation',
+    getAdminQueryScope: () => `fixture:${auth.selectedChannelToken}`,
     clearAuthSession: auth.clear,
     getActiveChannelToken: () => auth.selectedChannelToken,
     hasActiveChannelSelection: () => Boolean(auth.selectedChannelToken),
@@ -74,7 +76,10 @@ afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
 });
 
-async function renderApp(respond: (name: string) => Record<string, unknown> | Error, strictMode = false) {
+async function renderApp(
+    respond: (name: string) => Record<string, unknown> | Error | Promise<Record<string, unknown> | Error>,
+    strictMode = false,
+) {
     const requests = vi.fn();
     const client = new ApolloClient({
         cache: new InMemoryCache(),
@@ -83,11 +88,16 @@ async function renderApp(respond: (name: string) => Record<string, unknown> | Er
                 new Observable(observer => {
                     requests(operation.operationName);
                     const response = respond(operation.operationName ?? '');
-                    if (response instanceof Error) observer.error(response);
-                    else {
-                        observer.next(response);
-                        observer.complete();
-                    }
+                    const deliver = (value: Record<string, unknown> | Error) => {
+                        if (value instanceof Error) observer.error(value);
+                        else {
+                            observer.next(value);
+                            observer.complete();
+                        }
+                    };
+                    if (response instanceof Promise)
+                        void response.then(deliver, error => observer.error(error));
+                    else deliver(response);
                 }),
         ),
     });
@@ -419,4 +429,109 @@ describe('admin bootstrap session recovery', () => {
         expect(requests.mock.calls.filter(([name]) => name === 'GetAdminSession')).toHaveLength(2);
         expect(auth.clear).not.toHaveBeenCalled();
     });
+});
+
+function requestSessionRevalidation() {
+    window.dispatchEvent(
+        new CustomEvent('vendure:admin-session-revalidation', {
+            detail: { scope: `fixture:${auth.selectedChannelToken}` },
+        }),
+    );
+}
+
+it('rechecks identity after an authenticated page loses its session and leaves the misleading permission screen', async () => {
+    const { host, requests } = await renderApp(name =>
+        name === 'GetAdminBootstrap'
+            ? { data: ready }
+            : {
+                  data: null,
+                  errors: [
+                      new GraphQLError('你当前无权执行此操作', {
+                          path: ['me'],
+                          extensions: { code: 'FORBIDDEN' },
+                      }),
+                  ],
+              },
+    );
+    expect(host.textContent).toContain('已进入管理界面');
+    await act(async () => requestSessionRevalidation());
+    expect(requests.mock.calls.filter(([name]) => name === 'GetAdminSession')).toHaveLength(1);
+    expect(window.location.pathname).toBe('/login');
+    expect(host.textContent).toContain('管理员登录入口');
+    expect(auth.clear).toHaveBeenCalledOnce();
+});
+
+it('keeps a valid identity and does not reinterpret an operation denial as logout', async () => {
+    const { host, requests } = await renderApp(name =>
+        name === 'GetAdminBootstrap' ? { data: ready } : { data: { me: { id: me.id } } },
+    );
+    await act(async () => requestSessionRevalidation());
+    expect(requests).toHaveBeenCalledWith('GetAdminSession');
+    expect(host.textContent).toContain('已进入管理界面');
+    expect(auth.clear).not.toHaveBeenCalled();
+});
+
+it('merges concurrent session checks and ignores a revoked result from a previous store scope', async () => {
+    let finish!: (value: Record<string, unknown>) => void;
+    const deferred = new Promise<Record<string, unknown>>(resolve => {
+        finish = resolve;
+    });
+    const { host, requests } = await renderApp(name =>
+        name === 'GetAdminBootstrap' ? { data: ready } : deferred,
+    );
+    await act(async () => {
+        requestSessionRevalidation();
+        requestSessionRevalidation();
+    });
+    expect(requests.mock.calls.filter(([name]) => name === 'GetAdminSession')).toHaveLength(1);
+    auth.selectedChannelToken = 'store-b';
+    await act(async () => finish({ data: { me: null } }));
+    expect(host.textContent).toContain('已进入管理界面');
+    expect(auth.clear).not.toHaveBeenCalled();
+});
+
+it('does not interrupt recovery-code acknowledgement after an intentional security session transition', async () => {
+    const { host, requests } = await renderApp(() => ({ data: ready }));
+    auth.selectedChannelToken = '';
+    await act(async () => requestSessionRevalidation());
+    expect(requests).not.toHaveBeenCalledWith('GetAdminSession');
+    expect(host.textContent).toContain('已进入管理界面');
+    expect(auth.clear).not.toHaveBeenCalled();
+});
+
+it('does not discard a session on a failed network identity check', async () => {
+    const { host } = await renderApp(name =>
+        name === 'GetAdminBootstrap' ? { data: ready } : new Error('Failed to fetch'),
+    );
+    await act(async () => requestSessionRevalidation());
+    expect(host.textContent).toContain('已进入管理界面');
+    expect(auth.clear).not.toHaveBeenCalled();
+});
+
+it('allows a new scope to revalidate without reusing the previous scope in-flight identity response', async () => {
+    let finishA!: (value: Record<string, unknown>) => void;
+    let finishB!: (value: Record<string, unknown>) => void;
+    const pendingA = new Promise<Record<string, unknown>>(resolve => {
+        finishA = resolve;
+    });
+    const pendingB = new Promise<Record<string, unknown>>(resolve => {
+        finishB = resolve;
+    });
+    let attempts = 0;
+    const { host, requests } = await renderApp(name =>
+        name === 'GetAdminBootstrap' ? { data: ready } : ++attempts === 1 ? pendingA : pendingB,
+    );
+    await act(async () => requestSessionRevalidation());
+    auth.selectedChannelToken = 'store-b';
+    await act(async () => requestSessionRevalidation());
+    expect(requests.mock.calls.filter(([name]) => name === 'GetAdminSession')).toHaveLength(2);
+    await act(async () => {
+        finishA({
+            data: null,
+            errors: [new GraphQLError('expired', { path: ['me'], extensions: { code: 'FORBIDDEN' } })],
+        });
+        finishB({ data: { me: { id: me.id } } });
+    });
+    expect(host.textContent).toContain('已进入管理界面');
+    expect(auth.clear).not.toHaveBeenCalled();
 });
