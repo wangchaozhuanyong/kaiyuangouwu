@@ -27,6 +27,8 @@ export function packageCommands(plan, operation, inventory) {
 }
 
 export function frontendTestCommands(tests, sources, cwd) {
+    // Match backend suites: parallel CI jobs own package concurrency, and a timed-out
+    // fake-timer workflow must not poison the remaining cases through CPU starvation.
     const paths = files => files.map(file => resolve(file));
     const nodeTests = tests.filter(file => /\bfrom\s*['"]node:test['"]/u.test(readFileSync(file, 'utf8')));
     const vitestTests = tests.filter(file => !nodeTests.includes(file));
@@ -36,9 +38,20 @@ export function frontendTestCommands(tests, sources, cwd) {
     ]);
     return [
         ...(nodeTests.length ? [['node', '--test', ...paths(nodeTests)]] : []),
-        ...(vitestTests.length ? [['bunx', 'vitest', 'run', ...paths(vitestTests)]] : []),
+        ...(vitestTests.length ? [['bunx', 'vitest', 'run', '--maxWorkers=1', ...paths(vitestTests)]] : []),
         ...(sources.length
-            ? [['bunx', 'vitest', 'related', '--run', '--passWithNoTests', ...exclusions, ...paths(sources)]]
+            ? [
+                  [
+                      'bunx',
+                      'vitest',
+                      'related',
+                      '--run',
+                      '--passWithNoTests',
+                      '--maxWorkers=1',
+                      ...exclusions,
+                      ...paths(sources),
+                  ],
+              ]
             : []),
     ];
 }
@@ -67,7 +80,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         const sources = files.filter(file => !tests.includes(file) && /\.(css|[cm]?[jt]sx?)$/u.test(file));
         const testEnvironment = { NODE_ENV: 'test' };
         if (plan.full || (!tests.length && !sources.length))
-            run(['bun', 'run', 'test'], cwd, testEnvironment);
+            run(['bun', 'run', 'test', '--maxWorkers=1'], cwd, testEnvironment);
         else
             for (const command of frontendTestCommands(tests, sources, cwd))
                 run(command, cwd, testEnvironment);
