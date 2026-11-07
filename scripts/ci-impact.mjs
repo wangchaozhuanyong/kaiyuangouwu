@@ -38,6 +38,7 @@ export const affectedFrontendsForFile = file =>
         ...(file.startsWith('packages/next-admin/') || storefrontPreviewInput(file) ? ['next-admin'] : []),
     ]);
 export const DATABASES = ['mysql', 'sqljs', 'postgres', 'mariadb'];
+const packageAutomationControls = new Set(['packages/commerce-fulfillment-plugin/e2e/run-isolated-mysql.py']);
 const sorted = values => [...new Set(values)].sort();
 const architectureDebtBaseline = JSON.parse(
     readFileSync(new URL('./architecture-debt-baseline.json', import.meta.url), 'utf8'),
@@ -59,6 +60,7 @@ export const isDocumentation = file =>
 // These files run in CI, not in the serving processes. They still require
 // control checks, but must not turn a later CSS release into a runtime release.
 export const isAutomationOnly = file =>
+    packageAutomationControls.has(file) ||
     file === 'deploy/news-blog-editorial.cjs' ||
     file === 'scripts/news-blog-editorial.mjs' ||
     file.startsWith('.github/') ||
@@ -116,11 +118,13 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
     const deployable = executable.filter(file => !isAutomationOnly(file));
     const changedPackages = sorted(
         executable.flatMap(file =>
-            staticStyleOwner(file)
-                ? [staticStyleOwner(file)]
-                : file.startsWith('packages/dev-server/scripts/')
-                  ? []
-                  : (/^packages\/([^/]+)\//u.exec(file)?.[1] ?? []),
+            packageAutomationControls.has(file)
+                ? []
+                : staticStyleOwner(file)
+                  ? [staticStyleOwner(file)]
+                  : file.startsWith('packages/dev-server/scripts/')
+                    ? []
+                    : (/^packages\/([^/]+)\//u.exec(file)?.[1] ?? []),
         ),
     );
     const dependencies =
@@ -188,6 +192,7 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
     const controls =
         full ||
         workflow ||
+        executable.some(file => packageAutomationControls.has(file)) ||
         executable.some(file => /^(deploy\/|scripts\/|packages\/dev-server\/scripts\/)/u.test(file));
     const publishing =
         full ||

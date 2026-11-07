@@ -644,7 +644,6 @@
     display: grid;
     gap: var(--space-8);
     padding-block-start: var(--space-12);
-    border-block-start: 1px solid var(--line-subtle);
 }
 .environment-proxy-step {
     display: grid;
