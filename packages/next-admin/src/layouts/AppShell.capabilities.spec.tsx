@@ -16,6 +16,7 @@ const mountedBusinessPaths = vi.hoisted(() => [] as string[]);
 vi.mock('../extensions/installed-extensions', () => ({}));
 vi.mock('../components/OrderNotifications', () => ({ OrderNotifications: () => null }));
 vi.mock('../custom-fields/CustomFieldsProvider', () => ({
+    CustomFieldsPageBoundary: ({ children }: { children: React.ReactNode }) => children,
     CustomFieldsProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock('../theme/theme-context', () => ({

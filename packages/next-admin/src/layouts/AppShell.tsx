@@ -67,7 +67,7 @@ import { AdminPermissionsProvider } from '../components/admin-permissions-contex
 import { AdminPageWorkspace, PageSkeleton } from '../components/AdminPageWorkspace';
 import { OrderNotifications } from '../components/OrderNotifications';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
-import { CustomFieldsProvider } from '../custom-fields/CustomFieldsProvider';
+import { CustomFieldsPageBoundary, CustomFieldsProvider } from '../custom-fields/CustomFieldsProvider';
 import {
     getNextAdminExtensionNavItems,
     getNextAdminExtensionRoute,
@@ -101,6 +101,14 @@ import {
 import { TabbedOutlet } from './TabbedOutlet';
 
 const adminBrandIcon = `${import.meta.env.BASE_URL}brand-icon-180.png`;
+
+function ConfiguredPageWorkspace(props: React.ComponentProps<typeof AdminPageWorkspace>) {
+    return (
+        <AdminPageWorkspace {...props}>
+            <CustomFieldsPageBoundary page={props.page}>{props.children}</CustomFieldsPageBoundary>
+        </AdminPageWorkspace>
+    );
+}
 
 interface OpenTab {
     path: string;
@@ -1414,7 +1422,7 @@ export function AppShell() {
                                         .filter(tab => canAccessPath(tab.path))
                                         .map(tab => tab.path)}
                                     fallback={<PageSkeleton />}
-                                    pageFrame={AdminPageWorkspace}
+                                    pageFrame={ConfiguredPageWorkspace}
                                 />
                             </CustomFieldsProvider>
                         </AdminPermissionsProvider>

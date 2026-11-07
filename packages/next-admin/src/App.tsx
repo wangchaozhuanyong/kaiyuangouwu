@@ -1,12 +1,14 @@
 import { gql } from '@apollo/client';
-import { useQuery } from '@apollo/client/react';
+import { useApolloClient, useQuery } from '@apollo/client/react';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { getStandaloneAdminRedirect, resolveAdminRedirectTarget } from './navigation/admin-navigation';
 
 import {
+    ADMIN_SESSION_REVALIDATION_EVENT,
     clearAuthSession,
     getActiveChannelToken,
+    getAdminQueryScope,
     hasActiveChannelSelection,
     setInitialActiveChannel,
 } from './apollo';
@@ -116,12 +118,60 @@ interface AdminBootstrapData {
 }
 
 function SessionExpiredRedirect() {
-    useEffect(() => clearAuthSession(), []);
-    return <Navigate to="/login" replace />;
+    const client = useApolloClient();
+    useEffect(() => {
+        clearAuthSession();
+        void client.clearStore();
+    }, [client]);
+    return <Navigate to="/login" replace state={{ notice: '当前登录状态不可用，请重新登录后继续操作。' }} />;
 }
 
 function AuthenticatedShell() {
     const navigate = useNavigate();
+    const client = useApolloClient();
+    const [sessionExpired, setSessionExpired] = useState(false);
+    useEffect(() => {
+        let mounted = true;
+        const pendingScopes = new Set<string>();
+        const revalidate = (event: Event) => {
+            const scope = getAdminQueryScope();
+            if (
+                (event as CustomEvent<{ scope: string }>).detail?.scope !== scope ||
+                !hasActiveChannelSelection() ||
+                pendingScopes.has(scope)
+            )
+                return;
+            pendingScopes.add(scope);
+            void client
+                .query<{ me: { id: string } | null }>({
+                    query: GET_ADMIN_SESSION,
+                    // Identity verification is transient; a late result must not overwrite bootstrap data.
+                    fetchPolicy: 'no-cache',
+                    errorPolicy: 'all',
+                    context: { queryDeduplication: false },
+                })
+                .then(result => {
+                    if (
+                        mounted &&
+                        scope === getAdminQueryScope() &&
+                        isMissingAdminSession(result.data, result.error)
+                    )
+                        setSessionExpired(true);
+                })
+                .catch(error => {
+                    if (mounted && scope === getAdminQueryScope() && isMissingAdminSession(undefined, error))
+                        setSessionExpired(true);
+                })
+                .finally(() => {
+                    pendingScopes.delete(scope);
+                });
+        };
+        window.addEventListener(ADMIN_SESSION_REVALIDATION_EVENT, revalidate);
+        return () => {
+            mounted = false;
+            window.removeEventListener(ADMIN_SESSION_REVALIDATION_EVENT, revalidate);
+        };
+    }, [client]);
     const [channelReady, setChannelReady] = useState(() => hasActiveChannelSelection());
     const [selectedChannelToken, setSelectedChannelToken] = useState(() => getActiveChannelToken());
     const recoveringChannelTokenRef = useRef<string | null>(null);
@@ -191,6 +241,7 @@ function AuthenticatedShell() {
     }
 
     if (
+        sessionExpired ||
         (!blockingError && data?.me === null) ||
         (blockingError && isMissingAdminSession(sessionQuery.data, sessionQuery.error))
     ) {

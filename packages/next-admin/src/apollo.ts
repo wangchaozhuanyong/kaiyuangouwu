@@ -8,6 +8,7 @@ import { adminReadTimeoutLink } from './runtime/admin-read-timeout';
 import { createResourceInvalidationLink } from './runtime/admin-resource-events';
 import { runAdminActionWithFeedback } from './utils/admin-action-feedback';
 import { getAdminDisplayLanguage } from './utils/admin-language';
+import { isAuthenticationRequiredError } from './utils/authentication-error';
 import { clearAllListSearch } from './utils/list-state-storage';
 
 const AUTH_TOKEN_KEY = 'vendure-auth-token';
@@ -297,11 +298,44 @@ export const channelScopeResponseLink = new ApolloLink((operation, forward) => {
     });
 });
 
+export const ADMIN_SESSION_REVALIDATION_EVENT = 'vendure:admin-session-revalidation';
+
+/** A transport rejection only requests an identity check; it never grants permissions or retries writes. */
+export const sessionRevalidationLink = new ApolloLink((operation, forward) => {
+    const scope = getAdminQueryScope();
+    const notify = (error: unknown) => {
+        // Intentional logout / recovery-code display owns its redirect. Never interrupt
+        // that flow, nor let a late response invalidate a newly selected account/store.
+        if (scope !== getAdminQueryScope() || !hasActiveChannelSelection() || typeof window === 'undefined')
+            return;
+        if (['GetAdminBootstrap', 'GetAdminSession'].includes(operation.operationName ?? '')) return;
+        if (isAuthenticationRequiredError(error))
+            window.dispatchEvent(new CustomEvent(ADMIN_SESSION_REVALIDATION_EVENT, { detail: { scope } }));
+    };
+    return new Observable(observer => {
+        const subscription = forward(operation).subscribe({
+            next(result) {
+                if (result.errors?.length) notify({ errors: result.errors });
+                observer.next(result);
+            },
+            error(error) {
+                notify(error);
+                observer.error(error);
+            },
+            complete() {
+                observer.complete();
+            },
+        });
+        return () => subscription.unsubscribe();
+    });
+});
+
 export const client = new ApolloClient({
     link: ApolloLink.from([
         authLink,
         adminMutationFeedbackLink,
         channelScopeResponseLink,
+        sessionRevalidationLink,
         createResourceInvalidationLink(getAdminQueryScope),
         adminReadTimeoutLink,
         sensitiveActionPasswordLink,
