@@ -2388,13 +2388,57 @@ function assertProductionHealthSnapshot(snapshot, stage) {
     );
 }
 
+function boundedRuntimeSecurityVerification(runtime, spawn = spawnSync) {
+    const child = spawn(
+        process.execPath,
+        [
+            '--max-old-space-size=256',
+            path.join(__dirname, 'verify-runtime-security-dependencies.cjs'),
+            runtime,
+        ],
+        {
+            encoding: 'utf8',
+            timeout: 60000,
+            killSignal: 'SIGKILL',
+            maxBuffer: 16384,
+            stdio: ['ignore', 'pipe', 'pipe'],
+        },
+    );
+    assert.ok(
+        child.status === 0 && !child.error,
+        'Runtime security probe failed or exceeded its resource budget',
+    );
+    try {
+        const result = JSON.parse(child.stdout);
+        assert.equal(result.status, 'PASS');
+        assert.ok(result.packages && typeof result.packages === 'object' && !Array.isArray(result.packages));
+        assert.deepEqual(
+            Object.keys(result).sort(),
+            result.checks ? ['checks', 'packages', 'status'] : ['packages', 'status'],
+        );
+        assert.deepEqual(
+            Object.keys(result.packages).sort(),
+            result.checks ? ['express', 'qs'] : ['@tiptap/core', 'express', 'qs'],
+        );
+        for (const version of Object.values(result.packages))
+            assert.match(version, /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u);
+        if (result.checks)
+            assert.deepEqual(result.checks, [
+                { name: 'express-qs', status: 'PASS' },
+                { name: 'tiptap', status: 'NOT_APPLICABLE', reason: 'NEXT_ADMIN_WITHOUT_TIPTAP_CONSUMER' },
+            ]);
+        return result;
+    } catch {
+        throw new Error('Runtime security probe returned invalid evidence');
+    }
+}
+
 function runRuntimeSecurityVerification(
     request,
     {
         inspect = inspectProductionReleases,
         health = productionHealthSnapshot,
-        verify = runtime =>
-            require('./verify-runtime-security-dependencies.cjs').verifyRuntimeSecurityDependencies(runtime),
+        verify = boundedRuntimeSecurityVerification,
     } = {},
 ) {
     assert.equal(request.operation, 'verify-security-dependencies');
@@ -3354,6 +3398,7 @@ module.exports = {
     storefrontInspectionFailure,
     runStoreIsolationAudit,
     runRuntimeSecurityVerification,
+    boundedRuntimeSecurityVerification,
     runPlatformGovernanceDataPreflight,
     runAdministratorProductReadinessAudit,
     runDatabaseBackup,

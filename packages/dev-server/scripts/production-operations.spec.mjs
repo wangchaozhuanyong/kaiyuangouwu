@@ -3368,3 +3368,43 @@ void test('preflight waits only for a running signature update and keeps real im
     const source = readFileSync(path.join(repositoryRoot, 'deploy/production-operations.cjs'), 'utf8');
     assert.match(source, /const imageServices = waitForImageUpdate\(\)/u);
 });
+
+void test('runtime dependency probes have an independent heap, deadline and output budget', () => {
+    const result = { status: 'PASS', packages: { express: '5.2.1', qs: '6.16.1', '@tiptap/core': '3.30.4' } };
+    const actual = operations.boundedRuntimeSecurityVerification(
+        '/reviewed-runtime',
+        (binary, args, options) => {
+            assert.equal(binary, process.execPath);
+            assert.equal(args[0], '--max-old-space-size=256');
+            assert.equal(path.basename(args[1]), 'verify-runtime-security-dependencies.cjs');
+            assert.equal(args[2], '/reviewed-runtime');
+            assert.equal(options.timeout, 60000);
+            assert.equal(options.killSignal, 'SIGKILL');
+            assert.equal(options.maxBuffer, 16384);
+            return { status: 0, stdout: JSON.stringify(result) };
+        },
+    );
+    assert.deepEqual(actual, result);
+});
+
+void test('probe timeouts and malformed output fail without forwarding dependency stderr or payloads', () => {
+    const secret = 'private-probe-output-must-not-escape';
+    for (const response of [
+        { status: null, error: new Error(secret), stderr: secret },
+        { status: 1, stderr: secret },
+        { status: 0, stdout: secret },
+        { status: 0, stdout: JSON.stringify({ status: 'PASS', packages: { injected: secret } }) },
+    ]) {
+        assert.throws(
+            () => operations.boundedRuntimeSecurityVerification('/reviewed-runtime', () => response),
+            error => {
+                assert.equal(error.message.includes(secret), false);
+                assert.match(
+                    error.message,
+                    /^Runtime security probe (?:failed or exceeded its resource budget|returned invalid evidence)$/u,
+                );
+                return true;
+            },
+        );
+    }
+});

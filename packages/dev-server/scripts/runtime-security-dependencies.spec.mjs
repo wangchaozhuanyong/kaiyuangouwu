@@ -18,6 +18,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+import { preserveFrontendAssets } from '../../../deploy/frontend-asset-compatibility.mjs';
+
 const require = createRequire(import.meta.url);
 void test('preserves brace-expansion CommonJS compatibility and the new rewrite bound export', async () => {
     const commonjs = require('brace-expansion');
@@ -734,4 +736,81 @@ void test('keeps installed manifest reads bounded and checks their hashes', t =>
     });
     sealNextAdmin(runtime);
     assert.equal(inspectRuntimeSecurityDependencies(runtime).status, 'FAIL');
+});
+
+function appendPublishedCompatibility(result, directory = 'packages/next-admin/dist') {
+    const previous = path.join(result.directory, 'previous-frontend');
+    mkdirSync(path.join(previous, 'assets'), { recursive: true });
+    writeFileSync(path.join(previous, 'assets/retained-abcdefgh.js'), '/* previously published */');
+    const target = path.join(result.runtime, directory);
+    mkdirSync(target, { recursive: true });
+    preserveFrontendAssets(previous, target);
+    return target;
+}
+
+void test('verifies real publisher compatibility assets for all three independent frontend outputs', t => {
+    const result = nextAdminFixture(t);
+    for (const directory of [
+        'packages/next-admin/dist',
+        'packages/storefront/dist',
+        'packages/storefront/dist-two-factor',
+    ]) {
+        appendPublishedCompatibility(result, directory);
+    }
+    assert.equal(verifyRuntimeSecurityDependencies(result.runtime).status, 'PASS');
+});
+
+for (const [label, mutate] of [
+    [
+        'changed bytes',
+        root => writeFileSync(path.join(root, '.compat-assets/assets/retained-abcdefgh.js'), 'changed'),
+    ],
+    [
+        'unlisted asset',
+        root => writeFileSync(path.join(root, '.compat-assets/assets/hidden-abcdefgh.js'), 'hidden'),
+    ],
+    ['missing manifest', root => rmSync(path.join(root, '.asset-compatibility.json'))],
+    ['missing asset', root => rmSync(path.join(root, '.compat-assets/assets/retained-abcdefgh.js'))],
+    [
+        'forged digest',
+        root =>
+            changeJson(root, '.asset-compatibility.json', data => {
+                data.assets['retained-abcdefgh.js'].sha256 = '0'.repeat(64);
+            }),
+    ],
+    [
+        'escaping entry',
+        root =>
+            changeJson(root, '.asset-compatibility.json', data => {
+                data.assets['../outside.js'] = data.assets['retained-abcdefgh.js'];
+            }),
+    ],
+    [
+        'untracked executable',
+        root => writeFileSync(path.join(root, '.compat-assets/payload.cjs'), 'module.exports = {};'),
+    ],
+    [
+        'symlink asset',
+        root => {
+            rmSync(path.join(root, '.compat-assets/assets/retained-abcdefgh.js'));
+            symlinkSync(
+                '../../assets/editor.js',
+                path.join(root, '.compat-assets/assets/retained-abcdefgh.js'),
+            );
+        },
+    ],
+]) {
+    void test(`rejects malformed deployment compatibility: ${label}`, t => {
+        const result = nextAdminFixture(t);
+        const root = appendPublishedCompatibility(result);
+        mutate(root);
+        assert.equal(inspectRuntimeSecurityDependencies(result.runtime).status, 'FAIL');
+    });
+}
+
+void test('does not treat unrelated files beside a valid compatibility publisher manifest as managed assets', t => {
+    const result = nextAdminFixture(t);
+    const root = appendPublishedCompatibility(result);
+    writeFileSync(path.join(root, 'unexpected.cjs'), 'module.exports = {};');
+    assert.equal(inspectRuntimeSecurityDependencies(result.runtime).status, 'FAIL');
 });

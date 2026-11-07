@@ -5,6 +5,7 @@ const { createHash } = require('node:crypto');
 const { existsSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync } = require('node:fs');
 const Module = require('node:module');
 const path = require('node:path');
+const { isDeepStrictEqual } = require('node:util');
 
 function runtimeFile(runtimeRoot, filePath) {
     const resolved = realpathSync(filePath);
@@ -81,6 +82,51 @@ function assertPatchedTiptap(tiptap, version) {
     assert.equal('onerror' in attributes, false);
 }
 
+// Deployment appends content-hashed compatibility assets after sealing the runtime.
+// Reconcile every appended byte against that publisher's manifest; other extras fail.
+function verifiedCompatibilityFiles(runtimeRoot, files, checksums) {
+    const appended = new Set();
+    const hashedAsset = /^[\w.-]+-[A-Za-z0-9_-]{8}\.(?:css|js|webp|png|jpe?g|svg|avif|ico|woff2?)$/u;
+    for (const directory of [
+        'packages/next-admin/dist',
+        'packages/storefront/dist',
+        'packages/storefront/dist-two-factor',
+    ]) {
+        const marker = `${directory}/.asset-compatibility.json`;
+        const prefix = `${directory}/.compat-assets/`;
+        const actual = [...files].filter(file => file.startsWith(prefix));
+        if (!files.has(marker)) {
+            assert.equal(actual.length, 0, 'Compatibility manifest is missing');
+            continue;
+        }
+        const markerFile = runtimeFile(runtimeRoot, path.join(runtimeRoot, marker));
+        assert.ok(statSync(markerFile).size <= 16 * 1024 * 1024);
+        const manifest = JSON.parse(readFileSync(markerFile, 'utf8'));
+        assert.ok(isDeepStrictEqual(Object.keys(manifest).sort(), ['assets', 'version']));
+        assert.equal(manifest.version, 1);
+        assert.ok(manifest.assets && typeof manifest.assets === 'object' && !Array.isArray(manifest.assets));
+        const entries = Object.entries(manifest.assets);
+        assert.ok(entries.length < 100_000);
+        const expected = [];
+        for (const [name, record] of entries) {
+            assert.match(name, hashedAsset);
+            assert.ok(record && typeof record === 'object' && !Array.isArray(record));
+            assert.ok(isDeepStrictEqual(Object.keys(record).sort(), ['expiresAt', 'sha256']));
+            assert.ok(Number.isFinite(record.expiresAt) && record.expiresAt > 0);
+            assert.match(record.sha256, /^[a-f0-9]{64}$/u);
+            const relative = `${prefix}assets/${name}`;
+            assert.ok(files.has(relative));
+            const file = runtimeFile(runtimeRoot, path.join(runtimeRoot, relative));
+            assert.ok(statSync(file).size <= 16 * 1024 * 1024);
+            assert.equal(createHash('sha256').update(readFileSync(file)).digest('hex'), record.sha256);
+            expected.push(relative);
+        }
+        assert.ok(isDeepStrictEqual(actual.sort(), expected.sort()), 'Compatibility file set changed');
+        for (const file of [marker, ...expected]) if (!checksums.has(file)) appended.add(file);
+    }
+    return appended;
+}
+
 function hasVerifiedNextAdminWithoutTiptap(runtimeRoot) {
     try {
         // An absent old consumer alone never authorizes N/A. Reconcile the real
@@ -122,9 +168,15 @@ function hasVerifiedNextAdminWithoutTiptap(runtimeRoot) {
             assert.ok(!checksums.has(relative));
             checksums.set(relative, match[1]);
         }
-        assert.deepEqual(
-            [...checksums.keys()].sort(),
-            [...files].filter(file => file !== 'SHA256SUMS').sort(),
+        const compatibility = verifiedCompatibilityFiles(runtimeRoot, files, checksums);
+        for (const file of compatibility) files.delete(file);
+        // A large assertion diff can exhaust the operations budget before it is redacted.
+        assert.ok(
+            isDeepStrictEqual(
+                [...checksums.keys()].sort(),
+                [...files].filter(file => file !== 'SHA256SUMS').sort(),
+            ),
+            'Immutable runtime file set changed',
         );
         function checkedFile(relative, maxBytes = 64 * 1024) {
             assert.ok(files.has(relative) && checksums.has(relative));
@@ -146,9 +198,11 @@ function hasVerifiedNextAdminWithoutTiptap(runtimeRoot) {
         const inventory = JSON.parse(checkedFile('RUNTIME-PACKAGES.json', 4 * 1024 * 1024));
         assert.ok(Array.isArray(inventory) && inventory.length > 0 && inventory.length < 10_000);
         const symlinks = JSON.parse(checkedFile('RUNTIME-SYMLINKS.json', 1024 * 1024));
-        assert.deepEqual(
-            links.sort((a, b) => a.path.localeCompare(b.path)),
-            symlinks,
+        assert.ok(
+            isDeepStrictEqual(
+                links.sort((a, b) => a.path.localeCompare(b.path)),
+                symlinks,
+            ),
         );
         const actualInventory = [];
         const manifests = new Map();
@@ -206,9 +260,11 @@ function hasVerifiedNextAdminWithoutTiptap(runtimeRoot) {
                 assert.ok(missing);
             }
         }
-        assert.deepEqual(
-            actualInventory.sort((a, b) => a.path.localeCompare(b.path)),
-            inventory,
+        assert.ok(
+            isDeepStrictEqual(
+                actualInventory.sort((a, b) => a.path.localeCompare(b.path)),
+                inventory,
+            ),
         );
         assert.equal(manifests.get('')?.name, 'vendure-production-runtime');
         for (const [directory, name] of [
@@ -348,3 +404,12 @@ function verifyRuntimeSecurityDependencies(runtimeDirectory) {
 }
 
 module.exports = { inspectRuntimeSecurityDependencies, verifyRuntimeSecurityDependencies };
+
+if (require.main === module) {
+    try {
+        process.stdout.write(`${JSON.stringify(verifyRuntimeSecurityDependencies(process.argv[2]))}\n`);
+    } catch {
+        process.stderr.write('Runtime dependency security verification failed\n');
+        process.exitCode = 1;
+    }
+}
