@@ -223,6 +223,7 @@ function validateRequest(environment) {
     if (
         [
             'backup-database',
+            'verify-security-dependencies',
             'audit-store-isolation-data',
             'audit-catalog-ownership',
             'inspect-icloud-relay',
@@ -2387,6 +2388,37 @@ function assertProductionHealthSnapshot(snapshot, stage) {
     );
 }
 
+function runRuntimeSecurityVerification(
+    request,
+    {
+        inspect = inspectProductionReleases,
+        health = productionHealthSnapshot,
+        verify = runtime =>
+            require('./verify-runtime-security-dependencies.cjs').verifyRuntimeSecurityDependencies(runtime),
+    } = {},
+) {
+    assert.equal(request.operation, 'verify-security-dependencies');
+    assert.match(request.expectedRuntimeSha || '', /^[a-f0-9]{40}$/u);
+    const before = inspect();
+    assert.equal(
+        before.markerSha,
+        request.expectedRuntimeSha,
+        'Production runtime SHA changed or was not reviewed',
+    );
+    assertProductionHealthSnapshot(health(), 'before');
+    let result;
+    let failure;
+    try {
+        result = verify(before.currentRuntime);
+    } catch (error) {
+        failure = error;
+    }
+    assert.deepEqual(inspect(), before, 'Production release state changed during security verification');
+    assertProductionHealthSnapshot(health(), 'after');
+    if (failure) throw failure;
+    return { ...result, sourceSha: request.sourceSha, runtimeSha: before.markerSha };
+}
+
 function runStoreIsolationAudit(
     request,
     {
@@ -3197,15 +3229,8 @@ function runLocked(environment = process.env) {
         return;
     }
     if (request.operation === 'verify-security-dependencies') {
-        const plan = inspectProductionReleases();
-        assert.equal(
-            plan.markerSha,
-            request.sourceSha,
-            'Security verification requires the deployed source SHA',
-        );
-        const { verifyRuntimeSecurityDependencies } = require('./verify-runtime-security-dependencies.cjs');
-        const result = verifyRuntimeSecurityDependencies(plan.currentRuntime);
-        process.stdout.write(`${JSON.stringify({ sourceSha: request.sourceSha, ...result })}\n`);
+        const result = runRuntimeSecurityVerification(request);
+        process.stdout.write(`${JSON.stringify(result)}\n`);
         process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=verify-security-dependencies\n');
         return;
     }
@@ -3328,6 +3353,7 @@ module.exports = {
     retainReviewedPlan,
     storefrontInspectionFailure,
     runStoreIsolationAudit,
+    runRuntimeSecurityVerification,
     runPlatformGovernanceDataPreflight,
     runAdministratorProductReadinessAudit,
     runDatabaseBackup,

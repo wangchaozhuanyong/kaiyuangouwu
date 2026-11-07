@@ -1859,13 +1859,22 @@ void test('key backup plans and verification are read-only; key writes require a
         'inspect-storefront-config',
     ]) {
         assert.equal(
-            operations.validateRequest({ OPS_SOURCE_SHA: sourceSha, OPS_OPERATION: operation }).operation,
+            operations.validateRequest({
+                OPS_SOURCE_SHA: sourceSha,
+                OPS_OPERATION: operation,
+                ...(operation === 'verify-security-dependencies'
+                    ? { OPS_EXPECTED_RUNTIME_SHA: 'b'.repeat(40) }
+                    : {}),
+            }).operation,
             operation,
         );
         assert.throws(() =>
             operations.validateRequest({
                 OPS_SOURCE_SHA: sourceSha,
                 OPS_OPERATION: operation,
+                ...(operation === 'verify-security-dependencies'
+                    ? { OPS_EXPECTED_RUNTIME_SHA: 'b'.repeat(40) }
+                    : {}),
                 OPS_EXPECTED_PLAN_SHA256: 'b'.repeat(64),
             }),
         );
@@ -1883,6 +1892,102 @@ void test('key backup plans and verification are read-only; key writes require a
             OPS_EXPECTED_PLAN_SHA256: 'b'.repeat(64),
         }).expectedPlanSha256,
         'b'.repeat(64),
+    );
+});
+
+void test('security verification binds the reviewed runtime independently of the latest control source', () => {
+    const runtimeSha = 'b'.repeat(40);
+    const request = operations.validateRequest({
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_OPERATION: 'verify-security-dependencies',
+        OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+    });
+    const plan = { markerSha: runtimeSha, currentRuntime: '/synthetic/runtime' };
+    const stages = [];
+    const result = operations.runRuntimeSecurityVerification(request, {
+        inspect: () => ({ ...plan }),
+        health: () => {
+            stages.push('health');
+            return { status: 'ok', output: 'Result=success\nExecMainStatus=0\nActiveState=inactive' };
+        },
+        verify: runtime => {
+            assert.equal(runtime, plan.currentRuntime);
+            stages.push('verify');
+            return { status: 'passed' };
+        },
+    });
+    assert.deepEqual(result, { status: 'passed', sourceSha, runtimeSha });
+    assert.deepEqual(stages, ['health', 'verify', 'health']);
+    assert.throws(() =>
+        operations.validateRequest({
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_OPERATION: 'verify-security-dependencies',
+        }),
+    );
+    let verified = false;
+    assert.throws(
+        () =>
+            operations.runRuntimeSecurityVerification(request, {
+                inspect: () => ({ ...plan, markerSha: 'c'.repeat(40) }),
+                verify: () => {
+                    verified = true;
+                },
+            }),
+        /runtime SHA changed/,
+    );
+    assert.equal(verified, false);
+});
+
+void test('security verification rejects runtime changes and checks health after a failed probe', () => {
+    const request = {
+        operation: 'verify-security-dependencies',
+        sourceSha,
+        expectedRuntimeSha: 'b'.repeat(40),
+    };
+    const plan = { markerSha: request.expectedRuntimeSha, currentRuntime: '/synthetic/runtime' };
+    const healthy = () => ({
+        status: 'ok',
+        output: 'Result=success\nExecMainStatus=0\nActiveState=inactive',
+    });
+    let reads = 0;
+    assert.throws(
+        () =>
+            operations.runRuntimeSecurityVerification(request, {
+                inspect: () => (++reads === 1 ? plan : { ...plan, currentRuntime: '/changed/runtime' }),
+                health: healthy,
+                verify: () => ({ status: 'passed' }),
+            }),
+        /release state changed/,
+    );
+    let healthChecks = 0;
+    assert.throws(
+        () =>
+            operations.runRuntimeSecurityVerification(request, {
+                inspect: () => plan,
+                health: () => {
+                    healthChecks++;
+                    return healthy();
+                },
+                verify: () => {
+                    throw new Error('synthetic failed dependency');
+                },
+            }),
+        /synthetic failed dependency/,
+    );
+    assert.equal(healthChecks, 2);
+    assert.throws(
+        () =>
+            operations.runRuntimeSecurityVerification(request, {
+                inspect: () => plan,
+                health: () => ({
+                    status: 'ok',
+                    output: 'Result=failed\nExecMainStatus=1\nActiveState=failed',
+                }),
+                verify: () => {
+                    throw new Error('probe must not run');
+                },
+            }),
+        /health check is not successful/,
     );
 });
 

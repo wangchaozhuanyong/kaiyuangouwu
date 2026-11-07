@@ -559,13 +559,14 @@ test('mixed frontend checks run the Node fixture separately from Vitest and excl
     const source = join(cwd, 'e2e/client-loading/preview-server.mjs');
     assert.deepEqual(frontendTestCommands([fixture, unit], [source], cwd), [
         ['node', '--test', fixture],
-        ['bunx', 'vitest', 'run', unit],
+        ['bunx', 'vitest', 'run', '--maxWorkers=1', unit],
         [
             'bunx',
             'vitest',
             'related',
             '--run',
             '--passWithNoTests',
+            '--maxWorkers=1',
             '--exclude',
             'e2e/client-loading/preview-server.spec.mjs',
             source,
@@ -576,7 +577,9 @@ test('mixed frontend checks run the Node fixture separately from Vitest and excl
 test('Vitest-only frontend checks retain their existing runner', () => {
     const cwd = fileURLToPath(new URL('../packages/storefront/', import.meta.url));
     const unit = join(cwd, 'src/api/catalog.spec.ts');
-    assert.deepEqual(frontendTestCommands([unit], [], cwd), [['bunx', 'vitest', 'run', unit]]);
+    assert.deepEqual(frontendTestCommands([unit], [], cwd), [
+        ['bunx', 'vitest', 'run', '--maxWorkers=1', unit],
+    ]);
 });
 
 test('a same-tree fork or unproven superseded PR head cannot supply trusted release evidence', () => {

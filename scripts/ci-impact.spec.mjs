@@ -17,6 +17,29 @@ const inventory = [
     { directory: 'other-plugin', name: 'other', dependencies: { catalog: '1' } },
     { directory: 'icloud-relay-plugin', name: 'icloud', dependencies: { '@vendure/core': '3' } },
 ];
+
+test('the isolated MySQL launcher selects controls without restarting serving packages', () => {
+    const launcher = 'packages/commerce-fulfillment-plugin/e2e/run-isolated-mysql.py';
+    const packages = [
+        ...inventory,
+        { directory: 'commerce-fulfillment-plugin', name: 'commerce-fulfillment', scripts: { e2e: 'test' } },
+    ];
+    const control = classifyChanges([launcher], packages);
+    assert.equal(control.controls, true);
+    assert.equal(control.lane, 'none');
+    assert.deepEqual(control.packages, []);
+    assert.equal(control.e2e, false);
+    const frontend = classifyChanges([launcher, 'packages/storefront/src/styles/cart-layout.css'], packages);
+    assert.equal(frontend.lane, 'frontend');
+    assert.deepEqual(frontend.packages, []);
+    assert.deepEqual(frontend.frontends, ['next-admin', 'storefront']);
+    assert.equal(frontend.e2e, false);
+    assert.equal(
+        classifyChanges([launcher, 'packages/commerce-fulfillment-plugin/src/auto-card.service.ts'], packages)
+            .lane,
+        'runtime',
+    );
+});
 test('ordinary source does not trigger global architecture budgets; budgeted inputs still do', () => {
     for (const file of [
         'packages/store-management-plugin/src/administrator-access.service.ts',
