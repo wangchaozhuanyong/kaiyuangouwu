@@ -180,6 +180,8 @@ jobs:
             retain_frontends: ${{ inputs.retain_frontends || false }}
             base_sha: ${{ needs.preflight.outputs.deployed_sha }}
             target_sha: ${{ inputs.target_sha || github.sha }}
+            storefront_sha: ${{ needs.preflight.outputs.storefront_sha }}
+            admin_sha: ${{ needs.preflight.outputs.admin_sha }}
         permissions:
             contents: read
             actions: read

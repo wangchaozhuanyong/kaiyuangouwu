@@ -2229,3 +2229,31 @@ test('client styles invalidate both client and Admin preview input fingerprints'
         );
     }
 });
+
+test('missing-check planning receives the same observed frontend revisions as release routing', () => {
+    const release = yaml.load(
+        readFileSync(new URL('../.github/workflows/production_release.yml', import.meta.url), 'utf8'),
+    );
+    const checks = yaml.load(
+        readFileSync(new URL('../.github/workflows/build_and_test.yml', import.meta.url), 'utf8'),
+    );
+    const route = release.jobs.route.steps.find(
+        step => step.name === 'Find successful checks for the exact content and required scope',
+    );
+    const planning = checks.jobs['detect-changes'].steps.find(
+        step => step.name === 'Explain the affected checks',
+    );
+    for (const [input, variable, expected] of [
+        ['storefront_sha', 'STOREFRONT_SHA', '${{ needs.preflight.outputs.storefront_sha }}'],
+        ['admin_sha', 'ADMIN_SHA', '${{ needs.preflight.outputs.admin_sha }}'],
+    ]) {
+        assert.equal(release.jobs.checks.with[input], expected);
+        assert.equal(release.jobs.checks.with[input], route.env[variable]);
+        assert.deepEqual(checks.on.workflow_call.inputs[input], {
+            required: false,
+            type: 'string',
+            default: '',
+        });
+        assert.equal(planning.env[variable], `\${{ inputs.${input} || '' }}`);
+    }
+});
