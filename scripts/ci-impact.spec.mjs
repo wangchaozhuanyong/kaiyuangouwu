@@ -40,6 +40,16 @@ test('the isolated MySQL launcher selects controls without restarting serving pa
         'runtime',
     );
 });
+test('the transported dependency verifier requires controls and preserves frontend-only routing', () => {
+    const verifier = 'deploy/verify-runtime-security-dependencies.cjs';
+    const plan = classifyChanges([verifier], inventory);
+    assert.equal(plan.controls, true);
+    assert.equal(plan.lane, 'none');
+    assert.deepEqual(plan.packages, []);
+    const frontend = classifyChanges([verifier, 'packages/storefront/src/styles/cart-layout.css'], inventory);
+    assert.equal(frontend.lane, 'frontend');
+    assert.deepEqual(frontend.packages, []);
+});
 test('ordinary source does not trigger global architecture budgets; budgeted inputs still do', () => {
     for (const file of [
         'packages/store-management-plugin/src/administrator-access.service.ts',
