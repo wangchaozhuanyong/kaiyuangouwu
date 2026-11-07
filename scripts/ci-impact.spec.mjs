@@ -452,3 +452,20 @@ test('fixed window test-order operations use controls without a website or datab
     assert.deepEqual(plan.frontends, []);
     assert.deepEqual(plan.databases, []);
 });
+
+test('MFA-independent configuration inspections remain control-only inputs', () => {
+    for (const file of [
+        'deploy/storefront-configuration-guard.mjs',
+        'deploy/storefront-saved-configuration.mjs',
+    ]) {
+        const plan = classifyChanges([file], inventory);
+        assert.equal(plan.controls, true);
+        assert.equal(plan.lane, 'none');
+        assert.deepEqual(plan.packages, []);
+        assert.equal(plan.e2e, false);
+        const frontend = classifyChanges([file, 'packages/next-admin/src/App.tsx'], inventory);
+        assert.equal(frontend.lane, 'frontend');
+        assert.deepEqual(frontend.packages, []);
+        assert.deepEqual(frontend.frontends, ['next-admin']);
+    }
+});

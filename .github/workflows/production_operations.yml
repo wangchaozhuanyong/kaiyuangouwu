@@ -323,6 +323,7 @@ jobs:
                       ])
                   if operation_name in {'preflight-release', 'postflight-release', 'inspect-storefront-config'}:
                       lines.append(transport('deploy/storefront-configuration-guard.mjs', 'storefront-configuration-guard.mjs'))
+                      lines.append(transport('deploy/storefront-saved-configuration.mjs', 'storefront-saved-configuration.mjs'))
                   if operation_name in {'inspect-notification-config', 'enable-unified-notifications', 'prepare-notification-secret-transfer'}:
                       lines.append(transport('deploy/notification-configuration-guard.mjs', 'notification-configuration-guard.mjs'))
                   if operation_name == 'diagnose':

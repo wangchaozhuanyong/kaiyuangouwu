@@ -96,6 +96,7 @@ jobs:
                   node --test deploy/icloud-relay-diagnostic.spec.mjs deploy/window-test-order-cleanup.spec.mjs
                   node --test packages/dev-server/scripts/catalog-ownership-evidence.spec.mjs deploy/catalog-ownership-audit.spec.mjs
                   node --test deploy/historical-asset-cleanup.spec.mjs
+                  node --test packages/dev-server/scripts/storefront-configuration-guard.spec.mjs deploy/storefront-saved-configuration.spec.mjs
             - name: Test lint prerequisite selection
               run: node --test scripts/ci-lint-prerequisites.spec.mjs
             - name: Build lint prerequisites
