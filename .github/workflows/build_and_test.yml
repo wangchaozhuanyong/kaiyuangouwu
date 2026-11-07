@@ -25,6 +25,14 @@ on:
             target_sha:
                 required: true
                 type: string
+            storefront_sha:
+                required: false
+                type: string
+                default: ''
+            admin_sha:
+                required: false
+                type: string
+                default: ''
             retain_frontends:
                 type: boolean
                 default: false
@@ -163,6 +171,8 @@ jobs:
                   BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || 'HEAD^' }}
                   FULL: ${{ inputs.full || false }}
                   RETAIN_FRONTENDS: ${{ inputs.retain_frontends || false }}
+                  STOREFRONT_SHA: ${{ inputs.storefront_sha || '' }}
+                  ADMIN_SHA: ${{ inputs.admin_sha || '' }}
                   GH_TOKEN: ${{ github.token }}
               run: |
                   base="$(git merge-base "$BASE_SHA" HEAD)"
