@@ -78,6 +78,8 @@ export const isAutomationOnly = file =>
         'deploy/deploy-nginx-from-s3.sh',
         'deploy/production-operations.cjs',
         'deploy/verify-runtime-security-dependencies.cjs',
+        'deploy/storefront-configuration-guard.mjs',
+        'deploy/storefront-saved-configuration.mjs',
         'deploy/catalog-ownership-audit.cjs',
         'deploy/historical-asset-cleanup.cjs',
         'deploy/historical-asset-cleanup-operations.cjs',

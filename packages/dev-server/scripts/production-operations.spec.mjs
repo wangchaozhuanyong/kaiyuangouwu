@@ -488,6 +488,7 @@ void test('release workflow ships the fixed live preflight inputs and migration 
         [
             ...commonFiles,
             'deploy/storefront-configuration-guard.mjs',
+            'deploy/storefront-saved-configuration.mjs',
             'deploy/usdt-migration-guard.cjs',
             'packages/dev-server/migrations/index.ts',
         ],

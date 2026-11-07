@@ -243,8 +243,9 @@ export async function captureStorefrontConfiguration({
     password,
     request = loopbackConfigurationRequest,
     apiOrigin = 'http://127.0.0.1:3002',
+    savedStores,
 } = {}) {
-    assert.ok(username && password, 'Storefront verification credentials are unavailable');
+    assert.ok(savedStores || (username && password), 'Storefront verification credentials are unavailable');
     const origin = new URL(apiOrigin);
     assert.ok(
         origin.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(origin.hostname),
@@ -321,18 +322,31 @@ export async function captureStorefrontConfiguration({
             );
         }
     }
-    const { login } = await query(
-        `mutation ConfigurationGuardLogin($username: String!, $password: String!) {
+    const { login } = savedStores
+        ? {
+              login: {
+                  channels: savedStores.map(store => ({
+                      id: store.channelId,
+                      code: store.channelCode,
+                      token: store.channelToken,
+                  })),
+              },
+          }
+        : await query(
+              `mutation ConfigurationGuardLogin($username: String!, $password: String!) {
             login(username: $username, password: $password) {
                 ... on CurrentUser { id channels { id code token } }
             }
         }`,
-        { variables: { username, password } },
+              { variables: { username, password } },
+          );
+    assert.ok(
+        (savedStores || (login?.id && auth)) && login.channels.length,
+        'Configuration guard login failed',
     );
-    assert.ok(login?.id && auth && login.channels.length, 'Configuration guard login failed');
-    const { storeProfiles } = await query(
-        `query ConfigurationGuardProfiles { storeProfiles { ${PROFILE} } }`,
-    );
+    const { storeProfiles } = savedStores
+        ? { storeProfiles: savedStores.map(store => store.profile) }
+        : await query(`query ConfigurationGuardProfiles { storeProfiles { ${PROFILE} } }`);
     const stores = [];
     for (const channel of [...login.channels].sort((a, b) => String(a.id).localeCompare(String(b.id)))) {
         const profile = storeProfiles.find(candidate => candidate.channel.id === channel.id) ?? null;
@@ -349,8 +363,16 @@ export async function captureStorefrontConfiguration({
             host && new URL(`https://${host}`).hostname === host,
             'Configuration guard requires a verified primary domain for each Channel',
         );
-        const result = await query(
-            `query ConfigurationGuardContent {
+        const saved = savedStores?.find(store => store.channelId === channel.id);
+        const result = saved
+            ? {
+                  activeChannel: { id: saved.channelId },
+                  storefrontContentBlocks: saved.blocks,
+                  storefrontContentSettings: saved.settings,
+                  referralProgram: saved.sharing,
+              }
+            : await query(
+                  `query ConfigurationGuardContent {
                 activeChannel { id }
                 storefrontContentBlocks { ${BLOCK} }
                 storefrontContentSettings { heroAutoplayIntervalSeconds configuredBlockTypes }
@@ -360,8 +382,8 @@ export async function captureStorefrontConfiguration({
                     systemPosterTemplateConfigs { ${POSTER} }
                 }
             }`,
-            { channel: channel.token },
-        );
+                  { channel: channel.token },
+              );
         assert.equal(result.activeChannel.id, channel.id, 'Configuration guard Channel mismatch');
         const published = {};
         for (const locale of ['zh_Hans', 'en']) {
@@ -380,9 +402,10 @@ export async function captureStorefrontConfiguration({
             settings: result.storefrontContentSettings,
             sharing: result.referralProgram,
             published,
+            ...(saved ? { sourceRows: saved.sourceRows } : {}),
         });
     }
-    return { format: 1, stores };
+    return { format: savedStores ? 2 : 1, stores };
 }
 
 async function main() {
@@ -400,9 +423,11 @@ async function main() {
         ['inspect', 'preflight'].includes(mode) ? !review : Boolean(file),
         'Configuration snapshot path is required',
     );
+    // Production inspections run inside the existing trusted host operation. They
+    // use a consistent read-only database snapshot, not a human administrator login.
+    const { loadSavedStorefrontConfiguration } = await import('./storefront-saved-configuration.mjs');
     const snapshot = await captureStorefrontConfiguration({
-        username: process.env.SUPERADMIN_USERNAME,
-        password: process.env.SUPERADMIN_PASSWORD,
+        savedStores: await loadSavedStorefrontConfiguration(),
     });
     if (mode === 'capture') await writeFile(file, JSON.stringify(snapshot), { mode: 0o600, flag: 'wx' });
     if (mode === 'verify') assertConfigurationPreserved(JSON.parse(await readFile(file, 'utf8')), snapshot);
