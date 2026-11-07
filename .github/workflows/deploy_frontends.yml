@@ -51,6 +51,7 @@ jobs:
             ADMIN_SHA: ${{ inputs.admin_sha }}
             NGINX_SHA: ${{ inputs.nginx_sha }}
             STAGED_NGINX: ${{ inputs.staged_nginx }}
+            FORCE_REBUILD: ${{ inputs.force_rebuild }}
             GH_TOKEN: ${{ github.token }}
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd

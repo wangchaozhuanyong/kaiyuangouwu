@@ -205,15 +205,16 @@ export function frontendChangedSinceObserved(observedSha, targetSha, component) 
 }
 export function pendingFrontendComponents(
     plan,
-    { storefrontSha, adminSha, targetSha },
+    { storefrontSha, adminSha, targetSha, forceRebuild = false },
     changedSince = frontendChangedSinceObserved,
 ) {
     assert.match(targetSha, /^[a-f0-9]{40}$/u);
+    assert.equal(typeof forceRebuild, 'boolean');
     const observed = { storefront: storefrontSha, 'next-admin': adminSha };
     return plan.frontends.filter(component => {
         const sourceSha = observed[component];
         assert.match(sourceSha, /^[a-f0-9]{40}$/u, `Unknown active ${component} revision`);
-        return sourceSha !== targetSha && changedSince(sourceSha, targetSha, component);
+        return forceRebuild || (sourceSha !== targetSha && changedSince(sourceSha, targetSha, component));
     });
 }
 export function assertFrontendScope(
@@ -240,7 +241,7 @@ export function assertFrontendScope(
     assert.deepEqual(
         [...components].sort(),
         pendingFrontendComponents(plan, revisions, changedSince),
-        'Deploy exactly the frontends changed since their active revisions',
+        'Deploy exactly the frontends selected by active revisions or an explicit fresh build',
     );
     return plan;
 }
@@ -363,6 +364,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
                 adminSha: process.env.ADMIN_SHA,
                 nginxSha: process.env.NGINX_SHA,
                 stagedNginx: process.env.STAGED_NGINX === 'true',
+                forceRebuild: process.env.FORCE_REBUILD === 'true',
                 targetSha: process.env.TARGET_SHA,
             });
         else if (command === 'activate') {

@@ -155,6 +155,7 @@ test('static deployment runs target control files while preserving the active ba
         archive: `frontends-${target}-123-1.tar.gz`,
         checksum: 'a'.repeat(64),
         components: 'storefront',
+        forceRebuild: true,
     })
         .replace('sudo -H -u ubuntu /bin/bash', '/bin/bash')
         .replaceAll('/var/www/kaiyuangouwu-frontend-releases', join(root, 'frontends'))
@@ -162,6 +163,16 @@ test('static deployment runs target control files while preserving the active ba
     const deployed = spawnSync('sh', ['-c', command], { encoding: 'utf8' });
     assert.equal(deployed.status, 0, deployed.stderr);
     assert.ok(deployed.stdout.includes(`TARGET_CONTROLS_OK ${target} frontends-${target}-123-1.tar.gz`));
+    assert.ok(deployed.stdout.trim().endsWith('storefront false true'));
+    assert.throws(() =>
+        frontendDeployCommand({
+            sha: target,
+            archive: `frontends-${target}-123-1.tar.gz`,
+            checksum: 'a'.repeat(64),
+            components: 'storefront',
+            forceRebuild: 'true',
+        }),
+    );
     assert.equal(git('rev-parse', 'HEAD'), active);
     assert.equal(git('status', '--porcelain'), '');
     const stale = spawnSync('sh', ['-c', command.replaceAll(target, active)], { encoding: 'utf8' });
@@ -227,10 +238,27 @@ ${script.replaceAll(/^                  /gmu, '')}`;
                 'stage:storefront',
             ],
         },
+        {
+            components: 'next-admin,storefront',
+            restored: 'next-admin,storefront',
+            fresh: true,
+            events: [
+                'bun install --frozen-lockfile --linker=hoisted',
+                'bun run build:core-common',
+                'bun run --cwd packages/next-admin build',
+                'stage:next-admin',
+                'bun run --cwd packages/storefront build',
+                'stage:storefront',
+            ],
+        },
     ];
     for (const [index, scenario] of scenarios.entries()) {
         const events = join(root, `events-${index}.txt`);
-        const result = spawnSync('bash', ['-c', command], {
+        const scenarioCommand = command.replaceAll(
+            '${{ inputs.force_rebuild }}',
+            String(scenario.fresh === true),
+        );
+        const result = spawnSync('bash', ['-c', scenarioCommand], {
             encoding: 'utf8',
             cwd: root,
             env: {
@@ -240,11 +268,36 @@ ${script.replaceAll(/^                  /gmu, '')}`;
                 RESTORED_APPS: scenario.restored,
                 BUILD_EVENTS: events,
                 CI_RUN_ID: '123',
+                TARGET_SHA: 'c'.repeat(40),
             },
         });
         assert.equal(result.status, 0, result.stderr);
         assert.deepEqual(readFileSync(events, 'utf8').trim().split('\n'), scenario.events);
     }
+});
+
+test('fresh frontend scope keeps exact component, known-version and runtime safety checks', () => {
+    const files = ['packages/next-admin/src/index.css'];
+    const revisions = {
+        storefrontSha: 'a'.repeat(40),
+        adminSha: 'b'.repeat(40),
+        targetSha: 'c'.repeat(40),
+        forceRebuild: true,
+    };
+    const unchanged = () => false;
+    assert.doesNotThrow(() => assertFrontendScope(files, ['next-admin'], revisions, unchanged));
+    assert.throws(() => assertFrontendScope(files, ['storefront'], revisions, unchanged));
+    assert.throws(() => assertFrontendScope(files, ['next-admin', 'storefront'], revisions, unchanged));
+    assert.throws(() =>
+        assertFrontendScope(files, ['next-admin'], { ...revisions, adminSha: 'unknown' }, unchanged),
+    );
+    assert.throws(() =>
+        assertFrontendScope(files, ['next-admin'], { ...revisions, forceRebuild: 'true' }, unchanged),
+    );
+    assert.throws(() =>
+        assertFrontendScope([...files, 'packages/core/src/auth.ts'], ['next-admin'], revisions, unchanged),
+    );
+    assert.throws(() => assertFrontendScope(['scripts/release-lock.mjs'], [], revisions, unchanged));
 });
 
 const sha = value => createHash('sha256').update(value).digest('hex');
