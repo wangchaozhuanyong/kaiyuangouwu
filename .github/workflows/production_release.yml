@@ -157,6 +157,7 @@ jobs:
                   ADMIN_SHA: ${{ needs.preflight.outputs.admin_sha }}
                   NGINX_SHA: ${{ needs.preflight.outputs.nginx_sha }}
                   RETAIN_FRONTENDS: ${{ inputs.retain_frontends || false }}
+                  FORCE_REBUILD: ${{ inputs.rebuild_runtime || false }}
                   MANAGED: ${{ inputs.media_keys != '' || inputs.auth_visuals || inputs.moyao_brand || inputs.homepage_carousel || inputs.damatong_storefront || (inputs.referral_posters != '' && inputs.referral_posters != 'none') }}
               run: node deploy/release-route.mjs
             - name: Find successful checks for the exact content and required scope

@@ -37,6 +37,23 @@ import {
     waitForCompleteInputCoverage,
 } from './release-evidence.mjs';
 
+test('fresh-build intent reaches routing, runner scope and the locked host scope', () => {
+    const readWorkflow = name =>
+        yaml.load(readFileSync(new URL(`../.github/workflows/${name}.yml`, import.meta.url), 'utf8'));
+    const release = readWorkflow('production_release');
+    const route = release.jobs.route.steps.find(step => step.id === 'route');
+    assert.equal(route.env.FORCE_REBUILD, '${{ inputs.rebuild_runtime || false }}');
+    assert.equal(release.jobs.frontend.with.force_rebuild, route.env.FORCE_REBUILD);
+    assert.equal(
+        readWorkflow('deploy_frontends').jobs.deploy.env.FORCE_REBUILD,
+        '${{ inputs.force_rebuild }}',
+    );
+    const host = readFileSync(new URL('../deploy/deploy-frontends-from-s3.sh', import.meta.url), 'utf8');
+    assert.match(host, /readonly force_rebuild="\$\{6:-false\}"/u);
+    assert.match(host, /case "\$force_rebuild" in true\|false\)/u);
+    assert.match(host, /FORCE_REBUILD="\$force_rebuild"/u);
+});
+
 test('release evidence readers can verify merged PR CI with read-only GitHub token access', () => {
     const readWorkflow = name =>
         yaml.load(readFileSync(new URL(`../.github/workflows/${name}.yml`, import.meta.url), 'utf8'));

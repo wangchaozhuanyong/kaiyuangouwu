@@ -18,6 +18,7 @@ export function selectReleaseRoute({
     nginxChangedSince,
     managed = false,
     retainFrontends = false,
+    forceRebuild = false,
     changedSince = frontendChangedSinceObserved,
 }) {
     for (const sha of [baseSha, targetSha]) assert.match(sha, /^[a-f0-9]{40}$/u);
@@ -62,7 +63,7 @@ export function selectReleaseRoute({
         if (['none', 'frontend'].includes(remaining.lane) && knownFrontends) {
             const pending = pendingFrontendComponents(
                 remaining,
-                { storefrontSha, adminSha, targetSha },
+                { storefrontSha, adminSha, targetSha, forceRebuild },
                 changedSince,
             );
             if (pending.length) {
@@ -94,7 +95,7 @@ export function selectReleaseRoute({
         }
         const components = pendingFrontendComponents(
             plan,
-            { storefrontSha, adminSha, targetSha },
+            { storefrontSha, adminSha, targetSha, forceRebuild },
             changedSince,
         );
         if (!components.length) {
@@ -127,6 +128,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         nginxSha: process.env.NGINX_SHA,
         managed: process.env.MANAGED === 'true',
         retainFrontends: process.env.RETAIN_FRONTENDS === 'true',
+        forceRebuild: process.env.FORCE_REBUILD === 'true',
     });
     if (process.env.GITHUB_OUTPUT)
         appendFileSync(

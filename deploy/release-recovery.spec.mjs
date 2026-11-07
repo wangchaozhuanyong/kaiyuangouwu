@@ -185,6 +185,35 @@ test('a later storefront release does not redeploy an unchanged active admin', (
     assert.deepEqual(route.components, ['storefront']);
 });
 
+test('an explicit fresh build republishes the reviewed static scope even when its content is active', () => {
+    const input = {
+        plan: classifyChanges(['packages/storefront/src/index.css', 'packages/next-admin/src/index.css']),
+        baseSha: old,
+        targetSha: target,
+        storefrontSha: 'c'.repeat(40),
+        adminSha: 'd'.repeat(40),
+        changedSince: () => false,
+    };
+    assert.equal(selectReleaseRoute(input).lane, 'none');
+    const fresh = selectReleaseRoute({ ...input, forceRebuild: true });
+    assert.equal(fresh.lane, 'frontend');
+    assert.deepEqual(fresh.components, ['next-admin', 'storefront']);
+    assert.equal(selectReleaseRoute({ ...input, forceRebuild: true, adminSha: 'unknown' }).lane, 'runtime');
+    assert.equal(
+        selectReleaseRoute({
+            ...input,
+            forceRebuild: true,
+            plan: classifyChanges(['packages/core/src/order.ts', ...input.plan.files]),
+        }).lane,
+        'runtime',
+    );
+    assert.equal(selectReleaseRoute({ ...input, forceRebuild: true, managed: true }).lane, 'runtime');
+    assert.equal(
+        selectReleaseRoute({ ...input, forceRebuild: true, plan: classifyChanges([]) }).lane,
+        'none',
+    );
+});
+
 test('an active backend with drifted frontend pointers cannot trigger an empty-diff release loop', () => {
     const input = {
         plan: classifyChanges([]),
