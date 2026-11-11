@@ -749,7 +749,7 @@ void test('read-only storefront inspection accepts an older running ancestor but
     );
 });
 
-void test('inspection refreshes only Git objects before verifying ancestry', () => {
+void test('inspection fetches Git objects from the production origin before verifying ancestry', () => {
     const calls = [];
     operations.refreshInspectionHistory('b'.repeat(40), sourceSha, (command, args, options) => {
         calls.push({ command, args, options });
@@ -764,8 +764,10 @@ void test('inspection refreshes only Git objects before verifying ancestry', () 
                 'core.askPass=/usr/bin/false',
                 'fetch',
                 '--no-tags',
-                'https://github.com/wangchaozhuanyong/kaiyuangouwu.git',
-                'main',
+                '--no-write-fetch-head',
+                '--refmap=',
+                'origin',
+                'refs/heads/main',
             ],
             ['merge-base', '--is-ancestor', 'b'.repeat(40), sourceSha],
         ],
