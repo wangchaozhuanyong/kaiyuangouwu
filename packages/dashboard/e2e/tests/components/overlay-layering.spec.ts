@@ -173,10 +173,12 @@ test.describe('floating controls inside modal layers', () => {
         await expect(footer).toBeInViewport();
 
         await setStableViewport(768, 1024);
-        const tabletPortraitBox = await wideDialog.boundingBox();
-        expect(tabletPortraitBox).not.toBeNull();
-        expect(tabletPortraitBox?.width).toBeGreaterThan(735);
-        expect(tabletPortraitBox?.width).toBeLessThanOrEqual(738);
+        await expect(async () => {
+            const tabletPortraitBox = await wideDialog.boundingBox();
+            expect(tabletPortraitBox).not.toBeNull();
+            expect(tabletPortraitBox?.width).toBeGreaterThan(735);
+            expect(tabletPortraitBox?.width).toBeLessThanOrEqual(738);
+        }).toPass({ timeout: 5_000 });
         const portraitFormBox = await formPane.boundingBox();
         const portraitPreviewBox = await previewPane.boundingBox();
         expect(portraitPreviewBox?.y ?? 0).toBeGreaterThan(

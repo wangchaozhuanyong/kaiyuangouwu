@@ -216,6 +216,7 @@ jobs:
             - name: Build affected packages and preserve compiled output
               env:
                   NODE_ENV: production
+                  NODE_OPTIONS: --max-old-space-size=4096
                   TZ: Asia/Shanghai
                   VENDURE_SERVE_GRAPHIQL: 'false'
                   VENDURE_DASHBOARD_URL: https://admin.build.test/dashboard
