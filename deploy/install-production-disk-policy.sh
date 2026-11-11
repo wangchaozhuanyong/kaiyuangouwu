@@ -17,6 +17,7 @@ readonly files=(
     vendure-production-release-retention.cjs
     vendure-frontend-release-retention.cjs
     vendure-file-backup-retention.py
+    vendure-backup-verification.py
     vendure-file-backup
     vendure-disk-budget.py
     vendure-backup-s3-guard.py

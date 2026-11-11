@@ -251,7 +251,8 @@ fi
 [[ "${GITHUB_RUN_ID:-}" =~ ^[0-9]+$ ]] || fail 'release run ID is required for the offsite file restore proof'
 readonly file_restore_proof="/var/lib/vendure-readiness/file-restore-drill-runs/${target_sha}-${GITHUB_RUN_ID}.json"
 restore_policy_sha="$(for source in deploy/offsite-file-restore-drill.py deploy/systemd/vendure-file-backup.py \
-    deploy/systemd/vendure-s3-prefix-snapshot.py deploy/systemd/vendure-file-backup; do
+    deploy/systemd/vendure-s3-prefix-snapshot.py deploy/systemd/vendure-file-backup \
+    deploy/systemd/vendure-backup-verification.py; do
     git show "${target_sha}:${source}" | sha256sum | cut -d ' ' -f1 || exit 1
 done | sha256sum | cut -d ' ' -f1)" || fail 'could not read the target restore policy'
 readonly restore_policy_sha
@@ -822,7 +823,7 @@ check_production_disk_usage
 # A failure here can resume the paused worker without entering schema rollback.
 deploy_stage="persistent-file-backup-readiness"
 for file_backup_tool in \
-    vendure-file-backup vendure-file-backup.py vendure-file-backup-retention \
+    vendure-backup-verification.py vendure-file-backup vendure-file-backup.py vendure-file-backup-retention \
     vendure-file-backup-retention.py vendure-disk-budget.py \
     vendure-file-restore-drill vendure-s3-prefix-snapshot.py vendure-backup-s3-guard.py; do
     sudo -n install -o root -g root -m 0755 \
@@ -855,6 +856,9 @@ fi
 [[ -n "${file_backup_checksum}" && "${file_backup_result}" == "success" ]] ||
     fail 'persistent file backup readiness did not produce successful evidence'
 sudo -n test -s "${file_backup_checksum}" || fail 'persistent file backup checksum is empty'
+sudo -n timeout --kill-after=10s 10m nice -n 10 /bin/bash \
+    "${repository}/deploy/systemd/vendure-production-healthcheck" --initialize-backup-verification files ||
+    fail 'persistent file backup verification could not be initialized before runtime mutation'
 printf 'PRODUCTION_FILE_BACKUP_READY phase=before-runtime-mutation result=%s\n' "${file_backup_result}"
 
 deploy_stage="migration-memory-readiness"
@@ -947,6 +951,9 @@ else
     load_verified_backup || fail 'the fresh pre-migration database backup or offsite evidence failed'
 fi
 readonly backup_file backup_invocation_id backup_age_seconds backup_action
+sudo -n timeout --kill-after=10s 10m nice -n 10 /bin/bash \
+    "${repository}/deploy/systemd/vendure-production-healthcheck" --initialize-backup-verification mysql ||
+    fail 'database backup verification could not be initialized before migration'
 printf 'DEPLOY_BACKUP_OK policy=%s action=%s data_risk=%s file=%s age_seconds=%s offsite=yes encrypted=yes invocation_id=%s\n' \
     "${release_backup_policy}" "${backup_action}" "${release_data_risk}" "${backup_file}" \
     "${backup_age_seconds}" "${backup_invocation_id}"

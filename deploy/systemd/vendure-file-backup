@@ -126,6 +126,8 @@ readonly s3_policy_guard="$(dirname "$(readlink -f "$0")")/vendure-backup-s3-gua
 readonly s3_snapshot_tool="$(dirname "$(readlink -f "$0")")/vendure-s3-prefix-snapshot.py"
 readonly retention_tool="$(dirname "$(readlink -f "$0")")/vendure-file-backup-retention.py"
 readonly disk_budget_tool="$(dirname "$(readlink -f "$0")")/vendure-disk-budget.py"
+readonly verification_tool="$(dirname "$(readlink -f "$0")")/vendure-backup-verification.py"
+verification_destination=("--offsite-uri=${offsite_backup_uri}")
 
 retain_after_success() {
     # A verified capture/upload remains successful if remote retention proof is
@@ -166,15 +168,16 @@ remote_object_status() {
         return
     fi
     metadata="$(aws s3api head-object --bucket "${bucket}" --key "${key}" \
-        --query '{ContentLength:ContentLength,ServerSideEncryption:ServerSideEncryption}' --output json)"
-    expected_size="$(wc -c <"${source}" | tr -d '[:space:]')"
-    if ! jq -e --argjson expected_size "${expected_size}" \
-        '.ContentLength == $expected_size and .ServerSideEncryption == "AES256"' \
-        <<<"${metadata}" >/dev/null; then
+        --query '{ContentLength:ContentLength,ServerSideEncryption:ServerSideEncryption,VersionId:VersionId}' --output json)"
+    expected_size="$(stat --format='%s' "${source}")"
+    local version
+    if ! version="$(jq -er --argjson expected_size "${expected_size}" \
+        'select(.ContentLength == $expected_size and .ServerSideEncryption == "AES256")
+        | .VersionId | strings | select(length > 0 and . != "null")' <<<"${metadata}")"; then
         printf 'Offsite file backup object differs from the verified local file: %s\n' "${key}" >&2
         return 1
     fi
-    printf 'present\n'
+    printf 'present:%s\n' "${version}"
 }
 
 upload_offsite_backup() {
@@ -186,8 +189,10 @@ upload_offsite_backup() {
             key="$(basename "${source}")"
             if [[ -n "${prefix:-}" ]]; then key="${prefix}/${key}"; fi
             aws s3 cp "${source}" "s3://${bucket}/${key}" --sse AES256 --only-show-errors
-            [[ "$(remote_object_status "${source}")" == "present" ]]
+            state="$(remote_object_status "${source}")"
         fi
+        [[ "${state}" == present:* ]] || return 1
+        verification_destination+=("--version=${state#present:}")
     done
 }
 
@@ -214,11 +219,16 @@ if [[ -n "${offsite_backup_uri}" ]]; then
                 missing_offsite=true
             fi
         done
-        if [[ "${missing_offsite}" == "true" ]]; then
-            (cd "${vendure_backup_dir}" && sha256sum --check --status "${latest_checksum}")
+        receipt_archive="$(jq -er '.archive' "${vendure_backup_dir}/.verified-backup.json" 2>/dev/null || true)"
+        latest_age="$(($(date +%s) - $(stat --format='%Y' "${latest_archive}")))"
+        if [[ "${missing_offsite}" == "true" ]] || \
+            { [[ "${receipt_archive}" != "${latest_archive##*/}" ]] && ((latest_age >= 0 && latest_age < 86400)); }; then
+            local_verification="$(python3 "${verification_tool}" prepare files "${latest_archive}" --existing)"
             gzip -t "${latest_archive}"
             python3 "${backup_tool}" verify "${latest_archive}" >/dev/null
             upload_offsite_backup "${latest_archive}"
+            python3 "${verification_tool}" publish files "${latest_archive}" \
+                "${verification_destination[@]}" <<<"${local_verification}"
             retain_after_success
             printf 'Resumed verified persistent file backup: %s offsite=yes encrypted=yes\n' \
                 "${latest_archive}"
@@ -284,16 +294,13 @@ gzip -t "${backup_partial}"
 python3 "${backup_tool}" verify "${backup_partial}" >/dev/null
 mv "${backup_partial}.manifest.json" "${backup_file}.manifest.json"
 mv "${backup_partial}" "${backup_file}"
-(
-    cd "${vendure_backup_dir}"
-    sha256sum "$(basename "${backup_file}")" "$(basename "${backup_file}.manifest.json")" \
-        >"$(basename "${backup_file}.sha256.part")"
-)
-mv "${backup_file}.sha256.part" "${backup_file}.sha256"
+local_verification="$(python3 "${verification_tool}" prepare files "${backup_file}")"
 
 if [[ -n "${offsite_backup_uri}" ]]; then
     upload_offsite_backup "${backup_file}"
 fi
+python3 "${verification_tool}" publish files "${backup_file}" \
+    "${verification_destination[@]}" <<<"${local_verification}"
 preserve_failed_backup
 trap - EXIT
 retain_after_success

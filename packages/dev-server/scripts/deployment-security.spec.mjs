@@ -1391,6 +1391,10 @@ void test('persistent business files have encrypted offsite backup, retention an
         path.join(repositoryRoot, 'deploy/systemd/vendure-backup-s3-guard.py'),
         'utf8',
     );
+    const backupVerification = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-backup-verification.py'),
+        'utf8',
+    );
     const s3SnapshotTool = await readFile(
         path.join(repositoryRoot, 'deploy/systemd/vendure-s3-prefix-snapshot.py'),
         'utf8',
@@ -1433,7 +1437,11 @@ void test('persistent business files have encrypted offsite backup, retention an
     assert.match(s3PolicyGuard, /get-public-access-block/u);
     assert.match(s3PolicyGuard, /get-bucket-lifecycle-configuration/u);
     assert.match(s3PolicyGuard, /current_days \+ noncurrent_days <= maximum_days/u);
-    assert.match(backupScript, /sha256sum/u);
+    assert.match(backupScript, /python3 "\$\{verification_tool\}" prepare files/u);
+    assert.match(backupScript, /python3 "\$\{verification_tool\}" publish files/u);
+    assert.match(backupVerification, /hashlib\.sha256\(\)/u);
+    assert.match(backupVerification, /if hashes != recorded:/u);
+    assert.match(backupVerification, /os\.replace\(temporary, path\)/u);
     assert.match(backupTool, /BACKUP_MANIFEST\.json/u);
     assert.match(backupTool, /O_NOFOLLOW/u);
     assert.match(backupTool, /File changed while being backed up/u);
@@ -1463,6 +1471,7 @@ void test('persistent business files have encrypted offsite backup, retention an
     assert.match(offhostWorkflow, /OFFSITE_FILE_RESTORE_VERIFIED sha=%s run=%s/u);
     assert.match(offhostWorkflow, /\/bin\/bash <<'VENDURE_OFFSITE_PROOF'/u);
     assert.match(offhostScript, /restore_stream/u);
+    assert.match(offhostScript, /TOOLS \/ "vendure-backup-verification\.py"/u);
     assert.match(offhostScript, /DISK_RESERVE_BYTES/u);
     assert.match(deploymentScript, /DEPLOY_OFFSITE_FILE_RESTORE_OK/u);
     assert.match(deploymentScript, /sudo -n jq -er --arg sha/u);
