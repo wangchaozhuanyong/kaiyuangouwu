@@ -44,29 +44,6 @@ fail_switch() {
     exit 1
 }
 
-wait_for_candidate_api() {
-    # The production cold start can outlast the old 30 two-second probes.
-    # Require the same health response, and bound the whole wait including requests.
-    local deadline=$((SECONDS + 150))
-    local attempt=0 remaining request_timeout
-    api_ready_attempt=0
-    while (( SECONDS < deadline )); do
-        (( attempt += 1 ))
-        remaining=$((deadline - SECONDS))
-        (( remaining > 0 )) || break
-        request_timeout=$((remaining < 10 ? remaining : 10))
-        if curl --fail --silent --max-time "${request_timeout}" http://127.0.0.1:3002/health >/dev/null 2>&1; then
-            api_ready_attempt="${attempt}"
-            return 0
-        fi
-        remaining=$((deadline - SECONDS))
-        if (( remaining > 0 )); then
-            sleep "$((remaining < 2 ? remaining : 2))"
-        fi
-    done
-    return 1
-}
-
 handle_switch_error() {
     local status="$?"
     local line="${BASH_LINENO[0]:-unknown}"
@@ -124,11 +101,17 @@ done
 # Start the API and worker sequentially so their cold-start allocation does not
 # overlap on the single-host production instance.
 VENDURE_RUNTIME_DIR="${candidate}" pm2 start "${ecosystem}" --only vendure-api --update-env
-if ! wait_for_candidate_api; then
-    printf '%s\n' 'Candidate API health check failed; PM2 diagnostics follow:' >&2
-    curl --fail --silent --show-error --max-time 10 \
-        http://127.0.0.1:3002/health >/dev/null || true
-    pm2 jlist | node -e '
+api_ready_attempt=0
+for attempt in $(seq 1 30); do
+    if curl --fail --silent --max-time 10 http://127.0.0.1:3002/health >/dev/null 2>&1; then
+        api_ready_attempt="${attempt}"
+        break
+    fi
+    if [[ "${attempt}" == "30" ]]; then
+        printf '%s\n' 'Candidate API health check failed; PM2 diagnostics follow:' >&2
+        curl --fail --silent --show-error --max-time 10 \
+            http://127.0.0.1:3002/health >/dev/null || true
+        pm2 jlist | node -e '
 let input = "";
 process.stdin.on("data", chunk => (input += chunk)).on("end", () => {
     const processes = JSON.parse(input);
@@ -143,9 +126,11 @@ process.stdin.on("data", chunk => (input += chunk)).on("end", () => {
     process.stdout.write(`${JSON.stringify(summary)}\\n`);
 });
 ' >&2 || true
-    pm2 logs vendure-api --nostream --lines 120 --raw >&2 || true
-    fail_switch 'candidate API health check did not pass before worker start'
-fi
+        pm2 logs vendure-api --nostream --lines 120 --raw >&2 || true
+        fail_switch 'candidate API health check did not pass before worker start'
+    fi
+    sleep 2
+done
 printf 'PRODUCTION_API_READY phase=pre-worker attempts=%s\n' "${api_ready_attempt}"
 VENDURE_RUNTIME_DIR="${candidate}" pm2 start "${ecosystem}" --only vendure-worker --update-env
 
