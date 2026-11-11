@@ -95,6 +95,147 @@ describe('iCloud admin contract persistence', () => {
         disableJobs.mockRestore();
     });
 
+    it('serves scoped relay metadata, code authorization and mail summaries through the Admin API', async () => {
+        const ctx = RequestContext.empty();
+        const service = server.app.get(IcloudAdminService);
+        const connection = server.app.get(TransactionalConnection);
+        const owner = await service.createPrimaryAccount(ctx, {
+            email: 'scoped-owner@icloud.com',
+            appPassword: 'isolated-test-password',
+        });
+        const other = await service.createPrimaryAccount(ctx, {
+            email: 'scoped-other@icloud.com',
+            appPassword: 'isolated-test-password',
+        });
+        const alias = await service.createVirtualEmail(ctx, {
+            primaryAccountId: owner.id,
+            aliasEmail: 'scoped-alias@icloud.com',
+        });
+        const receivedAt = new Date('2026-11-01T02:00:00Z');
+        const [assigned, unassigned] = await connection.getRepository(ctx, IcloudReceivedMail).save([
+            new IcloudReceivedMail({
+                primaryAccountId: owner.id,
+                virtualEmailId: alias.id,
+                messageId: 'scoped-assigned',
+                fromAddress: 'fixture@example.test',
+                subject: 'Verification code',
+                bodyText: 'Your verification code is 123456',
+                receivedAt,
+            }),
+            new IcloudReceivedMail({
+                primaryAccountId: owner.id,
+                virtualEmailId: null,
+                messageId: 'scoped-unassigned',
+                fromAddress: 'fixture@example.test',
+                subject: 'Owner-only mail',
+                receivedAt,
+            }),
+            new IcloudReceivedMail({
+                primaryAccountId: other.id,
+                virtualEmailId: null,
+                messageId: 'scoped-other',
+                fromAddress: 'fixture@example.test',
+                subject: 'Other mailbox mail',
+                receivedAt,
+            }),
+        ]);
+
+        const targets = gql`
+            query ScopedTargets($primary: ID!, $alias: ID!, $codes: Boolean!) {
+                icloudRelayTargets(primaryIds: [$primary], aliasIds: [$alias], includeCodes: $codes) {
+                    primaries {
+                        id
+                        masterQueryCode
+                    }
+                    aliases {
+                        id
+                        buyerQueryCode
+                        mailCount
+                        lastMailReceivedAt
+                        lastQueriedAt
+                    }
+                }
+            }
+        `;
+        // testConfig uses the prefixed ID strategy to exercise both encoding and decoding.
+        const encode = (id: string | number) => `T_${id}`;
+        const ids = { primary: encode(owner.id), alias: encode(alias.id) };
+        const metadata = (await adminClient.query(targets, { ...ids, codes: false })).icloudRelayTargets;
+        expect(metadata.primaries).toEqual([{ id: ids.primary, masterQueryCode: null }]);
+        expect(metadata.aliases).toEqual([
+            {
+                id: ids.alias,
+                buyerQueryCode: null,
+                mailCount: 1,
+                lastMailReceivedAt: receivedAt.toISOString(),
+                lastQueriedAt: null,
+            },
+        ]);
+        const page = gql`
+            query ScopedMails($primary: ID!, $onlyUnassigned: Boolean!, $mailId: ID) {
+                icloudRelayMailPage(
+                    primaryAccountId: $primary
+                    unassignedOnly: $onlyUnassigned
+                    mailId: $mailId
+                ) {
+                    items {
+                        id
+                        bodyText
+                    }
+                }
+            }
+        `;
+        const mailPage = (variables: { primary: string; onlyUnassigned: boolean; mailId?: string }) =>
+            adminClient.query(page, variables).then(result => result.icloudRelayMailPage.items);
+        expect(await mailPage({ primary: ids.primary, onlyUnassigned: true })).toEqual([
+            { id: encode(unassigned.id), bodyText: null },
+        ]);
+        expect(
+            await mailPage({ primary: ids.primary, onlyUnassigned: false, mailId: encode(assigned.id) }),
+        ).toEqual([{ id: encode(assigned.id), bodyText: 'Your verification code is 123456' }]);
+        expect(
+            await mailPage({ primary: encode(other.id), onlyUnassigned: false, mailId: encode(assigned.id) }),
+        ).toEqual([]);
+
+        const verify = gql`
+            query ResolveRelay($code: String!, $primary: ID, $alias: ID) {
+                icloudRelayCodeTarget(
+                    queryCode: $code
+                    expectedPrimaryId: $primary
+                    expectedAliasId: $alias
+                ) {
+                    primary {
+                        id
+                    }
+                    alias {
+                        id
+                    }
+                }
+            }
+        `;
+        const code = alias.buyerQueryCode;
+        expect((await adminClient.query(verify, { code })).icloudRelayCodeTarget).toEqual({
+            primary: { id: ids.primary },
+            alias: { id: ids.alias },
+        });
+        expect(
+            (await adminClient.query(verify, { code, primary: encode(other.id), alias: ids.alias }))
+                .icloudRelayCodeTarget,
+        ).toEqual({ primary: null, alias: null });
+        expect((await adminClient.query(verify, { code, ...ids })).icloudRelayCodeTarget.alias?.id).toBe(
+            ids.alias,
+        );
+        const tracked = (await adminClient.query(targets, { ...ids, codes: true })).icloudRelayTargets;
+        expect(tracked.aliases[0]).toMatchObject({ buyerQueryCode: code, lastQueriedAt: expect.any(String) });
+        await connection
+            .getRepository(ctx, IcloudVirtualEmail)
+            .update({ id: alias.id }, { status: IcloudVirtualEmailStatus.DISABLED });
+        expect((await adminClient.query(verify, { code })).icloudRelayCodeTarget).toEqual({
+            primary: null,
+            alias: null,
+        });
+    });
+
     it('commits new mail and outbox together, recovers a failed insert, and deduplicates a replay', async () => {
         const connection = server.app.get(TransactionalConnection);
         const ctx = RequestContext.empty();

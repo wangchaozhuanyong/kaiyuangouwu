@@ -120,6 +120,45 @@ export type IcloudReceivedMailView = Node & {
     virtualEmailId?: Maybe<Scalars['ID']['output']>;
 };
 
+export type IcloudRelayAlias = {
+    aliasEmail: Scalars['String']['output'];
+    buyerQueryCode?: Maybe<Scalars['String']['output']>;
+    codeExpiresAt?: Maybe<Scalars['DateTime']['output']>;
+    id: Scalars['ID']['output'];
+    lastMailReceivedAt?: Maybe<Scalars['DateTime']['output']>;
+    lastQueriedAt?: Maybe<Scalars['DateTime']['output']>;
+    mailCount: Scalars['Int']['output'];
+    primaryAccountId: Scalars['ID']['output'];
+    status: IcloudVirtualEmailStatus;
+};
+
+export type IcloudRelayCodeTarget = {
+    alias?: Maybe<IcloudRelayAlias>;
+    primary?: Maybe<IcloudRelayPrimary>;
+    retryAfterSeconds?: Maybe<Scalars['Int']['output']>;
+};
+
+export type IcloudRelayMailPage = {
+    aliases: Array<IcloudRelayAlias>;
+    items: Array<IcloudReceivedMailView>;
+    primary?: Maybe<IcloudRelayPrimary>;
+    truncated: Scalars['Boolean']['output'];
+};
+
+export type IcloudRelayPrimary = {
+    codeExpiresAt?: Maybe<Scalars['DateTime']['output']>;
+    email: Scalars['String']['output'];
+    id: Scalars['ID']['output'];
+    lastSyncedAt?: Maybe<Scalars['DateTime']['output']>;
+    masterQueryCode?: Maybe<Scalars['String']['output']>;
+    status: IcloudAccountStatus;
+};
+
+export type IcloudRelayTargets = {
+    aliases: Array<IcloudRelayAlias>;
+    primaries: Array<IcloudRelayPrimary>;
+};
+
 export type IcloudSyncResult = {
     error?: Maybe<Scalars['String']['output']>;
     success: Scalars['Boolean']['output'];
@@ -240,6 +279,9 @@ export type Query = {
     icloudPrimaryAccount?: Maybe<IcloudPrimaryAccountView>;
     icloudPrimaryAccounts: Array<IcloudPrimaryAccountView>;
     icloudReceivedMails: Array<IcloudReceivedMailView>;
+    icloudRelayCodeTarget: IcloudRelayCodeTarget;
+    icloudRelayMailPage: IcloudRelayMailPage;
+    icloudRelayTargets: IcloudRelayTargets;
     icloudVirtualEmail?: Maybe<IcloudVirtualEmailView>;
     icloudVirtualEmails: Array<IcloudVirtualEmailView>;
 };
@@ -253,6 +295,26 @@ export type QueryIcloudReceivedMailsArgs = {
     primaryAccountId?: InputMaybe<Scalars['ID']['input']>;
     unassignedOnly?: InputMaybe<Scalars['Boolean']['input']>;
     virtualEmailId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+export type QueryIcloudRelayCodeTargetArgs = {
+    expectedAliasId?: InputMaybe<Scalars['ID']['input']>;
+    expectedPrimaryId?: InputMaybe<Scalars['ID']['input']>;
+    queryCode: Scalars['String']['input'];
+};
+
+export type QueryIcloudRelayMailPageArgs = {
+    limit?: Scalars['Int']['input'];
+    mailId?: InputMaybe<Scalars['ID']['input']>;
+    primaryAccountId: Scalars['ID']['input'];
+    unassignedOnly?: Scalars['Boolean']['input'];
+    virtualEmailId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+export type QueryIcloudRelayTargetsArgs = {
+    aliasIds: Array<Scalars['ID']['input']>;
+    includeCodes?: Scalars['Boolean']['input'];
+    primaryIds: Array<Scalars['ID']['input']>;
 };
 
 export type QueryIcloudVirtualEmailArgs = {

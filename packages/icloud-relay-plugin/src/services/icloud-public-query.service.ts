@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Logger, RequestContext, TransactionalConnection } from '@vendure/core';
+import { ID, Logger, RequestContext, TransactionalConnection } from '@vendure/core';
 
 import { loggerCtx, RATE_LIMIT_LOCKOUT_MS, RATE_LIMIT_MAX_FAILED_ATTEMPTS } from '../constants';
 import { IcloudPrimaryAccount } from '../entities/icloud-primary-account.entity';
@@ -154,12 +154,73 @@ export class IcloudPublicQueryService {
         return { success: false, message: '无效的查询码，请检查后重试。', totalEmails: 0, items: [] };
     }
 
+    async resolveRelayCode(
+        ctx: RequestContext,
+        queryCode: string,
+        clientIp: string,
+        userAgent: string | undefined,
+        expected: { primaryId?: ID; aliasId?: ID },
+    ) {
+        const target = await this.authorizeQueryTarget(ctx, queryCode, clientIp, userAgent, true);
+        const alias = target.virtual;
+        const primary = alias ? alias.primaryAccount : target.primary;
+        if (target.error || !primary) return { retryAfterSeconds: target.retryAfterSeconds };
+
+        if (expected.primaryId != null) {
+            if (
+                String(primary.id) !== String(expected.primaryId) ||
+                String(alias?.id ?? '') !== String(expected.aliasId ?? '')
+            )
+                return {};
+            const code = queryCode.trim().toUpperCase();
+            const tracking = { lastQueriedAt: new Date(), lastQueriedIp: clientIp };
+            const updated = alias
+                ? await this.connection
+                      .getRepository(ctx, IcloudVirtualEmail)
+                      .update({ id: alias.id, buyerQueryCode: code, status: alias.status }, tracking)
+                : await this.connection
+                      .getRepository(ctx, IcloudPrimaryAccount)
+                      .update({ id: primary.id, masterQueryCode: code, status: primary.status }, tracking);
+            if (updated.affected === 0) return {};
+            await this.recordAudit(
+                this.connection.getRepository(ctx, IcloudQueryAuditLog),
+                code,
+                alias ? IcloudQueryTargetType.VIRTUAL : IcloudQueryTargetType.PRIMARY,
+                String(alias?.id ?? primary.id),
+                clientIp,
+                userAgent ?? null,
+                IcloudAuditResult.SUCCESS,
+            );
+        }
+
+        return {
+            primary: {
+                id: primary.id,
+                email: primary.email,
+                status: primary.status,
+                codeExpiresAt: primary.codeExpiresAt,
+                lastSyncedAt: primary.lastSyncedAt,
+            },
+            alias: alias && {
+                id: alias.id,
+                primaryAccountId: alias.primaryAccountId,
+                aliasEmail: alias.aliasEmail,
+                status: alias.status,
+                codeExpiresAt: alias.codeExpiresAt,
+                lastQueriedAt: alias.lastQueriedAt,
+                mailCount: alias.mailCount,
+                lastMailReceivedAt: alias.lastMailReceivedAt,
+            },
+        };
+    }
+
     /** Shared authorization for public reads and subscriptions. Does not read mail. */
     async authorizeQueryTarget(
         ctx: RequestContext,
         queryCode: string,
         clientIp: string,
         userAgent?: string,
+        uniqueAcrossTypes = false,
     ): Promise<{
         virtual?: IcloudVirtualEmail;
         primary?: IcloudPrimaryAccount;
@@ -180,16 +241,19 @@ export class IcloudPublicQueryService {
             );
             return this.rateLimitError(clientIp);
         }
-        const virtual = await this.connection.getRepository(ctx, IcloudVirtualEmail).findOne({
-            where: { buyerQueryCode: code },
-            relations: ['primaryAccount'],
-        });
-        const primary = virtual
-            ? undefined
-            : ((await this.connection
-                  .getRepository(ctx, IcloudPrimaryAccount)
-                  .findOne({ where: { masterQueryCode: code } })) ?? undefined);
-        const match = virtual ?? primary;
+        const loadVirtual = () =>
+            this.connection.getRepository(ctx, IcloudVirtualEmail).findOne({
+                where: { buyerQueryCode: code },
+                relations: ['primaryAccount'],
+            });
+        const loadPrimary = () =>
+            this.connection
+                .getRepository(ctx, IcloudPrimaryAccount)
+                .findOne({ where: { masterQueryCode: code } });
+        const [virtual, primary] = uniqueAcrossTypes
+            ? await Promise.all([loadVirtual(), loadPrimary()])
+            : await loadVirtual().then(async alias => [alias, alias ? null : await loadPrimary()] as const);
+        const match = virtual && primary ? null : (virtual ?? primary);
         if (!match) {
             // Other requests can fill the tracker or lock this source while the lookups are pending.
             const recorded = this.recordFailedAttempt(clientIp);
@@ -237,7 +301,7 @@ export class IcloudPublicQueryService {
             };
         }
         this.failedAttempts.delete(clientIp);
-        return { virtual: virtual ?? undefined, primary };
+        return { virtual: virtual ?? undefined, primary: primary ?? undefined };
     }
 
     // ==========================================

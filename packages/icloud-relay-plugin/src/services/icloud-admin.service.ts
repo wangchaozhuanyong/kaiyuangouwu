@@ -1,6 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { ID, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
-import { IsNull } from 'typeorm';
+import { In, IsNull } from 'typeorm';
 
 import { validateIcloudInput } from '../client/admin-validation';
 import { ICLOUD_IDLE_UNSUPPORTED_ERROR } from '../constants';
@@ -27,6 +27,18 @@ import { mailPreviewHtml } from './icloud-mail-sanitizer.service';
 import { lockMailAccount, refreshMailCounts } from './icloud-mail-storage';
 import { IcloudOtpExtractorService } from './icloud-otp-extractor.service';
 import { updateIcloudRecord } from './icloud-record-update';
+
+const relayPrimaryFields = ['id', 'email', 'status', 'lastSyncedAt'] as const;
+const relayAliasFields = [
+    'id',
+    'primaryAccountId',
+    'aliasEmail',
+    'status',
+    'codeExpiresAt',
+    'lastQueriedAt',
+    'mailCount',
+    'lastMailReceivedAt',
+] as const;
 
 export interface PrimaryAccountView {
     id: ID;
@@ -243,8 +255,14 @@ export class IcloudAdminService {
         if (!account) {
             return { success: false, syncedCount: 0, error: '主邮箱不存在' };
         }
-        const result = await this.imapSyncService.syncAccount(ctx, account);
-        if (result.success) await this.idle?.ensureWatching(String(id), account).catch(() => undefined);
+        if (account.status === IcloudAccountStatus.DISABLED) {
+            return { success: false, syncedCount: 0, error: '主邮箱已停用' };
+        }
+        const listeningSync = this.idle?.syncNow(account);
+        const result = await (listeningSync ?? this.imapSyncService.syncAccount(ctx, account));
+        if (result.success && !listeningSync) {
+            await this.idle?.ensureWatching(String(id), account).catch(() => undefined);
+        }
         return result;
     }
 
@@ -521,6 +539,139 @@ export class IcloudAdminService {
         return mails.map(mail =>
             this.toReceivedMailView(mail, this.otpExtractor.extractCode(mail.subject, mail.bodyText || '')),
         );
+    }
+
+    async findRelayTargets(ctx: RequestContext, primaryIds: ID[], aliasIds: ID[], includeCodes: boolean) {
+        if (
+            [primaryIds, aliasIds].some(
+                ids => ids.length > 50 || ids.some(id => !String(id) || String(id).length > 180),
+            )
+        ) {
+            throw new UserInputError('每次最多读取 50 个同类邮箱编号');
+        }
+        const [primaries, aliases] = await Promise.all([
+            primaryIds.length
+                ? this.connection.getRepository(ctx, IcloudPrimaryAccount).find({
+                      where: { id: In(primaryIds) },
+                      select: [
+                          ...relayPrimaryFields,
+                          'codeExpiresAt',
+                          ...(includeCodes ? ['masterQueryCode' as const] : []),
+                      ],
+                  })
+                : [],
+            aliasIds.length
+                ? this.connection.getRepository(ctx, IcloudVirtualEmail).find({
+                      where: { id: In(aliasIds) },
+                      select: [...relayAliasFields, ...(includeCodes ? ['buyerQueryCode' as const] : [])],
+                  })
+                : [],
+        ]);
+        if (!aliases.length) return { primaries, aliases };
+        const counts = await this.connection
+            .getRepository(ctx, IcloudReceivedMail)
+            .createQueryBuilder('mail')
+            .select('mail.virtualEmailId', 'aliasId')
+            .addSelect('mail.primaryAccountId', 'primaryId')
+            .addSelect('COUNT(*)', 'mailCount')
+            .addSelect('MAX(mail.receivedAt)', 'lastMailReceivedAt')
+            .where('mail.virtualEmailId IN (:...aliasIds)', { aliasIds: aliases.map(row => row.id) })
+            .groupBy('mail.virtualEmailId')
+            .addGroupBy('mail.primaryAccountId')
+            .getRawMany<{
+                aliasId: ID;
+                primaryId: ID;
+                mailCount: number | string;
+                lastMailReceivedAt: Date | string;
+            }>();
+        const byAlias = new Map(counts.map(row => [`${row.primaryId}:${row.aliasId}`, row]));
+        return {
+            primaries,
+            aliases: aliases.map(alias => {
+                const count = byAlias.get(`${alias.primaryAccountId}:${alias.id}`);
+                const receivedAt = count?.lastMailReceivedAt;
+                // SQL.js returns UTC datetime text, while MySQL can return a Date instance.
+                const date =
+                    typeof receivedAt === 'string' && /^\d{4}-\d{2}-\d{2} /.test(receivedAt)
+                        ? new Date(receivedAt.replace(' ', 'T') + 'Z')
+                        : receivedAt
+                          ? new Date(receivedAt)
+                          : null;
+                return {
+                    ...alias,
+                    mailCount: count ? Number(count.mailCount) : 0,
+                    lastMailReceivedAt: date && Number.isFinite(date.getTime()) ? date : null,
+                };
+            }),
+        };
+    }
+
+    async findRelayMailPage(
+        ctx: RequestContext,
+        {
+            primaryAccountId,
+            virtualEmailId,
+            unassignedOnly,
+            limit,
+            mailId,
+        }: {
+            primaryAccountId: ID;
+            virtualEmailId?: ID;
+            unassignedOnly: boolean;
+            limit: number;
+            mailId?: ID;
+        },
+    ) {
+        if (!Number.isInteger(limit) || limit < 1 || limit > 200 || (virtualEmailId && unassignedOnly)) {
+            throw new UserInputError('收件范围或数量无效');
+        }
+        const primary = await this.connection.getRepository(ctx, IcloudPrimaryAccount).findOne({
+            where: { id: primaryAccountId },
+            select: [...relayPrimaryFields],
+        });
+        if (!primary || primary.status === IcloudAccountStatus.DISABLED) {
+            return { primary, aliases: [], items: [], truncated: false };
+        }
+        const rows = await this.connection.getRepository(ctx, IcloudReceivedMail).find({
+            where: {
+                primaryAccountId,
+                ...(virtualEmailId ? { virtualEmailId } : unassignedOnly ? { virtualEmailId: IsNull() } : {}),
+                ...(mailId && { id: mailId }),
+            },
+            select: [
+                'id',
+                'createdAt',
+                'updatedAt',
+                'primaryAccountId',
+                'virtualEmailId',
+                'messageId',
+                'fromAddress',
+                'fromName',
+                'subject',
+                'bodyText',
+                'receivedAt',
+                'isRead',
+                'isStarred',
+            ],
+            order: { receivedAt: 'DESC', id: 'DESC' },
+            take: mailId ? 1 : limit + 1,
+        });
+        const items = rows.slice(0, limit).map(mail => ({
+            ...mail,
+            bodyText: mailId ? mail.bodyText : null,
+            extractedCode: this.otpExtractor.extractCode(mail.subject, mail.bodyText || ''),
+        }));
+        const aliasIds = new Set(
+            items.flatMap(mail => (mail.virtualEmailId == null ? [] : [mail.virtualEmailId])),
+        );
+        if (virtualEmailId) aliasIds.add(virtualEmailId);
+        const aliases = aliasIds.size
+            ? await this.connection.getRepository(ctx, IcloudVirtualEmail).find({
+                  where: { primaryAccountId, id: In([...aliasIds]) },
+                  select: [...relayAliasFields],
+              })
+            : [];
+        return { primary, aliases, items, truncated: rows.length > limit };
     }
 
     private toReceivedMailView(

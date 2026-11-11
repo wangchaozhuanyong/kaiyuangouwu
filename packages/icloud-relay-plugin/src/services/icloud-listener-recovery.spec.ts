@@ -46,7 +46,7 @@ describe('manual success restores realtime listening independently', () => {
             testConnection: vi.fn().mockResolvedValue({ success: true }),
             syncAccount: vi.fn().mockResolvedValue({ success: true, syncedCount: 1 }),
         };
-        const idle = { ensureWatching: vi.fn().mockResolvedValue(undefined) };
+        const idle = { ensureWatching: vi.fn().mockResolvedValue(undefined), syncNow: vi.fn() };
         const service = new IcloudAdminService(
             { getRepository: () => repo } as never,
             {} as never,
@@ -88,5 +88,14 @@ describe('manual success restores realtime listening independently', () => {
         await expect(f.service.syncPrimaryAccount({} as RequestContext, f.account.id)).resolves.toMatchObject(
             { success: true, syncedCount: 1 },
         );
+    });
+    it('uses a healthy listener for explicit sync without opening a short connection', async () => {
+        const f = fixture();
+        f.idle.syncNow.mockResolvedValue({ success: true, syncedCount: 2 });
+        const result = await f.service.syncPrimaryAccount({} as RequestContext, f.account.id);
+        expect(result).toEqual({ success: true, syncedCount: 2 });
+        expect(f.idle.syncNow).toHaveBeenCalledExactlyOnceWith(f.account);
+        expect(f.sync.syncAccount).not.toHaveBeenCalled();
+        expect(f.idle.ensureWatching).not.toHaveBeenCalled();
     });
 });
