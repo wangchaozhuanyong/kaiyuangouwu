@@ -47,6 +47,11 @@ Headless e-commerce framework. Lerna monorepo with fixed versioning.
 
 ## Release execution
 
+- 现用发布角色仅负责向受管目标部署，不得新增、扩容或延长付费资源的保留期。新增月费、一次性费用和延长保留须先记录项目、负责人、费用及退出日期并获得对应批准；AWS 预算预警与发布权限检查各自验收。
+- 文件恢复只复用同一 S3 版本、校验清单和恢复规则的真实全量回执。每次运行时发布仍须生成本次 SHA 和运行编号的独立验证，定时异机演练也遵守此校验；禁止刷新旧回执的演练时间。
+- 迁机验收需回读旧实例、磁盘、快照、地址及后续账单。发布账本记录退役范围和回滚制品位置，备份及在用制品继续按各自的保留规则管理。
+
+
 - Current AWS access must follow the account, Region, role and instance in `.github/workflows/production_operations.yml`, not an old local profile name. Prefer the existing GitHub Actions OIDC release/operations identity over repeated browser logins. See `docs/production-access-20261026.md`; keep credentials in system/platform storage and preserve unrelated profiles.
 - Keep one release ledger: target revision, production component revisions, changed files, required checks, reused evidence, artifact, and acceptance result. Use `scripts/release-evidence.mjs` and `deploy/release-route.mjs`; do not improvise another full test or deployment sequence.
 - Finish the selected local checks and consolidate their fixes before pushing a release candidate. A failed local gate is a reason to fix locally, not to push successive incomplete candidates and use CI as the debugger.

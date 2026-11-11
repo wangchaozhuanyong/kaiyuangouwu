@@ -152,12 +152,12 @@ class OffhostFileRestoreTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(dir=TEST_OUTPUT)
         self.root = Path(self.temporary.name)
-        self.files = self.root / "files"
-        self.files.mkdir()
-        (self.files / "customer.txt").write_text("complete offsite restore")
+        files = self.root / "files"
+        files.mkdir()
+        (files / "customer.txt").write_text("complete offsite restore")
         self.archive = self.root / "vendure-files-20260923T091826Z.tar.gz"
         subprocess.run(
-            [sys.executable, str(SCRIPT), "capture", str(self.archive), f"public-assets={self.files}"],
+            [sys.executable, str(SCRIPT), "capture", str(self.archive), f"public-assets={files}"],
             check=True, capture_output=True,
         )
         self.manifest = Path(str(self.archive) + ".manifest.json")
@@ -166,6 +166,12 @@ class OffhostFileRestoreTest(unittest.TestCase):
             f"{hashlib.sha256(self.archive.read_bytes()).hexdigest()}  {self.archive.name}\n"
             f"{hashlib.sha256(self.manifest.read_bytes()).hexdigest()}  {self.archive.name}.manifest.json\n"
         )
+        self.key = "files/" + self.archive.name
+        self.version = "archive-v1"
+        self.download_version = None
+        self.checksum_version = "checksum-v1"
+        self.archive_downloads = 0
+        self.etag = '"5f144bc54e80"'
         spec = importlib.util.spec_from_file_location("offhost_file_restore", OFFHOST_SCRIPT)
         self.tool = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.tool)
@@ -173,49 +179,134 @@ class OffhostFileRestoreTest(unittest.TestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
-    def run_drill(self):
-        archive = self.archive
-        manifest = self.manifest
-        checksum = self.checksum
+    def s3(self, operation, bucket, *arguments):
+        self.assertEqual(bucket, "backup-test")
+        if operation == "list-objects-v2":
+            return {"Contents": [{"Key": self.key + ".sha256", "LastModified": "2026-09-23T09:18:26Z"}]}
+        key = arguments[1]
+        if operation == "head-object":
+            self.assertEqual(key, self.key)
+            return {"VersionId": self.version, "ETag": self.etag, "ContentLength": self.archive.stat().st_size}
+        self.assertEqual(operation, "get-object")
+        if key == self.key:
+            self.assertEqual(arguments[2:4], ("--if-match", self.etag))
+            self.archive_downloads += 1
+            source, version = self.archive, self.download_version or self.version
+        elif key == self.key + ".manifest.json":
+            source, version = self.manifest, "manifest-v1"
+        else:
+            self.assertEqual(key, self.key + ".sha256")
+            source, version = self.checksum, self.checksum_version
+        Path(arguments[-1]).write_bytes(source.read_bytes())
+        return {"VersionId": version}
 
-        def copy_sidecar(command, **kwargs):
-            source = manifest if command[3].endswith(".manifest.json") else checksum
-            Path(command[4]).write_bytes(source.read_bytes())
-            return subprocess.CompletedProcess(command, 0)
+    def run_drill(self, run_id="123", target_sha="a" * 40, prior_receipt=None):
+        receipt = self.root / f"restore-{run_id}.json"
+        verification = self.root / f"release-{run_id}.json"
+        with mock.patch.object(self.tool, "s3", side_effect=self.s3):
+            self.tool.run(
+                "backup-test", "files/", target_sha, run_id, receipt,
+                prior_receipt or self.root / "missing-prior.json", verification,
+            )
+        return receipt, json.loads(verification.read_bytes())
 
-        class Download:
-            def __init__(self):
-                self.stdout = archive.open("rb")
+    def test_full_drill_produces_versioned_proof_and_exact_release_verification(self):
+        receipt_path, release = self.run_drill()
+        proof = json.loads(receipt_path.read_bytes())
+        self.assertEqual(proof["source"], "offsite")
+        self.assertEqual(proof["method"], "offhost-full-restore")
+        self.assertEqual(proof["archive"]["fileCount"], 1)
+        self.assertEqual(proof["archiveIdentity"]["versionId"], "archive-v1")
+        self.assertEqual(release["targetSha"], "a" * 40)
+        self.assertEqual(release["runId"], "123")
+        self.assertEqual(release["downloadedArchiveBytes"], self.archive.stat().st_size)
+        self.assertEqual(release["restoreProof"], proof)
 
-            def wait(self):
-                return 0
+    def test_same_backup_reuses_actual_proof_without_an_archive_download(self):
+        receipt, original = self.run_drill()
+        new_receipt, release = self.run_drill("456", "b" * 40, receipt)
+        self.assertFalse(new_receipt.exists())
+        self.assertEqual(self.archive_downloads, 1)
+        self.assertEqual(release["downloadedArchiveBytes"], 0)
+        self.assertEqual(release["restoreProof"], original["restoreProof"])
+        self.assertEqual(release["targetSha"], "b" * 40)
+        self.assertEqual(release["runId"], "456")
 
-            def kill(self):
-                self.stdout.close()
+    def test_archive_or_sidecar_version_change_requires_full_restore(self):
+        receipt, _ = self.run_drill()
+        self.version = "archive-v2"
+        second, release = self.run_drill("456", "b" * 40, receipt)
+        self.assertEqual(release["restoreProof"]["archiveIdentity"]["versionId"], "archive-v2")
+        self.checksum_version = "checksum-v2"
+        _, release = self.run_drill("789", "c" * 40, second)
+        self.assertEqual(release["restoreProof"]["archiveIdentity"]["checksumVersionId"], "checksum-v2")
+        self.assertEqual(self.archive_downloads, 3)
 
-        listing = json.dumps({"Contents": [{
-            "Key": "files/" + archive.name + ".sha256",
-            "LastModified": "2026-09-23T09:18:26Z",
-        }]})
-        receipt = self.root / "receipt.json"
-        with mock.patch.object(self.tool, "aws", return_value=listing), \
-             mock.patch.object(self.tool.subprocess, "run", side_effect=copy_sidecar), \
-             mock.patch.object(self.tool.subprocess, "Popen", side_effect=lambda *args, **kwargs: Download()):
-            self.tool.run("backup-test", "files/", "a" * 40, "123", receipt)
-        return json.loads(receipt.read_text())
+    def test_restore_policy_change_requires_full_restore(self):
+        receipt, _ = self.run_drill()
+        with mock.patch.object(self.tool, "policy_sha256", return_value="f" * 64):
+            _, release = self.run_drill("456", "b" * 40, receipt)
+        self.assertEqual(self.archive_downloads, 2)
+        self.assertEqual(release["restoreProof"]["archiveIdentity"]["restorePolicySha256"], "f" * 64)
 
-    def test_full_offhost_drill_produces_exact_release_receipt(self):
-        receipt = self.run_drill()
-        self.assertEqual(receipt["source"], "offsite")
-        self.assertEqual(receipt["method"], "offhost-full-restore")
-        self.assertEqual(receipt["archive"]["fileCount"], 1)
-        self.assertEqual(receipt["targetSha"], "a" * 40)
-        self.assertEqual(receipt["runId"], "123")
+    def test_archive_changed_during_download_cannot_publish_proof(self):
+        self.download_version = "changed-after-head"
+        with self.assertRaisesRegex(RuntimeError, "archive changed after verification"):
+            self.run_drill()
+        self.assertFalse((self.root / "restore-123.json").exists())
+        self.assertFalse((self.root / "release-123.json").exists())
 
-    def test_offhost_drill_rejects_mismatched_manifest_checksum(self):
+    def test_offhost_drill_rejects_mismatched_manifest_checksum_before_archive_get(self):
         self.manifest.write_bytes(self.manifest.read_bytes() + b"tampered")
         with self.assertRaisesRegex(ValueError, "manifest checksum does not match"):
             self.run_drill()
+        self.assertEqual(self.archive_downloads, 0)
+
+    def test_offhost_drill_rejects_stale_backup_even_with_matching_proof(self):
+        receipt, _ = self.run_drill()
+        from datetime import timedelta
+        with mock.patch.object(self.tool, "now", return_value=self.tool.now() + timedelta(hours=31)):
+            with self.assertRaisesRegex(ValueError, "older than the configured recovery window"):
+                self.run_drill("456", "b" * 40, receipt)
+        self.assertEqual(self.archive_downloads, 1)
+
+    def test_production_gate_checks_run_freshness_and_actual_restore(self):
+        receipt, _ = self.run_drill()
+        _, release = self.run_drill("456", "b" * 40, receipt)
+        production = OFFHOST_SCRIPT.with_name("deploy-production-from-s3.sh").read_text()
+        gate = production.split("# Bind a fresh release verification", 1)[1].split("auth_visual_change=false", 1)[0]
+        gate = gate[gate.index("\n[[ "):]
+        gate = "\n".join(
+            'readonly file_restore_proof="$TEST_FILE_PROOF"'
+            if line.startswith("readonly file_restore_proof=") else line
+            for line in gate.splitlines()
+        )
+        setup = (
+            "set -euo pipefail\n"
+            'git() { [[ "$1" == show ]]; cat -- "${2#*:}"; }\n'
+            'sudo() { shift; "$@"; }\n'
+            'fail() { printf "%s\\n" "$*" >&2; exit 1; }\n'
+            f'target_sha="{"b" * 40}"\n'
+            'expected_bucket="backup-test"\n'
+            'GITHUB_RUN_ID=456\n'
+        )
+        proof_path = self.root / "gate-input.json"
+
+        def verify(document):
+            proof_path.write_text(json.dumps(document))
+            return subprocess.run(
+                ["bash"], input=setup + gate, cwd=OFFHOST_SCRIPT.parents[1],
+                env={**os.environ, "TEST_FILE_PROOF": str(proof_path)},
+                capture_output=True, text=True,
+            )
+
+        accepted = verify(release)
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertIn("DEPLOY_OFFSITE_FILE_RESTORE_OK", accepted.stdout)
+        self.assertNotEqual(verify(dict(release, runId="789")).returncode, 0)
+        self.assertNotEqual(verify(dict(release, verifiedAt="2000-01-01T00:00:00Z")).returncode, 0)
+        invalid_proof = dict(release["restoreProof"], durationSeconds=14401)
+        self.assertNotEqual(verify(dict(release, restoreProof=invalid_proof)).returncode, 0)
 
 
 class FileBackupServiceResumeTest(unittest.TestCase):
