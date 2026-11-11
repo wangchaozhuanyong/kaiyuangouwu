@@ -18,11 +18,37 @@ import {
 import { selectReleaseRoute } from './release-route.mjs';
 
 const deploymentScript = readFileSync(new URL('./deploy-production-from-s3.sh', import.meta.url), 'utf8');
-const shellFunction = name => {
-    const start = deploymentScript.indexOf(`${name}() {`);
+const switchScript = readFileSync(new URL('./switch-production-runtime.sh', import.meta.url), 'utf8');
+const shellFunction = (name, script = deploymentScript) => {
+    const start = script.indexOf(`${name}() {`);
     assert.ok(start >= 0);
-    return deploymentScript.slice(start, deploymentScript.indexOf('\n}', start) + 2);
+    return script.slice(start, script.indexOf('\n}', start) + 2);
 };
+
+test('the cold-start wait accepts a delayed healthy API and stops if readiness never arrives', () => {
+    const fixture = `
+set -Eeuo pipefail
+ready_after=74
+sleep() { SECONDS=$((SECONDS + $1)); }
+curl() {
+    [[ "$*" == *'http://127.0.0.1:3002/health'* && "$*" == *'--fail'* ]] || exit 44
+    (( $4 > 0 && $4 <= 10 )) || exit 45
+    (( SECONDS >= ready_after ))
+}
+${shellFunction('wait_for_candidate_api', switchScript)}
+SECONDS=0
+wait_for_candidate_api
+(( SECONDS >= 74 && api_ready_attempt > 30 ))
+ready_after=200
+SECONDS=0
+if wait_for_candidate_api; then exit 46; fi
+(( SECONDS == 150 && api_ready_attempt == 0 ))
+printf 'BOUNDED_COLD_START_OK\\n'
+`;
+    const result = spawnSync('bash', ['-c', fixture], { encoding: 'utf8', timeout: 5000 });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), 'BOUNDED_COLD_START_OK');
+});
 
 test('the frozen migration backup is reverified without readonly assignment or accepting another snapshot', () => {
     const fixture = `
