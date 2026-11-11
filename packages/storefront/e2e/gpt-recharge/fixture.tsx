@@ -68,7 +68,10 @@ function Fixture() {
     const [status, setStatus] = useState<RechargeStatus>('queued');
     const [key, setKey] = useState(0);
     const client = useMemo<GptRechargeClient>(() => {
+        const availability = params.get('availability');
+        let maintenance = availability === 'maintenance';
         let lastPlan: RechargePlan = 'plus';
+        let verifiedCode: string | undefined;
         let challengeSequence = 0;
         const spent = new Set<string>();
         const issued = new Map<string, { action: string; target: string }>();
@@ -109,7 +112,13 @@ function Fixture() {
             updatedAt: '2026-10-16T10:30:00Z',
         });
         return {
-            config: () => Promise.resolve({ enabled: true, maintenance: false }),
+            config: () => {
+                if (availability === 'error')
+                    return Promise.reject(new Error('Synthetic configuration outage'));
+                const config = { enabled: availability !== 'disabled', maintenance };
+                maintenance = false;
+                return Promise.resolve(config);
+            },
             createShopAbuseChallenge: (action, target) => {
                 const id = (++challengeSequence).toString(16).padStart(48, '0');
                 issued.set(id, { action, target });
@@ -122,9 +131,11 @@ function Fixture() {
             verify: async (code, proof) => {
                 setOperationCalls(value => ({ ...value, verify: value.verify + 1 }));
                 admit('RECHARGE_CODE', code, proof);
-                if (params.get('error') === 'verify')
+                const errorMode = params.get('error');
+                if (errorMode === 'verify' || (errorMode === 'verify-repeat' && code === verifiedCode))
                     throw new Error('Synthetic private verification provider detail');
                 if (!code.startsWith('DEMO-')) return Promise.reject(new Error('Only demo codes'));
+                verifiedCode = code;
                 lastPlan = code.includes('200') ? 'pro_20x' : code.includes('100') ? 'pro_5x' : 'plus';
                 return Promise.resolve({ plan: lastPlan, status: 'available' });
             },
