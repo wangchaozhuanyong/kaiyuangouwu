@@ -120,6 +120,17 @@ try {
         results.push({ width, height, skin, overflow: false, interactions: 'passed', consoleErrors: errors });
         await page.close();
     }
+    const shortPage = await browser.newPage({ viewport: { width: 390, height: 600 } });
+    await shortPage.goto(`${origin}/e2e/gpt-recharge/`);
+    await shortPage.locator('#gpt-code').fill('DEMO-200');
+    const shortVerify = shortPage.getByRole('button', { name: '验证兑换码', exact: true });
+    await shortVerify.evaluate(button => button.scrollIntoView({ block: 'end', behavior: 'instant' }));
+    const pro200 = shortPage.getByRole('listitem').filter({ hasText: 'Pro200' });
+    await expect(pro200).not.toBeInViewport();
+    await shortVerify.click();
+    await expect(pro200).toHaveAttribute('aria-current', 'true');
+    await expect(pro200).toBeInViewport({ ratio: 1 });
+    await shortPage.close();
     const repeatPage = await browser.newPage({ viewport: { width: 390, height: 1100 } });
     await repeatPage.goto(`${origin}/e2e/gpt-recharge/?error=verify-repeat`);
     await repeatPage.locator('#gpt-code').waitFor();
@@ -179,6 +190,7 @@ try {
             {
                 source: 'local actual component with synthetic client; no live recharge',
                 results,
+                matchedPlanScroll: 'passed at 390×600',
                 repeatVerificationFailure: 'passed',
                 codeRejectionFeedback: 'passed at 1440px and 390px',
                 clipboardFallback: 'passed at 390px',
