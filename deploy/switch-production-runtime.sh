@@ -101,29 +101,20 @@ done
 # Start the API and worker sequentially so their cold-start allocation does not
 # overlap on the single-host production instance.
 VENDURE_RUNTIME_DIR="${candidate}" pm2 start "${ecosystem}" --only vendure-api --update-env
-# A cold API needs more than one minute when the instance is running at its
-# baseline CPU allocation. Bound the whole wait, including each HTTP probe.
-readonly api_startup_started="${SECONDS}"
-readonly api_startup_deadline="$((api_startup_started + 180))"
+# Connection refusals return immediately during a cold start. Bound the
+# wait by elapsed time so the API can finish booting before we start the worker.
+readonly api_startup_started_at="$SECONDS"
+readonly api_startup_deadline="$((api_startup_started_at + 180))"
 api_ready_attempt=0
-api_probe_status=0
-for ((attempt = 1; ; attempt++)); do
-    remaining_seconds="$((api_startup_deadline - SECONDS))"
-    ((remaining_seconds > 0)) || break
-    probe_timeout="$((remaining_seconds < 10 ? remaining_seconds : 10))"
-    if curl --fail --silent --max-time "${probe_timeout}" http://127.0.0.1:3002/health >/dev/null 2>&1; then
-        api_ready_attempt="${attempt}"
-        break
-    else
-        api_probe_status="$?"
-    fi
-    ((SECONDS + 2 < api_startup_deadline)) || break
-    sleep 2
-done
-if ((api_ready_attempt == 0)); then
-    printf 'Candidate API health check failed after %ss (curl status %s); PM2 diagnostics follow:\n' \
-        "$((SECONDS - api_startup_started))" "${api_probe_status}" >&2
-    pm2 jlist | node -e '
+while true; do
+    probe_timeout="$((api_startup_deadline - SECONDS))"
+    if ((probe_timeout <= 0)); then
+        printf 'PRODUCTION_API_READINESS_TIMEOUT attempts=%s waited_seconds=%s\n' \
+            "$api_ready_attempt" "$((SECONDS - api_startup_started_at))" >&2
+        printf '%s\n' 'Candidate API health check failed; PM2 diagnostics follow:' >&2
+        curl --fail --silent --show-error --max-time 10 \
+            http://127.0.0.1:3002/health >/dev/null || true
+        pm2 jlist | node -e '
 let input = "";
 process.stdin.on("data", chunk => (input += chunk)).on("end", () => {
     const processes = JSON.parse(input);
@@ -138,11 +129,20 @@ process.stdin.on("data", chunk => (input += chunk)).on("end", () => {
     process.stdout.write(`${JSON.stringify(summary)}\\n`);
 });
 ' >&2 || true
-    pm2 logs vendure-api --nostream --lines 120 --raw >&2 || true
-    fail_switch 'candidate API health check did not pass before worker start'
-fi
-printf 'PRODUCTION_API_READY phase=pre-worker attempts=%s elapsed_seconds=%s\n' \
-    "${api_ready_attempt}" "$((SECONDS - api_startup_started))"
+        pm2 logs vendure-api --nostream --lines 120 --raw >&2 || true
+        fail_switch 'candidate API health check did not pass before worker start'
+
+    fi
+    ((api_ready_attempt += 1))
+    if ((probe_timeout > 10)); then
+        probe_timeout=10
+    fi
+    if curl --fail --silent --max-time "${probe_timeout}" http://127.0.0.1:3002/health >/dev/null 2>&1; then
+        break
+    fi
+    sleep 2
+done
+printf 'PRODUCTION_API_READY phase=pre-worker attempts=%s\n' "${api_ready_attempt}"
 VENDURE_RUNTIME_DIR="${candidate}" pm2 start "${ecosystem}" --only vendure-worker --update-env
 
 CANDIDATE="${candidate}" node <<'NODE'

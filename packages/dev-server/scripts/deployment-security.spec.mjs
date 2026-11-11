@@ -1007,42 +1007,39 @@ void test('production runtime switch rebuilds PM2 definitions for an immutable r
     assert.doesNotMatch(script, /startOrReload/u);
 });
 
-void test('production runtime switch waits for a slow API and bounds an unresponsive one', async () => {
+void test('the runtime switch gives a slow API a bounded boot window before starting the worker', async () => {
     const script = await readFile(path.join(repositoryRoot, 'deploy/switch-production-runtime.sh'), 'utf8');
-    const start = script.indexOf('readonly api_startup_started=');
-    const worker = script.indexOf(
-        'VENDURE_RUNTIME_DIR="${candidate}" pm2 start "${ecosystem}" --only vendure-worker',
-    );
-    assert.ok(start > 0 && worker > start);
-    const probe = `
-set -Eeuo pipefail
-SECONDS=0
-sleep() { SECONDS=$((SECONDS + $1)); }
-curl() {
-    if [[ "$SCENARIO" == stalled ]]; then
-        SECONDS=$((SECONDS + $4))
-        return 28
-    fi
-    ((SECONDS >= 80))
-}
-pm2() { if [[ "$1" == jlist ]]; then echo '[]'; fi; }
-fail_switch() { printf '%s\\n' "$1" >&2; exit 1; }
-${script.slice(start, worker)}
-echo worker-start
-`;
-    const run = scenario =>
-        spawnSync('bash', ['-c', probe], {
+    const start = script.indexOf('readonly api_startup_started_at=');
+    const end = script.indexOf('\n\nCANDIDATE=', start);
+    assert.ok(start >= 0 && end > start);
+    const gate = script.slice(start, end);
+    const probe = readyAfter =>
+        spawnSync('bash', ['-s'], {
+            input: [
+                'set -euo pipefail',
+                'SECONDS=0',
+                'candidate=/fixture/runtime',
+                'ecosystem=/fixture/ecosystem',
+                'sleep() { SECONDS=$((SECONDS + $1)); }',
+                'curl() { ((SECONDS >= READY_AFTER)); }',
+                'pm2() { case "$1" in start) printf "WORKER_STARTED\\n" ;; jlist) printf "[]\\n" ;; esac; }',
+                'fail_switch() { printf "%s\\n" "$1" >&2; exit 1; }',
+                gate,
+                '',
+            ].join('\n'),
+            env: { ...process.env, READY_AFTER: String(readyAfter) },
             encoding: 'utf8',
-            env: { ...process.env, SCENARIO: scenario },
-            timeout: 5_000,
         });
-    const slow = run('slow');
+
+    const slow = probe(94);
     assert.equal(slow.status, 0, slow.stderr);
-    assert.match(slow.stdout, /phase=pre-worker attempts=\d+ elapsed_seconds=8[01]\nworker-start/u);
-    const stalled = run('stalled');
-    assert.equal(stalled.status, 1, stalled.stderr);
-    assert.match(stalled.stderr, /failed after (17[89]|180)s \(curl status 28\)/u);
-    assert.doesNotMatch(stalled.stdout, /worker-start/u);
+    assert.match(slow.stdout, /PRODUCTION_API_READY phase=pre-worker attempts=\d+\nWORKER_STARTED/u);
+
+    const unavailable = probe(999);
+    assert.equal(unavailable.status, 1, unavailable.stderr);
+    assert.match(unavailable.stderr, /PRODUCTION_API_READINESS_TIMEOUT attempts=\d+ waited_seconds=18[0-2]/u);
+    assert.match(unavailable.stderr, /candidate API health check did not pass before worker start/u);
+    assert.doesNotMatch(unavailable.stdout, /WORKER_STARTED/u);
 });
 
 void test('production runbook elevates only the root-owned atomic runtime switch', async () => {
