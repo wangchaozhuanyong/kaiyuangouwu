@@ -23,14 +23,26 @@ try {
         const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
+        await page.addInitScript(() => {
+            Object.defineProperty(navigator, 'clipboard', {
+                value: { readText: () => Promise.resolve('  DEMO-100  ') },
+                configurable: true,
+            });
+        });
         await page.goto(`${origin}/e2e/gpt-recharge/?skin=${skin}`);
         await page.getByText('ChatGPT自助充值', { exact: true }).waitFor();
         await page.locator('#gpt-code').waitFor();
-        const planResult = page.locator('.gpt-recharge-code-section .gpt-recharge-summary dd');
-        await expect(planResult).toHaveText('验码后自动显示');
-        await expect(page.getByRole('button', { name: /^(Plus|Pro100|Pro200|Pro500)$/ })).toHaveCount(0);
-        const codeBounds = await page.locator('#gpt-code').boundingBox();
-        const planBounds = await planResult.boundingBox();
+        const codeInput = page.locator('#gpt-code');
+        const plans = page.getByRole('list', { name: '套餐类型' });
+        const activePlan = plans.locator('[aria-current="true"]');
+        const planStatus = page.locator('.gpt-recharge-plan-status');
+        await expect(planStatus).toHaveText('验码后自动匹配');
+        await expect(plans.getByRole('listitem')).toHaveCount(4);
+        await expect(plans.getByRole('button')).toHaveCount(0);
+        await expect(plans.getByText('暂未开放')).toBeVisible();
+        await expect(activePlan).toHaveCount(0);
+        const codeBounds = await codeInput.boundingBox();
+        const planBounds = await plans.boundingBox();
         if (!codeBounds || !planBounds || codeBounds.y + codeBounds.height > planBounds.y)
             throw new Error('The verified plan must appear below the redemption code');
         const getJson = page.getByRole('link', { name: '前往获取 JSON', exact: true });
@@ -41,23 +53,27 @@ try {
         await page.screenshot({ path: path.join(output, `recharge-${width}-${skin}.png`), fullPage: true });
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
         if (overflow) throw new Error(`Horizontal overflow at ${width}/${skin}`);
-        for (const [code, plan] of [
-            ['DEMO-100', 'Pro100'],
-            ['DEMO-200', 'Pro200'],
-        ]) {
-            await page.locator('#gpt-code').fill(code);
-            await expect(planResult).toHaveText('验码后自动显示');
-            await page.getByRole('button', { name: '验证兑换码', exact: true }).click();
-            await expect(planResult).toHaveText(plan);
-        }
+        const verifyButton = page.getByRole('button', { name: '验证兑换码', exact: true });
+        await page.getByRole('button', { name: '粘贴', exact: true }).click();
+        await expect(codeInput).toHaveValue('DEMO-100');
+        await expect(codeInput).toBeFocused();
+        await expect(page.locator('[data-demo-verify-calls]')).toHaveAttribute('data-demo-verify-calls', '0');
+        await expect(activePlan).toHaveCount(0);
+        await verifyButton.click();
+        await expect(activePlan).toHaveText('Pro100');
+        await expect(planStatus).toHaveText('已匹配 Pro100');
+        await codeInput.fill('DEMO-200');
+        await expect(activePlan).toHaveCount(0);
+        await verifyButton.click();
+        await expect(activePlan).toHaveText('Pro200');
         await page.locator('#gpt-code').fill('INVALID');
-        await expect(planResult).toHaveText('验码后自动显示');
+        await expect(planStatus).toHaveText('验码后自动匹配');
         await page.getByRole('button', { name: '验证兑换码', exact: true }).click();
         await expect(page.locator('#gpt-verify-error')).toBeVisible();
-        await expect(planResult).toHaveText('验码后自动显示');
+        await expect(activePlan).toHaveCount(0);
         await page.getByRole('button', { name: '填入演示资料' }).click();
         await page.getByRole('button', { name: '验证兑换码', exact: true }).click();
-        await expect(planResult).toHaveText('Plus');
+        await expect(activePlan).toHaveText('Plus');
         await page.locator('#gpt-session').fill('{');
         await page.getByText('JSON 格式不完整，请重新全选复制账号资料。').waitFor();
         if (await page.getByRole('button', { name: '充值提交', exact: true }).isEnabled())
@@ -111,17 +127,37 @@ try {
     const verifyCode = repeatPage.getByRole('button', { name: '验证兑换码', exact: true });
     const submit = repeatPage.getByRole('button', { name: '充值提交', exact: true });
     const confirmation = repeatPage.getByRole('checkbox');
-    const verifiedPlan = repeatPage.locator('.gpt-recharge-code-section .gpt-recharge-summary dd');
+    const verifiedPlan = repeatPage.locator('.gpt-recharge-plan-list [aria-current="true"]');
     await verifyCode.click();
     await expect(verifiedPlan).toHaveText('Plus');
     await confirmation.check();
     await expect(submit).toBeEnabled();
     await verifyCode.click();
     await expect(repeatPage.locator('#gpt-verify-error')).toBeVisible();
-    await expect(verifiedPlan).toHaveText('验码后自动显示');
+    await expect(verifiedPlan).toHaveCount(0);
     await expect(confirmation).not.toBeChecked();
     await expect(submit).toBeDisabled();
     await repeatPage.close();
+    const blockedClipboardPage = await browser.newPage({ viewport: { width: 390, height: 1100 } });
+    await blockedClipboardPage.addInitScript(() => {
+        Object.defineProperty(navigator, 'clipboard', {
+            value: { readText: () => Promise.reject(new DOMException('Denied', 'NotAllowedError')) },
+            configurable: true,
+        });
+    });
+    await blockedClipboardPage.goto(origin + '/e2e/gpt-recharge/');
+    await blockedClipboardPage.getByRole('button', { name: '粘贴', exact: true }).click();
+    const manualCode = blockedClipboardPage.locator('#gpt-code');
+    await expect(blockedClipboardPage.locator('#gpt-verify-error')).toHaveText(
+        '无法读取剪贴板，请在输入框手动粘贴。',
+    );
+    await expect(manualCode).toBeFocused();
+    await manualCode.fill('DEMO-PLUS');
+    await blockedClipboardPage.getByRole('button', { name: '验证兑换码', exact: true }).click();
+    await expect(blockedClipboardPage.locator('.gpt-recharge-plan-list [aria-current="true"]')).toHaveText(
+        'Plus',
+    );
+    await blockedClipboardPage.close();
     for (const width of [1440, 390]) {
         const page = await browser.newPage({ viewport: { width, height: 1100 } });
         await page.goto(`${origin}/e2e/gpt-recharge/?error=verify-code-rejected`);
@@ -145,6 +181,7 @@ try {
                 results,
                 repeatVerificationFailure: 'passed',
                 codeRejectionFeedback: 'passed at 1440px and 390px',
+                clipboardFallback: 'passed at 390px',
             },
             null,
             2,

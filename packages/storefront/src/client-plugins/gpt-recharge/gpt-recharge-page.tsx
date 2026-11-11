@@ -6,6 +6,7 @@ import {
     CheckCircle2,
     ChevronRight,
     CircleAlert,
+    ClipboardPaste,
     Clock3,
     Headphones,
     LockKeyhole,
@@ -33,6 +34,7 @@ import {
     inspectRechargeSession,
     type RechargeCode,
     rechargePlanLabel,
+    rechargePlans,
     type RechargeTask,
 } from './contracts';
 import { rechargeCopy, rechargeStateCopy } from './copy';
@@ -53,6 +55,8 @@ type RechargeTab = 'recharge' | 'query' | 'guide';
 type RechargeOperation = 'verify' | 'submit' | 'query' | 'refresh';
 // Reviewed localized display copy, populated through the shared error formatter.
 type RechargeFeedback = { scope: RechargeOperation; text: string; field?: 'code' | 'query' };
+const redemptionCodeMaxLength = 190;
+
 export function GptRechargePage({
     client,
     language = 'zh',
@@ -94,6 +98,7 @@ export function GptRechargePage({
         onTabChange?.(next);
     };
     const [code, setCode] = useState('');
+    const [pastingCode, setPastingCode] = useState(false);
     const [session, setSession] = useState('');
     const [verified, setVerified] = useState<RechargeCode | null>(null);
     const [confirmed, setConfirmed] = useState(false);
@@ -143,6 +148,7 @@ export function GptRechargePage({
     const operation = useRef(false);
     const operationScope = useRef<RechargeOperation>('verify');
     const requestVersion = useRef(0);
+    const codeInput = useRef<HTMLInputElement>(null);
     const focusLookup = useRef(false);
     let account: { email: string } | null = null;
     let sessionError = '';
@@ -252,8 +258,42 @@ export function GptRechargePage({
         setError(null);
         setFeedbackAttempt(null);
     }
+    async function pasteCode() {
+        const input = codeInput.current;
+        if (!input || pastingCode || operation.current) return;
+        const version = requestVersion.current;
+        setPastingCode(true);
+        let value: string | undefined;
+        try {
+            value = (await navigator.clipboard?.readText?.())?.trim();
+        } catch {
+            // The browser may require manual paste for this site.
+        }
+        if (!mounted.current) return;
+        setPastingCode(false);
+        if (input !== codeInput.current || version !== requestVersion.current || operation.current) return;
+        if (value && value.length <= redemptionCodeMaxLength && !/[\r\n]/.test(value)) {
+            changeCode(value);
+        } else {
+            setFeedbackAttempt(null);
+            setError({
+                scope: 'verify',
+                text:
+                    value === undefined
+                        ? t(
+                              '无法读取剪贴板，请在输入框手动粘贴。',
+                              'Clipboard access is unavailable. Paste into the code field.',
+                          )
+                        : t(
+                              '请先复制一条兑换码，或在输入框手动填写。',
+                              'Copy one redemption code first, or enter it in the code field.',
+                          ),
+            });
+        }
+        input.focus();
+    }
     async function verify() {
-        if (!canStartRecharge) return;
+        if (!canStartRecharge || pastingCode) return;
         if (!code.trim()) {
             setError({
                 scope: 'verify',
@@ -291,6 +331,7 @@ export function GptRechargePage({
             verified.status !== 'available' ||
             !account ||
             !confirmed ||
+            pastingCode ||
             uncertain ||
             task ||
             !canStartRecharge
@@ -566,10 +607,11 @@ export function GptRechargePage({
                                         <div className="gpt-recharge-code-row">
                                             <input
                                                 id="gpt-code"
+                                                ref={codeInput}
                                                 value={code}
                                                 onChange={event => changeCode(event.target.value)}
                                                 disabled={Boolean(busy)}
-                                                maxLength={190}
+                                                maxLength={redemptionCodeMaxLength}
                                                 autoComplete="off"
                                                 spellCheck={false}
                                                 aria-invalid={
@@ -585,6 +627,16 @@ export function GptRechargePage({
                                                     'Enter your redemption code',
                                                 )}
                                             />
+                                            <button
+                                                type="button"
+                                                className="secondary-action gpt-recharge-paste"
+                                                aria-busy={pastingCode}
+                                                disabled={pastingCode || Boolean(busy)}
+                                                onClick={() => void pasteCode()}
+                                            >
+                                                <ClipboardPaste size={16} aria-hidden="true" />
+                                                {t('粘贴', 'Paste')}
+                                            </button>
                                         </div>
                                         {error?.scope === 'verify' && error.field === 'code' && (
                                             <RechargeError id="gpt-code-error" message={error.text} field />
@@ -604,6 +656,7 @@ export function GptRechargePage({
                                             className={`${verified ? 'secondary-action' : 'primary-action'} gpt-recharge-verify`}
                                             disabled={
                                                 !canStartRecharge ||
+                                                pastingCode ||
                                                 Boolean(busy) ||
                                                 codeChallenge.state?.loading
                                             }
@@ -613,22 +666,45 @@ export function GptRechargePage({
                                                 : t('验证兑换码', 'Verify code')}
                                         </button>
                                     </form>
-                                    <dl
-                                        className="gpt-recharge-summary"
-                                        aria-label={t('兑换码绑定套餐', 'Plan for this code')}
-                                        aria-live="polite"
+                                    <section
+                                        className="gpt-recharge-plan-panel"
+                                        aria-labelledby="gpt-recharge-plan-title"
                                     >
-                                        <div>
-                                            <dt>{t('充值套餐', 'Recharge plan')}</dt>
-                                            <dd>
+                                        <div className="gpt-recharge-plan-heading">
+                                            <h3 id="gpt-recharge-plan-title">
+                                                {t('充值套餐', 'Recharge plan')}
+                                            </h3>
+                                            <span className="gpt-recharge-plan-status" role="status">
                                                 {verified
-                                                    ? rechargePlanLabel(verified.plan)
+                                                    ? t('已匹配', 'Matched') +
+                                                      ' ' +
+                                                      rechargePlanLabel(verified.plan)
                                                     : busy === 'verify'
                                                       ? t('正在验证…', 'Checking…')
-                                                      : t('验码后自动显示', 'Shown after verification')}
-                                            </dd>
+                                                      : t('验码后自动匹配', 'Matched after verification')}
+                                            </span>
                                         </div>
-                                    </dl>
+                                        <ul
+                                            className="gpt-recharge-plan-list"
+                                            aria-label={t('套餐类型', 'Plan types')}
+                                        >
+                                            {rechargePlans.map(({ key, label }) => (
+                                                <li
+                                                    key={key}
+                                                    aria-current={verified?.plan === key ? 'true' : undefined}
+                                                >
+                                                    <span>{label}</span>
+                                                    {verified?.plan === key && (
+                                                        <CheckCircle2 size={16} aria-hidden="true" />
+                                                    )}
+                                                </li>
+                                            ))}
+                                            <li className="gpt-recharge-plan-unavailable">
+                                                <span>Pro500</span>
+                                                <small>{t('暂未开放', 'Coming soon')}</small>
+                                            </li>
+                                        </ul>
+                                    </section>
                                 </section>
                                 <section className="gpt-recharge-account-section">
                                     <div className="gpt-recharge-section-title">
@@ -727,6 +803,7 @@ export function GptRechargePage({
                                             !confirmed ||
                                             !verified ||
                                             !account ||
+                                            pastingCode ||
                                             Boolean(busy) ||
                                             !canStartRecharge ||
                                             submitChallenge.state?.loading
