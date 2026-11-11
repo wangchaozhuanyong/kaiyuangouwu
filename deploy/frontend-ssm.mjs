@@ -38,9 +38,9 @@ set -Eeuo pipefail
 cd /var/www/kaiyuangouwu
 git fetch origin main --no-tags
 [[ "$(git rev-parse origin/main)" == "$1" ]] || { echo 'Target is no longer current main' >&2; exit 1; }
-# Use the reviewed target controls without changing the active backend checkout.
-mkdir -p /var/www/kaiyuangouwu-frontend-releases
-controls=$(mktemp -d /var/www/kaiyuangouwu-frontend-releases/.controls-XXXXXX)
+# Stage the reviewed controls in the writable checkout. The deployment script
+# creates the frontend release directory after its disk budget check.
+controls=$(mktemp -d "$PWD/.frontend-controls-XXXXXX")
 trap 'rm -rf -- "$controls"' EXIT
 git archive "$1" deploy scripts | tar -x -C "$controls"
 /bin/bash "$controls/deploy/deploy-frontends-from-s3.sh" "$@"

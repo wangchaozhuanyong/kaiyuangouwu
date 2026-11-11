@@ -120,12 +120,13 @@ test('immutable backend check precedes static mutation and retains the tracked-s
     assert.ok(!/git\s+(?:reset|checkout|clean)/u.test(script));
 });
 
-test('static deployment runs target control files while preserving the active backend checkout', t => {
+test('static deployment stages target controls before the frontend release directory exists', t => {
     const temporaryRoot = fileURLToPath(new URL('../.local-validation/frontend-controls/', import.meta.url));
     mkdirSync(temporaryRoot, { recursive: true });
     const root = realpathSync(mkdtempSync(join(temporaryRoot, 'case-')));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const repository = join(root, 'repository');
+    const releaseDirectory = join(root, 'frontends');
     mkdirSync(join(repository, 'deploy'), { recursive: true });
     mkdirSync(join(repository, 'scripts'));
     const git = (...args) => execFileSync('git', args, { cwd: repository, encoding: 'utf8' }).trim();
@@ -157,13 +158,19 @@ test('static deployment runs target control files while preserving the active ba
         components: 'storefront',
         forceRebuild: true,
     })
+        .replace('/usr/local/sbin/vendure-production-disk-maintenance', join(root, 'not-installed'))
         .replace('sudo -H -u ubuntu /bin/bash', '/bin/bash')
-        .replaceAll('/var/www/kaiyuangouwu-frontend-releases', join(root, 'frontends'))
+        .replaceAll('/var/www/kaiyuangouwu-frontend-releases', releaseDirectory)
         .replaceAll('/var/www/kaiyuangouwu', repository);
     const deployed = spawnSync('sh', ['-c', command], { encoding: 'utf8' });
     assert.equal(deployed.status, 0, deployed.stderr);
     assert.ok(deployed.stdout.includes(`TARGET_CONTROLS_OK ${target} frontends-${target}-123-1.tar.gz`));
     assert.ok(deployed.stdout.trim().endsWith('storefront false true'));
+    assert.equal(
+        existsSync(releaseDirectory),
+        false,
+        'The target deployment owns release directory initialization',
+    );
     assert.throws(() =>
         frontendDeployCommand({
             sha: target,
