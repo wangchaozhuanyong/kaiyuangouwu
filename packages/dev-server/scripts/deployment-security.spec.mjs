@@ -481,6 +481,37 @@ rollback 19`,
     assert.doesNotMatch(result.stdout, /ROLLBACK_BEGIN|PRODUCTION_API_READY/u);
 });
 
+void test('an unsuccessful runtime recovery cannot save or report an incomplete process set as restored', async () => {
+    const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
+    const rollback = script.match(/\nrollback\(\) \{[\s\S]*?\n\}/u)?.[0];
+    assert.ok(rollback);
+    const result = spawnSync(
+        'bash',
+        [
+            '-c',
+            `set -Eeuo pipefail
+rollback_needed=1
+admin_pointer_changed=0
+storefront_pointer_changed=0
+two_factor_pointer_changed=0
+pointer_changed=0
+nginx_changed=0
+repository=/dev/null
+previous_runtime=/immutable/previous
+deployment_id=fixture
+cleanup() { :; }
+node() { [[ "$2" == check-runtime ]]; }
+pm2() { printf 'PM2:%s\\n' "$*"; }
+${rollback}
+rollback 19`,
+        ],
+        { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 19);
+    assert.match(result.stderr, /RUNTIME_ROLLBACK_FAILED\nROLLBACK_INCOMPLETE/u);
+    assert.doesNotMatch(result.stdout, /PM2:save|ROLLBACK_DONE/u);
+});
+
 void test('reused CI skips do not skip deployment, and skipped deployment cannot pass the release', async () => {
     const workflow = await readFile(
         path.join(repositoryRoot, '.github/workflows/production_release.yml'),
@@ -967,13 +998,51 @@ void test('production runtime switch rebuilds PM2 definitions for an immutable r
     assert.match(script, /PRODUCTION_API_READY phase=pre-worker attempts=/u);
     assert.match(
         script,
-        /curl --fail --silent --max-time 10 http:\/\/127\.0\.0\.1:3002\/health >\/dev\/null 2>&1/u,
+        /curl --fail --silent --max-time "\$\{probe_timeout\}" http:\/\/127\.0\.0\.1:3002\/health >\/dev\/null 2>&1/u,
     );
     assert.match(script, /--only vendure-worker/u);
     assert.ok(script.indexOf('--only vendure-api') < script.indexOf('--only vendure-worker'));
     assert.match(script, /pm_cwd/u);
     assert.match(script, /pm_exec_path/u);
     assert.doesNotMatch(script, /startOrReload/u);
+});
+
+void test('production runtime switch waits for a slow API and bounds an unresponsive one', async () => {
+    const script = await readFile(path.join(repositoryRoot, 'deploy/switch-production-runtime.sh'), 'utf8');
+    const start = script.indexOf('readonly api_startup_started=');
+    const worker = script.indexOf(
+        'VENDURE_RUNTIME_DIR="${candidate}" pm2 start "${ecosystem}" --only vendure-worker',
+    );
+    assert.ok(start > 0 && worker > start);
+    const probe = `
+set -Eeuo pipefail
+SECONDS=0
+sleep() { SECONDS=$((SECONDS + $1)); }
+curl() {
+    if [[ "$SCENARIO" == stalled ]]; then
+        SECONDS=$((SECONDS + $4))
+        return 28
+    fi
+    ((SECONDS >= 80))
+}
+pm2() { if [[ "$1" == jlist ]]; then echo '[]'; fi; }
+fail_switch() { printf '%s\\n' "$1" >&2; exit 1; }
+${script.slice(start, worker)}
+echo worker-start
+`;
+    const run = scenario =>
+        spawnSync('bash', ['-c', probe], {
+            encoding: 'utf8',
+            env: { ...process.env, SCENARIO: scenario },
+            timeout: 5_000,
+        });
+    const slow = run('slow');
+    assert.equal(slow.status, 0, slow.stderr);
+    assert.match(slow.stdout, /phase=pre-worker attempts=\d+ elapsed_seconds=8[01]\nworker-start/u);
+    const stalled = run('stalled');
+    assert.equal(stalled.status, 1, stalled.stderr);
+    assert.match(stalled.stderr, /failed after (17[89]|180)s \(curl status 28\)/u);
+    assert.doesNotMatch(stalled.stdout, /worker-start/u);
 });
 
 void test('production runbook elevates only the root-owned atomic runtime switch', async () => {
@@ -1199,6 +1268,16 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     );
     assert.match(script, /rollback_needed=0\n\s+printf 'ROLLBACK_BEGIN/u);
     assert.equal(script.match(/ROLLBACK_BEGIN/gu)?.length, 1);
+    assert.match(
+        script,
+        /if \(\(rollback_failed\)\); then\n\s+printf 'ROLLBACK_INCOMPLETE\\n' >&2\n\s+else\n\s+printf 'ROLLBACK_DONE\\n'/u,
+    );
+    assert.ok(
+        script.indexOf('--initialize-backup-verification mysql') <
+            script.indexOf('deploy_stage="install-backup-healthcheck"') &&
+            script.indexOf('deploy_stage="install-backup-healthcheck"') <
+                script.indexOf('deploy_stage="runtime-switch"'),
+    );
     assert.match(script, /sync-moyao-brand\.mjs/u);
     assert.match(script, /packages\/storefront\/src\/assets\/brand\//u);
     assert.match(script, /MOYAO AI managed brand data changed/u);
