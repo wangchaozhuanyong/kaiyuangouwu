@@ -58,7 +58,11 @@ const upstream = {
     result: { url: source, card: 'private' },
 };
 const ctx = (channelId = 1) =>
-    ({ channelId, req: { ip: '203.0.113.10', res: { setHeader: vi.fn() } } }) as unknown as RequestContext;
+    ({
+        channelId,
+        channel: { code: channelId === 1 ? 'moyao-ai' : 'another-store' },
+        req: { ip: '203.0.113.10', res: { setHeader: vi.fn() } },
+    }) as unknown as RequestContext;
 const base = {
     id: { type: Number, primary: true, generated: true },
     createdAt: { type: Date, createDate: true },
@@ -148,6 +152,39 @@ describe('GPT recharge real SQL migration and service boundary', () => {
         await db?.destroy();
         vi.unstubAllEnvs();
         vi.unstubAllGlobals();
+    });
+    it('uses the resolved store channel and separates denied and held codes without creating receipts', async () => {
+        vi.mocked(fetch).mockImplementation((_url, options) => {
+            expect(new Headers(options?.headers).get('x-vendure-recharge-channel')).toBe('moyao-ai');
+            if (typeof options?.body !== 'string') throw new Error('Expected JSON body');
+            const { code } = JSON.parse(options.body);
+            if (code === 'outside') {
+                return Promise.resolve(
+                    Response.json({ reason: 'storefront_code_not_admitted' }, { status: 400 }),
+                );
+            }
+            if (code === 'unavailable') return Promise.resolve(new Response(null, { status: 503 }));
+            return Promise.resolve(
+                Response.json({ plan: 'plus', status: 'reserved', reason: 'manual_review_required' }),
+            );
+        });
+        await expect(service.verify(ctx(), 'outside')).rejects.toThrow('此兑换码未获本商城使用授权');
+        await expect(service.query(ctx(), 'unavailable')).rejects.toThrow('充值服务暂时无法确认请求');
+        const held = { plan: 'plus', status: 'reserved', reason: 'manual_review_required', task: null };
+        expect(await service.verify(ctx(), 'held')).toEqual(held);
+        expect(await service.query(ctx(), 'held')).toEqual(held);
+        await expect(service.submit(ctx(), 'held', session)).rejects.toThrow('上次开通结果待核对');
+        expect(
+            vi.mocked(fetch).mock.calls.some(([url]) => typeof url === 'string' && url.endsWith('/submit')),
+        ).toBe(false);
+        expect(await db.getRepository(GptRechargeReceipt).count()).toBe(0);
+    });
+    it('recovers the same store receipt for two spellings of a native code', async () => {
+        const code = 'KC-' + 'A'.repeat(15);
+        const first = await service.submit(ctx(), code, session);
+        expect(await service.submit(ctx(), code.toLowerCase(), session)).toEqual(first);
+        expect(submits).toBe(1);
+        expect(await db.getRepository(GptRechargeReceipt).count()).toBe(1);
     });
     it('cancels an oversized streamed upstream response before reading the rest', async () => {
         let pulls = 0;
