@@ -111,6 +111,7 @@ jobs:
               if: needs.detect-changes.outputs.has_lint_packages == 'true'
               env:
                   CI_PLAN: ${{ needs.detect-changes.outputs.plan }}
+                  NODE_OPTIONS: --max-old-space-size=4096
               run: node scripts/ci-lint-prerequisites.mjs
             - name: Lint changed source without new warnings
               env:
