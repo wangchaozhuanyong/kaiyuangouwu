@@ -1,12 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import {
     ArrowRight,
+    ArrowUpRight,
     BookOpen,
-    Check,
     CheckCircle2,
     ChevronRight,
     CircleAlert,
-    CircleHelp,
     Clock3,
     Headphones,
     LockKeyhole,
@@ -33,13 +32,11 @@ import {
     type GptRechargeClient,
     inspectRechargeSession,
     type RechargeCode,
-    type RechargePlan,
     rechargePlanLabel,
-    rechargePlans,
     type RechargeTask,
 } from './contracts';
 import { rechargeCopy, rechargeStateCopy } from './copy';
-import { GptRechargeGuide } from './gpt-recharge-guide';
+import { CHATGPT_SESSION_URL, GptRechargeGuide } from './gpt-recharge-guide';
 import { resolveGptRechargeProductsCollection } from './gpt-recharge-navigation';
 import './gpt-recharge.css';
 
@@ -96,7 +93,6 @@ export function GptRechargePage({
         setLocalTab(next);
         onTabChange?.(next);
     };
-    const [plan, setPlan] = useState<RechargePlan>('plus');
     const [code, setCode] = useState('');
     const [session, setSession] = useState('');
     const [verified, setVerified] = useState<RechargeCode | null>(null);
@@ -121,6 +117,7 @@ export function GptRechargePage({
     });
     const config = configQuery.data;
     const configPresentation = storefrontQueryPresentation(configQuery);
+    const canStartRecharge = config?.enabled === true && !config.maintenance;
     usePageReadiness(configPresentation.initialLoading);
     const taskQuery = useQuery({
         queryKey: [
@@ -146,6 +143,7 @@ export function GptRechargePage({
     const operation = useRef(false);
     const operationScope = useRef<RechargeOperation>('verify');
     const requestVersion = useRef(0);
+    const focusLookup = useRef(false);
     let account: { email: string } | null = null;
     let sessionError = '';
     if (session.trim()) {
@@ -161,6 +159,12 @@ export function GptRechargePage({
             mounted.current = false;
         };
     }, []);
+
+    useEffect(() => {
+        if (tab !== 'query' || busy || !focusLookup.current) return;
+        focusLookup.current = false;
+        document.getElementById('gpt-query')?.focus();
+    }, [tab, busy]);
 
     useEffect(() => {
         if (!feedbackAttempt || busy) return;
@@ -234,6 +238,7 @@ export function GptRechargePage({
         setFeedbackAttempt(null);
     }
     async function verify() {
+        if (!canStartRecharge) return;
         if (!code.trim()) {
             setError({
                 scope: 'verify',
@@ -245,6 +250,8 @@ export function GptRechargePage({
         }
         const version = requestVersion.current;
         await run('verify', async () => {
+            setVerified(null);
+            setConfirmed(false);
             const checked = await codeChallenge.execute('RECHARGE_CODE', code.trim(), proof =>
                 client.verify(code.trim(), ...(proof ? ([proof] as const) : [])),
             );
@@ -252,7 +259,6 @@ export function GptRechargePage({
             const result = checked.value;
             if (!mounted.current || version !== requestVersion.current) return;
             setVerified(result);
-            setPlan(result.plan);
             if (result.status !== 'available') {
                 setQueryCode(code);
                 setTab('query');
@@ -272,8 +278,7 @@ export function GptRechargePage({
             !confirmed ||
             uncertain ||
             task ||
-            !config?.enabled ||
-            config.maintenance
+            !canStartRecharge
         )
             return;
         await run('submit', async () => {
@@ -340,30 +345,28 @@ export function GptRechargePage({
             if (mounted.current && next.executed) setQueryResult(next.value);
         });
     };
-    const isLocked = Boolean(verified || busy || task || uncertain);
-    const submitHelp =
-        !config && (configPresentation.initialError || configPresentation.paused)
-            ? t(
-                  '暂时无法确认充值服务状态，请检查网络后重试。',
-                  'Could not confirm service availability. Check your connection and try again.',
-              )
-            : !config
-              ? t('正在确认充值服务状态，请稍候。', 'Checking service availability. Please wait.')
-              : !config.enabled || config.maintenance
-                ? t(
-                      '充值服务暂未开放，已有任务仍可查询。',
-                      'Recharge is unavailable. Existing tasks can still be looked up.',
-                  )
-                : !verified || verified.status !== 'available'
-                  ? t('请先验证兑换码。', 'Verify your redemption code first.')
-                  : !account
-                    ? t('请填写有效的账号资料。', 'Enter valid account data.')
-                    : !confirmed
-                      ? t(
-                            '请核对账号与套餐，并勾选确认。',
-                            'Check the account and plan, then select the confirmation checkbox.',
-                        )
-                      : '';
+    const retainDraftWhileChecking = configPresentation.initialLoading && Boolean(code || session);
+    const showServiceStatus =
+        !canStartRecharge && !retainDraftWhileChecking && !currentTask && !uncertain && busy !== 'submit';
+    const serviceStatusTitle = config
+        ? config.maintenance
+            ? t('充值服务维护中', 'Recharge is under maintenance')
+            : t('充值服务暂未开放', 'Recharge is currently unavailable')
+        : configPresentation.initialLoading
+          ? t('正在确认充值服务状态', 'Checking recharge availability')
+          : t('暂时无法确认充值服务状态', 'Could not confirm recharge availability');
+    const submitHelp = !canStartRecharge
+        ? serviceStatusTitle
+        : !verified || verified.status !== 'available'
+          ? t('请先验证兑换码。', 'Verify your redemption code first.')
+          : !account
+            ? t('请填写有效的账号资料。', 'Enter valid account data.')
+            : !confirmed
+              ? t(
+                    '请核对账号与套餐，并勾选确认。',
+                    'Check the account and plan, then select the confirmation checkbox.',
+                )
+              : '';
     return (
         <main className="page subpage gpt-recharge-page">
             <SubHeader
@@ -400,7 +403,7 @@ export function GptRechargePage({
                     <div className="gpt-recharge-quick-links">
                         <button
                             type="button"
-                            className="primary-action"
+                            className={canStartRecharge ? 'primary-action' : 'secondary-action'}
                             onClick={() => productsCollection && onViewProducts?.(productsCollection.id)}
                             disabled={!canViewProducts}
                             title={
@@ -417,7 +420,7 @@ export function GptRechargePage({
                         </button>
                         <button
                             type="button"
-                            className="primary-action"
+                            className={canStartRecharge ? 'primary-action' : 'secondary-action'}
                             onClick={onContactSupport}
                             disabled={!onContactSupport}
                         >
@@ -449,37 +452,48 @@ export function GptRechargePage({
                             </button>
                         ))}
                     </nav>
-                    {(configPresentation.initialError ||
-                        configPresentation.paused ||
-                        (config && (!config.enabled || config.maintenance))) && (
-                        <div className="gpt-recharge-notices">
-                            {(configPresentation.initialError || configPresentation.paused) && (
-                                <div className="gpt-recharge-alert" role="alert">
-                                    <span>
-                                        {t(
-                                            '充值服务状态读取失败，请检查网络后重试。',
-                                            'Could not load service status. Check your connection and try again.',
-                                        )}
-                                    </span>
+                    {tab === 'recharge' && showServiceStatus && (
+                        <div className="gpt-recharge-result">
+                            <Clock3 size={36} aria-hidden="true" />
+                            <h2 aria-live="polite">{serviceStatusTitle}</h2>
+                            <p>
+                                {t(
+                                    '已提交的充值可用原兑换码查询进度。',
+                                    'Use your original code to check the progress of an existing recharge.',
+                                )}
+                            </p>
+                            <div className="gpt-recharge-service-actions">
+                                <button
+                                    className="primary-action"
+                                    type="button"
+                                    onClick={() => {
+                                        if (!queryCode && code) setQueryCode(code);
+                                        setError(null);
+                                        setFeedbackAttempt(null);
+                                        focusLookup.current = true;
+                                        setTab('query');
+                                    }}
+                                >
+                                    {t('查询已有任务', 'Look up an existing task')}
+                                </button>
+                                {!configPresentation.initialLoading && (
                                     <button
-                                        className="gpt-recharge-text-button"
+                                        className="secondary-action"
+                                        type="button"
+                                        disabled={configQuery.isFetching}
+                                        aria-busy={configQuery.isFetching}
                                         onClick={() => void configQuery.refetch({ cancelRefetch: false })}
                                     >
-                                        {t('重试', 'Retry')}
+                                        {configQuery.isFetching
+                                            ? t('正在检查…', 'Checking…')
+                                            : t('重新检查服务状态', 'Check service status again')}
                                     </button>
-                                </div>
-                            )}
-                            {config && (!config.enabled || config.maintenance) && (
-                                <p className="gpt-recharge-helper" role="status">
-                                    {t(
-                                        '充值服务暂未开放，已有任务仍可查询。',
-                                        'Recharge is currently unavailable. You can still look up existing tasks.',
-                                    )}
-                                </p>
-                            )}
+                                )}
+                            </div>
                         </div>
                     )}
                     {tab === 'recharge' &&
+                        !showServiceStatus &&
                         (currentTask ? (
                             <TaskResult
                                 task={currentTask}
@@ -523,36 +537,6 @@ export function GptRechargePage({
                                         <span className="gpt-recharge-step">01</span>
                                         <h2>{t('验证兑换码', 'Verify your code')}</h2>
                                     </div>
-                                    <div
-                                        className="gpt-recharge-plans"
-                                        role="group"
-                                        aria-label={t('套餐', 'Plans')}
-                                    >
-                                        {rechargePlans.map(item => (
-                                            <button
-                                                type="button"
-                                                key={item.key}
-                                                aria-pressed={plan === item.key}
-                                                disabled={isLocked}
-                                                onClick={() => setPlan(item.key)}
-                                            >
-                                                <strong>{item.label}</strong>
-                                                {plan === item.key &&
-                                                    (verified ? (
-                                                        <LockKeyhole size={15} />
-                                                    ) : (
-                                                        <Check size={15} />
-                                                    ))}
-                                            </button>
-                                        ))}
-                                        <button type="button" className="gpt-recharge-unavailable" disabled>
-                                            <strong>Pro500</strong>
-                                            <small>{t('暂未开放', 'Coming soon')}</small>
-                                        </button>
-                                    </div>
-                                    <p className="gpt-recharge-plan-note">
-                                        {t('验码后自动匹配套餐', 'Your code determines the plan')}
-                                    </p>
                                     <form
                                         noValidate
                                         aria-busy={busy === 'verify'}
@@ -603,19 +587,33 @@ export function GptRechargePage({
                                         <button
                                             type="submit"
                                             className={`${verified ? 'secondary-action' : 'primary-action'} gpt-recharge-verify`}
-                                            disabled={Boolean(busy) || codeChallenge.state?.loading}
+                                            disabled={
+                                                !canStartRecharge ||
+                                                Boolean(busy) ||
+                                                codeChallenge.state?.loading
+                                            }
                                         >
                                             {busy === 'verify'
                                                 ? t('验证中…', 'Checking…')
                                                 : t('验证兑换码', 'Verify code')}
                                         </button>
                                     </form>
-                                    {verified && (
-                                        <p className="gpt-recharge-valid" role="status">
-                                            <CheckCircle2 size={16} />
-                                            {t('已锁定', 'Plan locked:')} {rechargePlanLabel(verified.plan)}
-                                        </p>
-                                    )}
+                                    <dl
+                                        className="gpt-recharge-summary"
+                                        aria-label={t('兑换码绑定套餐', 'Plan for this code')}
+                                        aria-live="polite"
+                                    >
+                                        <div>
+                                            <dt>{t('充值套餐', 'Recharge plan')}</dt>
+                                            <dd>
+                                                {verified
+                                                    ? rechargePlanLabel(verified.plan)
+                                                    : busy === 'verify'
+                                                      ? t('正在验证…', 'Checking…')
+                                                      : t('验码后自动显示', 'Shown after verification')}
+                                            </dd>
+                                        </div>
+                                    </dl>
                                 </section>
                                 <section className="gpt-recharge-account-section">
                                     <div className="gpt-recharge-section-title">
@@ -627,14 +625,15 @@ export function GptRechargePage({
                                             <label htmlFor="gpt-session">
                                                 {t('账号资料（JSON）', 'Account data (JSON)')}
                                             </label>
-                                            <button
-                                                className="gpt-recharge-text-button"
-                                                type="button"
-                                                onClick={() => setTab('guide')}
+                                            <a
+                                                className="secondary-action gpt-recharge-session-link"
+                                                href={CHATGPT_SESSION_URL}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
                                             >
-                                                {t('如何获取？', 'How to get it?')}
-                                                <CircleHelp size={15} />
-                                            </button>
+                                                {t('前往获取 JSON', 'Get JSON')}
+                                                <ArrowUpRight size={16} aria-hidden="true" />
+                                            </a>
                                         </div>
                                         <textarea
                                             id="gpt-session"
@@ -705,18 +704,6 @@ export function GptRechargePage({
                                             {submitHelp}
                                         </p>
                                     )}
-                                    {!config &&
-                                        (configPresentation.initialError || configPresentation.paused) && (
-                                            <button
-                                                type="button"
-                                                className="gpt-recharge-text-button"
-                                                onClick={() =>
-                                                    void configQuery.refetch({ cancelRefetch: false })
-                                                }
-                                            >
-                                                {t('重新检查服务状态', 'Check service status again')}
-                                            </button>
-                                        )}
                                     <button
                                         className="primary-action gpt-recharge-submit"
                                         type="button"
@@ -726,8 +713,7 @@ export function GptRechargePage({
                                             !verified ||
                                             !account ||
                                             Boolean(busy) ||
-                                            !config?.enabled ||
-                                            config.maintenance ||
+                                            !canStartRecharge ||
                                             submitChallenge.state?.loading
                                         }
                                         onClick={() => void submit()}
@@ -840,7 +826,7 @@ export function GptRechargePage({
                         />
                     )}
                 </section>
-                {tab === 'recharge' && (
+                {tab === 'recharge' && !showServiceStatus && (
                     <div className="gpt-recharge-help-links">
                         <button className="gpt-recharge-text-button" onClick={() => setTab('guide')}>
                             <BookOpen size={16} />

@@ -1,4 +1,4 @@
-import { chromium } from '@playwright/test';
+import { chromium, expect } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,15 +25,39 @@ try {
         page.on('pageerror', error => errors.push(error.message));
         await page.goto(`${origin}/e2e/gpt-recharge/?skin=${skin}`);
         await page.getByText('ChatGPT自助充值', { exact: true }).waitFor();
+        await page.locator('#gpt-code').waitFor();
+        const planResult = page.locator('.gpt-recharge-code-section .gpt-recharge-summary dd');
+        await expect(planResult).toHaveText('验码后自动显示');
+        await expect(page.getByRole('button', { name: /^(Plus|Pro100|Pro200|Pro500)$/ })).toHaveCount(0);
+        const codeBounds = await page.locator('#gpt-code').boundingBox();
+        const planBounds = await planResult.boundingBox();
+        if (!codeBounds || !planBounds || codeBounds.y + codeBounds.height > planBounds.y)
+            throw new Error('The verified plan must appear below the redemption code');
+        const getJson = page.getByRole('link', { name: '前往获取 JSON', exact: true });
+        await expect(getJson).toHaveAttribute('href', 'https://chatgpt.com/api/auth/session');
+        await expect(getJson).toHaveAttribute('target', '_blank');
+        await expect(getJson).toHaveAttribute('rel', 'noopener noreferrer');
         await page.evaluate(() => window.scrollTo(0, 0));
         await page.screenshot({ path: path.join(output, `recharge-${width}-${skin}.png`), fullPage: true });
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
         if (overflow) throw new Error(`Horizontal overflow at ${width}/${skin}`);
+        for (const [code, plan] of [
+            ['DEMO-100', 'Pro100'],
+            ['DEMO-200', 'Pro200'],
+        ]) {
+            await page.locator('#gpt-code').fill(code);
+            await expect(planResult).toHaveText('验码后自动显示');
+            await page.getByRole('button', { name: '验证兑换码', exact: true }).click();
+            await expect(planResult).toHaveText(plan);
+        }
+        await page.locator('#gpt-code').fill('INVALID');
+        await expect(planResult).toHaveText('验码后自动显示');
+        await page.getByRole('button', { name: '验证兑换码', exact: true }).click();
+        await expect(page.locator('#gpt-verify-error')).toBeVisible();
+        await expect(planResult).toHaveText('验码后自动显示');
         await page.getByRole('button', { name: '填入演示资料' }).click();
         await page.getByRole('button', { name: '验证兑换码', exact: true }).click();
-        await page.getByText('已锁定 Plus').waitFor();
-        if (!(await page.getByRole('button', { name: 'Pro200', exact: true }).isDisabled()))
-            throw new Error('Plan is not locked');
+        await expect(planResult).toHaveText('Plus');
         await page.locator('#gpt-session').fill('{');
         await page.getByText('JSON 格式不完整，请重新全选复制账号资料。').waitFor();
         if (await page.getByRole('button', { name: '充值提交', exact: true }).isEnabled())
@@ -80,10 +104,32 @@ try {
         results.push({ width, height, skin, overflow: false, interactions: 'passed', consoleErrors: errors });
         await page.close();
     }
+    const repeatPage = await browser.newPage({ viewport: { width: 390, height: 1100 } });
+    await repeatPage.goto(`${origin}/e2e/gpt-recharge/?error=verify-repeat`);
+    await repeatPage.locator('#gpt-code').waitFor();
+    await repeatPage.getByRole('button', { name: '填入演示资料' }).click();
+    const verifyCode = repeatPage.getByRole('button', { name: '验证兑换码', exact: true });
+    const submit = repeatPage.getByRole('button', { name: '充值提交', exact: true });
+    const confirmation = repeatPage.getByRole('checkbox');
+    const verifiedPlan = repeatPage.locator('.gpt-recharge-code-section .gpt-recharge-summary dd');
+    await verifyCode.click();
+    await expect(verifiedPlan).toHaveText('Plus');
+    await confirmation.check();
+    await expect(submit).toBeEnabled();
+    await verifyCode.click();
+    await expect(repeatPage.locator('#gpt-verify-error')).toBeVisible();
+    await expect(verifiedPlan).toHaveText('验码后自动显示');
+    await expect(confirmation).not.toBeChecked();
+    await expect(submit).toBeDisabled();
+    await repeatPage.close();
     await writeFile(
         path.join(output, 'browser-result.json'),
         JSON.stringify(
-            { source: 'local actual component with synthetic client; no live recharge', results },
+            {
+                source: 'local actual component with synthetic client; no live recharge',
+                results,
+                repeatVerificationFailure: 'passed',
+            },
             null,
             2,
         ),

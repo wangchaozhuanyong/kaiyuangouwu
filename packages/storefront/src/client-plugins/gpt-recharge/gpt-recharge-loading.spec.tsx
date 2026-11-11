@@ -19,11 +19,12 @@ const config = vi.fn<GptRechargeClient['config']>();
 const verify = vi.fn();
 const submit = vi.fn();
 const task = vi.fn();
+const lookupCode = vi.fn();
 const client: GptRechargeClient = {
     config,
     verify,
     submit,
-    query: vi.fn(),
+    query: lookupCode,
     task,
 };
 const key = (market = 'test:MYR', language = 'zh') => [
@@ -81,11 +82,34 @@ it('retains content while expired configuration refreshes and accepts maintenanc
     await render();
     expect(config).toHaveBeenCalledTimes(2);
     expect(container.textContent).not.toContain('正在确认充值服务状态');
+    expect(container.querySelector('#gpt-code')).not.toBeNull();
     await act(async () => {
         finish({ enabled: true, maintenance: true });
-        await Promise.resolve();
+        await new Promise(resolve => setTimeout(resolve, 10));
     });
     expect(cache.getQueryData(key())).toEqual({ enabled: true, maintenance: true });
+    expect(container.textContent).toContain('充值服务维护中');
+    expect(container.querySelector('#gpt-code')).toBeNull();
+});
+
+it.each([
+    [{ enabled: true, maintenance: true }, '充值服务维护中'],
+    [{ enabled: false, maintenance: false }, '充值服务暂未开放'],
+])('offers existing-task lookup when the service reports %j', async (availability, title) => {
+    cache.setQueryData(key(), availability);
+    await render();
+    expect(container.textContent).toContain(title);
+    expect(container.querySelector('#gpt-code')).toBeNull();
+    expect(container.querySelector('#gpt-session')).toBeNull();
+    const lookup = container.querySelector<HTMLButtonElement>(
+        '.gpt-recharge-service-actions .primary-action',
+    );
+    expect(lookup?.textContent).toBe('查询已有任务');
+    act(() => lookup?.click());
+    expect(container.querySelector('#gpt-query')).not.toBeNull();
+    expect(verify).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+    expect(lookupCode).not.toHaveBeenCalled();
 });
 
 it('isolates markets and languages without persisting configuration or invoking business operations', async () => {
@@ -105,9 +129,15 @@ it('isolates markets and languages without persisting configuration or invoking 
 });
 
 it('keeps first-load failure retryable and discards the separate task query on exit', async () => {
-    config.mockRejectedValueOnce(new Error('Synthetic configuration outage'));
+    let fail!: (error: Error) => void;
+    config.mockImplementationOnce(() => new Promise((_, reject) => (fail = reject)));
     await render();
-    await render();
+    expect(container.textContent).toContain('正在确认充值服务状态');
+    expect(container.querySelector('#gpt-code')).toBeNull();
+    await act(async () => {
+        fail(new Error('Synthetic configuration outage'));
+        await new Promise(resolve => setTimeout(resolve, 10));
+    });
     expect(container.textContent).toContain('暂时无法确认充值服务状态');
     const retry = [...container.querySelectorAll('button')].find(button =>
         button.textContent?.includes('重新检查服务状态'),
@@ -120,6 +150,7 @@ it('keeps first-load failure retryable and discards the separate task query on e
     });
     expect(config).toHaveBeenCalledTimes(2);
     expect(container.textContent).not.toContain('暂时无法确认充值服务状态');
+    expect(container.querySelector('#gpt-code')).not.toBeNull();
     const tasks = cache
         .getQueryCache()
         .findAll()
