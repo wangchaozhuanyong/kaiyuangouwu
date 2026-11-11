@@ -26,7 +26,7 @@ SCRIPT = Path(__file__).resolve()
 TOOLS = SCRIPT.parent / "systemd"
 RESTORE_POLICY_FILES = (
     SCRIPT, TOOLS / "vendure-file-backup.py", TOOLS / "vendure-s3-prefix-snapshot.py",
-    TOOLS / "vendure-file-backup",
+    TOOLS / "vendure-file-backup", TOOLS / "vendure-backup-verification.py",
 )
 
 

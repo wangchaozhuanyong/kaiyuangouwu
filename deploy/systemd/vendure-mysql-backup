@@ -83,16 +83,14 @@ trap preserve_failed_backup EXIT
 # The DDL-only backup lock permits business writes. Timeout closes the snapshot and releases the lock.
 readonly manifest_tool="$(dirname "$(readlink -f "$0")")/vendure-mysql-backup-manifest.py"
 readonly s3_policy_guard="$(dirname "$(readlink -f "$0")")/vendure-backup-s3-guard.py"
+readonly verification_tool="$(dirname "$(readlink -f "$0")")/vendure-backup-verification.py"
 timeout --kill-after=5s 15m python3 "${manifest_tool}" capture "${backup_partial}"
 
 gzip -t "${backup_partial}"
 mv "${backup_partial}.manifest.json" "${backup_file}.manifest.json"
 mv "${backup_partial}" "${backup_file}"
-(
-    cd "${vendure_backup_dir}"
-    sha256sum "$(basename "${backup_file}")" "$(basename "${backup_file}.manifest.json")" > "$(basename "${backup_file}.sha256.part")"
-)
-mv "${backup_file}.sha256.part" "${backup_file}.sha256"
+local_verification="$(python3 "${verification_tool}" prepare mysql "${backup_file}")"
+verification_destination=("--offsite-uri=${offsite_backup_uri}")
 
 if [[ -n "${offsite_backup_uri}" ]]; then
     if ! command -v aws >/dev/null 2>&1; then
@@ -110,9 +108,16 @@ if [[ -n "${offsite_backup_uri}" ]]; then
         key="${name}"
         if [[ -n "${prefix}" ]]; then key="${prefix}/${name}"; fi
         aws s3 cp "${source}" "s3://${bucket}/${key}" --sse AES256 --only-show-errors
-        [[ "$(aws s3api head-object --bucket "${bucket}" --key "${key}" --query ServerSideEncryption --output text)" == "AES256" ]]
+        metadata="$(aws s3api head-object --bucket "${bucket}" --key "${key}" --output json)"
+        size="$(stat --format='%s' "${source}")"
+        version="$(jq -er --argjson size "${size}" \
+            'select(.ContentLength == $size and .ServerSideEncryption == "AES256")
+            | .VersionId | strings | select(length > 0 and . != "null")' <<<"${metadata}")"
+        verification_destination+=("--version=${version}")
     done
 fi
+python3 "${verification_tool}" publish mysql "${backup_file}" \
+    "${verification_destination[@]}" <<<"${local_verification}"
 trap - EXIT
 
 printf 'Created verified MySQL backup: %s offsite=%s encrypted=%s\n' \

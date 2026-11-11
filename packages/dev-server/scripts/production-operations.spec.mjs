@@ -30,6 +30,32 @@ const nodeCoreRetention = require('../../../deploy/systemd/vendure-node-core-ret
 const retention = require('../../../deploy/systemd/vendure-production-release-retention.cjs');
 const sourceSha = 'a'.repeat(40);
 
+void test('release preflight checks the real staging directory as the deployment user', () => {
+    const repository = '/var/www/kaiyuangouwu';
+    const inputs = {
+        stat: () => ({ isDirectory: () => true }),
+        readGit: args => {
+            assert.deepEqual(args, ['rev-parse', '--show-toplevel']);
+            return repository + '\n';
+        },
+        run: (binary, args) => {
+            assert.equal(binary, 'sudo');
+            assert.deepEqual(args.slice(0, 4), ['-n', '-H', '-u', 'ubuntu']);
+            assert.equal(args.at(-1), repository);
+            return { status: 0 };
+        },
+    };
+    operations.verifyReleaseSourceCheckout(inputs);
+    assert.throws(
+        () => operations.verifyReleaseSourceCheckout({ ...inputs, run: () => ({ status: 1 }) }),
+        /cannot stage controls/u,
+    );
+    assert.throws(
+        () => operations.verifyReleaseSourceCheckout({ ...inputs, readGit: () => '/var/www/other' }),
+        /approved repository root/u,
+    );
+});
+
 void test('backup retention diagnosis only reads the installed gate and masks unknown reasons and stderr', () => {
     const calls = [];
     const secret = 'private-retention-fixture-never-forward';

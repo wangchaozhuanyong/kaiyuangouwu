@@ -160,6 +160,13 @@ jobs:
                   FORCE_REBUILD: ${{ inputs.rebuild_runtime || false }}
                   MANAGED: ${{ inputs.media_keys != '' || inputs.auth_visuals || inputs.moyao_brand || inputs.homepage_carousel || inputs.damatong_storefront || (inputs.referral_posters != '' && inputs.referral_posters != 'none') }}
               run: node deploy/release-route.mjs
+            - name: Verify frontend controls before packaging
+              if: steps.route.outputs.lane == 'frontend' || steps.route.outputs.lane == 'frontend-nginx'
+              run: |
+                  set -Eeuo pipefail
+                  git ls-files --error-unmatch -- deploy/deploy-frontends-from-s3.sh deploy/frontend-release.mjs
+                  bash -n deploy/deploy-frontends-from-s3.sh
+                  node --check deploy/frontend-release.mjs
             - name: Find successful checks for the exact content and required scope
               if: steps.route.outputs.lane != 'none'
               id: evidence

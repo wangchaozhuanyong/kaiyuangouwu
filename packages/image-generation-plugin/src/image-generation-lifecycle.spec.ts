@@ -1,3 +1,4 @@
+/// <reference lib="es2021.promise" />
 /* eslint-disable @typescript-eslint/require-await -- Repository and provider fixtures return promises. */
 import { Customer } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';

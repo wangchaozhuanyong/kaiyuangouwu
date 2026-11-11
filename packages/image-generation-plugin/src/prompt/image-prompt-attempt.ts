@@ -70,6 +70,12 @@ export async function runPromptAttempt(
         ...(result?.telemetry ?? errorTelemetry(failure)),
         callId,
     };
+    const status = telemetry.httpStatus;
+    const outcome = result
+        ? 'SUCCEEDED'
+        : typeof status === 'number' && status >= 200 && status < 500 && ![408, 409, 425].includes(status)
+          ? 'FAILED'
+          : 'UNKNOWN';
     try {
         await repository.update(
             { callId, channelId: ctx.channelId },
@@ -81,7 +87,7 @@ export async function runPromptAttempt(
                 usage: telemetry.usage ?? null,
                 actualCostMicrounits: telemetry.actualCostMicrounits ?? null,
                 costCurrency: telemetry.costCurrency ?? null,
-                outcome: result ? 'SUCCEEDED' : telemetry.httpStatus ? 'FAILED' : 'UNKNOWN',
+                outcome,
                 latencyMs: Math.min(2_147_483_647, Date.now() - startedAt),
                 completedAt: new Date(),
                 // Error bodies may contain private prompts. Store a classification only.
