@@ -15,6 +15,7 @@ export const shopSchema = gql`
     type GptRechargeCode {
         plan: String!
         status: String!
+        reason: String
         task: GptRechargeTask
     }
     extend type Query {

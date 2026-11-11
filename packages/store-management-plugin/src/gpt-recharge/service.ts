@@ -23,7 +23,8 @@ import {
     validateRechargeSession,
 } from './security';
 
-type InternalCode = { plan: string; status: string; task?: unknown };
+type InternalCode = { plan: string; status: string; reason?: 'manual_review_required'; task?: unknown };
+const notAdmitted = '此兑换码未获本商城使用授权';
 @Injectable()
 export class GptRechargeService {
     constructor(
@@ -42,7 +43,10 @@ export class GptRechargeService {
     private code(value: string) {
         if (typeof value !== 'string' || !value.trim() || value.trim().length > 190)
             throw new UserInputError('兑换码格式无效');
-        return value.trim();
+        const code = value.trim();
+        return /^KC-(?:[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{15}|[A-F0-9]{28})$/i.test(code)
+            ? code.toUpperCase()
+            : code;
     }
     async adminConfig(ctx: RequestContext) {
         const row = await this.configs(ctx).findOne({ where: { channelId: ctx.channelId } });
@@ -117,6 +121,7 @@ export class GptRechargeService {
     private async upstream(ctx: RequestContext, config: GptRechargeConfig, action: string, body: object) {
         try {
             const origin = allowedRechargeOrigin(config.upstreamOrigin);
+            const channel = ctx.channel?.code;
             const response = await fetch(
                 `${origin}/api/id-business-v2/online-recharge/integrations/vendure/${action}`,
                 {
@@ -130,12 +135,18 @@ export class GptRechargeService {
                             this.context(ctx),
                         ),
                         'x-vendure-client-ip': ctx.req?.ip?.replace(/^::ffff:/, '') ?? '',
+                        ...(channel ? { 'x-vendure-recharge-channel': channel } : {}),
                     },
                     body: JSON.stringify(body),
                 },
             );
-            if (response.status === 400 && ['verify', 'query'].includes(action))
+            if (response.status === 400 && (action === 'verify' || action === 'query')) {
+                const detail = await readRechargeResponse(response)
+                    .then(text => JSON.parse(text) as { reason?: unknown } | null)
+                    .catch(() => null);
+                if (detail?.reason === 'storefront_code_not_admitted') throw new UserInputError(notAdmitted);
                 throw new UserInputError('兑换码无效或已停用，请核对后重试');
+            }
             if (!response.ok) throw new Error('Upstream request rejected');
             const raw = await readRechargeResponse(response);
             return JSON.parse(raw) as Record<string, unknown>;
@@ -157,14 +168,21 @@ export class GptRechargeService {
             !['available', 'reserved', 'used', 'disabled'].includes(String(value.status))
         )
             throw new UserInputError('兑换码状态暂不可用');
-        return { plan: String(value.plan), status: String(value.status), task: value.task };
+        return {
+            plan: String(value.plan),
+            status: String(value.status),
+            ...(value.status === 'reserved' && value.reason === 'manual_review_required'
+                ? { reason: value.reason }
+                : {}),
+            task: value.task,
+        };
     }
     async verify(ctx: RequestContext, code: string) {
         const config = await this.connectionConfig(ctx, true);
         code = this.code(code);
         await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
         const result = this.validateCodeResult(await this.upstream(ctx, config, 'verify', { code }));
-        return { plan: result.plan, status: result.status, task: null };
+        return { ...result, task: null };
     }
     private codePublicId(code: string, origin: string) {
         // The existing unique publicId index also claims a code across channels using this source.
@@ -271,10 +289,10 @@ export class GptRechargeService {
             // An available-code read cannot disprove a timed-out submission still in flight.
             if (pending && ['submitting', 'submission_unknown'].includes(pending.status))
                 return { plan: pending.plan, status: 'reserved', task: this.view(ctx, pending) };
-            return { plan: result.plan, status: result.status, task: null };
+            return { ...result, task: null };
         }
         const row = await this.receipt(ctx, code, result.plan, config.upstreamOrigin);
-        return { plan: result.plan, status: result.status, task: await this.capture(ctx, row, result.task) };
+        return { ...result, task: await this.capture(ctx, row, result.task) };
     }
     async submit(ctx: RequestContext, codeInput: string, session: string) {
         const code = this.code(codeInput);
@@ -283,9 +301,12 @@ export class GptRechargeService {
         await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
         // Recover first. A transport error must never create another payment attempt.
         const queried = this.validateCodeResult(await this.upstream(ctx, config, 'query', { code }));
+        if (!queried.task && queried.status !== 'available')
+            throw new UserInputError(
+                queried.reason === 'manual_review_required' ? '上次开通结果待核对' : '兑换码暂不可用',
+            );
         const row = await this.receipt(ctx, code, queried.plan, config.upstreamOrigin);
         if (queried.task) return this.capture(ctx, row, queried.task);
-        if (queried.status !== 'available') throw new UserInputError('兑换码暂不可用');
         const claimed = await this.receipts(ctx).update(
             { id: row.id, channelId: ctx.channelId, status: 'new' },
             { status: 'submitting' },

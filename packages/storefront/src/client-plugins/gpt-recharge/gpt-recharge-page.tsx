@@ -219,15 +219,22 @@ export function GptRechargePage({
                     (scope === 'verify' || scope === 'query') &&
                     errorCode === 'USER_INPUT_ERROR' &&
                     reason instanceof Error &&
-                    reason.message === '兑换码无效或已停用，请核对后重试'
+                    (reason.message === '兑换码无效或已停用，请核对后重试' ||
+                        reason.message === '此兑换码未获本商城使用授权')
                 ) {
                     setError({
                         scope,
                         field: scope === 'verify' ? 'code' : 'query',
-                        text: t(
-                            '该兑换码无法在本商城使用，请核对兑换码后重试。',
-                            'This redemption code cannot be used in this store. Check the code and try again.',
-                        ),
+                        text:
+                            reason.message === '此兑换码未获本商城使用授权'
+                                ? t(
+                                      '此兑换码未获本商城使用授权',
+                                      'This code is not authorized for this store.',
+                                  )
+                                : t(
+                                      '该兑换码无法在本商城使用，请核对兑换码后重试。',
+                                      'This redemption code cannot be used in this store. Check the code and try again.',
+                                  ),
                     });
                     return;
                 }
@@ -325,8 +332,11 @@ export function GptRechargePage({
             setVerified(result);
             if (result.status !== 'available') {
                 setQueryCode(code);
+                queryChallenge.reset();
+                setQueryResult(result.reason === 'manual_review_required' ? result : null);
                 setTab('query');
                 operationScope.current = 'query';
+                if (result.reason === 'manual_review_required') return;
                 const current = await queryChallenge.execute('RECHARGE_CODE', code.trim(), proof =>
                     client.query(code.trim(), ...(proof ? ([proof] as const) : [])),
                 );
@@ -902,6 +912,22 @@ export function GptRechargePage({
                                 <div className="gpt-recharge-query-result" aria-live="polite">
                                     {queryResult.task ? (
                                         <TaskResult task={queryResult.task} language={language} />
+                                    ) : queryResult.reason === 'manual_review_required' ? (
+                                        <>
+                                            <Clock3 aria-hidden="true" />
+                                            <h3>
+                                                {t(
+                                                    '上次开通结果待核对',
+                                                    'Previous activation is under review',
+                                                )}
+                                            </h3>
+                                            <p>
+                                                {t(
+                                                    '请勿重复充值。核对完成后，可用原兑换码查询。',
+                                                    'Do not recharge again. Use your original code to check the result.',
+                                                )}
+                                            </p>
+                                        </>
                                     ) : (
                                         <>
                                             <CheckCircle2 />
