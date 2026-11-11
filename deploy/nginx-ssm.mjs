@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-import { maskedDeploymentLines } from './frontend-ssm.mjs';
+import { maskedDeploymentLines, productionSsmInstanceId } from './frontend-ssm.mjs';
 
 export function nginxDeployCommand({
     sha,
@@ -37,7 +37,7 @@ VENDURE_NGINX_HOST`;
 
 export function nginxReceiptFromInvocation(result, { sha, configHash, backendSha, commandId }) {
     assert.equal(result.CommandId, commandId);
-    assert.equal(result.InstanceId, 'i-01d6737449bc52460');
+    assert.equal(result.InstanceId, productionSsmInstanceId);
     assert.equal(result.Comment, `Nginx release ${sha}`);
     assert.equal(result.Status, 'Success', 'Nginx deployment did not complete successfully');
     assert.equal(result.ResponseCode, 0);
@@ -90,7 +90,7 @@ async function main() {
         '--document-name',
         'AWS-RunShellScript',
         '--instance-ids',
-        'i-01d6737449bc52460',
+        productionSsmInstanceId,
         '--comment',
         `Nginx release ${sha}`,
         '--parameters',
@@ -108,7 +108,7 @@ async function main() {
                 '--command-id',
                 commandId,
                 '--instance-id',
-                'i-01d6737449bc52460',
+                productionSsmInstanceId,
             ]);
         } catch (error) {
             if (!/InvocationDoesNotExist/u.test(String(error.stderr))) throw error;

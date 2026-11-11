@@ -33,6 +33,7 @@ jobs:
             STOREFRONT_SHA: ${{ inputs.storefront_sha }}
             ADMIN_SHA: ${{ inputs.admin_sha }}
             CI_RUN_ID: ${{ inputs.ci_run_id }}
+            VENDURE_PRODUCTION_LIGHTSAIL_ACTIVE: ${{ vars.VENDURE_PRODUCTION_LIGHTSAIL_ACTIVE == 'true' && 'true' || 'false' }}
             GH_TOKEN: ${{ github.token }}
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd

@@ -102,6 +102,7 @@ function harness(isWorker = false, sharedVersions = true, prepareHtml = false) {
         html,
         access,
         add,
+        createQueue: jobs.createQueue,
         records,
         cache,
         run: (channelId = 'a') => process({ data: { channelId } }),
@@ -124,12 +125,7 @@ describe('bounded public page preparation', () => {
         expect(h.add).not.toHaveBeenCalled();
         h.service.onApplicationShutdown();
     });
-    it('keeps local worker HTML private to its cache and treats preparation failure as optional', async () => {
-        const worker = harness(true, false, true);
-        await worker.service.onApplicationBootstrap();
-        await worker.run();
-        expect(worker.html.render).not.toHaveBeenCalled();
-        worker.service.onApplicationShutdown();
+    it('treats shared worker HTML preparation failure as optional', async () => {
         const shared = harness(true, true, true);
         shared.pages.read.mockResolvedValue({ failures: [] });
         shared.publicSeo.assertOutput.mockRejectedValue(new Error('Publication changed'));
@@ -138,13 +134,12 @@ describe('bounded public page preparation', () => {
         expect(shared.html.render).not.toHaveBeenCalled();
         shared.service.onApplicationShutdown();
     });
-    it('warms the serving API cache when the worker cannot share its cache generations', async () => {
+    it('warms process-local data only in the serving API without creating worker jobs', async () => {
         vi.useFakeTimers();
         const api = harness(false, false);
         const worker = harness(true, false);
         await worker.service.onApplicationBootstrap();
-        await worker.run('*');
-        await worker.run();
+        expect(worker.createQueue).not.toHaveBeenCalled();
         expect(api.pages.read).not.toHaveBeenCalled();
         await api.service.onApplicationBootstrap();
         await vi.waitFor(() => expect(api.pages.read).toHaveBeenCalledTimes(4));
@@ -154,6 +149,8 @@ describe('bounded public page preparation', () => {
         expect(api.records).not.toBe(worker.records);
         await vi.advanceTimersByTimeAsync(20_000);
         expect(api.pages.read).toHaveBeenCalledTimes(8);
+        expect(worker.pages.read).not.toHaveBeenCalled();
+        expect(worker.add).not.toHaveBeenCalled();
         api.service.onApplicationShutdown();
         worker.service.onApplicationShutdown();
         await vi.advanceTimersByTimeAsync(60_000);

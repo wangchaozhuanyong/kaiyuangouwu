@@ -2,7 +2,9 @@ name: Monitor Production Health
 
 on:
     schedule:
-        - cron: '17,47 * * * *'
+        - cron: '17 */2 * * *'
+        - cron: '17 1-23/2 * * *'
+        - cron: '47 * * * *'
     workflow_dispatch:
         inputs:
             read_frontend_command_id:
@@ -48,14 +50,30 @@ jobs:
             AWS_REGION: ap-northeast-1
             AWS_ACCOUNT_ID: '098208446664'
             AWS_ROLE_ARN: arn:aws:iam::098208446664:role/yunqiao-vendure-github-deploy
-            INSTANCE_ID: i-01d6737449bc52460
+            INSTANCE_ID: ${{ vars.VENDURE_PRODUCTION_LIGHTSAIL_ACTIVE == 'true' && 'mi-04476e3f29a528ddc' || 'i-01d6737449bc52460' }}
+            VENDURE_PRODUCTION_LIGHTSAIL_ACTIVE: ${{ vars.VENDURE_PRODUCTION_LIGHTSAIL_ACTIVE == 'true' && 'true' || 'false' }}
 
         steps:
+            - name: Select the host inspection cadence
+              id: inspection
+              shell: bash
+              env:
+                  SCHEDULE_CRON: ${{ github.event.schedule }}
+              run: |
+                  # The notification step checks public endpoints on every schedule.
+                  # Hybrid nodes are billed per Run Command, so inspect the host every two hours.
+                  if [[ "$GITHUB_EVENT_NAME" == schedule && "$INSTANCE_ID" == mi-* && "$SCHEDULE_CRON" != '17 */2 * * *' ]]; then
+                      echo 'host=false' >> "$GITHUB_OUTPUT"
+                  else
+                      echo 'host=true' >> "$GITHUB_OUTPUT"
+                  fi
+
             - name: Check out the audited revision
               if: always()
               uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
 
             - name: Configure short-lived AWS credentials
+              if: ${{ steps.inspection.outputs.host == 'true' }}
               uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
               with:
                   role-to-assume: ${{ env.AWS_ROLE_ARN }}
@@ -220,7 +238,7 @@ jobs:
                   } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Check production health
-              if: ${{ inputs.read_frontend_command_id == '' }}
+              if: ${{ inputs.read_frontend_command_id == '' && steps.inspection.outputs.host == 'true' }}
               run: |
                   REALTIME_CAPACITY_AUDIT=false
                   if [ "${{ github.event_name }}" = "workflow_dispatch" ] && \
@@ -293,6 +311,7 @@ jobs:
                   TELEGRAM_EMERGENCY_ENABLED: ${{ vars.TELEGRAM_EMERGENCY_ENABLED }}
                   VENDURE_NOTIFICATION_STATE_FILE: ${{ github.workspace }}/.notification-monitor-state/state.json
                   PRODUCTION_HEALTH_RESULT: ${{ runner.temp }}/production-health.json
+                  VENDURE_MONITOR_HOST_CHECK: ${{ steps.inspection.outputs.host }}
               run: node deploy/monitor-notifications.mjs
 
             - name: Persist notification incident state

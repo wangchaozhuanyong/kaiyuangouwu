@@ -418,7 +418,10 @@ test('only native successful invocation evidence with exact preserved identities
     };
     const invocation = {
         CommandId: commandId,
-        InstanceId: 'i-01d6737449bc52460',
+        InstanceId:
+            process.env.VENDURE_PRODUCTION_LIGHTSAIL_ACTIVE === 'true'
+                ? 'mi-04476e3f29a528ddc'
+                : 'i-01d6737449bc52460',
         Comment: `Nginx release ${target}`,
         Status: 'Success',
         ResponseCode: 0,
