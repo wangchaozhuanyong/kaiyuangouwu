@@ -1297,7 +1297,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.ok(
         releaseWorkflow.indexOf('needs: preflight') <
             releaseWorkflow.indexOf('needs: [build, offhost_file_restore, preflight]'),
-        'release must finish preflight, build, and full offsite restore before deployment',
+        'release must finish preflight, build, and verified offsite restore evidence before deployment',
     );
     assert.match(releaseWorkflow, /uses: \.\/\.github\/workflows\/build_production_runtime\.yml/u);
     assert.match(releaseWorkflow, /uses: \.\/\.github\/workflows\/offsite_file_restore_drill\.yml/u);
@@ -1456,15 +1456,20 @@ void test('persistent business files have encrypted offsite backup, retention an
         'utf8',
     );
     assert.match(offhostWorkflow, /schedule:/u);
-    assert.match(offhostWorkflow, /restore every offsite file before production switch/u);
+    assert.match(offhostWorkflow, /group: production-offsite-file-restore\s+queue: max/u);
     assert.match(offhostWorkflow, /offsite-file-restore-drill\.py/u);
-    assert.match(offhostWorkflow, /OFFSITE_FILE_RESTORE_PROOF_OK/u);
+    assert.match(offhostWorkflow, /--prior-receipt "\$RUNNER_TEMP\/prior-file-restore\.json"/u);
+    assert.match(offhostWorkflow, /--release-receipt "\$RUNNER_TEMP\/file-restore-verification\.json"/u);
+    assert.match(offhostWorkflow, /OFFSITE_FILE_RESTORE_VERIFIED sha=%s run=%s/u);
     assert.match(offhostWorkflow, /\/bin\/bash <<'VENDURE_OFFSITE_PROOF'/u);
     assert.match(offhostScript, /restore_stream/u);
     assert.match(offhostScript, /DISK_RESERVE_BYTES/u);
     assert.match(deploymentScript, /DEPLOY_OFFSITE_FILE_RESTORE_OK/u);
-    assert.match(deploymentScript, /sudo -n test -s "\$\{file_restore_proof\}"/u);
-    assert.match(deploymentScript, /sudo -n jq -e --arg sha/u);
+    assert.match(deploymentScript, /sudo -n jq -er --arg sha/u);
+    assert.match(deploymentScript, /\.targetSha == \$sha and \.runId == \$run/u);
+    assert.match(deploymentScript, /\$proof\.method == "offhost-full-restore"/u);
+    assert.match(deploymentScript, /\$identity\.restorePolicySha256 == \$policy/u);
+    assert.match(deploymentScript, /the exact release has no valid offsite file restore verification/u);
     assert.match(deploymentScript, /systemctl disable --now vendure-file-restore-drill\.timer/u);
     assert.doesNotMatch(deploymentScript, /systemctl start vendure-file-restore-drill\.service/u);
     assert.match(backupService, /^ProtectSystem=strict$/mu);
