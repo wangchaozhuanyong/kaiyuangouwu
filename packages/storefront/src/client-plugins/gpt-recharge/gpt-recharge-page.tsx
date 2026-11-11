@@ -149,6 +149,7 @@ export function GptRechargePage({
     const operationScope = useRef<RechargeOperation>('verify');
     const requestVersion = useRef(0);
     const codeInput = useRef<HTMLInputElement>(null);
+    const matchedPlanCard = useRef<HTMLLIElement>(null);
     const focusLookup = useRef(false);
     let account: { email: string } | null = null;
     let sessionError = '';
@@ -171,6 +172,14 @@ export function GptRechargePage({
         focusLookup.current = false;
         document.getElementById('gpt-query')?.focus();
     }, [tab, busy]);
+
+    useEffect(() => {
+        const card = matchedPlanCard.current;
+        if (!card || verified?.status !== 'available') return;
+        const bounds = card.getBoundingClientRect();
+        if (bounds.top < 0 || bounds.bottom > window.innerHeight)
+            card.scrollIntoView?.({ block: 'nearest', behavior: 'instant' });
+    }, [verified]);
 
     useEffect(() => {
         if (!feedbackAttempt || busy) return;
@@ -691,6 +700,7 @@ export function GptRechargePage({
                                             {rechargePlans.map(({ key, label }) => (
                                                 <li
                                                     key={key}
+                                                    ref={verified?.plan === key ? matchedPlanCard : undefined}
                                                     aria-current={verified?.plan === key ? 'true' : undefined}
                                                 >
                                                     <span>{label}</span>

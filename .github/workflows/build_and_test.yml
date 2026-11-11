@@ -744,14 +744,27 @@ jobs:
               run: |
                   CI_PLAN="$(node -p 'const plan = JSON.parse(process.env.CI_PLAN); JSON.stringify({...plan, full: plan.full || plan.frontendFull})')" \
                     node scripts/ci-run.mjs frontend "$COMPONENT"
-            - name: Install storefront continuity browser
-              if: matrix.component == 'storefront'
-              working-directory: packages/storefront
-              run: bunx playwright install --with-deps chromium
             - name: Verify storefront navigation continuity
               if: matrix.component == 'storefront'
               working-directory: packages/storefront
-              run: node e2e/seo-public/loading-continuity.mjs --cases=navigation,code-navigation,module-error,race,filter,scroll,cart,errors --widths=390,1440
+              shell: bash
+              run: |
+                  # The official Noble image contains the matching Chromium and system dependencies.
+                  playwright_version=1.62.1
+                  image="mcr.microsoft.com/playwright:v${playwright_version}-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e"
+                  installed_version="$(bunx --no-install playwright --version)"
+                  if [[ "$installed_version" != "Version $playwright_version" ]]; then
+                      printf 'Update the pinned Playwright image to match %s\n' "$installed_version" >&2
+                      exit 1
+                  fi
+                  runner_node="$(readlink -f "$(command -v node)")"
+                  docker run --rm --init --shm-size=1g \
+                    --user "$(id -u):$(id -g)" --env CI --env HOME=/tmp \
+                    --mount "type=bind,source=$GITHUB_WORKSPACE,target=$GITHUB_WORKSPACE" \
+                    --mount "type=bind,source=$runner_node,target=/usr/local/bin/node,readonly" \
+                    --workdir "$PWD" "$image" \
+                    /usr/local/bin/node e2e/seo-public/loading-continuity.mjs \
+                    --cases=navigation,code-navigation,module-error,race,filter,scroll,cart,errors --widths=390,1440
             - name: Package reusable frontend
               env:
                   NODE_ENV: production
