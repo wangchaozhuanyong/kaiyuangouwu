@@ -967,13 +967,48 @@ void test('production runtime switch rebuilds PM2 definitions for an immutable r
     assert.match(script, /PRODUCTION_API_READY phase=pre-worker attempts=/u);
     assert.match(
         script,
-        /curl --fail --silent --max-time 10 http:\/\/127\.0\.0\.1:3002\/health >\/dev\/null 2>&1/u,
+        /curl --fail --silent --max-time "\$\{probe_timeout\}" http:\/\/127\.0\.0\.1:3002\/health >\/dev\/null 2>&1/u,
     );
     assert.match(script, /--only vendure-worker/u);
     assert.ok(script.indexOf('--only vendure-api') < script.indexOf('--only vendure-worker'));
     assert.match(script, /pm_cwd/u);
     assert.match(script, /pm_exec_path/u);
     assert.doesNotMatch(script, /startOrReload/u);
+});
+
+void test('the runtime switch gives a slow API a bounded boot window before starting the worker', async () => {
+    const script = await readFile(path.join(repositoryRoot, 'deploy/switch-production-runtime.sh'), 'utf8');
+    const start = script.indexOf('readonly api_startup_started_at=');
+    const end = script.indexOf('\n\nCANDIDATE=', start);
+    assert.ok(start >= 0 && end > start);
+    const gate = script.slice(start, end);
+    const probe = readyAfter =>
+        spawnSync('bash', ['-s'], {
+            input: [
+                'set -euo pipefail',
+                'SECONDS=0',
+                'candidate=/fixture/runtime',
+                'ecosystem=/fixture/ecosystem',
+                'sleep() { SECONDS=$((SECONDS + $1)); }',
+                'curl() { ((SECONDS >= READY_AFTER)); }',
+                'pm2() { case "$1" in start) printf "WORKER_STARTED\\n" ;; jlist) printf "[]\\n" ;; esac; }',
+                'fail_switch() { printf "%s\\n" "$1" >&2; exit 1; }',
+                gate,
+                '',
+            ].join('\n'),
+            env: { ...process.env, READY_AFTER: String(readyAfter) },
+            encoding: 'utf8',
+        });
+
+    const slow = probe(94);
+    assert.equal(slow.status, 0, slow.stderr);
+    assert.match(slow.stdout, /PRODUCTION_API_READY phase=pre-worker attempts=\d+\nWORKER_STARTED/u);
+
+    const unavailable = probe(999);
+    assert.equal(unavailable.status, 1, unavailable.stderr);
+    assert.match(unavailable.stderr, /PRODUCTION_API_READINESS_TIMEOUT attempts=\d+ waited_seconds=18[0-2]/u);
+    assert.match(unavailable.stderr, /candidate API health check did not pass before worker start/u);
+    assert.doesNotMatch(unavailable.stdout, /WORKER_STARTED/u);
 });
 
 void test('production runbook elevates only the root-owned atomic runtime switch', async () => {
