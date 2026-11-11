@@ -108,14 +108,15 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
     ) {}
 
     async onApplicationBootstrap() {
+        // Only the serving API can fill its process-local cache.
+        if (this.processContext.isWorker && !this.publicCache.sharedVersions) return;
         this.queue = await this.jobs.createQueue({
             name: 'storefront-public-page-warm',
             process: job => this.process(job.data),
         });
         if (this.processContext.isWorker || !this.publicCache.sharedVersions) {
             const initial = this.enqueue('*').catch(() => this.failed());
-            // A process-local cache cannot receive the worker's snapshots. Seed the
-            // serving API's existing cache too, without delaying its listen/startup.
+            // Seed the API's own cache without delaying its startup.
             if (this.processContext.isWorker) await initial;
             this.timer = setInterval(() => {
                 void this.enqueue('*').catch(() => this.failed());

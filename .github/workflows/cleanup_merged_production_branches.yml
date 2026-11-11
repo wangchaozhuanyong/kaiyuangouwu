@@ -43,7 +43,7 @@ jobs:
             AWS_ROLE_ARN: arn:aws:iam::098208446664:role/yunqiao-vendure-github-deploy
             DEPLOYMENT_RUN_ID: ${{ inputs.deployment_run_id }}
             GH_TOKEN: ${{ github.token }}
-            INSTANCE_ID: i-01d6737449bc52460
+            INSTANCE_ID: ${{ vars.VENDURE_PRODUCTION_LIGHTSAIL_ACTIVE == 'true' && 'mi-04476e3f29a528ddc' || 'i-01d6737449bc52460' }}
             PRODUCTION_SHA: ${{ inputs.production_sha }}
 
         steps:

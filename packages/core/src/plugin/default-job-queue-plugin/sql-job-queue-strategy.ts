@@ -36,12 +36,17 @@ export class SqlJobQueueStrategy extends PollingJobQueueStrategy implements Insp
         super.destroy();
     }
 
-    async add<Data extends JobData<Data> = object>(job: Job<Data>, jobOptions?: JobQueueStrategyJobOptions<Data>): Promise<Job<Data>> {
+    async add<Data extends JobData<Data> = object>(
+        job: Job<Data>,
+        jobOptions?: JobQueueStrategyJobOptions<Data>,
+    ): Promise<Job<Data>> {
         if (!this.connectionAvailable(this.rawConnection)) {
             throw new Error('Connection not available');
         }
-        const jobRecordRepository = jobOptions?.ctx && this.connection ? this.connection.getRepository(jobOptions.ctx, JobRecord) :
-            this.rawConnection.getRepository(JobRecord);
+        const jobRecordRepository =
+            jobOptions?.ctx && this.connection
+                ? this.connection.getRepository(jobOptions.ctx, JobRecord)
+                : this.rawConnection.getRepository(JobRecord);
         const constrainedData = this.constrainDataSize(job);
         const newRecord = this.toRecord(job, constrainedData, this.setRetries(job.queueName, job));
         const record = await jobRecordRepository.save(newRecord);
@@ -88,37 +93,34 @@ export class SqlJobQueueStrategy extends PollingJobQueueStrategy implements Insp
         const isSQLite =
             connectionType === 'sqlite' || connectionType === 'sqljs' || connectionType === 'better-sqlite3';
 
-        return new Promise(async (resolve, reject) => {
-            if (isSQLite) {
-                try {
-                    // SQLite driver does not support concurrent transactions. See https://github.com/typeorm/typeorm/issues/1884
-                    const result = await this.getNextAndSetAsRunning(connection.manager, queueName, false);
-                    resolve(result);
-                } catch (e: any) {
-                    reject(e);
-                }
-            } else {
-                // Selecting the next job is wrapped in a transaction so that we can
-                // set a lock on that row and immediately update the status to "RUNNING".
-                // This prevents multiple worker processes from taking the same job when
-                // running concurrent workers.
-                connection
-                    .transaction(async transactionManager => {
-                        const result = await this.getNextAndSetAsRunning(transactionManager, queueName, true);
-                        resolve(result);
-                    })
-                    .catch(err => reject(err));
+        if (
+            (connection.options.type === 'mysql' || connection.options.type === 'mariadb') &&
+            !connection.options.replication
+        ) {
+            // Empty queues do not need a transaction or a locking scan of the job table.
+            // The transaction below still chooses and claims the next job when one exists.
+            const candidate = await this.readyJobs(connection.manager, queueName)
+                .select('record.id')
+                .limit(1)
+                .getRawOne();
+            if (!candidate) {
+                return undefined;
             }
-        });
+        }
+
+        if (isSQLite) {
+            // SQLite drivers do not support concurrent transactions.
+            return this.getNextAndSetAsRunning(connection.manager, queueName, false);
+        }
+
+        // Lock the job while claiming it and return it only after the transaction commits.
+        return connection.transaction(transactionManager =>
+            this.getNextAndSetAsRunning(transactionManager, queueName, true),
+        );
     }
 
-    private async getNextAndSetAsRunning(
-        manager: EntityManager,
-        queueName: string,
-        setLock: boolean,
-        waitingJobIds: ID[] = [],
-    ): Promise<Job | undefined> {
-        const qb = manager
+    private readyJobs(manager: EntityManager, queueName: string) {
+        return manager
             .getRepository(JobRecord)
             .createQueryBuilder('record')
             .where('record.queueName = :queueName', { queueName })
@@ -128,8 +130,20 @@ export class SqlJobQueueStrategy extends PollingJobQueueStrategy implements Insp
                         pending: JobState.PENDING,
                     }).orWhere('record.state = :retrying', { retrying: JobState.RETRYING });
                 }),
-            )
-            .orderBy('record.createdAt', 'ASC');
+            );
+    }
+
+    private async getNextAndSetAsRunning(
+        manager: EntityManager,
+        queueName: string,
+        setLock: boolean,
+        waitingJobIds: ID[] = [],
+    ): Promise<Job | undefined> {
+        const qb = this.readyJobs(manager, queueName).orderBy('record.createdAt', 'ASC');
+        const driver = manager.connection.options.type;
+        if (driver === 'mysql' || driver === 'mariadb') {
+            qb.limit(1);
+        }
 
         if (waitingJobIds.length) {
             qb.andWhere('record.id NOT IN (:...waitingJobIds)', { waitingJobIds });

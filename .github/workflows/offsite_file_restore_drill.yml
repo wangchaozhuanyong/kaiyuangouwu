@@ -22,7 +22,7 @@ jobs:
             AWS_REGION: ap-northeast-1
             AWS_ACCOUNT_ID: '098208446664'
             AWS_ROLE_ARN: arn:aws:iam::098208446664:role/yunqiao-vendure-github-deploy
-            INSTANCE_ID: i-01d6737449bc52460
+            INSTANCE_ID: ${{ vars.VENDURE_PRODUCTION_LIGHTSAIL_ACTIVE == 'true' && 'mi-04476e3f29a528ddc' || 'i-01d6737449bc52460' }}
             BACKUP_BUCKET: yunqiao-vendure-prod-backup-098208446664-apne1
             TARGET_SHA: ${{ inputs.target_sha || github.sha }}
         steps:

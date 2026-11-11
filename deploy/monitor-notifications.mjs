@@ -298,13 +298,16 @@ async function main() {
             }
         }
     } else {
-        let remote = null;
-        try {
-            remote = JSON.parse(await readFile(process.env.PRODUCTION_HEALTH_RESULT, 'utf8'));
-        } catch {
-            /* Missing remote evidence is unavailable, never host outage proof. */
+        signals = await publicSignals(await loadProductionStorefronts());
+        if (process.env.VENDURE_MONITOR_HOST_CHECK !== 'false') {
+            let remote = null;
+            try {
+                remote = JSON.parse(await readFile(process.env.PRODUCTION_HEALTH_RESULT, 'utf8'));
+            } catch {
+                /* Missing remote evidence is unavailable, never host outage proof. */
+            }
+            signals.push(externalSignal(remote));
         }
-        signals = [...(await publicSignals(await loadProductionStorefronts())), externalSignal(remote)];
     }
     if (!config.sendResolved) signals = signals.filter(signal => signal.firing || !state[signal.key]?.active);
     const result = await deliverSignals(

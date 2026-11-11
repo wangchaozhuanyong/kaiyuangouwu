@@ -3,6 +3,11 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
+export const productionSsmInstanceId =
+    process.env.VENDURE_PRODUCTION_LIGHTSAIL_ACTIVE === 'true'
+        ? 'mi-04476e3f29a528ddc'
+        : 'i-01d6737449bc52460';
+
 export function frontendDeployCommand({
     sha,
     archive,
@@ -76,7 +81,7 @@ async function main() {
         '--document-name',
         'AWS-RunShellScript',
         '--instance-ids',
-        'i-01d6737449bc52460',
+        productionSsmInstanceId,
         '--comment',
         `Frontend release ${sha}`,
         '--parameters',
@@ -94,7 +99,7 @@ async function main() {
                 '--command-id',
                 commandId,
                 '--instance-id',
-                'i-01d6737449bc52460',
+                productionSsmInstanceId,
             ]);
         } catch (error) {
             if (!/InvocationDoesNotExist/u.test(String(error.stderr))) throw error;
@@ -120,8 +125,6 @@ async function main() {
     process.stdout.write(summary);
 }
 
-const instanceId = 'i-01d6737449bc52460';
-
 export function maskedDeploymentLines(value) {
     return String(value ?? '')
         .split('\n')
@@ -140,7 +143,7 @@ export function readFrontendInvocation({ commandId, sourceSha }, read) {
         '--command-id',
         commandId,
         '--instance-id',
-        instanceId,
+        productionSsmInstanceId,
         '--region',
         'ap-northeast-1',
         '--output',
@@ -149,7 +152,7 @@ export function readFrontendInvocation({ commandId, sourceSha }, read) {
         '30',
     ]);
     assert.equal(result.CommandId, commandId);
-    assert.equal(result.InstanceId, instanceId);
+    assert.equal(result.InstanceId, productionSsmInstanceId);
     assert.equal(result.Comment, `Frontend release ${sourceSha}`);
     assert.ok(['Success', 'Failed', 'Cancelled', 'TimedOut'].includes(result.Status));
     return {
