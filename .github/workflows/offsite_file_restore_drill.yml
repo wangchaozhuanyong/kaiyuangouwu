@@ -15,9 +15,12 @@ permissions:
 
 jobs:
     restore:
-        name: restore every offsite file before production switch
+        name: verify the latest offsite file backup before production switch
         runs-on: ubuntu-24.04
         timeout-minutes: 75
+        concurrency:
+            group: production-offsite-file-restore
+            queue: max
         env:
             AWS_REGION: ap-northeast-1
             AWS_ACCOUNT_ID: '098208446664'
@@ -40,81 +43,105 @@ jobs:
                   aws-region: ${{ env.AWS_REGION }}
                   allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
 
-            - name: Restore and verify every file from the offsite archive
+            - name: Verify, restore if needed, and install the exact proof through Systems Manager
+              id: verify
               run: |
                   set -Eeuo pipefail
-                  python3 deploy/offsite-file-restore-drill.py \
+                  ssm_command() {
+                      local command_id status
+                      command_id="$(aws ssm send-command \
+                        --document-name AWS-RunShellScript --instance-ids "$INSTANCE_ID" \
+                        --comment "Offsite file restore $TARGET_SHA" \
+                        --parameters "$(jq -cn --arg command "$1" '{commands:[$command],executionTimeout:["300"]}')" \
+                        --query 'Command.CommandId' --output text)"
+                      [[ "$command_id" =~ ^[a-f0-9-]{36}$ ]]
+                      for attempt in $(seq 1 60); do
+                          status="$(aws ssm get-command-invocation --command-id "$command_id" \
+                            --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || true)"
+                          case "$status" in
+                              Success|Failed|Cancelled|TimedOut|Cancelling) break ;;
+                          esac
+                          sleep 5
+                      done
+                      aws ssm get-command-invocation --command-id "$command_id" \
+                        --instance-id "$INSTANCE_ID" --output json |
+                        jq -er 'select(.Status == "Success") | .StandardOutputContent'
+                  }
+
+                  ssm_command "$(cat <<'READ_PROOF'
+                  set -eu
+                  file=/var/lib/vendure-readiness/file-restore-drill.json
+                  if [ -f "$file" ]; then
+                      cat "$file"
+                  else
+                      printf '{}\n'
+                  fi
+                  READ_PROOF
+                  )" > "$RUNNER_TEMP/prior-file-restore.json"
+
+                  python3 -B deploy/offsite-file-restore-drill.py \
                     --bucket "$BACKUP_BUCKET" --prefix files/ \
                     --target-sha "$TARGET_SHA" --run-id "$GITHUB_RUN_ID" \
-                    --receipt "$RUNNER_TEMP/file-restore-drill.json"
+                    --receipt "$RUNNER_TEMP/file-restore-drill.json" \
+                    --prior-receipt "$RUNNER_TEMP/prior-file-restore.json" \
+                    --release-receipt "$RUNNER_TEMP/file-restore-verification.json"
 
-            - name: Install the exact proof on production through Systems Manager
-              run: |
+                  if [ -s "$RUNNER_TEMP/file-restore-drill.json" ]; then
+                      echo "downloaded=true" >> "$GITHUB_OUTPUT"
+                  fi
+
+                  verification="$(base64 -w0 "$RUNNER_TEMP/file-restore-verification.json")"
+                  proof_name="$TARGET_SHA-$GITHUB_RUN_ID.json"
+                  result="$(ssm_command "$(cat <<INSTALL_PROOF
+                  /bin/bash <<'VENDURE_OFFSITE_PROOF'
                   set -Eeuo pipefail
-                  python3 - <<'PY'
-                  import base64
-                  import json
-                  import os
-                  from pathlib import Path
-                  import shlex
+                  readiness=/var/lib/vendure-readiness
+                  install -d -o root -g root -m 0700 "\$readiness/file-restore-drill-runs"
+                  receipt="\$(mktemp "\$readiness/file-restore-drill-runs/.verification.XXXXXX")"
+                  full_receipt=
+                  trap 'rm -f -- "\$receipt" "\$full_receipt"' EXIT
+                  printf '%s' '$verification' | base64 -d > "\$receipt"
+                  jq -e --arg sha '$TARGET_SHA' --arg run '$GITHUB_RUN_ID' '
+                      .method == "offhost-file-restore-verification" and .targetSha == \$sha and .runId == \$run and
+                      .restoreProof.source == "offsite" and .restoreProof.method == "offhost-full-restore" and
+                      (.downloadedArchiveBytes == 0 or
+                          (.downloadedArchiveBytes == .restoreProof.archiveIdentity.archiveBytes and
+                              .restoreProof.targetSha == \$sha and .restoreProof.runId == \$run))
+                  ' "\$receipt" >/dev/null
+                  if jq -e '.downloadedArchiveBytes > 0' "\$receipt" >/dev/null; then
+                      full_receipt="\$(mktemp "\$readiness/.file-restore-drill.XXXXXX")"
+                      jq -c '.restoreProof' "\$receipt" > "\$full_receipt"
+                      chmod 0644 "\$full_receipt"
+                      mv -T -- "\$full_receipt" "\$readiness/file-restore-drill.json"
+                  else
+                      jq -e --slurpfile actual "\$readiness/file-restore-drill.json" '
+                          \$actual == [.restoreProof]
+                      ' "\$receipt" >/dev/null
+                  fi
+                  chmod 0644 "\$receipt"
+                  mv -T -- "\$receipt" "\$readiness/file-restore-drill-runs/$proof_name"
+                  printf 'OFFSITE_FILE_RESTORE_VERIFIED sha=%s run=%s\n' '$TARGET_SHA' '$GITHUB_RUN_ID'
+                  VENDURE_OFFSITE_PROOF
+                  INSTALL_PROOF
+                  )")"
+                  [[ "$result" == "OFFSITE_FILE_RESTORE_VERIFIED sha=$TARGET_SHA run=$GITHUB_RUN_ID" ]]
+                  jq -r '"Verified " + .restoreProof.backupFile + " from restore run " + .restoreProof.runId
+                    + ", downloaded archive bytes: " + (.downloadedArchiveBytes | tostring)' \
+                    "$RUNNER_TEMP/file-restore-verification.json" >> "$GITHUB_STEP_SUMMARY"
 
-                  receipt = Path(os.environ['RUNNER_TEMP'], 'file-restore-drill.json').read_bytes()
-                  sha = os.environ['TARGET_SHA']
-                  run_id = os.environ['GITHUB_RUN_ID']
-                  encoded = base64.b64encode(receipt).decode('ascii')
-                  proof_name = f'{sha}-{run_id}.json'
-                  command = '\n'.join([
-                      "/bin/bash <<'VENDURE_OFFSITE_PROOF'",
-                      'set -Eeuo pipefail',
-                      'proof_file="$(mktemp /tmp/vendure-offsite-proof.XXXXXX)"',
-                      'trap \'rm -f -- "$proof_file"\' EXIT',
-                      f"printf '%s' {shlex.quote(encoded)} | base64 -d > \"$proof_file\"",
-                      f"jq -e --arg sha {shlex.quote(sha)} --arg run {shlex.quote(run_id)} '"
-                      '.source == "offsite" and .method == "offhost-full-restore" and '
-                      '.targetSha == $sha and .runId == $run and '
-                      '(.archiveSha256 | test("^[a-f0-9]{64}$")) and '
-                      '(.archive.fileCount | type == "number" and . > 0) and '
-                      '(.archive.totalBytes | type == "number" and . > 0) and '
-                      '.rtoSeconds == 14400 and .durationSeconds <= .rtoSeconds'
-                      "' \"$proof_file\" >/dev/null",
-                      'install -d -o root -g root -m 0700 /var/lib/vendure-readiness/file-restore-drill-runs',
-                      f'install -o root -g root -m 0644 "$proof_file" /var/lib/vendure-readiness/file-restore-drill-runs/{proof_name}',
-                      'install -o root -g root -m 0644 "$proof_file" /var/lib/vendure-readiness/file-restore-drill.json',
-                      f'cmp -s "$proof_file" /var/lib/vendure-readiness/file-restore-drill-runs/{proof_name}',
-                      f'printf "OFFSITE_FILE_RESTORE_PROOF_OK sha={sha} run={run_id}\\n"',
-                      'VENDURE_OFFSITE_PROOF',
-                  ])
-                  parameters = {'commands': [command], 'executionTimeout': ['300']}
-                  Path(os.environ['RUNNER_TEMP'], 'offsite-proof-ssm.json').write_text(json.dumps(parameters))
-                  PY
-                  command_id="$(aws ssm send-command \
-                    --document-name AWS-RunShellScript --instance-ids "$INSTANCE_ID" \
-                    --comment "Full offsite file restore proof $TARGET_SHA" \
-                    --parameters "file://$RUNNER_TEMP/offsite-proof-ssm.json" \
-                    --query 'Command.CommandId' --output text)"
-                  test -n "$command_id"
-                  for attempt in $(seq 1 60); do
-                    status="$(aws ssm get-command-invocation --command-id "$command_id" \
-                      --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || true)"
-                    case "$status" in
-                      Success) break ;;
-                      Failed|Cancelled|TimedOut|Cancelling) break ;;
-                    esac
-                    sleep 5
-                  done
-                  aws ssm get-command-invocation --command-id "$command_id" \
-                    --instance-id "$INSTANCE_ID" --output json > "$RUNNER_TEMP/offsite-proof-result.json"
-                  jq -e '.Status == "Success" and (.StandardOutputContent | contains("OFFSITE_FILE_RESTORE_PROOF_OK"))' \
-                    "$RUNNER_TEMP/offsite-proof-result.json" >/dev/null || {
-                      jq '{Status, ResponseCode, StandardErrorContent}' "$RUNNER_TEMP/offsite-proof-result.json"
-                      exit 1
-                    }
-                  echo "Verified complete offsite file restore for $TARGET_SHA in run $GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
-
-            - name: Preserve the full-restore receipt
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+            - name: Preserve the new full-restore receipt
+              if: ${{ !cancelled() && steps.verify.outputs.downloaded == 'true' }}
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
-                  name: offsite-file-restore-${{ github.run_id }}
+                  name: offsite-file-restore-${{ github.run_id }}-${{ github.run_attempt }}
                   path: ${{ runner.temp }}/file-restore-drill.json
+                  if-no-files-found: error
+                  retention-days: 30
+
+            - name: Preserve release verification
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: offsite-file-restore-verification-${{ github.run_id }}-${{ github.run_attempt }}
+                  path: ${{ runner.temp }}/file-restore-verification.json
                   if-no-files-found: error
                   retention-days: 30

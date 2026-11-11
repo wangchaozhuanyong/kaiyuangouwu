@@ -246,28 +246,50 @@ fi
 [[ "${release_base_sha}" == "${deployed_sha}" ]] ||
     fail 'the running revision changed after release preflight; start a new release from current main'
 
-# The complete offsite restore is performed by a trusted, isolated release job
-# before this script is allowed to switch the production runtime. Keep its
-# per-run proof separate from the weekly healthcheck receipt.
+# Bind a fresh release verification to this run without changing the original
+# full-restore completion time. The backup policy must match this exact source.
 [[ "${GITHUB_RUN_ID:-}" =~ ^[0-9]+$ ]] || fail 'release run ID is required for the offsite file restore proof'
 readonly file_restore_proof="/var/lib/vendure-readiness/file-restore-drill-runs/${target_sha}-${GITHUB_RUN_ID}.json"
-sudo -n test -s "${file_restore_proof}" || fail 'the exact release has no complete offsite file restore proof'
-sudo -n jq -e --arg sha "${target_sha}" --arg run "${GITHUB_RUN_ID}" '
-    .source == "offsite" and .method == "offhost-full-restore" and
-    .targetSha == $sha and .runId == $run and
-    (.archiveSha256 | type == "string" and test("^[a-f0-9]{64}$")) and
-    (.backupFile | type == "string" and test("^vendure-files-[0-9]{8}T[0-9]{6}Z[.]tar[.]gz$")) and
-    (.archive.fileCount | type == "number" and . > 0) and
-    (.archive.totalBytes | type == "number" and . > 0) and
-    .rtoSeconds == 14400 and
-    (.durationSeconds | type == "number" and . >= 0 and . <= 14400)
-' "${file_restore_proof}" >/dev/null || fail 'the complete offsite file restore proof is invalid'
-readonly proof_completed_epoch="$(date -u --date="$(sudo -n jq -r .completedAt "${file_restore_proof}")" +%s 2>/dev/null || true)"
-readonly proof_age_seconds="$(( $(date +%s) - ${proof_completed_epoch:-0} ))"
-((proof_age_seconds >= 0 && proof_age_seconds <= 7200)) ||
-    fail 'the complete offsite file restore proof is stale'
+restore_policy_sha="$(for source in deploy/offsite-file-restore-drill.py deploy/systemd/vendure-file-backup.py \
+    deploy/systemd/vendure-s3-prefix-snapshot.py deploy/systemd/vendure-file-backup; do
+    git show "${target_sha}:${source}" | sha256sum | cut -d ' ' -f1 || exit 1
+done | sha256sum | cut -d ' ' -f1)" || fail 'could not read the target restore policy'
+readonly restore_policy_sha
+[[ "${restore_policy_sha}" =~ ^[a-f0-9]{64}$ ]] || fail 'could not verify the target restore policy'
+proof_times="$(sudo -n jq -er --arg sha "${target_sha}" --arg run "${GITHUB_RUN_ID}" \
+    --arg bucket "${expected_bucket}" --arg policy "${restore_policy_sha}" '
+    def digest: type == "string" and test("^[a-f0-9]{64}$");
+    def version: type == "string" and length > 0 and . != "null";
+    def positive_int: type == "number" and . > 0 and . == floor;
+    . as $release | .restoreProof as $proof | $proof.archiveIdentity as $identity |
+    select(
+        .method == "offhost-file-restore-verification" and .targetSha == $sha and .runId == $run and
+        $proof.source == "offsite" and $proof.method == "offhost-full-restore" and
+        ($proof.targetSha | type == "string" and test("^[a-f0-9]{40}$")) and
+        ($proof.runId | type == "string" and test("^[0-9]+$")) and
+        ($proof.backupFile | type == "string" and test("^vendure-files-[0-9]{8}T[0-9]{6}Z[.]tar[.]gz$")) and
+        $identity.bucket == $bucket and $identity.key == ("files/" + $proof.backupFile) and
+        ($identity.versionId | version) and ($identity.manifestVersionId | version) and
+        ($identity.checksumVersionId | version) and ($identity.archiveBytes | positive_int) and
+        ($identity.archiveSha256 | digest) and $proof.archiveSha256 == $identity.archiveSha256 and
+        ($identity.manifestSha256 | digest) and ($identity.checksumSha256 | digest) and
+        $identity.restorePolicySha256 == $policy and
+        ($proof.archive.fileCount | positive_int) and ($proof.archive.totalBytes | positive_int) and
+        $proof.rtoSeconds == 14400 and ($proof.durationSeconds | type == "number" and . >= 0 and . <= 14400) and
+        ($release.downloadedArchiveBytes == 0 or
+            ($release.downloadedArchiveBytes == $identity.archiveBytes and
+                $proof.targetSha == $sha and $proof.runId == $run))
+    ) | [(.verifiedAt | fromdateiso8601), ($proof.completedAt | fromdateiso8601),
+        ($identity.backupCreatedAt | fromdateiso8601)] | @tsv
+' "${file_restore_proof}")" || fail 'the exact release has no valid offsite file restore verification'
+IFS=$'\t' read -r proof_verified_epoch proof_completed_epoch backup_created_epoch <<< "$proof_times"
+readonly proof_now="$(date +%s)"
+((backup_created_epoch <= proof_completed_epoch && proof_completed_epoch <= proof_verified_epoch &&
+    proof_verified_epoch <= proof_now && proof_now - proof_verified_epoch <= 7200 &&
+    proof_now - backup_created_epoch <= 108000)) ||
+    fail 'the release verification or its offsite backup is stale'
 printf 'DEPLOY_OFFSITE_FILE_RESTORE_OK sha=%s run=%s age_seconds=%s\n' \
-    "${target_sha}" "${GITHUB_RUN_ID}" "${proof_age_seconds}"
+    "${target_sha}" "${GITHUB_RUN_ID}" "$((proof_now - proof_verified_epoch))"
 
 auth_visual_change=false
 if ! git diff --quiet "${deployed_sha}" "${target_sha}" -- \
