@@ -1374,6 +1374,36 @@ function inspectRepositoryState(sourceSha, readGit = readRepositoryGit) {
     }
 }
 
+function verifyReleaseSourceCheckout({
+    readGit = readRepositoryGit,
+    stat = lstatSync,
+    run = spawnSync,
+} = {}) {
+    const repository = '/var/www/kaiyuangouwu';
+    assert.ok(stat(repository).isDirectory(), 'Release source checkout must be a real directory');
+    assert.equal(
+        readGit(['rev-parse', '--show-toplevel']).trim(),
+        repository,
+        'Release source checkout does not match the approved repository root',
+    );
+    const permissions = run(
+        'sudo',
+        [
+            '-n',
+            '-H',
+            '-u',
+            'ubuntu',
+            '/bin/bash',
+            '-c',
+            '[[ -w "$1" && -x "$1" ]]',
+            'release-checkout',
+            repository,
+        ],
+        { timeout: 10000, stdio: 'ignore' },
+    );
+    assert.equal(permissions.status, 0, 'The release user cannot stage controls in the source checkout');
+}
+
 // The updater intentionally pauses image dependencies. Waiting here is read-only;
 // an absent/inactive updater never turns an actual dependency failure into a retry.
 function waitForImageUpdate({
@@ -3146,6 +3176,7 @@ function runLocked(environment = process.env) {
         return;
     }
     if (request.operation === 'preflight-release') {
+        verifyReleaseSourceCheckout();
         const plan = inspectProductionReleases();
         assertStorefrontInspectionRevision(plan.markerSha, request.sourceSha);
         if (existsSync(path.join(plan.currentRuntime, 'deploy/image-worker/server.cjs'))) {
@@ -3393,6 +3424,7 @@ module.exports = {
     applyFileBackupCleanup,
     inspectOffsiteFileBackupConfig,
     inspectRepositoryState,
+    verifyReleaseSourceCheckout,
     planDigest,
     productionHealthSnapshot,
     retainReviewedPlan,

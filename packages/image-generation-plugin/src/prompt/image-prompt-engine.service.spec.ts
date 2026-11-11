@@ -51,8 +51,10 @@ describe('prompt optimization daily quota boundary', () => {
 
 describe('prompt provider failover', () => {
     it.each([
-        ['network error', new Error('socket closed')],
-        ['server error', Object.assign(new Error('upstream unavailable'), { details: { httpStatus: 503 } })],
+        [
+            'authorization rejection',
+            Object.assign(new Error('unauthorized'), { details: { httpStatus: 401 } }),
+        ],
         ['rate limit', Object.assign(new Error('rate limited'), { details: { httpStatus: 429 } })],
     ])('uses a distinct fallback model after a %s', async (_label, firstError) => {
         const attempts: string[] = [];
@@ -90,10 +92,15 @@ describe('prompt provider failover', () => {
         expect(failures).toEqual(['gemini-primary']);
     });
 
-    it('does not send invalid requests to another provider', async () => {
+    it.each([
+        ['socket closed', undefined],
+        ['upstream timeout', 408],
+        ['gateway error', 502],
+        ['invalid prompt payload', 422],
+    ])('makes one upstream attempt after %s', async (message, httpStatus) => {
         const attempts: string[] = [];
-        const invalidRequest = Object.assign(new Error('invalid prompt payload'), {
-            details: { httpStatus: 422 },
+        const failure = Object.assign(new Error(message), {
+            details: { httpStatus },
         });
 
         await expect(
@@ -102,18 +109,18 @@ describe('prompt provider failover', () => {
                 excludedIds => Promise.resolve({ config: { id: `model-${excludedIds.length + 1}` } }),
                 route => {
                     attempts.push(String(route.config.id));
-                    return Promise.reject(invalidRequest);
+                    return Promise.reject(failure);
                 },
                 () => Promise.resolve(),
             ),
-        ).rejects.toThrow('invalid prompt payload');
+        ).rejects.toThrow(message);
 
         expect(attempts).toEqual(['model-1']);
     });
 
     it('classifies bounded failover statuses', () => {
-        expect(shouldFailoverPromptModel(new Error('network error'))).toBe(true);
-        expect(shouldFailoverPromptModel({ details: { httpStatus: 502 } })).toBe(true);
+        expect(shouldFailoverPromptModel(new Error('network error'))).toBe(false);
+        expect(shouldFailoverPromptModel({ details: { httpStatus: 502 } })).toBe(false);
         expect(shouldFailoverPromptModel({ details: { httpStatus: 401 } })).toBe(true);
         expect(shouldFailoverPromptModel({ details: { httpStatus: 422 } })).toBe(false);
     });
@@ -275,6 +282,26 @@ describe('prompt optimizer reference grounding', () => {
         expect(attempts[0].outcome).toBe('UNKNOWN');
         expect(result.actualCostMicrounits).toBeNull();
         expect(result).toMatchObject({ upstreamCallCount: 1 });
+    });
+
+    it('records a gateway failure for supplier reconciliation without a second upstream call', async () => {
+        const { engine, provider, attempts } = setup();
+        provider.optimizePrompt.mockRejectedValueOnce(
+            Object.assign(new Error('upstream response unavailable'), { details: { httpStatus: 502 } }),
+        );
+        const result = await engine.optimize(ctx, request);
+        expect(provider.optimizePrompt).toHaveBeenCalledTimes(1);
+        expect(attempts).toHaveLength(1);
+        expect(attempts[0]).toMatchObject({
+            outcome: 'UNKNOWN',
+            httpStatus: 502,
+            actualCostMicrounits: null,
+        });
+        expect(result).toMatchObject({
+            source: 'FALLBACK',
+            upstreamCallCount: 1,
+            actualCostMicrounits: null,
+        });
     });
 
     it.each(['PAID', 'FREE'])(

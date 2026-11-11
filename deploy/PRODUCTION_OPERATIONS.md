@@ -109,6 +109,36 @@ Normal deployment, verification, rollback and branch cleanup continue to use
 the existing workflows described in `DEPLOYMENT_RUNBOOK.md`. This operation
 does not promote an application release or change its version marker.
 
+## Backup verification and S3 release storage
+
+The backup writers publish a root-owned `.verified-backup.json` after validating
+the local archive and confirming the version IDs of the offsite objects. The
+five-minute health check reads this receipt and the small checksum sidecar and
+checks the archived files' identity and age. A missing, stale or changed backup
+still fails the health check. The first runtime release using the receipt adopts
+an existing fresh backup under its writer lock before the applicable switch or
+migration. Later checks reuse the receipt. Keep the independent full offsite
+restore evidence and existing RPO and RTO gates.
+
+Read every page of the release bucket's `deployments/` object versions and feed
+the inventory to `node deploy/release-artifact-retention.mjs -`. This includes
+versions hidden by delete markers and reports their actual storage classes.
+For a retention proposal, pass the current release ledger as the second
+argument. Its `protectedShas` covers each component's running version, last two
+verified rollbacks and in-flight releases. Each entry in `closedRuns` supplies
+`sha`, `runId`, `status` (`failure` or reviewed `temporary`) and `closedAt`.
+The report only proposes exact versions from those runs after seven days.
+Reconcile the ledger and protected references again before any separately
+authorized deletion. Database and persistent-file backup prefixes use their
+own recovery policies.
+
+When changing production capacity, verify the new resource uses the existing
+Vendure billing scope and has a CPU burst capacity alarm before routing traffic
+to it. Review additional recurring spend against the current project budget.
+The AWS budget is a billing alert. Supplier usage limits and GitHub Actions
+overage limits need their own approved amounts and controls before enabling
+additional metered work.
+
 ## Planned application or database maintenance
 
 An operation which stops `vendure-api` interrupts every store served by the shared

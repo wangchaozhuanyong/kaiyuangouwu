@@ -822,12 +822,12 @@ export async function firstSuccessfulPromptModel<TRoute extends { config: { id: 
 export function shouldFailoverPromptModel(error: unknown): boolean {
     if (error instanceof ImageAttemptPersistenceError) return false;
     const { httpStatus } = providerFailureDetails(error);
+    if (typeof httpStatus !== 'number') return false;
+    // A timeout or gateway failure can occur after the provider accepted the request.
+    // Preserve that attempt for reconciliation before sending anything to another provider.
     return (
-        httpStatus == null ||
-        // A successful HTTP response can still contain no usable description.
-        (httpStatus >= 200 && httpStatus <= 299) ||
-        [401, 403, 404, 408, 409, 425, 429].includes(httpStatus) ||
-        (httpStatus >= 500 && httpStatus <= 599)
+        // A completed response can still contain no usable description.
+        (httpStatus >= 200 && httpStatus <= 299) || [401, 403, 404, 429].includes(httpStatus)
     );
 }
 

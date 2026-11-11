@@ -481,6 +481,37 @@ rollback 19`,
     assert.doesNotMatch(result.stdout, /ROLLBACK_BEGIN|PRODUCTION_API_READY/u);
 });
 
+void test('an unsuccessful runtime recovery cannot save or report an incomplete process set as restored', async () => {
+    const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
+    const rollback = script.match(/\nrollback\(\) \{[\s\S]*?\n\}/u)?.[0];
+    assert.ok(rollback);
+    const result = spawnSync(
+        'bash',
+        [
+            '-c',
+            `set -Eeuo pipefail
+rollback_needed=1
+admin_pointer_changed=0
+storefront_pointer_changed=0
+two_factor_pointer_changed=0
+pointer_changed=0
+nginx_changed=0
+repository=/dev/null
+previous_runtime=/immutable/previous
+deployment_id=fixture
+cleanup() { :; }
+node() { [[ "$2" == check-runtime ]]; }
+pm2() { printf 'PM2:%s\\n' "$*"; }
+${rollback}
+rollback 19`,
+        ],
+        { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 19);
+    assert.match(result.stderr, /RUNTIME_ROLLBACK_FAILED\nROLLBACK_INCOMPLETE/u);
+    assert.doesNotMatch(result.stdout, /PM2:save|ROLLBACK_DONE/u);
+});
+
 void test('reused CI skips do not skip deployment, and skipped deployment cannot pass the release', async () => {
     const workflow = await readFile(
         path.join(repositoryRoot, '.github/workflows/production_release.yml'),
@@ -1234,6 +1265,16 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     );
     assert.match(script, /rollback_needed=0\n\s+printf 'ROLLBACK_BEGIN/u);
     assert.equal(script.match(/ROLLBACK_BEGIN/gu)?.length, 1);
+    assert.match(
+        script,
+        /if \(\(rollback_failed\)\); then\n\s+printf 'ROLLBACK_INCOMPLETE\\n' >&2\n\s+else\n\s+printf 'ROLLBACK_DONE\\n'/u,
+    );
+    assert.ok(
+        script.indexOf('--initialize-backup-verification mysql') <
+            script.indexOf('deploy_stage="install-backup-healthcheck"') &&
+            script.indexOf('deploy_stage="install-backup-healthcheck"') <
+                script.indexOf('deploy_stage="runtime-switch"'),
+    );
     assert.match(script, /sync-moyao-brand\.mjs/u);
     assert.match(script, /packages\/storefront\/src\/assets\/brand\//u);
     assert.match(script, /MOYAO AI managed brand data changed/u);
@@ -1426,6 +1467,10 @@ void test('persistent business files have encrypted offsite backup, retention an
         path.join(repositoryRoot, 'deploy/systemd/vendure-backup-s3-guard.py'),
         'utf8',
     );
+    const backupVerification = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-backup-verification.py'),
+        'utf8',
+    );
     const s3SnapshotTool = await readFile(
         path.join(repositoryRoot, 'deploy/systemd/vendure-s3-prefix-snapshot.py'),
         'utf8',
@@ -1468,7 +1513,11 @@ void test('persistent business files have encrypted offsite backup, retention an
     assert.match(s3PolicyGuard, /get-public-access-block/u);
     assert.match(s3PolicyGuard, /get-bucket-lifecycle-configuration/u);
     assert.match(s3PolicyGuard, /current_days \+ noncurrent_days <= maximum_days/u);
-    assert.match(backupScript, /sha256sum/u);
+    assert.match(backupScript, /python3 "\$\{verification_tool\}" prepare files/u);
+    assert.match(backupScript, /python3 "\$\{verification_tool\}" publish files/u);
+    assert.match(backupVerification, /hashlib\.sha256\(\)/u);
+    assert.match(backupVerification, /if hashes != recorded:/u);
+    assert.match(backupVerification, /os\.replace\(temporary, path\)/u);
     assert.match(backupTool, /BACKUP_MANIFEST\.json/u);
     assert.match(backupTool, /O_NOFOLLOW/u);
     assert.match(backupTool, /File changed while being backed up/u);
@@ -1498,6 +1547,7 @@ void test('persistent business files have encrypted offsite backup, retention an
     assert.match(offhostWorkflow, /OFFSITE_FILE_RESTORE_VERIFIED sha=%s run=%s/u);
     assert.match(offhostWorkflow, /\/bin\/bash <<'VENDURE_OFFSITE_PROOF'/u);
     assert.match(offhostScript, /restore_stream/u);
+    assert.match(offhostScript, /TOOLS \/ "vendure-backup-verification\.py"/u);
     assert.match(offhostScript, /DISK_RESERVE_BYTES/u);
     assert.match(deploymentScript, /DEPLOY_OFFSITE_FILE_RESTORE_OK/u);
     assert.match(deploymentScript, /sudo -n jq -er --arg sha/u);

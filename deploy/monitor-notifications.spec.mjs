@@ -122,7 +122,7 @@ describe('Chinese persisted external monitoring', () => {
                 }
             }
         }
-        assert.equal(codes.size, 17);
+        assert.equal(codes.size, 19);
         const signals = hostSignals([...codes]);
         assert.deepEqual(new Set(signals.map(signal => signal.key.replace('host:', ''))), codes);
         assert.ok(signals.every(signal => signal.firing));
@@ -131,19 +131,20 @@ describe('Chinese persisted external monitoring', () => {
         const codes = hostSignals([])
             .map(signal => signal.key.replace('host:', ''))
             .filter(code => /backup|restore-drill/u.test(code));
+        assert.equal(codes.length, 15);
         const messages = [];
         const send = async text => messages.push(text);
         const incident = await deliverSignals(hostSignals(codes), {}, send, 1_000);
-        assert.equal(incident.sent, 13);
+        assert.equal(incident.sent, codes.length);
         assert.equal(incident.failed, 0);
         const repeated = await deliverSignals(hostSignals(codes), incident.state, send, 2_000);
         assert.equal(repeated.sent, 0);
         const recovered = await deliverSignals(hostSignals([]), repeated.state, send, 3_000);
-        assert.equal(recovered.sent, 13);
-        assert.ok(messages.slice(13).every(text => /系统监测恢复/u.test(text)));
+        assert.equal(recovered.sent, codes.length);
+        assert.ok(messages.slice(codes.length).every(text => /系统监测恢复/u.test(text)));
         const settled = await deliverSignals(hostSignals([]), recovered.state, send, 4_000);
         assert.equal(settled.sent, 0);
-        assert.equal(messages.length, 26);
+        assert.equal(messages.length, codes.length * 2);
     });
     it('reports configuration readiness without exposing credentials or treating missing fields as success', () => {
         const configured = {

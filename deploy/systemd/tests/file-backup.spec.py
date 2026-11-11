@@ -330,6 +330,9 @@ class FileBackupServiceResumeTest(unittest.TestCase):
         (self.tools / "vendure-backup-s3-guard.py").write_bytes(
             SCRIPT.with_name("vendure-backup-s3-guard.py").read_bytes()
         )
+        (self.tools / "vendure-backup-verification.py").write_bytes(
+            SCRIPT.with_name("vendure-backup-verification.py").read_bytes()
+        )
         event_prelude = '''import json
 import os
 from pathlib import Path
@@ -438,7 +441,8 @@ elif operation == "s3":
         raise SystemExit("Synthetic upload failure")
     source = Path(args[2])
     key = args[3].split("/", 3)[3]
-    state[key] = {"ContentLength": source.stat().st_size, "ServerSideEncryption": "AES256"}
+    state[key] = {"ContentLength": source.stat().st_size, "ServerSideEncryption": "AES256",
+                  "VersionId": "version-" + source.name}
     state_path.write_text(json.dumps(state))
     log_path = Path(os.environ["FAKE_S3_UPLOAD_LOG"])
     log = json.loads(log_path.read_text())
@@ -492,6 +496,13 @@ if result is not None:
         self.assertIn("Resumed verified persistent file backup", result.stdout)
         self.assertEqual(len(list(self.backups.glob("*.tar.gz"))), 1)
         self.assertEqual(len(json.loads(self.upload_log.read_text())), 3)
+        receipt = json.loads((self.backups / ".verified-backup.json").read_text())
+        self.assertEqual(receipt["archive"], self.archive.name)
+        self.assertEqual(receipt["offsite"]["versions"], [
+            "version-" + self.archive.name,
+            "version-" + self.archive.name + ".manifest.json",
+            "version-" + self.archive.name + ".sha256",
+        ])
 
     def test_new_capture_uploads_and_verifies_all_objects(self):
         self.archive.unlink()
@@ -509,6 +520,7 @@ if result is not None:
             f"files/{path.name}": {
                 "ContentLength": path.stat().st_size,
                 "ServerSideEncryption": "AES256",
+                "VersionId": "version-" + path.name,
             }
             for path in (self.archive, manifest)
         }))
@@ -612,6 +624,7 @@ if result is not None:
         failed = self.run_service({"FAKE_S3_FAIL_UPLOAD": "1"})
         self.assertNotEqual(failed.returncode, 0)
         self.assertNotIn("Created verified persistent file backup", failed.stdout)
+        self.assertFalse((self.backups / ".verified-backup.json").exists())
         archives = list(self.backups.glob("*.tar.gz"))
         self.assertEqual(len(archives), 1)
         for suffix in (".manifest.json", ".sha256"):

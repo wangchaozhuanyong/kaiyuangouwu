@@ -286,6 +286,7 @@ jobs:
                   }
                   if operation_name in backup_operations:
                       backup_tools = [
+                          'vendure-backup-verification.py',
                           'vendure-mysql-backup',
                           'vendure-mysql-backup-manifest.py',
                           'vendure-backup-s3-guard.py',
