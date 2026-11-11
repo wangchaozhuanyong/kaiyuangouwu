@@ -98,10 +98,12 @@ verification_result:
 - Nginx 配置基线：`deploy/nginx/damatong.conf`（保留兼容文件名，已覆盖双店域名）
 - 在源站验证尚未安装的候选片段，使用 `sudo -n python3 -B deploy/validate-nginx-candidate.py deploy/nginx/damatong.conf`。脚本显式保留 `www-data` 身份、隔离全部 5 个临时目录和日志，并检查线上目录元数据未变。禁止以 root 对遗漏 `user` 或临时目录隔离的自制配置运行 `nginx -t/-T`：语法检查也会调整临时目录所有者，导致线上大请求返回 500。正式安装后的配置仍按发布脚本执行默认 `nginx -t` 与 reload。
 - TLS 协议只在 `deploy/nginx/damatong.conf` 的 `http` 作用域声明一次，固定为 `ssl_protocols TLSv1.2 TLSv1.3;`；生产机 `/etc/nginx/nginx.conf` 不得保留发行版默认的重复 `ssl_protocols` 声明。
-- 数据库：同一 EC2 上的 MySQL 8.0，使用 `single-host` 生产模式；每日逻辑备份与恢复演练脚本位于 `deploy/systemd/`。
-- 异地备份：`yunqiao-vendure-prod-backup-079740175286-apne1/mysql`，实例角色只能访问已审核的 MySQL 与持久文件前缀；存储桶必须启用版本控制、SSE-S3 默认加密、阻止全部公网访问、Bucket owner enforced 以及有界生命周期。默认本地保留 14 天，异地当前版本与非当前版本合计最长 30 天。
+- 数据库：同一 Lightsail 实例上的 MySQL 8.0，使用 `single-host` 生产模式；每日逻辑备份与恢复演练脚本位于 `deploy/systemd/`。
+- 异地备份：`yunqiao-vendure-prod-backup-098208446664-apne1/mysql`，实例角色只能访问已审核的 MySQL 与持久文件前缀；存储桶必须启用版本控制、SSE-S3 默认加密、阻止全部公网访问、Bucket owner enforced 以及有界生命周期。默认本地保留 14 天，异地当前版本与非当前版本合计最长 30 天。
 
 单机生产环境必须在 `.env` 中设置 `VENDURE_REQUIRE_OFFSITE_BACKUP=true` 和可写的 `VENDURE_BACKUP_S3_URI=s3://<bucket>/<mysql-prefix>`，同时设置 `VENDURE_REQUIRE_OFFSITE_FILE_BACKUP=true` 和不重叠的 `VENDURE_FILE_BACKUP_S3_URI=s3://<bucket>/<files-prefix>`。数据库、商品资源、客户头像、私有生图和数字交付文件都使用带 SHA-256 和内嵌清单的版本化异地备份；对象明确使用 SSE-S3 加密。如果客户图片本身已使用 S3，备份会按源对象 `VersionId` 捕获当前头像与私有图片，并且拒绝把备份写回任一源桶。每周恢复演练不依赖本机目录，使用 `s3:ListBucket` 独立发现最新完整备份，再下载并在隔离目标中校验全量内容与 S3 源清单，完成后删除临时数据库和文件。RPO/RTO 由四个 `VENDURE_*_RECOVERY_*_SECONDS` 变量声明并由生产健康检查强制。
+
+运行时发布和每周独立异机检查共用同一个文件恢复队列。首次验证、对象版本或清单变化、恢复程序变化、成功回执缺失或失效时，在隔离 GitHub runner 下载全量归档并按原恢复目标验证。仍在 30 小时恢复窗口内的相同对象版本，可复用可信的真实恢复结果。定时检查复用时，已有真实演练必须对应当前完整备份。每次运行时发布另外记录目标 SHA、运行编号、验证时间和实际下载字节，生产切换仍在两小时内核对此记录、源代码恢复规则摘要及真实回执。健康检查读取的是最近真实演练时间。校验不通过时停止切换。
 
 S3 生命周期由账户基础设施负责配置，发布脚本不自动改存储桶。每次备份前，共享策略门禁会读取版本控制、所有权、公网阻断、加密与生命周期；对应前缀必须有启用的当前版本到期、非当前版本到期和不超过 7 天的未完成分段上传清理，且两个到期天数之和不得超过对应 `VENDURE_*_BACKUP_S3_RETENTION_DAYS`。缺失任一项时备份与发布失败关闭。这个到期策略只清理历史备份，不会定时删除正在使用的头像；头像仍活跃时会持续进入新备份，只有在正式替换或删除后，历史副本才会随备份窗口到期。
 
@@ -188,11 +190,13 @@ Build & Test 整体失败时，总门禁仍为失败，不能作为目标版本�
 
 大马通整店受管内容使用独立的 `damatong_storefront` 与 `damatong_channel_token` 发布范围，不复用容易混淆 Channel code 与 token 的通用字段。生产只接受公开的受审选择器 `damatong_channel_token=my-malaysia`；该字段不是生产 Channel 凭据。发布脚本先从 `damatong.net` 的 Shop API 读取域名实际路由的 Channel code，再在已认证的 Admin Channel 列表中精确匹配，并只在进程内使用真实 token，日志不得输出该 token。首次启用必须先单独发布本工作流和服务器保护逻辑，且该门禁引导版本不得携带大马通内容或勾选发布范围；确认生产已安装新保护逻辑后，第二个正式版本才可携带发布器、图片与内容并勾选该范围。
 
-同一次 `Production Release` 的运行时制品任务成功后，可复用部署任务在同一运行内接管该固定版本。它使用 GitHub OIDC 临时凭证承担
-`arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy`，只把当前 SHA 的不可变归档写入
-`s3://yunqiao-vendure-prod-backup-079740175286-apne1/deployments/<sha>/`，再只向
-`i-041a146558e432cbf` 发送 `AWS-RunShellScript`。仓库和 GitHub 均不保存长期 AWS Access Key；常规发布在
-GitHub 的 `main` 分支手动运行一次 `Production Release`，无需登录 AWS 控制台。
+同一次 `Production Release` 的运行时制品任务成功后，可由部署任务在同一运行接管固定版本。现用生产位于 AWS 东京，
+GitHub OIDC 临时角色为 `arn:aws:iam::098208446664:role/yunqiao-vendure-github-deploy`，
+不可变归档位于 `s3://yunqiao-vendure-prod-backup-098208446664-apne1/deployments/<sha>/`，
+SSM 目标为 Lightsail 实例 `vendure-prelaunch-4gb-20261111` 的受管节点 `mi-04476e3f29a528ddc`。
+发布前核对工作流目标和 Lightsail 开关，目标不一致时停止。常规发布在 GitHub 的 `main` 分支手动运行一次 `Production Release`。
+
+费用变更先审核预估月费、一次性费用、负责人、资源保留和清退日期。每次迁机验收回读被替换的实例、磁盘、快照和公网 IP，并在下一账期确认停止产生对应费用。商城预算按 `VendureBudgetScope=vendure` 归属，另复核账户共享出站流量和未归属费用。上线后七天核对恢复实际下载字节和制品增长，下一完整账期复核抵扣前费用。
 
 ### 发布失败后继续修复
 
