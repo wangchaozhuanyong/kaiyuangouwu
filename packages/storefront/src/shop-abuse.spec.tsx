@@ -374,6 +374,33 @@ async function prepareRechargeSubmission() {
 }
 
 describe('recharge feedback follows the action that failed', () => {
+    it.each([
+        ['zh', '该兑换码无法在本商城使用，请核对兑换码后重试。'],
+        ['en', 'This redemption code cannot be used in this store. Check the code and try again.'],
+    ] as const)('identifies a definitive storefront code rejection in %s', async (language, message) => {
+        const client = rechargeClient();
+        const response = JSON.stringify({
+            data: null,
+            errors: [
+                {
+                    message: '兑换码无效或已停用，请核对后重试',
+                    extensions: { code: 'USER_INPUT_ERROR' },
+                },
+            ],
+        });
+        client.verify.mockImplementationOnce(() =>
+            Promise.resolve().then(() => parseShopApiResponse(response, 200, true)),
+        );
+        await renderRecharge(client, language);
+        await verifyRecharge();
+        const input = host.querySelector('#gpt-code');
+        expect(input?.getAttribute('aria-invalid')).toBe('true');
+        expect(input?.getAttribute('aria-describedby')).toContain('gpt-code-error');
+        expect(host.querySelector('#gpt-code-error')?.textContent).toBe(message);
+        expect(document.activeElement).toBe(input);
+        expect(client.submit).not.toHaveBeenCalled();
+    });
+
     it.each(['zh', 'en'] as const)(
         'validates an empty code locally and explains the next step in %s',
         async language => {
