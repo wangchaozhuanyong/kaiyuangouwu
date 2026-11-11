@@ -133,6 +133,10 @@ function Fixture() {
                 setOperationCalls(value => ({ ...value, verify: value.verify + 1 }));
                 admit('RECHARGE_CODE', code, proof);
                 const errorMode = params.get('error');
+                if (code === 'DEMO-NOT-ADMITTED')
+                    throw new ShopApiGraphQlError(['此兑换码未获本商城使用授权'], 200, 'USER_INPUT_ERROR');
+                if (code === 'DEMO-HELD')
+                    return { plan: 'plus', status: 'reserved', reason: 'manual_review_required' };
                 if (errorMode === 'verify-code-rejected')
                     throw new ShopApiGraphQlError(
                         ['兑换码无效或已停用，请核对后重试'],
@@ -160,6 +164,8 @@ function Fixture() {
             query: async (code, proof) => {
                 setOperationCalls(value => ({ ...value, query: value.query + 1 }));
                 admit('RECHARGE_CODE', code, proof);
+                if (code === 'DEMO-HELD')
+                    return { plan: 'plus', status: 'reserved', reason: 'manual_review_required' };
                 if (params.get('error') === 'query')
                     throw new Error('Synthetic private lookup provider detail');
                 return Promise.resolve({

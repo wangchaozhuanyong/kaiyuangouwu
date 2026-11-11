@@ -19,6 +19,7 @@ export interface RechargeTask {
 export interface RechargeCode {
     plan: RechargePlan;
     status: 'available' | 'reserved' | 'used' | 'disabled';
+    reason?: 'manual_review_required' | null;
     task?: RechargeTask | null;
 }
 export interface GptRechargeClient extends Partial<ShopAbuseClient> {
