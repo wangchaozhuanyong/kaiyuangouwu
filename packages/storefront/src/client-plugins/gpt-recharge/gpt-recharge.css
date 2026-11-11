@@ -138,56 +138,6 @@
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
 }
-.gpt-recharge-plans {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-8);
-}
-.gpt-recharge-plans button {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-12);
-    min-width: 0;
-    min-height: 76px;
-    padding: var(--space-8);
-    border: 1px solid var(--line);
-    border-radius: var(--skin-control-radius);
-    background: var(--surface);
-    color: var(--text);
-    font-size: var(--type-label-size);
-    line-height: var(--type-label-leading);
-}
-.gpt-recharge-plans strong {
-    font-weight: var(--font-weight-semibold);
-}
-.gpt-recharge-plans button[aria-pressed='true'] {
-    background: var(--selection-soft);
-    border-color: var(--selection);
-    color: var(--selection);
-}
-.gpt-recharge-plans button:disabled {
-    cursor: default;
-}
-.gpt-recharge-plans .gpt-recharge-unavailable {
-    flex-direction: column;
-    gap: 0;
-    background: var(--soft);
-    border-style: dashed;
-    color: var(--muted);
-}
-.gpt-recharge-plans small {
-    font-size: var(--type-meta-size);
-    line-height: var(--type-meta-leading);
-    font-weight: var(--font-weight-normal);
-}
-.gpt-recharge-plan-note {
-    margin: var(--space-8) 0 var(--space-24);
-    font-size: var(--type-meta-size);
-    line-height: var(--type-meta-leading);
-    color: var(--muted);
-}
 .gpt-recharge-label,
 .gpt-recharge-field {
     font-size: var(--type-label-size);
@@ -204,9 +154,21 @@
 }
 .gpt-recharge-field-heading {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-8);
+}
+.gpt-recharge-session-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-8);
+    min-height: 44px;
+    padding: var(--space-8) var(--space-12);
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+    white-space: nowrap;
 }
 .gpt-recharge-field input,
 .gpt-recharge-field textarea,
@@ -272,14 +234,10 @@
     line-height: var(--type-helper-leading);
     font-weight: var(--font-weight-medium);
 }
-.gpt-recharge-field-heading .gpt-recharge-text-button {
-    margin-block: calc(-1 * var(--space-8));
-}
 .gpt-recharge-text-button:hover {
     color: var(--accent-ink);
 }
 .gpt-recharge-helper,
-.gpt-recharge-valid,
 .gpt-recharge-alert {
     display: flex;
     align-items: flex-start;
@@ -288,9 +246,6 @@
     font-size: var(--type-helper-size);
     line-height: var(--type-helper-leading);
     color: var(--muted);
-}
-.gpt-recharge-valid {
-    color: var(--success);
 }
 .gpt-recharge-alert {
     color: var(--danger);
@@ -311,15 +266,6 @@
 .gpt-recharge-action-error:focus-visible {
     outline: 2px solid var(--danger);
     outline-offset: 2px;
-}
-.gpt-recharge-notices {
-    padding: var(--space-16) var(--space-32) 0;
-}
-.gpt-recharge-notices > :last-child {
-    margin-bottom: 0;
-}
-.gpt-recharge-notices .gpt-recharge-text-button {
-    margin-top: calc(-1 * var(--space-8));
 }
 .gpt-recharge-summary {
     margin: var(--space-16) 0 var(--space-8);
@@ -444,6 +390,15 @@
     margin-top: var(--space-16);
     padding-inline: var(--space-24);
 }
+.gpt-recharge-service-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-8) var(--space-16);
+}
+.gpt-recharge-service-actions button {
+    margin-top: 0;
+}
 @media (max-width: 1023px) {
     .gpt-recharge-intro {
         flex-direction: column;
@@ -490,32 +445,11 @@
     .gpt-recharge-section-title {
         margin-bottom: var(--space-16);
     }
-    .gpt-recharge-plans {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-    .gpt-recharge-plans button {
-        min-height: 60px;
-        padding: var(--space-4);
-        gap: 0;
-    }
-    .gpt-recharge-plans button > svg {
-        position: absolute;
-        top: var(--space-4);
-        right: var(--space-4);
-        width: 10px;
-        height: 10px;
-    }
-    .gpt-recharge-plan-note {
-        margin-bottom: var(--space-16);
-    }
     .gpt-recharge-field textarea {
         height: 104px;
     }
     .gpt-recharge-help-links {
         display: none;
-    }
-    .gpt-recharge-notices {
-        padding-inline: var(--space-16);
     }
     .gpt-recharge-query,
     .gpt-recharge-result {

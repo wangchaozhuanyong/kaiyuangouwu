@@ -7,7 +7,7 @@ import { rechargeCopy, rechargeFaq } from './copy';
 import './gpt-recharge-guide.css';
 
 const CHATGPT_URL = 'https://chatgpt.com/';
-const SESSION_URL = 'https://chatgpt.com/api/auth/session';
+export const CHATGPT_SESSION_URL = 'https://chatgpt.com/api/auth/session';
 
 function BrowserIllustration({
     language,
@@ -182,7 +182,7 @@ export function GptRechargeGuide({
         if (copyState === 'copying') return;
         setCopyState('copying');
         try {
-            await navigator.clipboard.writeText(SESSION_URL);
+            await navigator.clipboard.writeText(CHATGPT_SESSION_URL);
             setCopyState('copied');
         } catch {
             setCopyState('failed');
@@ -234,7 +234,7 @@ export function GptRechargeGuide({
                     </a>
                     <a
                         className="secondary-action"
-                        href={SESSION_URL}
+                        href={CHATGPT_SESSION_URL}
                         target="_blank"
                         rel="noreferrer noopener"
                     >
@@ -261,7 +261,7 @@ export function GptRechargeGuide({
                         id={urlId}
                         type="url"
                         readOnly
-                        value={SESSION_URL}
+                        value={CHATGPT_SESSION_URL}
                         onFocus={event => event.currentTarget.select()}
                         autoComplete="off"
                         spellCheck={false}

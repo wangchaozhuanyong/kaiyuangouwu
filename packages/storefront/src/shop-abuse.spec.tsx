@@ -300,14 +300,7 @@ it('keeps recharge session and confirmation after a challenge rejection and neve
         submit: vi.fn().mockRejectedValueOnce(denied('SHOP_ABUSE_CHALLENGE_REQUIRED', 'RECHARGE_SUBMIT')),
         createShopAbuseChallenge: vi.fn().mockResolvedValue(image()),
     };
-    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    await settle(() =>
-        root.render(
-            <QueryClientProvider client={cache}>
-                <GptRechargePage client={client} marketKey="synthetic" onBack={vi.fn()} />
-            </QueryClientProvider>,
-        ),
-    );
+    await renderRecharge(client);
     await settle(() => setInput(host.querySelector('#gpt-code') as HTMLInputElement, 'synthetic-code'));
     await settle(() =>
         host.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
@@ -324,7 +317,6 @@ it('keeps recharge session and confirmation after a challenge rejection and neve
     expect((host.querySelector('.gpt-recharge-confirm input') as HTMLInputElement).checked).toBe(true);
     expect(host.textContent).not.toContain('正在确认提交结果');
     expect(host.textContent).toContain('请输入图片验证码');
-    cache.clear();
 });
 
 function rechargeClient() {
@@ -354,6 +346,10 @@ async function renderRecharge(client: GptRechargeClient, language: StorefrontLan
             </QueryClientProvider>,
         ),
     );
+    await vi.waitFor(async () => {
+        await settle(() => Promise.resolve());
+        expect(host.querySelector('#gpt-code')).not.toBeNull();
+    });
 }
 
 async function verifyRecharge() {

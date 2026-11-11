@@ -582,13 +582,18 @@ describe('catalog rendering boundary', () => {
                         contentBlocks: [],
                     },
                 });
+            const waitForEmptyInput = () =>
+                vi.waitFor(async () => {
+                    await act(async () => {
+                        await Promise.resolve();
+                    });
+                    const field = element.querySelector<HTMLInputElement>('#gpt-code');
+                    if (!field) throw new Error('Expected real recharge input');
+                    expect(field.value).toBe('');
+                    return field;
+                });
             present('zh', 'fixture-store');
-            await act(async () => {
-                await Promise.resolve();
-            });
-            const input = element.querySelector<HTMLInputElement>('#gpt-code');
-            expect(input).not.toBeNull();
-            if (!input) throw new Error('Expected real recharge input');
+            const input = await waitForEmptyInput();
             const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
             act(() => {
                 descriptor?.set?.call(input, 'synthetic-shell-draft');
@@ -605,7 +610,8 @@ describe('catalog rendering boundary', () => {
                 expect(input.value).toBe('synthetic-shell-draft');
             }
             present('zh', 'fixture-store', 'CNY');
-            expect(element.querySelector<HTMLInputElement>('#gpt-code')?.value).toBe('');
+            expect(element.contains(input)).toBe(false);
+            await waitForEmptyInput();
             expect(
                 api.request.mock.calls.every(([query]) => query.startsWith('query GptRechargeConfig')),
             ).toBe(true);
