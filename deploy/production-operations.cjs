@@ -1660,8 +1660,7 @@ class InspectionGitError extends Error {}
 function refreshInspectionHistory(deployedSha, sourceSha, execute = execFileSync) {
     // Refresh objects only; a diagnostic must never checkout or advance the server working tree.
     for (const args of [
-        // The reviewed repository is public. Read its history without depending
-        // on a server SSH identity or forwarding credentials to a Git helper.
+        // Reuse the production checkout's read-only SSH origin for private repository history.
         [
             '-c',
             'credential.helper=',
@@ -1669,8 +1668,10 @@ function refreshInspectionHistory(deployedSha, sourceSha, execute = execFileSync
             'core.askPass=/usr/bin/false',
             'fetch',
             '--no-tags',
-            'https://github.com/wangchaozhuanyong/kaiyuangouwu.git',
-            'main',
+            '--no-write-fetch-head',
+            '--refmap=',
+            'origin',
+            'refs/heads/main',
         ],
         ['merge-base', '--is-ancestor', deployedSha, sourceSha],
     ]) {
