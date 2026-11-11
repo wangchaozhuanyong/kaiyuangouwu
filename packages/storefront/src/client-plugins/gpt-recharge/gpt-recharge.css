@@ -210,6 +210,16 @@
     display: flex;
     gap: var(--space-8);
 }
+.gpt-recharge-paste {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    gap: var(--space-8);
+    min-height: 48px;
+    padding-inline: var(--space-12);
+    white-space: nowrap;
+}
 .gpt-recharge-verify {
     display: flex;
     align-items: center;
@@ -266,6 +276,61 @@
 .gpt-recharge-action-error:focus-visible {
     outline: 2px solid var(--danger);
     outline-offset: 2px;
+}
+.gpt-recharge-plan-panel {
+    margin-top: var(--space-16);
+}
+.gpt-recharge-plan-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-4) var(--space-12);
+    margin-bottom: var(--space-8);
+}
+.gpt-recharge-plan-status {
+    color: var(--muted);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+.gpt-recharge-plan-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-8);
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+.gpt-recharge-plan-list li {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-8);
+    min-height: 56px;
+    padding: var(--space-8);
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--surface);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-medium);
+}
+.gpt-recharge-plan-list li[aria-current='true'] {
+    border-color: var(--selection);
+    background: var(--selection-soft);
+    color: var(--selection);
+}
+.gpt-recharge-plan-list .gpt-recharge-plan-unavailable {
+    flex-direction: column;
+    gap: 0;
+    border-style: dashed;
+    background: var(--soft);
+    color: var(--muted);
+}
+.gpt-recharge-plan-unavailable small {
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+    font-weight: var(--font-weight-normal);
 }
 .gpt-recharge-summary {
     margin: var(--space-16) 0 var(--space-8);

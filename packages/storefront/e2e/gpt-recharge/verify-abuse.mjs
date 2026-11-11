@@ -21,6 +21,11 @@ const session = JSON.stringify({
 async function calls(page) {
     return Number(await page.locator('[data-demo-abuse-calls]').getAttribute('data-demo-abuse-calls'));
 }
+async function assertMatchedPlus(page) {
+    const matchedPlan = page.locator('.gpt-recharge-plan-list [aria-current="true"]');
+    await matchedPlan.filter({ hasText: /^Plus$/ }).waitFor();
+    assert.equal(await matchedPlan.count(), 1);
+}
 async function assertFocused(page, selector) {
     await page.waitForFunction(value => document.activeElement?.matches(value), selector);
 }
@@ -118,9 +123,7 @@ try {
                         fullPage: true,
                     });
                     await verify.click();
-                    await page
-                        .getByText(language === 'zh' ? '已锁定 Plus' : 'Plan locked: Plus', { exact: true })
-                        .waitFor();
+                    await assertMatchedPlus(page);
                     await page.getByRole('checkbox').check();
                     const submit = page.getByRole('button', {
                         name: language === 'zh' ? '充值提交' : 'Submit recharge',
@@ -174,7 +177,7 @@ try {
             );
             if (mode === 'rate') await page.waitForTimeout(1100);
             await button.click();
-            await page.getByText('已锁定 Plus', { exact: true }).waitFor();
+            await assertMatchedPlus(page);
             assert.equal(await calls(page), 2);
             results.push({ mode, manualRecovery: 'passed', noForcedChallenge: true });
             await page.close();
@@ -240,9 +243,7 @@ try {
                                 );
                                 assert.equal(await page.locator('.shop-abuse-challenge').count(), 0);
                             } else {
-                                await page
-                                    .getByText(zh ? '已锁定 Plus' : 'Plan locked: Plus', { exact: true })
-                                    .waitFor();
+                                await assertMatchedPlus(page);
                                 await page.locator('#gpt-session').fill(session);
                                 await page.getByRole('checkbox').check();
                                 await submit.click();
