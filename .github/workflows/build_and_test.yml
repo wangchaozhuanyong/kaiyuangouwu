@@ -316,6 +316,8 @@ jobs:
               run: node deploy/build-artifact.mjs restore-tests "$RUNNER_TEMP/compiled-input" "$GITHUB_RUN_ID"
             - name: Build missing test prerequisites
               if: steps.compiled.outputs.restored != 'true' || needs.detect-changes.outputs.translation == 'true'
+              env:
+                  NODE_OPTIONS: --max-old-space-size=4096
               run: node scripts/ci-run.mjs prepare-tests
             - name: Build local application plugins
               if: needs.detect-changes.outputs.full == 'true' && steps.compiled.outputs.restored != 'true'
