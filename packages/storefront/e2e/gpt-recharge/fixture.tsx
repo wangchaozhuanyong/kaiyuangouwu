@@ -22,6 +22,7 @@ import {
 } from '../../src/components/common/locale-preferences';
 import { DesktopLayoutContext, useDesktopViewport } from '../../src/desktop-layout';
 import { createStorefrontQueryClient } from '../../src/query-client';
+import { ShopApiGraphQlError } from '../../src/shop-api-errors';
 import { StorefrontQueryFeedback } from '../../src/StorefrontQueryFeedback';
 
 import demoChallengeImage from './assets/abuse-demo.png?inline';
@@ -132,6 +133,12 @@ function Fixture() {
                 setOperationCalls(value => ({ ...value, verify: value.verify + 1 }));
                 admit('RECHARGE_CODE', code, proof);
                 const errorMode = params.get('error');
+                if (errorMode === 'verify-code-rejected')
+                    throw new ShopApiGraphQlError(
+                        ['兑换码无效或已停用，请核对后重试'],
+                        200,
+                        'USER_INPUT_ERROR',
+                    );
                 if (errorMode === 'verify' || (errorMode === 'verify-repeat' && code === verifiedCode))
                     throw new Error('Synthetic private verification provider detail');
                 if (!code.startsWith('DEMO-')) return Promise.reject(new Error('Only demo codes'));

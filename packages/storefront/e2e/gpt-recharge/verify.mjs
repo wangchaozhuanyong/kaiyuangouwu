@@ -122,6 +122,21 @@ try {
     await expect(confirmation).not.toBeChecked();
     await expect(submit).toBeDisabled();
     await repeatPage.close();
+    for (const width of [1440, 390]) {
+        const page = await browser.newPage({ viewport: { width, height: 1100 } });
+        await page.goto(`${origin}/e2e/gpt-recharge/?error=verify-code-rejected`);
+        const code = page.locator('#gpt-code');
+        await code.fill('DEMO-PLUS');
+        await page.getByRole('button', { name: '验证兑换码', exact: true }).click();
+        await expect(page.locator('#gpt-code-error')).toHaveText(
+            '该兑换码无法在本商城使用，请核对兑换码后重试。',
+        );
+        await expect(code).toBeFocused();
+        await expect(page.getByRole('button', { name: '充值提交', exact: true })).toBeDisabled();
+        if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth))
+            throw new Error(`Code rejection feedback overflow at ${width}`);
+        await page.close();
+    }
     await writeFile(
         path.join(output, 'browser-result.json'),
         JSON.stringify(
@@ -129,6 +144,7 @@ try {
                 source: 'local actual component with synthetic client; no live recharge',
                 results,
                 repeatVerificationFailure: 'passed',
+                codeRejectionFeedback: 'passed at 1440px and 390px',
             },
             null,
             2,

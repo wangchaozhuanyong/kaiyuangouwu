@@ -199,6 +199,23 @@ export function GptRechargePage({
         } catch (reason) {
             if (mounted.current) {
                 const scope = operationScope.current;
+                const errorCode = storefrontErrorCode(reason);
+                if (
+                    (scope === 'verify' || scope === 'query') &&
+                    errorCode === 'USER_INPUT_ERROR' &&
+                    reason instanceof Error &&
+                    reason.message === '兑换码无效或已停用，请核对后重试'
+                ) {
+                    setError({
+                        scope,
+                        field: scope === 'verify' ? 'code' : 'query',
+                        text: t(
+                            '该兑换码无法在本商城使用，请核对兑换码后重试。',
+                            'This redemption code cannot be used in this store. Check the code and try again.',
+                        ),
+                    });
+                    return;
+                }
                 const fallback =
                     scope === 'verify'
                         ? t(
@@ -211,10 +228,8 @@ export function GptRechargePage({
                           );
                 setError({
                     scope,
-                    // The service currently uses the same input-error envelope for invalid codes
-                    // and upstream failures. Do not mark the code as invalid without that evidence.
                     text:
-                        storefrontErrorCode(reason) === 'USER_INPUT_ERROR'
+                        errorCode === 'USER_INPUT_ERROR'
                             ? fallback
                             : storefrontErrorMessage(reason, language, fallback),
                 });
