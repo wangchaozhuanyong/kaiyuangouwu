@@ -71,6 +71,18 @@ try {
         await page.getByRole('button', { name: '验证兑换码', exact: true }).click();
         await expect(page.locator('#gpt-verify-error')).toBeVisible();
         await expect(activePlan).toHaveCount(0);
+        await codeInput.fill('DEMO-NOT-ADMITTED');
+        await verifyButton.click();
+        await expect(page.getByRole('alert')).toHaveText('此兑换码未获本商城使用授权');
+        await codeInput.fill('DEMO-HELD');
+        await verifyButton.click();
+        await expect(page.getByRole('heading', { name: '上次开通结果待核对', exact: true })).toBeVisible();
+        await expect(page.locator('#gpt-query')).toHaveValue('DEMO-HELD');
+        await expect(page.locator('[data-demo-query-calls]')).toHaveAttribute('data-demo-query-calls', '0');
+        await page.getByRole('button', { name: '查询充值结果' }).click();
+        await expect(page.locator('[data-demo-query-calls]')).toHaveAttribute('data-demo-query-calls', '1');
+        await expect(page.getByRole('heading', { name: '上次开通结果待核对', exact: true })).toBeVisible();
+        await page.getByRole('button', { name: '自助充值', exact: true }).click();
         await page.getByRole('button', { name: '填入演示资料' }).click();
         await page.getByRole('button', { name: '验证兑换码', exact: true }).click();
         await expect(activePlan).toHaveText('Plus');

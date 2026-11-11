@@ -10,7 +10,7 @@ import { type ShopApiContext } from './client-context';
 import { requestShopAbuseChallenge } from './shop-abuse';
 
 const taskFields = 'id credential plan status updatedAt';
-const codeFields = `plan status task { ${taskFields} }`;
+const codeFields = `plan status reason task { ${taskFields} }`;
 export class GptRechargeApi implements GptRechargeClient {
     createShopAbuseChallenge: ShopAbuseClient['createShopAbuseChallenge'];
     constructor(private readonly ctx: Pick<ShopApiContext, 'request'>) {
