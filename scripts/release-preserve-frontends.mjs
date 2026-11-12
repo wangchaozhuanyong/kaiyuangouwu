@@ -20,6 +20,7 @@ export function retainedFrontendPlan(plan, packageList = packageInventory()) {
             frontendOnly(file) ||
                 file.startsWith('packages/icloud-relay-plugin/src/') ||
                 [
+                    'packages/icloud-relay-plugin/e2e/admin-contract.e2e-spec.ts',
                     'packages/store-management-plugin/src/constants.ts',
                     'packages/store-management-plugin/src/merchant-catalog-access.service.ts',
                     'packages/store-management-plugin/src/administrator-access.interceptor.spec.ts',
