@@ -10,6 +10,8 @@ const state = vi.hoisted(() => ({
     clients: [] as Array<{
         capabilities: Set<string>;
         usable: boolean;
+        idling: boolean;
+        mailbox: { path: string; uidValidity: bigint };
         mailboxOpen: ReturnType<typeof vi.fn>;
         emit: (name: string) => void;
         close: () => void;
@@ -21,6 +23,8 @@ vi.mock('imapflow', async () => {
         ImapFlow: class extends EventEmitter {
             capabilities = new Set(state.idle ? ['IDLE'] : []);
             usable = false;
+            idling = true;
+            mailbox = { path: 'INBOX', uidValidity: BigInt(42) };
             constructor() {
                 super();
                 state.clients.push(this);
@@ -150,6 +154,28 @@ describe('event-driven IMAP IDLE', () => {
         await vi.advanceTimersByTimeAsync(1500);
         expect(state.clients).toHaveLength(2);
         expect(f.sync.syncAccount).toHaveBeenCalledTimes(2);
+        await f.service.onModuleDestroy();
+    });
+    it('reads the selected inbox only while the account still owns an idle listening socket', async () => {
+        const f = fixture();
+        await f.service.ensureWatching('1');
+        await vi.advanceTimersByTimeAsync(0);
+        const lease = f.builder.set.mock.calls[0][0];
+        const account = { ...f.account, ...lease } as never;
+        const read = vi.fn().mockResolvedValue('metadata');
+        const client = state.clients[0];
+        expect(await f.service.readListeningInbox(account, read)).toBe('metadata');
+        expect(read).toHaveBeenCalledExactlyOnceWith(client, BigInt(42));
+
+        client.idling = false;
+        expect(f.service.readListeningInbox(account, read)).toBeUndefined();
+        client.idling = true;
+        expect(
+            f.service.readListeningInbox({ ...f.account, ...lease, mailWatchOwner: 'other' }, read),
+        ).toBeUndefined();
+        expect(read).toHaveBeenCalledOnce();
+        expect(client.mailboxOpen).toHaveBeenCalledOnce();
+        expect(client.usable).toBe(true);
         await f.service.onModuleDestroy();
     });
     it('does not restart from a stale successful operation after disable or credential change', async () => {

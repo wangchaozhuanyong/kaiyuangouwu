@@ -141,6 +141,19 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
         }
     }
 
+    readListeningInbox<T>(
+        account: IcloudPrimaryAccount,
+        read: (client: Pick<ImapFlow, 'fetchAll'>, uidValidity: bigint) => Promise<T>,
+    ): Promise<T> | undefined {
+        const watcher = this.watchers.get(String(account.id));
+        const client = watcher?.client;
+        if (!watcher || !client?.idling || watcher.syncing || this.health(account).state !== 'listening')
+            return;
+        if (!client.mailbox || client.mailbox.path !== 'INBOX') return;
+        // The caller can only fetch metadata from the inbox already selected by the watcher.
+        return read(client, client.mailbox.uidValidity);
+    }
+
     reconcile(id: string): Promise<void> {
         if (this.stopped || !this.processContext.isServer || this.options?.realtimeEnabled === false)
             return Promise.resolve();
