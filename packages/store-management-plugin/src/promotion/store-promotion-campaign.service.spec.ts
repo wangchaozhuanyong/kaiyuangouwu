@@ -1,5 +1,5 @@
 import { CreatePromotionInput, SortOrder } from '@vendure/common/lib/generated-types';
-import { Collection, Product, ProductVariant } from '@vendure/core';
+import { Collection, Product, ProductVariant, type Promotion } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CouponLedgerEntry } from '../entities/coupon-ledger-entry.entity';
@@ -897,6 +897,7 @@ function createHarness({
 }
 
 function couponPromotion() {
+    const conditions: Promotion['conditions'] = [];
     return {
         id: 'coupon-1',
         createdAt: new Date('2026-08-25T00:00:00.000Z'),
@@ -909,7 +910,7 @@ function couponPromotion() {
         couponCode: 'CPN_123',
         usageLimit: null,
         perCustomerUsageLimit: null,
-        conditions: [],
+        conditions,
         actions: [{ code: 'order_fixed_discount', args: { discount: 1_000 } }],
     };
 }
