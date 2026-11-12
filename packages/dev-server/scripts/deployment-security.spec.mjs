@@ -1679,7 +1679,6 @@ void test('scheduled production monitor checks memory, processes, and health thr
     assert.match(script, /systemd_completion_wait_attempts=46/u);
     assert.match(script, /systemd_completion_wait_interval_seconds=2/u);
     assert.match(script, /sleep "\$\{systemd_completion_wait_interval_seconds\}"/u);
-    assert.match(script, /restore_drill_maximum_age_seconds=777600/u);
     assert.match(script, /pm2 jlist/u);
     assert.match(script, /vendure-api/u);
     assert.match(script, /vendure-worker/u);
@@ -1690,7 +1689,7 @@ void test('scheduled production monitor checks memory, processes, and health thr
     assert.match(systemdHealthcheck, /file-restore-drill\.json/u);
     assert.match(systemdHealthcheck, /VENDURE_DATABASE_RECOVERY_RPO_SECONDS/u);
     assert.match(systemdHealthcheck, /VENDURE_FILE_RECOVERY_RTO_SECONDS/u);
-    assert.match(systemdHealthcheck, /maximum_restore_drill_age_seconds/u);
+    assert.match(systemdHealthcheck, /VENDURE_MAXIMUM_RESTORE_DRILL_AGE_SECONDS:-777600/u);
     assert.match(systemdHealthcheck, /\$\{failure_prefix\}-missing-or-stale/u);
 
     assert.match(workflow, /schedule:/u);
@@ -1703,6 +1702,55 @@ void test('scheduled production monitor checks memory, processes, and health thr
     assert.match(workflow, /monitor-production-health\.sh/u);
     assert.doesNotMatch(workflow, /AWS_ACCESS_KEY_ID/u);
     assert.doesNotMatch(workflow, /AWS_SECRET_ACCESS_KEY/u);
+});
+
+void test('scheduled monitor accepts a verified restore after systemd unloads the drill service', async () => {
+    const monitor = await readFile(path.join(repositoryRoot, 'deploy/monitor-production-health.sh'), 'utf8');
+    const filesystemChecks = monitor.indexOf('\n[[ -f ');
+    const healthChecks = monitor.indexOf('\nrequire_recent_systemd_success \\\n', filesystemChecks);
+    const memoryCheck = monitor.indexOf('\nnode "', healthChecks);
+    assert.ok(filesystemChecks > 0 && healthChecks > filesystemChecks && memoryCheck > healthChecks);
+    const script = `
+systemctl() {
+    case "$*" in
+        'is-enabled vendure-mysql-restore-drill.timer')
+            if [[ "$SCENARIO" == timer-disabled ]]; then echo disabled; else echo enabled; fi ;;
+        'is-enabled vendure-production-healthcheck.timer') echo enabled ;;
+        'is-active vendure-production-healthcheck.timer'|'is-active vendure-mysql-restore-drill.timer')
+            echo active ;;
+        'show vendure-mysql-restore-drill.service -p Result --value')
+            if [[ "$SCENARIO" == drill-failed ]]; then echo exit-code; else echo success; fi ;;
+        'show vendure-mysql-restore-drill.service -p ExecMainExitTimestamp --value') echo ;;
+        'show vendure-production-healthcheck.service -p Result --value')
+            if [[ "$SCENARIO" == host-check-failed ]]; then echo exit-code; else echo success; fi ;;
+        'show vendure-production-healthcheck.service -p ExecMainExitTimestamp --value') echo 'test timestamp' ;;
+        'show vendure-'*'.service -p ActiveState --value') echo inactive ;;
+        'show vendure-file-restore-drill.timer -p UnitFileState --value') echo disabled ;;
+        'show vendure-file-restore-drill.timer -p ActiveState --value') echo inactive ;;
+        *) echo "Unexpected systemctl action: $*" >&2; return 91 ;;
+    esac
+}
+date() {
+    if [[ "$2" == --date=* ]]; then echo 10000; else echo 10030; fi
+}
+${monitor.slice(0, filesystemChecks)}
+${monitor.slice(healthChecks, memoryCheck)}
+`;
+    for (const [scenario, failure] of [
+        ['drill-unloaded', null],
+        ['timer-disabled', 'vendure-mysql-restore-drill.timer is not enabled'],
+        ['drill-failed', 'vendure-mysql-restore-drill.service last result is exit-code'],
+        ['host-check-failed', 'vendure-production-healthcheck.service last result is exit-code'],
+    ]) {
+        const result = spawnSync('bash', ['-c', script], {
+            encoding: 'utf8',
+            env: { ...process.env, SCENARIO: scenario },
+            timeout: 5_000,
+        });
+        assert.equal(result.status, failure ? 1 : 0, `${scenario}: ${result.stderr}`);
+        if (failure) assert.ok(result.stderr.includes(failure), result.stderr);
+        else assert.match(result.stdout, /age_seconds=30 status=healthy/u);
+    }
 });
 
 void test('OIDC production recovery restarts only the last verified immutable runtime', async () => {
