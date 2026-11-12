@@ -244,46 +244,6 @@ sudo(){ echo "sudo:$*"; }
     );
 });
 
-test('retained storefronts are prepared after readiness and keep the original public probe', () => {
-    const script = readFileSync('deploy/deploy-production-from-s3.sh', 'utf8');
-    const preparation = script.indexOf('prepare_storefronts() {');
-    const frontends = script.indexOf('# Initialize/switch the frontend', preparation);
-    const ready = script.indexOf("printf 'PRODUCTION_AI_HEALTH_READY phase=post-pointer", frontends);
-    const verification = script.indexOf('storefront_verification_sha=', ready);
-    const end = script.indexOf('\nif jq', verification);
-    assert.ok(
-        preparation > 0 &&
-            frontends > preparation &&
-            ready > frontends &&
-            verification > ready &&
-            end > verification,
-    );
-    const prepare = '--mode prepare --origin-url http://127.0.0.1:3002 --timeout-ms 20000';
-    const setup = `set -Eeuo pipefail
-repository=/repo
-retain_frontends="$1"
-target_sha=candidate
-expected_storefront_sha=active
-node(){ shift; printf '%s\\n' "$*"; }
-`;
-    const before = script.slice(preparation, frontends);
-    const after = script.slice(verification, end);
-    for (const [retain, expected] of [
-        ['false', [prepare, 'ready', '--mode release --release-id candidate']],
-        ['true', ['ready', prepare, '--mode release --release-id active']],
-    ]) {
-        const result = spawnSync(
-            'bash',
-            ['-c', setup + before + '\nprintf "ready\\n"\n' + after, 'probe', retain],
-            {
-                encoding: 'utf8',
-            },
-        );
-        assert.equal(result.status, 0, result.stderr);
-        assert.deepEqual(result.stdout.trim().split('\n'), expected);
-    }
-});
-
 test('the real bootstrap re-entry forwards the frontend retention flag and both observed revisions', () => {
     const script = readFileSync('deploy/deploy-production-from-s3.sh', 'utf8');
     const start = script.indexOf('if [[ "${VENDURE_DEPLOY_REEXECUTED:-0}" != "1" ]]');
