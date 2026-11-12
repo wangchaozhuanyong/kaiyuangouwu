@@ -9,7 +9,11 @@ import { DEFAULT_ICLOUD_IMAP_HOST, DEFAULT_ICLOUD_IMAP_PORT, isIcloudImapEndpoin
 import { IcloudAccountStatus, IcloudRelayPluginOptions } from '../types';
 
 import { IcloudCipherService } from './icloud-cipher.service';
-import { IcloudImapSyncService, isIcloudAuthenticationFailure } from './icloud-imap-sync.service';
+import {
+    IcloudImapSyncService,
+    isIcloudAuthenticationFailure,
+    SyncAccountResult,
+} from './icloud-imap-sync.service';
 
 const connectionFields = ['email', 'encryptedAppPassword', 'imapHost', 'imapPort'] as const;
 type MailboxConnection = Pick<IcloudPrimaryAccount, (typeof connectionFields)[number]>;
@@ -24,7 +28,7 @@ interface Watcher {
     retry?: ReturnType<typeof setTimeout>;
     renewal?: ReturnType<typeof setTimeout>;
     pending: boolean;
-    busy: boolean;
+    syncing?: Promise<SyncAccountResult>;
     listening: boolean;
     reason: IcloudListenerHealth['reason'];
     connection?: MailboxConnection;
@@ -129,6 +133,14 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
         return result('unknown', leaseValid ? 'owned_elsewhere' : 'not_started');
     }
 
+    syncNow(account: IcloudPrimaryAccount): Promise<SyncAccountResult> | undefined {
+        const id = String(account.id);
+        const watcher = this.watchers.get(id);
+        if (watcher && this.health(account).state === 'listening') {
+            return watcher.syncing ?? this.changed(id, watcher);
+        }
+    }
+
     reconcile(id: string): Promise<void> {
         if (this.stopped || !this.processContext.isServer || this.options?.realtimeEnabled === false)
             return Promise.resolve();
@@ -142,7 +154,6 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
                     stopped: false,
                     failures: 0,
                     pending: false,
-                    busy: false,
                     listening: false,
                     reason: 'connecting',
                 };
@@ -250,7 +261,7 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
             client.on('error', reconnect);
             client.on('close', reconnect);
             client.on('exists', () => {
-                if (watcher.client === client) this.changed(id, watcher);
+                if (watcher.client === client) void this.changed(id, watcher);
             });
             await client.connect();
             if (watcher.client !== client || watcher.stopped || this.stopped) {
@@ -278,7 +289,7 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
             if (watcher.client !== client || watcher.stopped || this.stopped) return;
             watcher.listening = true;
             watcher.reason = 'connected';
-            this.changed(id, watcher); // One catch-up on connect/reconnect.
+            void this.changed(id, watcher); // One catch-up on connect/reconnect.
             const renew = async () => {
                 try {
                     if (watcher.client !== client || watcher.stopped || this.stopped) return;
@@ -325,34 +336,33 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
     private changed(id: string, watcher: Watcher) {
         if (watcher.stopped || this.stopped || !watcher.client?.usable) return;
         watcher.pending = true;
-        if (watcher.busy) return;
-        watcher.busy = true;
-        let syncClient: ImapFlow | undefined = watcher.client;
-        void (async () => {
-            while (watcher.pending && !watcher.stopped && !this.stopped) {
-                watcher.pending = false;
-                syncClient = watcher.client;
-                if (!syncClient?.usable) return;
-                if (!(await this.claim(id, watcher))) throw new Error('idle_lease_lost');
-                const account = await this.repo().findOneBy({ id });
-                if (!account || account.status !== IcloudAccountStatus.ACTIVE) {
-                    await this.stop(id, watcher);
-                    return;
-                }
-                if (watcher.client !== syncClient || !syncClient.usable) {
-                    watcher.pending = true;
-                    return;
-                }
-                const result = await this.sync.syncAccount(RequestContext.empty(), account, syncClient);
-                if (!result.success) throw new Error('idle_incremental_sync_failed');
+        if (watcher.syncing) return watcher.syncing;
+        watcher.pending = false;
+        const client = watcher.client;
+        const pending = (async () => {
+            if (!(await this.claim(id, watcher))) throw new Error('idle_lease_lost');
+            const account = await this.repo().findOneBy({ id });
+            if (!account || account.status !== IcloudAccountStatus.ACTIVE) {
+                await this.stop(id, watcher);
+                return { success: false, syncedCount: 0 };
             }
+            if (watcher.client !== client || !client.usable) {
+                watcher.pending = true;
+                return { success: false, syncedCount: 0 };
+            }
+            const result = await this.sync.syncAccount(RequestContext.empty(), account, client);
+            if (!result.success && watcher.client === client) this.retry(id, watcher);
+            return result;
         })()
             .catch(() => {
-                if (watcher.client === syncClient) this.retry(id, watcher);
+                if (watcher.client === client) this.retry(id, watcher);
+                return { success: false, syncedCount: 0 };
             })
             .finally(() => {
-                watcher.busy = false;
-                if (watcher.pending && watcher.client?.usable) this.changed(id, watcher);
+                watcher.syncing = undefined;
+                if (watcher.pending && watcher.client?.usable) void this.changed(id, watcher);
             });
+        watcher.syncing = pending;
+        return pending;
     }
 }

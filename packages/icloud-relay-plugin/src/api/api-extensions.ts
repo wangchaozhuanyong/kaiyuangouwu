@@ -87,6 +87,45 @@ export const adminApiExtensions = gql`
         isStarred: Boolean!
     }
 
+    type IcloudRelayPrimary {
+        id: ID!
+        email: String!
+        status: IcloudAccountStatus!
+        masterQueryCode: String
+        codeExpiresAt: DateTime
+        lastSyncedAt: DateTime
+    }
+
+    type IcloudRelayAlias {
+        id: ID!
+        primaryAccountId: ID!
+        aliasEmail: String!
+        status: IcloudVirtualEmailStatus!
+        buyerQueryCode: String
+        codeExpiresAt: DateTime
+        lastQueriedAt: DateTime
+        mailCount: Int!
+        lastMailReceivedAt: DateTime
+    }
+
+    type IcloudRelayTargets {
+        primaries: [IcloudRelayPrimary!]!
+        aliases: [IcloudRelayAlias!]!
+    }
+
+    type IcloudRelayCodeTarget {
+        primary: IcloudRelayPrimary
+        alias: IcloudRelayAlias
+        retryAfterSeconds: Int
+    }
+
+    type IcloudRelayMailPage {
+        primary: IcloudRelayPrimary
+        aliases: [IcloudRelayAlias!]!
+        items: [IcloudReceivedMailView!]!
+        truncated: Boolean!
+    }
+
     type IcloudTestConnectionResult {
         success: Boolean!
         message: String!
@@ -161,6 +200,23 @@ export const adminApiExtensions = gql`
 
     extend type Query {
         icloudMailHealth: IcloudMailHealth!
+        icloudRelayTargets(
+            primaryIds: [ID!]!
+            aliasIds: [ID!]!
+            includeCodes: Boolean! = false
+        ): IcloudRelayTargets!
+        icloudRelayCodeTarget(
+            queryCode: String!
+            expectedPrimaryId: ID
+            expectedAliasId: ID
+        ): IcloudRelayCodeTarget!
+        icloudRelayMailPage(
+            primaryAccountId: ID!
+            virtualEmailId: ID
+            unassignedOnly: Boolean! = false
+            limit: Int! = 50
+            mailId: ID
+        ): IcloudRelayMailPage!
         icloudPrimaryAccounts: [IcloudPrimaryAccountView!]!
         icloudPrimaryAccount(id: ID!): IcloudPrimaryAccountView
         icloudVirtualEmails(primaryAccountId: ID): [IcloudVirtualEmailView!]!

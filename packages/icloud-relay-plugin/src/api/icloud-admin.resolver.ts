@@ -1,10 +1,11 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
-import { Allow, Ctx, ID, RequestContext, Transaction } from '@vendure/core';
+import { Allow, Ctx, ForbiddenError, ID, RequestContext, Transaction } from '@vendure/core';
 
 import { manageIcloudRelayPermission } from '../constants';
 import { IcloudAdminService } from '../services/icloud-admin.service';
 import { IcloudMailHealthService } from '../services/icloud-mail-health.service';
 import { IcloudMailHistoryService } from '../services/icloud-mail-history.service';
+import { IcloudPublicQueryService } from '../services/icloud-public-query.service';
 import {
     BatchCreateVirtualEmailsInput,
     CreatePrimaryAccountInput,
@@ -19,12 +20,59 @@ export class IcloudAdminResolver {
         private readonly adminService: IcloudAdminService,
         private readonly mailHistory: IcloudMailHistoryService,
         private readonly mailHealth: IcloudMailHealthService,
+        private readonly publicQuery: IcloudPublicQueryService,
     ) {}
 
     @Query()
     @Allow(manageIcloudRelayPermission.Read)
     icloudMailHealth(@Ctx() ctx: RequestContext) {
         return this.mailHealth.read(ctx);
+    }
+
+    @Query()
+    @Allow(manageIcloudRelayPermission.Read)
+    icloudRelayTargets(
+        @Ctx() ctx: RequestContext,
+        @Args('primaryIds') primaryIds: ID[],
+        @Args('aliasIds') aliasIds: ID[],
+        @Args('includeCodes') includeCodes: boolean,
+    ) {
+        return this.adminService.findRelayTargets(ctx, primaryIds, aliasIds, includeCodes);
+    }
+
+    @Query()
+    @Allow(manageIcloudRelayPermission.Read)
+    icloudRelayCodeTarget(
+        @Ctx() ctx: RequestContext,
+        @Args('queryCode') queryCode: string,
+        @Args('expectedPrimaryId') expectedPrimaryId?: ID,
+        @Args('expectedAliasId') expectedAliasId?: ID,
+    ) {
+        const ip = ctx.req?.ip || ctx.req?.socket?.remoteAddress;
+        if (!ip) throw new ForbiddenError();
+        return this.publicQuery.resolveRelayCode(ctx, queryCode, ip, ctx.req?.headers['user-agent'], {
+            primaryId: expectedPrimaryId,
+            aliasId: expectedAliasId,
+        });
+    }
+
+    @Query()
+    @Allow(manageIcloudRelayPermission.Read)
+    icloudRelayMailPage(
+        @Ctx() ctx: RequestContext,
+        @Args('primaryAccountId') primaryAccountId: ID,
+        @Args('virtualEmailId') virtualEmailId: ID | undefined,
+        @Args('unassignedOnly') unassignedOnly: boolean,
+        @Args('limit') limit: number,
+        @Args('mailId') mailId?: ID,
+    ) {
+        return this.adminService.findRelayMailPage(ctx, {
+            primaryAccountId,
+            virtualEmailId,
+            unassignedOnly,
+            limit,
+            mailId,
+        });
     }
 
     @Mutation()

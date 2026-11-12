@@ -72,7 +72,7 @@ function fixture() {
         update: vi.fn().mockResolvedValue({ affected: 1 }),
         createQueryBuilder: () => builder,
     };
-    const sync = { syncAccount: vi.fn().mockResolvedValue({ success: true }) };
+    const sync = { syncAccount: vi.fn().mockResolvedValue({ success: true, syncedCount: 0 }) };
     const service = new IcloudIdleService(
         { getRepository: () => repo } as never,
         { decrypt: () => 'synthetic-fixture' } as never,
@@ -194,6 +194,27 @@ describe('event-driven IMAP IDLE', () => {
         expect(f.sync.syncAccount).toHaveBeenCalledTimes(2);
         await f.service.onModuleDestroy();
         expect(state.clients[0].usable).toBe(false);
+    });
+    it('joins an in-flight catch-up on the same healthy listening socket', async () => {
+        const f = fixture();
+        let complete!: (result: { success: boolean; syncedCount: number }) => void;
+        const pending = new Promise<{ success: boolean; syncedCount: number }>(resolve => {
+            complete = resolve;
+        });
+        f.sync.syncAccount.mockReturnValueOnce(pending);
+        await f.service.onApplicationBootstrap();
+        await vi.advanceTimersByTimeAsync(0);
+        const lease = f.builder.set.mock.calls[0][0];
+        const leasedAccount = { ...f.account, ...lease } as never;
+        const first = f.service.syncNow(leasedAccount);
+        const second = f.service.syncNow(leasedAccount);
+        expect(first).toBeDefined();
+        expect(first).toBe(second);
+        expect(state.clients).toHaveLength(1);
+        expect(f.sync.syncAccount).toHaveBeenCalledTimes(1);
+        complete({ success: true, syncedCount: 2 });
+        await expect(first).resolves.toEqual({ success: true, syncedCount: 2 });
+        await f.service.onModuleDestroy();
     });
     it('losing the owner election opens no socket and fetches no messages', async () => {
         const f = fixture();
