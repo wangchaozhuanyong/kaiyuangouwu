@@ -7,7 +7,7 @@ import {
     RequestContext,
 } from '@vendure/core';
 
-const machineMailboxPermissions: ReadonlyMap<string, Permission> = new Map([
+export const machineMailboxPermissions: ReadonlyMap<string, Permission> = new Map([
     ...[
         'Query.icloudMailHealth',
         'Query.icloudPrimaryAccounts',
@@ -15,6 +15,9 @@ const machineMailboxPermissions: ReadonlyMap<string, Permission> = new Map([
         'Query.icloudVirtualEmails',
         'Query.icloudVirtualEmail',
         'Query.icloudReceivedMails',
+        'Query.icloudRelayTargets',
+        'Query.icloudRelayCodeTarget',
+        'Query.icloudRelayMailPage',
     ].map(field => [field, 'ReadIcloudRelay' as Permission] as const),
     ...[
         'Mutation.createIcloudPrimaryAccount',
