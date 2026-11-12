@@ -36,11 +36,13 @@ const rows = [
 ];
 function fixture() {
     const find = vi.fn().mockResolvedValue(rows);
+    const readListeningInbox = vi.fn();
     const service = new IcloudArrivalSampleService(
         { getRepository: () => ({ find }) } as never,
         { decrypt: () => 'synthetic-password' } as never,
+        { readListeningInbox } as never,
     );
-    return { service, find };
+    return { service, find, readListeningInbox };
 }
 
 describe('Apple arrival sampling', () => {
@@ -93,6 +95,38 @@ describe('Apple arrival sampling', () => {
         );
         expect(client.close).toHaveBeenCalledOnce();
         expect(JSON.stringify(sample)).not.toMatch(/example\.test|password/);
+    });
+
+    it('reads metadata from a healthy listener without opening or closing a socket', async () => {
+        const { service, readListeningInbox } = fixture();
+        readListeningInbox.mockImplementation((_, read) => read(client, BigInt(42)));
+        expect(await service.read(ctx, account)).toMatchObject({
+            outcome: 'measured',
+            arrivalToStoreMs: [3000],
+        });
+        expect(client.fetchAll).toHaveBeenCalledExactlyOnceWith(
+            '4,3,2',
+            { uid: true, internalDate: true, headers: ['message-id'] },
+            { uid: true },
+        );
+        expect(ImapFlow).not.toHaveBeenCalled();
+        expect(client.mailboxOpen).not.toHaveBeenCalled();
+        expect(client.close).not.toHaveBeenCalled();
+    });
+
+    it('bounds the caller wait while leaving an unresponsive listening socket alone', async () => {
+        vi.useFakeTimers();
+        try {
+            const { service, readListeningInbox } = fixture();
+            readListeningInbox.mockReturnValue(new Promise(() => undefined));
+            const sample = service.read(ctx, account);
+            await vi.advanceTimersByTimeAsync(3500);
+            expect(await sample).toMatchObject({ outcome: 'unavailable', attempted: 3 });
+            expect(ImapFlow).not.toHaveBeenCalled();
+            expect(client.close).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('stops on a different Apple mailbox generation and returns no latency', async () => {
