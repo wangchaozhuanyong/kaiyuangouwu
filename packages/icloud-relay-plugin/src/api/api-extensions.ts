@@ -13,10 +13,17 @@ export const adminApiExtensions = gql`
         oldestPendingAt: DateTime
         lastDeliveredAt: DateTime
     }
+    type IcloudMailArrivalSample {
+        outcome: String!
+        attempted: Int!
+        arrivalToStoreMs: [Float!]!
+        newestStoredAt: DateTime
+    }
     type IcloudMailHealth {
         checkedAt: DateTime!
         listeners: [IcloudMailListenerHealth!]!
         delivery: IcloudMailDeliveryHealth!
+        arrivalSample: IcloudMailArrivalSample
     }
     enum IcloudAccountStatus {
         ACTIVE
@@ -199,7 +206,7 @@ export const adminApiExtensions = gql`
     }
 
     extend type Query {
-        icloudMailHealth: IcloudMailHealth!
+        icloudMailHealth(sampleArrival: Boolean! = false): IcloudMailHealth!
         icloudRelayTargets(
             primaryIds: [ID!]!
             aliasIds: [ID!]!

@@ -25,8 +25,8 @@ export class IcloudAdminResolver {
 
     @Query()
     @Allow(manageIcloudRelayPermission.Read)
-    icloudMailHealth(@Ctx() ctx: RequestContext) {
-        return this.mailHealth.read(ctx);
+    icloudMailHealth(@Ctx() ctx: RequestContext, @Args('sampleArrival') sampleArrival = false) {
+        return this.mailHealth.read(ctx, sampleArrival);
     }
 
     @Query()

@@ -14,6 +14,7 @@ import { IcloudVirtualEmail } from './entities/icloud-virtual-email.entity';
 import { IcloudJobService } from './jobs/icloud-job.service';
 import { IcloudAccessCodeService } from './services/icloud-access-code.service';
 import { IcloudAdminService } from './services/icloud-admin.service';
+import { IcloudArrivalSampleService } from './services/icloud-arrival-sample.service';
 import { IcloudCipherService } from './services/icloud-cipher.service';
 import { IcloudIdleService } from './services/icloud-idle.service';
 import { IcloudImapSyncService } from './services/icloud-imap-sync.service';
@@ -76,6 +77,7 @@ import { IcloudRelayPluginOptions } from './types';
         IcloudImapSyncService,
         IcloudMailHistoryService,
         IcloudMailHealthService,
+        IcloudArrivalSampleService,
         IcloudAdminService,
         IcloudPublicQueryService,
         IcloudManagedMailboxClient,

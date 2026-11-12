@@ -95,6 +95,26 @@ describe('iCloud admin contract persistence', () => {
         disableJobs.mockRestore();
     });
 
+    it('accepts an explicit health sample request without starting an unavailable Apple listener', async () => {
+        const result = await adminClient.query(gql`
+            query ArrivalHealth {
+                icloudMailHealth(sampleArrival: true) {
+                    listeners {
+                        state
+                    }
+                    arrivalSample {
+                        outcome
+                        arrivalToStoreMs
+                    }
+                }
+            }
+        `);
+        expect(result.icloudMailHealth).toMatchObject({
+            listeners: [{ state: 'disabled' }],
+            arrivalSample: null,
+        });
+    });
+
     it('serves scoped relay metadata, code authorization and mail summaries through the Admin API', async () => {
         const ctx = RequestContext.empty();
         const service = server.app.get(IcloudAdminService);

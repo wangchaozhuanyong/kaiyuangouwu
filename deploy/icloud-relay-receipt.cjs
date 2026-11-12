@@ -58,6 +58,34 @@ module.exports = function safeIcloudRelayReceipt(result, sourceSha, runtimeSha) 
                 'buyerQueryCode mailCount lastMailReceivedAt icloudMailHealth checkedAt listeners primaryAccountId state reason leaseExpiresAt delivery configured pendingCount oldestPendingAt lastDeliveredAt'
             ).split(' '),
         );
+        const healthMetadata = value => {
+            const states = ['listening', 'recovering', 'unavailable', 'disabled', 'unknown'];
+            const listenerStates = Object.fromEntries(
+                states.map(state => [state, value.listenerStates?.[state]]),
+            );
+            assert.ok(Object.values(listenerStates).every(count => Number.isInteger(count) && count >= 0));
+            assert.equal(
+                Object.values(listenerStates).reduce((sum, count) => sum + count, 0),
+                value.count,
+            );
+            const sample = value.arrivalSample;
+            if (sample === null) return { listenerStates, arrivalSample: null };
+            const { outcome, attempted, arrivalToStoreMs, newestStoredAt } = sample;
+            assert.ok(['measured', 'no_messages', 'no_match', 'unavailable'].includes(outcome));
+            assert.ok(Number.isInteger(attempted) && attempted >= 0 && attempted <= 20);
+            assert.ok(Array.isArray(arrivalToStoreMs) && arrivalToStoreMs.length <= attempted);
+            assert.ok(arrivalToStoreMs.every(ms => Number.isSafeInteger(ms) && ms >= 0));
+            assert.equal(outcome === 'measured', arrivalToStoreMs.length > 0);
+            assert.ok(
+                newestStoredAt === null ||
+                    (typeof newestStoredAt === 'string' &&
+                        new Date(newestStoredAt).toISOString() === newestStoredAt),
+            );
+            return {
+                listenerStates,
+                arrivalSample: { outcome, attempted, arrivalToStoreMs, newestStoredAt },
+            };
+        };
         const record = value => {
             assert.ok(value && categories.has(value.category) && operations.has(value.operation));
             assert.ok(
@@ -88,6 +116,7 @@ module.exports = function safeIcloudRelayReceipt(result, sourceSha, runtimeSha) 
                 count: value.count,
                 errorCount: value.errorCount,
                 code: value.code === null ? null : errorCodes.has(value.code) ? value.code : 'UNKNOWN',
+                ...(value.operation === 'health' && value.category === 'OK' ? healthMetadata(value) : {}),
                 ...(value.operation === 'health' && value.category !== 'OK'
                     ? {
                           healthFailure: [

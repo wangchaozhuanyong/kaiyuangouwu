@@ -1,3 +1,4 @@
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { RequestContext } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -26,10 +27,14 @@ describe('mail health is metadata only', () => {
             }),
             kick: vi.fn(),
         };
+        const arrival = {
+            read: vi.fn().mockResolvedValue({ outcome: 'measured', arrivalToStoreMs: [1200] }),
+        };
         const service = new IcloudMailHealthService(
             { getRepository: () => ({ find: () => accounts }) } as never,
             idle as never,
             events as never,
+            arrival as never,
         );
         const result = await service.read({} as RequestContext);
         expect(result.listeners[0]).toMatchObject({ state: 'unknown' });
@@ -37,5 +42,17 @@ describe('mail health is metadata only', () => {
         expect(JSON.stringify(result)).not.toMatch(/fixture-encrypted-password|fixture-code/);
         expect(idle.ensureWatching).not.toHaveBeenCalled();
         expect(events.kick).not.toHaveBeenCalled();
+        expect(arrival.read).not.toHaveBeenCalled();
+
+        idle.health.mockReturnValue({ primaryAccountId: '1', state: 'listening' });
+        const platform = { channel: { code: DEFAULT_CHANNEL_CODE } } as RequestContext;
+        expect((await service.read(platform, true)).arrivalSample).toMatchObject({
+            arrivalToStoreMs: [1200],
+        });
+        expect(arrival.read).toHaveBeenCalledExactlyOnceWith(platform, accounts[0]);
+        expect(
+            (await service.read({ channel: { code: 'store' } } as RequestContext, true)).arrivalSample,
+        ).toBeNull();
+        expect(arrival.read).toHaveBeenCalledTimes(1);
     });
 });
