@@ -43,17 +43,15 @@ const OPERATIONS = Object.freeze([
         query: `query IcloudRelayAliasFull { icloudVirtualEmails { ${ALIAS_FIELDS} } }`,
     }),
 ]);
-const healthFields = `checkedAt listeners { primaryAccountId state reason leaseExpiresAt }
-    delivery { configured pendingCount oldestPendingAt lastDeliveredAt }`;
 const HEALTH_OPERATION = Object.freeze({
     operation: 'IcloudRelayHealth',
     label: 'health',
     field: 'icloudMailHealth',
-    query: `query IcloudRelayHealth { icloudMailHealth { ${healthFields} } }`,
+    query: `query IcloudRelayHealth { icloudMailHealth {
+        checkedAt listeners { primaryAccountId state reason leaseExpiresAt }
+        delivery { configured pendingCount oldestPendingAt lastDeliveredAt }
+    } }`,
 });
-const arrivalHealthQuery = `query IcloudRelayHealth { icloudMailHealth(sampleArrival: true) {
-    ${healthFields} arrivalSample { outcome attempted arrivalToStoreMs newestStoredAt }
-} }`;
 const SAFE_ERROR_CODES = new Set([
     'FORBIDDEN',
     'UNAUTHENTICATED',
@@ -109,38 +107,6 @@ function safeContentType(headers) {
             ['text/plain', 'text'],
         ]).get(type) ?? 'other'
     );
-}
-
-function healthMetrics(value, rows) {
-    const listenerStates = { listening: 0, recovering: 0, unavailable: 0, disabled: 0, unknown: 0 };
-    for (const { state } of rows)
-        listenerStates[
-            typeof state === 'string' && Object.hasOwn(listenerStates, state) ? state : 'unknown'
-        ]++;
-    const sample = value.arrivalSample;
-    if (sample == null) return { listenerStates, arrivalSample: null };
-    const { outcome, attempted, arrivalToStoreMs, newestStoredAt } = sample;
-    if (
-        !['measured', 'no_messages', 'no_match', 'unavailable'].includes(outcome) ||
-        !Number.isInteger(attempted) ||
-        attempted < 0 ||
-        attempted > 20 ||
-        !Array.isArray(arrivalToStoreMs) ||
-        arrivalToStoreMs.length > attempted ||
-        !arrivalToStoreMs.every(ms => Number.isSafeInteger(ms) && ms >= 0) ||
-        (outcome === 'measured') !== arrivalToStoreMs.length > 0
-    )
-        return { listenerStates, arrivalSample: null };
-    const newest = typeof newestStoredAt === 'string' ? Date.parse(newestStoredAt) : NaN;
-    return {
-        listenerStates,
-        arrivalSample: {
-            outcome,
-            attempted,
-            arrivalToStoreMs,
-            newestStoredAt: Number.isFinite(newest) ? new Date(newest).toISOString() : null,
-        },
-    };
 }
 
 function safeError(error) {
@@ -339,7 +305,7 @@ async function runDiagnostic(options = {}) {
                             const message = String(failure.error.message ?? '');
                             record.healthFailure = /Cannot return null for non-nullable field/u.test(message)
                                 ? 'NON_NULL_RESULT'
-                                : /Cannot query field|Unknown argument/u.test(message)
+                                : /Cannot query field/u.test(message)
                                   ? 'SCHEMA_MISMATCH'
                                   : /Unknown column|does not exist|doesn't exist/u.test(message)
                                     ? 'DATABASE_COLUMN'
@@ -424,25 +390,13 @@ async function runDiagnostic(options = {}) {
             const channelResult = { channelIndex, isDefaultChannel, probes: [] };
             receipt.channels.push(channelResult);
             for (const operation of healthOnly ? [HEALTH_OPERATION] : OPERATIONS) {
-                const sampleArrival = operation.label === 'health' && isDefaultChannel;
-                let result = await run(
-                    operation.label,
-                    sampleArrival ? arrivalHealthQuery : operation.query,
-                    {},
-                    channel.token,
-                );
-                if (sampleArrival && result.record.healthFailure === 'SCHEMA_MISMATCH')
-                    result = await run(operation.label, operation.query, {}, channel.token);
+                const result = await run(operation.label, operation.query, {}, channel.token);
                 if (result.record.category === 'OK') {
                     const value = result.data[operation.field];
                     const rows = operation.label === 'health' ? value?.listeners : value;
                     if (!Array.isArray(rows) || rows.length > 100_000 || !rows.every(isObject))
                         result.record.category = 'INVALID_ENVELOPE';
-                    else {
-                        result.record.count = rows.length;
-                        if (operation.label === 'health')
-                            Object.assign(result.record, healthMetrics(value, rows));
-                    }
+                    else result.record.count = rows.length;
                 }
                 channelResult.probes.push(result.record);
                 if (result.record.category === 'BUDGET_EXHAUSTED') {

@@ -206,7 +206,7 @@ export const adminApiExtensions = gql`
     }
 
     extend type Query {
-        icloudMailHealth(sampleArrival: Boolean! = false): IcloudMailHealth!
+        icloudMailHealth(sampleArrivalFor: ID): IcloudMailHealth!
         icloudRelayTargets(
             primaryIds: [ID!]!
             aliasIds: [ID!]!

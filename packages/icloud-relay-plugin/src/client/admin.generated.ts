@@ -295,7 +295,7 @@ export type Query = {
 };
 
 export type QueryIcloudMailHealthArgs = {
-    sampleArrival?: Scalars['Boolean']['input'];
+    sampleArrivalFor?: InputMaybe<Scalars['ID']['input']>;
 };
 
 export type QueryIcloudPrimaryAccountArgs = {

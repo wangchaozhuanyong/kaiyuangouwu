@@ -79,6 +79,7 @@ export class IcloudArrivalSampleService {
         try {
             await client.connect();
             const mailbox = await client.mailboxOpen('INBOX', { readOnly: true });
+            if (mailbox.readOnly === false) return emptySample('unavailable', uids.length);
             if (String(mailbox.uidValidity) !== account.lastSyncedUidValidity)
                 return emptySample('no_match', uids.length);
 

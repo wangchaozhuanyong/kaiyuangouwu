@@ -129,11 +129,10 @@ async function fixture(t, handler) {
 }
 const probes = receipt => receipt.channels.flatMap(channel => channel.probes);
 
-test('health-only inspection transports listener counts and only numeric arrival samples', async t => {
+test('health-only inspection reads no mailbox rows and transports only controlled metadata', async t => {
     const api = await fixture(t, (entry, response) => {
         if (entry.operation === 'IcloudRelayDiagnosticLogin') return login(response);
         assert.equal(entry.operation, 'IcloudRelayHealth');
-        assert.match(entry.query, /sampleArrival: true/u);
         assert.doesNotMatch(entry.query, /bodyText|extractedCode|masterQueryCode|buyerQueryCode|email /u);
         json(response, {
             data: {
@@ -141,13 +140,6 @@ test('health-only inspection transports listener counts and only numeric arrival
                     checkedAt: new Date().toISOString(),
                     listeners: [{ primaryAccountId: '1', state: 'listening' }],
                     delivery: { configured: true, pendingCount: 0 },
-                    arrivalSample: {
-                        outcome: 'measured',
-                        attempted: 3,
-                        arrivalToStoreMs: [1000, 2000],
-                        newestStoredAt: '2026-11-12T00:00:00.000Z',
-                        messageId: 'fixture-query-code-private',
-                    },
                     extra: 'fixture-query-code-private',
                 },
             },
@@ -160,54 +152,12 @@ test('health-only inspection transports listener counts and only numeric arrival
         ['IcloudRelayDiagnosticLogin', 'IcloudRelayHealth'],
     );
     assert.equal(probes(receipt)[0].count, 1);
-    const safe = safeIcloudRelayReceipt(
-        { status: 0, stdout: JSON.stringify(receipt) },
-        'a'.repeat(40),
-        'b'.repeat(40),
+    assert.equal(
+        safeIcloudRelayReceipt({ status: 0, stdout: JSON.stringify(receipt) }, 'a'.repeat(40), 'b'.repeat(40))
+            .category,
+        'OK',
     );
-    assert.equal(safe.category, 'OK');
-    assert.deepEqual(probes(safe)[0].listenerStates, {
-        listening: 1,
-        recovering: 0,
-        unavailable: 0,
-        disabled: 0,
-        unknown: 0,
-    });
-    assert.deepEqual(probes(safe)[0].arrivalSample, {
-        outcome: 'measured',
-        attempted: 3,
-        arrivalToStoreMs: [1000, 2000],
-        newestStoredAt: '2026-11-12T00:00:00.000Z',
-    });
     assertNoSecrets(receipt);
-    assertNoSecrets(safe);
-});
-
-test('health inspection works on the previous runtime schema', async t => {
-    const api = await fixture(t, (entry, response) => {
-        if (entry.operation === 'IcloudRelayDiagnosticLogin') return login(response);
-        if (entry.query.includes('sampleArrival')) {
-            return json(
-                response,
-                {
-                    errors: [
-                        {
-                            message: 'Unknown argument "sampleArrival"',
-                            extensions: { code: 'GRAPHQL_VALIDATION_FAILED' },
-                        },
-                    ],
-                },
-                {},
-                400,
-            );
-        }
-        json(response, { data: { icloudMailHealth: { listeners: [{ state: 'listening' }] } } });
-    });
-    const result = await diagnoseIcloudRelay({ ...credentials, healthOnly: true, request: api.request });
-    assert.equal(result.category, 'OK');
-    assert.equal(api.entries.length, 3);
-    assert.equal(probes(result)[0].listenerStates.listening, 1);
-    assert.equal(probes(result)[0].arrivalSample, null);
 });
 
 test('health inspection retains safe schema and non-null failure causes without raw errors', async t => {

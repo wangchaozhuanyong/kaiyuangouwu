@@ -2,12 +2,20 @@ import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { RequestContext } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { IcloudAccountStatus } from '../types';
+
 import { IcloudMailHealthService } from './icloud-mail-health.service';
 
 describe('mail health is metadata only', () => {
     it('returns controlled listener states and delivery metadata without exposing account secrets', async () => {
         const accounts = [
-            { id: '1', encryptedAppPassword: 'fixture-encrypted-password', masterQueryCode: 'fixture-code' },
+            {
+                id: '1',
+                status: IcloudAccountStatus.ACTIVE,
+                lastSyncedUidValidity: '42',
+                encryptedAppPassword: 'fixture-encrypted-password',
+                masterQueryCode: 'fixture-code',
+            },
         ];
         const idle = {
             health: vi.fn().mockReturnValue({
@@ -44,15 +52,17 @@ describe('mail health is metadata only', () => {
         expect(events.kick).not.toHaveBeenCalled();
         expect(arrival.read).not.toHaveBeenCalled();
 
-        idle.health.mockReturnValue({ primaryAccountId: '1', state: 'listening' });
         const platform = { channel: { code: DEFAULT_CHANNEL_CODE } } as RequestContext;
-        expect((await service.read(platform, true)).arrivalSample).toMatchObject({
+        expect((await service.read(platform, '1')).arrivalSample).toMatchObject({
             arrivalToStoreMs: [1200],
         });
         expect(arrival.read).toHaveBeenCalledExactlyOnceWith(platform, accounts[0]);
         expect(
-            (await service.read({ channel: { code: 'store' } } as RequestContext, true)).arrivalSample,
+            (await service.read({ channel: { code: 'store' } } as RequestContext, '1')).arrivalSample,
         ).toBeNull();
+        expect((await service.read(platform, 'different')).arrivalSample).toBeNull();
+        accounts[0].status = IcloudAccountStatus.DISABLED;
+        expect((await service.read(platform, '1')).arrivalSample).toBeNull();
         expect(arrival.read).toHaveBeenCalledTimes(1);
     });
 });
