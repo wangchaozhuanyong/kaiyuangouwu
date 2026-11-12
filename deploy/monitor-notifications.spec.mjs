@@ -78,9 +78,10 @@ describe('Chinese persisted external monitoring', () => {
     });
     it('keeps failed sends eligible for retry and never says a failed inspection proves a host outage', async () => {
         const incident = externalSignal(null);
+        const pending = await deliverSignals([incident], {}, async () => assert.fail('Unconfirmed'), 500);
         const failed = await deliverSignals(
             [incident],
-            {},
+            pending.state,
             async () => {
                 throw new Error('transport private data');
             },
@@ -101,6 +102,107 @@ describe('Chinese persisted external monitoring', () => {
         const signals = hostSignals(['backup-checksum-invalid', 'root-disk-high']);
         assert.equal(signals.filter(signal => signal.firing).length, 2);
         assert.equal(signals.find(signal => signal.key === 'host:mysql-unreachable').samples, 2);
+    });
+    it('ignores isolated public and AI health failures without sending recovery messages', async () => {
+        const messages = [];
+        const send = async text => messages.push(text);
+        const codes = ['public-health-failed', 'image-generation-health-failed'];
+        let state = {};
+        for (let run = 1; run <= 6; run++) {
+            const result = await deliverSignals(
+                hostSignals(run % 2 ? codes : []),
+                state,
+                send,
+                run * 300_000,
+            );
+            state = result.state;
+        }
+        assert.deepEqual(messages, []);
+    });
+    it('keeps intermittent healthy samples in one incident and identifies each confirmed recovery', async () => {
+        const messages = [];
+        const send = async text => messages.push(text);
+        const codes = ['public-health-failed', 'image-generation-health-failed'];
+        let result = await deliverSignals(hostSignals(codes), {}, send, 300_000);
+        result = await deliverSignals(hostSignals(codes), result.state, send, 600_000);
+        assert.equal(messages.length, 2);
+        result = await deliverSignals(hostSignals([]), result.state, send, 900_000);
+        assert.equal(result.sent, 0);
+        result = await deliverSignals(hostSignals(codes), result.state, send, 1_200_000);
+        assert.equal(result.sent, 0);
+        result = await deliverSignals(hostSignals([]), result.state, send, 1_500_000);
+        assert.equal(result.sent, 0);
+        result = await deliverSignals(hostSignals([]), result.state, send, 1_800_000);
+        assert.equal(result.sent, 2);
+        assert.match(messages[2], /店铺公共健康检查/);
+        assert.match(messages[3], /人工智能后台任务健康检查/);
+        assert.ok(messages.slice(2).every(text => /系统监测恢复/u.test(text)));
+        result = await deliverSignals(hostSignals([]), result.state, send, 2_100_000);
+        assert.equal(result.sent, 0);
+    });
+    it('confirms external inspection failures and recoveries across separate runs', async () => {
+        const messages = [];
+        const send = async text => messages.push(text);
+        const failed = externalSignal({ Status: 'TimedOut' });
+        const healthy = externalSignal({ Status: 'Success' });
+        let result = await deliverSignals([failed], {}, send, 1_000);
+        assert.equal(result.sent, 0);
+        result = await deliverSignals([healthy], result.state, send, 2_000);
+        assert.equal(result.sent, 0);
+        result = await deliverSignals([failed], result.state, send, 3_000);
+        result = await deliverSignals([failed], result.state, send, 4_000);
+        assert.equal(result.sent, 1);
+        result = await deliverSignals([healthy], result.state, send, 5_000);
+        assert.equal(result.sent, 0);
+        result = await deliverSignals([healthy], result.state, send, 6_000);
+        assert.equal(result.sent, 1);
+        assert.match(messages[1], /外部巡检自身未完成/);
+        assert.match(messages[1], /系统监测恢复/);
+    });
+    it('closes a confirmed recovery when resolved messages are disabled and alerts on a new incident', async () => {
+        const messages = [];
+        const send = async text => messages.push(text);
+        const code = 'public-health-failed';
+        let result = await deliverSignals(hostSignals([code]), {}, send, 1_000);
+        result = await deliverSignals(hostSignals([code]), result.state, send, 2_000);
+        assert.equal(messages.length, 1);
+        for (const now of [3_000, 4_000]) {
+            result = await deliverSignals(hostSignals([]), result.state, send, now, {
+                sendResolved: false,
+            });
+            assert.equal(result.sent, 0);
+        }
+        assert.equal(result.state[`host:${code}`].active, false);
+        result = await deliverSignals(hostSignals([]), result.state, send, 5_000);
+        assert.equal(result.sent, 0);
+        result = await deliverSignals(hostSignals([code]), result.state, send, 6_000);
+        result = await deliverSignals(hostSignals([code]), result.state, send, 7_000);
+        assert.equal(result.sent, 1);
+        assert.equal(messages.length, 2);
+    });
+    it('confirms legacy active incidents and retries failed recovery delivery', async () => {
+        const code = 'public-health-failed';
+        const key = `host:${code}`;
+        const messages = [];
+        let failDelivery = true;
+        const send = async text => {
+            if (failDelivery) throw new Error('fixture delivery failed');
+            messages.push(text);
+        };
+        const state = {
+            [key]: { active: true, failures: 1, sentAt: 1_000, severity: 'P0', revision: null },
+        };
+        let result = await deliverSignals(hostSignals([]), state, send, 2_000);
+        assert.equal(result.failed, 0);
+        assert.equal(result.state[key].active, true);
+        result = await deliverSignals(hostSignals([]), result.state, send, 3_000);
+        assert.equal(result.failed, 1);
+        assert.equal(result.state[key].active, true);
+        failDelivery = false;
+        result = await deliverSignals(hostSignals([]), result.state, send, 4_000);
+        assert.equal(result.sent, 1);
+        assert.equal(result.state[key].active, false);
+        assert.match(messages[0], /店铺公共健康检查/);
     });
     it('covers every direct and prefixed failure emitted by the production health service', async () => {
         const healthcheck = await readFile(
