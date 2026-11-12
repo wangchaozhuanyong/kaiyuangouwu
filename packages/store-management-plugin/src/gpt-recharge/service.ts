@@ -24,7 +24,6 @@ import {
 } from './security';
 
 type InternalCode = { plan: string; status: string; reason?: 'manual_review_required'; task?: unknown };
-const notAdmitted = '此兑换码未获本商城使用授权';
 @Injectable()
 export class GptRechargeService {
     constructor(
@@ -141,10 +140,7 @@ export class GptRechargeService {
                 },
             );
             if (response.status === 400 && (action === 'verify' || action === 'query')) {
-                const detail = await readRechargeResponse(response)
-                    .then(text => JSON.parse(text) as { reason?: unknown } | null)
-                    .catch(() => null);
-                if (detail?.reason === 'storefront_code_not_admitted') throw new UserInputError(notAdmitted);
+                await response.body?.cancel().catch(() => undefined);
                 throw new UserInputError('兑换码无效或已停用，请核对后重试');
             }
             if (!response.ok) throw new Error('Upstream request rejected');
@@ -180,7 +176,6 @@ export class GptRechargeService {
     async verify(ctx: RequestContext, code: string) {
         const config = await this.connectionConfig(ctx, true);
         code = this.code(code);
-        await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
         const result = this.validateCodeResult(await this.upstream(ctx, config, 'verify', { code }));
         return { ...result, task: null };
     }

@@ -153,7 +153,7 @@ describe('GPT recharge real SQL migration and service boundary', () => {
         vi.unstubAllEnvs();
         vi.unstubAllGlobals();
     });
-    it('uses the resolved store channel and separates denied and held codes without creating receipts', async () => {
+    it('uses the resolved store channel and separates invalid and held codes without creating receipts', async () => {
         vi.mocked(fetch).mockImplementation((_url, options) => {
             expect(new Headers(options?.headers).get('x-vendure-recharge-channel')).toBe('moyao-ai');
             if (typeof options?.body !== 'string') throw new Error('Expected JSON body');
@@ -168,7 +168,7 @@ describe('GPT recharge real SQL migration and service boundary', () => {
                 Response.json({ plan: 'plus', status: 'reserved', reason: 'manual_review_required' }),
             );
         });
-        await expect(service.verify(ctx(), 'outside')).rejects.toThrow('此兑换码未获本商城使用授权');
+        await expect(service.verify(ctx(), 'outside')).rejects.toThrow('兑换码无效或已停用，请核对后重试');
         await expect(service.query(ctx(), 'unavailable')).rejects.toThrow('充值服务暂时无法确认请求');
         const held = { plan: 'plus', status: 'reserved', reason: 'manual_review_required', task: null };
         expect(await service.verify(ctx(), 'held')).toEqual(held);
@@ -253,7 +253,7 @@ describe('GPT recharge real SQL migration and service boundary', () => {
         await expect(service.task(ctx(), task.id, 'f'.repeat(64))).rejects.toThrow();
         await expect(service.task(ctx(), task.id, '中'.repeat(64))).rejects.toThrow();
     });
-    it('binds used codes to their first storefront, including concurrent claims', async () => {
+    it('verifies through the source while isolating task receipts and concurrent claims', async () => {
         await service.saveConfig(ctx(2), {
             enabled: true,
             upstreamOrigin: source,
@@ -261,8 +261,12 @@ describe('GPT recharge real SQL migration and service boundary', () => {
             expectedRevision: -1,
         });
         await service.submit(ctx(), 'owned', session);
+        expect(await service.verify(ctx(2), 'owned')).toEqual({
+            plan: 'plus',
+            status: 'reserved',
+            task: null,
+        });
         for (const operation of [
-            () => service.verify(ctx(2), 'owned'),
             () => service.query(ctx(2), 'owned'),
             () => service.submit(ctx(2), 'owned', session),
         ])
