@@ -52,6 +52,13 @@ export type IcloudBatchCreateResult = {
     skippedCount: Scalars['Int']['output'];
 };
 
+export type IcloudMailArrivalSample = {
+    arrivalToStoreMs: Array<Scalars['Float']['output']>;
+    attempted: Scalars['Int']['output'];
+    newestStoredAt?: Maybe<Scalars['DateTime']['output']>;
+    outcome: Scalars['String']['output'];
+};
+
 export type IcloudMailDeliveryHealth = {
     configured: Scalars['Boolean']['output'];
     lastDeliveredAt?: Maybe<Scalars['DateTime']['output']>;
@@ -60,6 +67,7 @@ export type IcloudMailDeliveryHealth = {
 };
 
 export type IcloudMailHealth = {
+    arrivalSample?: Maybe<IcloudMailArrivalSample>;
     checkedAt: Scalars['DateTime']['output'];
     delivery: IcloudMailDeliveryHealth;
     listeners: Array<IcloudMailListenerHealth>;
@@ -284,6 +292,10 @@ export type Query = {
     icloudRelayTargets: IcloudRelayTargets;
     icloudVirtualEmail?: Maybe<IcloudVirtualEmailView>;
     icloudVirtualEmails: Array<IcloudVirtualEmailView>;
+};
+
+export type QueryIcloudMailHealthArgs = {
+    sampleArrivalFor?: InputMaybe<Scalars['ID']['input']>;
 };
 
 export type QueryIcloudPrimaryAccountArgs = {
