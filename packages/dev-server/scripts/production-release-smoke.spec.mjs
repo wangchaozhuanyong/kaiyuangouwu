@@ -5,6 +5,49 @@ import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import test from 'node:test';
 
+import { loadProductionStorefronts } from '../../../deploy/production-storefronts.mjs';
+import {
+    extractDashboardAssetUrls,
+    extractEntryTicket,
+    extractStorefrontAssetUrl,
+    verifyDashboardAssets,
+    verifyDashboardPreviewShopApi,
+    verifyProductionRelease,
+    verifyStorefrontAssets,
+} from '../../../deploy/verify-production-release.mjs';
+import { verifyConfiguredProductionStorefronts } from '../../../deploy/verify-production-storefronts.mjs';
+
+void test('public readiness prepares the same credential-free audience as the ingress', async () => {
+    const { storefronts } = await loadProductionStorefronts();
+    const hosts = new Map(storefronts.map(store => [new URL(store.origin).host, store.expectedChannelCode]));
+    const prepared = await verifyConfiguredProductionStorefronts({
+        mode: 'prepare',
+        originUrl: 'http://127.0.0.1:3002',
+        localFetchImpl: async (url, { headers }) => {
+            assert.equal(url.href, 'http://127.0.0.1:3002/storefront/html');
+            assert.ok(hosts.has(headers.host));
+            assert.equal(headers['x-storefront-public-coupon-guest'], '1');
+            assert.equal(headers.authorization, undefined);
+            assert.equal(headers.cookie, undefined);
+            if (headers['x-storefront-original-uri'] === '/') {
+                return new Response(null, { status: 301, headers: { location: '/en/' } });
+            }
+            assert.equal(headers['x-storefront-original-uri'], '/en/');
+            const page = {
+                schemaVersion: 1,
+                scope: { host: headers.host, channelCode: hosts.get(headers.host), priceContext: 'public' },
+                config: { accessMode: 'LIVE' },
+                request: { kind: 'home' },
+            };
+            return new Response(
+                `<main data-public-rendered="1"></main><script id="storefront-public-page-data">${JSON.stringify(page)}</script>`,
+                { headers: { 'content-type': 'text/html' } },
+            );
+        },
+    });
+    assert.equal(prepared.results.length, storefronts.length);
+});
+
 void test('runtime acceptance checks the ready candidate instead of an interrupted timer invocation', () => {
     const bootstrap = readFileSync(
         new URL('../../../deploy/deploy-production-from-s3.sh', import.meta.url),
@@ -39,16 +82,6 @@ ${acceptance}
         assert.equal(result.status, expectedStatus, result.stderr);
     }
 });
-
-import {
-    extractDashboardAssetUrls,
-    extractEntryTicket,
-    extractStorefrontAssetUrl,
-    verifyDashboardAssets,
-    verifyDashboardPreviewShopApi,
-    verifyProductionRelease,
-    verifyStorefrontAssets,
-} from '../../../deploy/verify-production-release.mjs';
 
 async function startFixtureServer({
     requirePromotionCookie = false,

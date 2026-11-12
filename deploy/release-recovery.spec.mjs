@@ -809,7 +809,7 @@ test('the actual CLI rejects supplied proof arguments before making any request'
     assert.match(result.stderr, /No external proof arguments are accepted/u);
 });
 
-test('a backend-only release prepares the active storefront after readiness and verifies its version', () => {
+test('each runtime release prepares its active storefront after readiness and verifies its version', () => {
     const preparationStart = deploymentScript.indexOf('prepare_storefronts() {');
     const frontendSwitch = deploymentScript.indexOf('# Initialize/switch the frontend', preparationStart);
     const ready = deploymentScript.indexOf(
@@ -858,7 +858,7 @@ ${command}
         const expected =
             retained === 'true'
                 ? ['runtime-ready', ...warmup, ...verification, frontend]
-                : [...warmup, 'runtime-ready', ...verification, backend];
+                : [...warmup, 'runtime-ready', ...warmup, ...verification, backend];
         assert.deepEqual(result.stdout.trim().split('\n'), expected);
     }
 });

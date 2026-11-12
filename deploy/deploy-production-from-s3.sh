@@ -1274,10 +1274,12 @@ printf 'PRODUCTION_AI_HEALTH_READY phase=post-pointer attempts=%s\n' "${image_he
 storefront_verification_sha="${target_sha}"
 if [[ "${retain_frontends}" == true ]]; then
     storefront_verification_sha="${expected_storefront_sha}"
-    # The existing renderer stays active. Warm its documents after runtime and
-    # image-worker readiness, before the public requests consume the cache.
-    prepare_storefronts
 fi
+# The renderer follows the active storefront pointer. Prepare that artifact
+# after runtime readiness so the public checks use its anonymous cache.
+deploy_stage="prepare-active-storefront"
+prepare_storefronts
+deploy_stage="public-storefront-acceptance"
 node "${repository}/deploy/verify-production-storefronts.mjs" \
     --mode release \
     --release-id "${storefront_verification_sha}"
