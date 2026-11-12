@@ -11,7 +11,7 @@ on:
                 required: true
                 type: string
             retain_frontends:
-                description: 'Mailbox backend only: preserve active storefront, Admin and 2FA versions'
+                description: 'Preserve active storefront, Admin and 2FA versions for a scoped runtime release'
                 required: false
                 default: false
                 type: boolean
@@ -31,7 +31,7 @@ on:
                 required: true
                 type: string
             retain_frontends:
-                description: 'Mailbox backend only: preserve active storefront, Admin and 2FA versions'
+                description: 'Preserve active storefront, Admin and 2FA versions for a scoped runtime release'
                 required: false
                 default: false
                 type: boolean

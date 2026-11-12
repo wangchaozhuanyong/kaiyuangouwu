@@ -37,7 +37,7 @@ export function selectReleaseRoute({
         return {
             lane: 'runtime',
             components: [],
-            reasons: ['Publish the mailbox backend and preserve all frontend pointers and asset bytes.'],
+            reasons: ['Publish the scoped runtime and preserve all frontend pointers and asset bytes.'],
         };
     }
     if (managed)

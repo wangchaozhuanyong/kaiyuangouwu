@@ -8,7 +8,6 @@ readonly current_marker="/var/www/kaiyuangouwu-releases/current-sha"
 readonly memory_guard="${repository}/deploy/production-memory-guard.cjs"
 readonly environment_file="${repository}/packages/dev-server/.env"
 readonly healthcheck_maximum_age_seconds=1200
-readonly restore_drill_maximum_age_seconds=777600
 readonly systemd_completion_wait_attempts=46
 readonly systemd_completion_wait_interval_seconds=2
 readonly audit_storefront_realtime_capacity="${AUDIT_STOREFRONT_REALTIME_CAPACITY:-false}"
@@ -16,6 +15,14 @@ readonly audit_storefront_realtime_capacity="${AUDIT_STOREFRONT_REALTIME_CAPACIT
 fail() {
     printf 'Production health monitor failed: %s\n' "$1" >&2
     exit 1
+}
+
+require_active_timer() {
+    local timer_name="$1"
+    [[ "$(systemctl is-enabled "${timer_name}")" == "enabled" ]] ||
+        fail "${timer_name} is not enabled"
+    [[ "$(systemctl is-active "${timer_name}")" == "active" ]] ||
+        fail "${timer_name} is not active"
 }
 
 require_recent_systemd_success() {
@@ -30,10 +37,7 @@ require_recent_systemd_success() {
     local current_epoch
     local age_seconds
 
-    [[ "$(systemctl is-enabled "${timer_name}")" == "enabled" ]] ||
-        fail "${timer_name} is not enabled"
-    [[ "$(systemctl is-active "${timer_name}")" == "active" ]] ||
-        fail "${timer_name} is not active"
+    require_active_timer "${timer_name}"
 
     for wait_attempt in $(seq 1 "${systemd_completion_wait_attempts}"); do
         result="$(systemctl show "${service_name}" -p Result --value)"
@@ -84,10 +88,12 @@ require_recent_systemd_success \
     vendure-production-healthcheck.timer \
     vendure-production-healthcheck.service \
     "${healthcheck_maximum_age_seconds}"
-require_recent_systemd_success \
-    vendure-mysql-restore-drill.timer \
-    vendure-mysql-restore-drill.service \
-    "${restore_drill_maximum_age_seconds}"
+# The host healthcheck verifies the durable restore receipt. Systemd can unload
+# a successful oneshot service and forget its execution timestamp.
+require_active_timer vendure-mysql-restore-drill.timer
+restore_drill_result="$(systemctl show vendure-mysql-restore-drill.service -p Result --value)"
+[[ "${restore_drill_result}" == "success" ]] ||
+    fail "vendure-mysql-restore-drill.service last result is ${restore_drill_result:-missing}"
 [[ "$(systemctl show vendure-file-restore-drill.timer -p UnitFileState --value)" == "disabled" ]] ||
     fail 'on-host file restore drill timer must stay disabled'
 [[ "$(systemctl show vendure-file-restore-drill.timer -p ActiveState --value)" == "inactive" ]] ||
