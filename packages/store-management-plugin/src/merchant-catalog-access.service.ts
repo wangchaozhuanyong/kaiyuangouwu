@@ -34,7 +34,11 @@ import {
 import { In } from 'typeorm';
 
 import { CatalogGovernanceService } from './catalog-governance.service';
-import { hasMachineMailboxAccess, sensitiveStoreFinancePermission } from './constants';
+import {
+    hasMachineMailboxAccess,
+    machineMailboxPermissions,
+    sensitiveStoreFinancePermission,
+} from './constants';
 import { AdministratorAccessProfile } from './entities/administrator-access-profile.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { StoreCouponCampaignConfig } from './entities/store-coupon-campaign-config.entity';
@@ -230,26 +234,7 @@ const platformOwnerFields = new Set([
     'Mutation.testImagePromptModel',
     'Mutation.archiveImagePromptModel',
     'Mutation.anonymizeImageGenerationCustomerData',
-    'Query.icloudMailHealth',
-    'Query.icloudPrimaryAccounts',
-    'Query.icloudPrimaryAccount',
-    'Query.icloudVirtualEmails',
-    'Query.icloudVirtualEmail',
-    'Query.icloudReceivedMails',
-    'Mutation.reconcileIcloudMailHistory',
-    'Mutation.createIcloudPrimaryAccount',
-    'Mutation.updateIcloudPrimaryAccount',
-    'Mutation.deleteIcloudPrimaryAccount',
-    'Mutation.testIcloudConnection',
-    'Mutation.syncIcloudAccount',
-    'Mutation.resetIcloudMasterCode',
-    'Mutation.createIcloudVirtualEmail',
-    'Mutation.batchCreateIcloudVirtualEmails',
-    'Mutation.updateIcloudVirtualEmail',
-    'Mutation.deleteIcloudVirtualEmail',
-    'Mutation.resetIcloudVirtualEmailCode',
-    'Mutation.reassignIcloudMail',
-    'Mutation.deleteIcloudMail',
+    ...machineMailboxPermissions.keys(),
 ]);
 const platformPaymentConfigurationMutations = new Set([
     'createPaymentMethod',
