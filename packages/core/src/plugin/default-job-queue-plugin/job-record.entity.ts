@@ -6,6 +6,7 @@ import { VendureEntity } from '../../entity/base/base.entity';
 
 // createdAt is coming from base entity VendureEntity and is not explicitly defined here
 @Index(['createdAt'])
+@Index('IDX_job_record_queue_state_created', ['queueName', 'state', 'createdAt'])
 @Entity()
 export class JobRecord extends VendureEntity {
     constructor(input: DeepPartial<JobRecord>) {

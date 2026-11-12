@@ -163,6 +163,7 @@ import { AddNewsBlog1793491200000 } from './1793491200000-add-news-blog';
 import { AddBlogSkills1793577600000 } from './1793577600000-add-blog-skills';
 import { AddBlogSourceMetadata1793577660000 } from './1793577660000-add-blog-source-metadata';
 import { SeedFlashcastContentSettings1793952000000 } from './1793952000000-seed-flashcast-content-settings';
+import { AddJobRecordQueueIndex1794499800000 } from './1794499800000-add-job-record-queue-index';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -330,4 +331,5 @@ export const devServerMigrations = [
     AddBlogSkills1793577600000,
     AddBlogSourceMetadata1793577660000,
     SeedFlashcastContentSettings1793952000000,
+    AddJobRecordQueueIndex1794499800000,
 ];
