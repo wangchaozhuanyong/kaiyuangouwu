@@ -43,6 +43,8 @@ export type PublicHotRoute = {
     currencyCode: string;
     request: PublicPageRequest;
     seenAt: number;
+    /** Last observation from an actual anonymous request, excluding scheduled defaults. */
+    observedAt?: number;
     /** Worker-selected published primary navigation, never supplied by visitors. */
     primary?: boolean;
 };
@@ -72,8 +74,13 @@ export function mergePublicHotRoutes(previous: PublicHotRoute[], recent: PublicH
             const entry = { ...route, request };
             const key = identity(entry);
             const existing = routes.get(key);
-            if ((existing?.seenAt ?? 0) <= entry.seenAt)
-                routes.set(key, { ...entry, ...(existing?.primary ? { primary: true } : {}) });
+            const newest = existing && existing.seenAt > entry.seenAt ? existing : entry;
+            const observedAt = Math.max(existing?.observedAt ?? 0, entry.observedAt ?? 0);
+            routes.set(key, {
+                ...newest,
+                ...(existing?.primary ? { primary: true } : {}),
+                ...(observedAt > 0 ? { observedAt } : {}),
+            });
         } catch {
             /* Invalid/obsolete work never enters the warm set. */
         }
@@ -119,7 +126,7 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
             // Seed the API's own cache without delaying its startup.
             if (this.processContext.isWorker) await initial;
             this.timer = setInterval(() => {
-                void this.enqueue('*').catch(() => this.failed());
+                void this.enqueue('*', this.publicCache.sharedVersions).catch(() => this.failed());
             }, 20_000);
             this.timer.unref?.();
         }
@@ -136,12 +143,14 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
         const key = await this.registryKey(ctx);
         if (!key) return;
         if (!this.pending.has(key) && this.pending.size + this.flushing.size >= CHANNEL_LIMIT) return;
+        const observedAt = Date.now();
         const route: PublicHotRoute = {
             host,
             request,
             languageCode: ctx.languageCode,
             currencyCode: ctx.currencyCode,
-            seenAt: Date.now(),
+            seenAt: observedAt,
+            observedAt,
         };
         this.pending.set(key, mergePublicHotRoutes(this.pending.get(key) ?? [], [route]));
         if (this.flushing.has(key)) return;
@@ -181,7 +190,7 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
         }
     }
 
-    private async enqueue(channelId: string) {
+    private async enqueue(channelId: string, includeUnvisitedRoutes = true) {
         // Shared generations use the existing worker queue. With process-local
         // generations each API must fill its own cache; it never creates a DB job.
         // Keep each channel owned until completion, including a local scan's children.
@@ -196,17 +205,17 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
         try {
             // The periodic scan retries failures. Independent queue retries would outlive this ownership.
             if (this.processContext.isWorker) await this.queue.add({ channelId }, { retries: 0 });
-            else await this.process({ channelId });
+            else await this.process({ channelId }, includeUnvisitedRoutes);
         } catch (error) {
             this.queued.delete(channelId);
             throw error;
         }
     }
 
-    private process(job: WarmJob): Promise<unknown> {
+    private process(job: WarmJob, includeUnvisitedRoutes = true): Promise<unknown> {
         const pending = this.processing.get(job.channelId);
         if (pending) return pending;
-        const work = this.warm(job)
+        const work = this.warm(job, includeUnvisitedRoutes)
             .catch(error => {
                 if (error instanceof StorefrontClosedError || error instanceof ForbiddenError)
                     return { warmed: 0 };
@@ -220,7 +229,7 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
         return work;
     }
 
-    private async warm({ channelId }: WarmJob) {
+    private async warm({ channelId }: WarmJob, includeUnvisitedRoutes: boolean) {
         const query = this.connection.rawConnection
             .getRepository(StoreDomain)
             .createQueryBuilder('domain')
@@ -240,7 +249,7 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
                 if (channels.has(channel)) continue;
                 if (await this.verifiedContext(domain.host, channel)) {
                     channels.add(channel);
-                    await this.enqueue(channel);
+                    await this.enqueue(channel, includeUnvisitedRoutes);
                 }
             }
             return { queued: channels.size };
@@ -251,7 +260,12 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
         if (!first) return { warmed: 0 };
         const key = await this.registryKey(first);
         if (!key) return { warmed: 0 };
-        const previous = await publicSectionWithinBudget(this.cache.get<Json[]>(key), 200);
+        const previous = ((await publicSectionWithinBudget(this.cache.get<Json[]>(key), 200)) ??
+            []) as PublicHotRoute[];
+        // Prepare the published navigation on startup and on a fresh revision.
+        // Subsequent local refreshes reserve the API's resources for home and observed routes.
+        const refreshUnvisitedRoutes =
+            includeUnvisitedRoutes || !previous.some(route => route.primary && route.request.kind !== 'home');
         const primaryLanguage =
             first.channel.defaultLanguageCode === LanguageCode.zh_Hans
                 ? LanguageCode.zh_Hans
@@ -308,15 +322,20 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
             }
         }
         const routes = mergePublicHotRoutes(
-            ((previous ?? []) as PublicHotRoute[])
-                .filter(route => validHosts.has(route.host))
-                .map(route => ({ ...route, primary: false })),
+            previous.filter(route => validHosts.has(route.host)).map(route => ({ ...route, primary: false })),
             defaults,
         );
         await this.saveRoutes(first, key, routes);
         if ((await this.registryKey(first)) !== key) return { warmed };
+        const observedSince = Date.now() - HOT_TTL;
         for (const route of routes) {
             if (preparedHomes.has(identity(route))) continue;
+            if (
+                !refreshUnvisitedRoutes &&
+                route.request.kind !== 'home' &&
+                (route.observedAt === undefined || route.observedAt < observedSince)
+            )
+                continue;
             // Domain revocation, activation and currency changes are checked again when queued work executes.
             const original = await this.verifiedContext(route.host, channelId);
             if (!original) continue;

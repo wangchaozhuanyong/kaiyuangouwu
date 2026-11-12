@@ -148,13 +148,46 @@ describe('bounded public page preparation', () => {
         expect(api.records.has('storefront-public-hot-routes:v2:a:r1')).toBe(true);
         expect(api.records).not.toBe(worker.records);
         await vi.advanceTimersByTimeAsync(20_000);
-        expect(api.pages.read).toHaveBeenCalledTimes(8);
+        expect(api.pages.read).toHaveBeenCalledTimes(6);
+        expect(api.pages.read.mock.calls.slice(4).map(call => call[2].kind)).toEqual(['home', 'home']);
         expect(worker.pages.read).not.toHaveBeenCalled();
         expect(worker.add).not.toHaveBeenCalled();
         api.service.onApplicationShutdown();
         worker.service.onApplicationShutdown();
         await vi.advanceTimersByTimeAsync(60_000);
-        expect(api.pages.read).toHaveBeenCalledTimes(8);
+        expect(api.pages.read).toHaveBeenCalledTimes(6);
+    });
+
+    it('keeps recently visited default routes warm and prepares new publications once', async () => {
+        vi.useFakeTimers();
+        const h = harness(false, false);
+        await h.service.onApplicationBootstrap();
+        await vi.waitFor(() => expect(h.pages.read).toHaveBeenCalledTimes(4));
+        h.pages.read.mockClear();
+
+        await h.service.observe(h.ctx as never, 'a.test', { kind: 'catalog', input: {} });
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(h.pages.read.mock.calls.map(([ctx, , request]) => [ctx.languageCode, request.kind])).toEqual([
+            ['zh_Hans', 'home'],
+            ['en', 'home'],
+            ['en', 'catalog'],
+        ]);
+        h.pages.read.mockClear();
+
+        vi.setSystemTime(Date.now() + 30 * 60_000);
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(h.pages.read.mock.calls.map(call => call[2].kind)).toEqual(['home', 'home']);
+        h.pages.read.mockClear();
+
+        h.revision.value = 'r2';
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(h.pages.read.mock.calls.map(call => call[2].kind)).toEqual([
+            'home',
+            'home',
+            'catalog',
+            'catalog',
+        ]);
+        h.service.onApplicationShutdown();
     });
 
     it('coalesces local API warming and stops at revoked access without publishing another generation', async () => {

@@ -90,6 +90,7 @@ export async function verifyConfiguredProductionStorefronts({
                                         'x-forwarded-host': publicUrl.host,
                                         'x-forwarded-proto': 'https',
                                         'x-storefront-original-uri': publicUrl.pathname + publicUrl.search,
+                                        'x-storefront-public-coupon-guest': '1',
                                     },
                                 });
                                 serverTimings = Object.fromEntries(
