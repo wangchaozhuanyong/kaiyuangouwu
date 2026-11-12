@@ -71,9 +71,9 @@ try {
         await page.getByRole('button', { name: '验证兑换码', exact: true }).click();
         await expect(page.locator('#gpt-verify-error')).toBeVisible();
         await expect(activePlan).toHaveCount(0);
-        await codeInput.fill('DEMO-NOT-ADMITTED');
+        await codeInput.fill('DEMO-INVALID');
         await verifyButton.click();
-        await expect(page.getByRole('alert')).toHaveText('此兑换码未获本商城使用授权');
+        await expect(page.getByRole('alert')).toHaveText('兑换码无效或已停用，请核对后重试。');
         await codeInput.fill('DEMO-HELD');
         await verifyButton.click();
         await expect(page.getByRole('heading', { name: '上次开通结果待核对', exact: true })).toBeVisible();
@@ -187,9 +187,7 @@ try {
         const code = page.locator('#gpt-code');
         await code.fill('DEMO-PLUS');
         await page.getByRole('button', { name: '验证兑换码', exact: true }).click();
-        await expect(page.locator('#gpt-code-error')).toHaveText(
-            '该兑换码无法在本商城使用，请核对兑换码后重试。',
-        );
+        await expect(page.locator('#gpt-code-error')).toHaveText('兑换码无效或已停用，请核对后重试。');
         await expect(code).toBeFocused();
         await expect(page.getByRole('button', { name: '充值提交', exact: true })).toBeDisabled();
         if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth))

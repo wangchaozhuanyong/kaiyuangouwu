@@ -219,22 +219,15 @@ export function GptRechargePage({
                     (scope === 'verify' || scope === 'query') &&
                     errorCode === 'USER_INPUT_ERROR' &&
                     reason instanceof Error &&
-                    (reason.message === '兑换码无效或已停用，请核对后重试' ||
-                        reason.message === '此兑换码未获本商城使用授权')
+                    reason.message === '兑换码无效或已停用，请核对后重试'
                 ) {
                     setError({
                         scope,
                         field: scope === 'verify' ? 'code' : 'query',
-                        text:
-                            reason.message === '此兑换码未获本商城使用授权'
-                                ? t(
-                                      '此兑换码未获本商城使用授权',
-                                      'This code is not authorized for this store.',
-                                  )
-                                : t(
-                                      '该兑换码无法在本商城使用，请核对兑换码后重试。',
-                                      'This redemption code cannot be used in this store. Check the code and try again.',
-                                  ),
+                        text: t(
+                            '兑换码无效或已停用，请核对后重试。',
+                            'This redemption code is invalid or disabled. Check the code and try again.',
+                        ),
                     });
                     return;
                 }
