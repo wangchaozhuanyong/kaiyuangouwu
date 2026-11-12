@@ -2,23 +2,23 @@
 import type { StorefrontActivationService } from '../storefront-activation.service';
 import type { RequestContextService, TransactionalConnection } from '@vendure/core';
 import { Channel, CurrencyCode, LanguageCode, RequestContext } from '@vendure/core';
-import type { StorefrontContentService } from '@vendure/storefront-content-plugin';
+import type { EnvironmentNetworkReport, StorefrontContentService } from '@vendure/storefront-content-plugin';
 import type { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 import { buildSchema, graphql, print } from 'graphql';
 import { createHash } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import 'reflect-metadata';
 import { DataSource, EntitySchema } from 'typeorm';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ShopApi } from '../../../storefront/src/api';
-import { requestEnvironmentNetworkReport } from '../../../storefront/src/api/environment-monitor';
 import { ShopAbuseBucket } from '../abuse-protection/entities';
 import { ShopAbuseStore } from '../abuse-protection/store';
 import { StorefrontClientPluginAccessService } from '../storefront-client-plugin-access.service';
 
 import { EnvironmentMonitorResolver, environmentMonitorSchema } from './environment-monitor.resolver';
 import { EnvironmentMonitorService } from './environment-monitor.service';
+
+type NetworkReportClient = { request<T>(query: string): Promise<T> };
 
 // Isolated SQL.js and loopback HTTP. Published-store fixtures and IPQS responses are synthetic.
 // No dev .env, production database, real customer IP, or paid provider is used.
@@ -71,15 +71,33 @@ describe('environment monitor through ShopApi, HTTP, resolver, admission and SQL
             isAuthorized: true,
             authorizedAsOwnerOnly: false,
         });
-    const client = (code = 'http-store-a') =>
-        new ShopApi({
-            code,
-            defaultLanguageCode: 'en',
-            currencyCode: 'USD',
-            countryCode: 'US',
-            locale: 'en-US',
-            label: 'Synthetic HTTP fixture',
-        });
+    const clientMarket = (code = 'http-store-a') => ({
+        code,
+        defaultLanguageCode: 'en',
+        currencyCode: 'USD',
+        countryCode: 'US',
+        locale: 'en-US',
+        label: 'Synthetic HTTP fixture',
+    });
+    let ShopApi: new (market: ReturnType<typeof clientMarket>) => NetworkReportClient;
+    let requestEnvironmentNetworkReport: (
+        api: NetworkReportClient,
+        signal?: AbortSignal,
+        observe?: () => Promise<{ ipv4?: string; ipv6?: string }>,
+    ) => Promise<EnvironmentNetworkReport>;
+    const client = (code?: string) => new ShopApi(clientMarket(code));
+
+    beforeAll(async () => {
+        // Vitest loads the real Vite client through its bundler. The backend type check owns the wire contract.
+        const [shopApi, network] = await Promise.all([
+            vi.importActual<{ ShopApi: typeof ShopApi }>('../../../storefront/src/api'),
+            vi.importActual<{ requestEnvironmentNetworkReport: typeof requestEnvironmentNetworkReport }>(
+                '../../../storefront/src/api/environment-monitor',
+            ),
+        ]);
+        ShopApi = shopApi.ShopApi;
+        requestEnvironmentNetworkReport = network.requestEnvironmentNetworkReport;
+    });
 
     beforeEach(async () => {
         db = await new DataSource({

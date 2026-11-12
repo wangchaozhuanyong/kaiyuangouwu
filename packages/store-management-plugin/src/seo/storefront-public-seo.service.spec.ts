@@ -11,12 +11,12 @@ import { StoreProfile } from '../entities/store-profile.entity';
 import { StorefrontPublicSeoService, type StorefrontPublicSeoInitial } from './storefront-public-seo.service';
 import { defaultStorefrontSeoSettings, publicStorefrontSeoSettings } from './storefront-seo.contract';
 
-function fixture() {
+function fixture(languageCode = LanguageCode.en) {
     const host = 'synthetic-store.invalid';
     const ctx = {
         channelId: 'synthetic-channel',
         channel: { code: 'synthetic-store' },
-        languageCode: LanguageCode.en,
+        languageCode,
         currencyCode: CurrencyCode.MYR,
     } as RequestContext;
     const configuration = {
@@ -363,14 +363,13 @@ describe('request-local public SEO preparation', () => {
     });
 
     it('uses article metadata and the store sharing image without reusing the legacy cover', async () => {
-        const test = fixture();
-        test.ctx.languageCode = LanguageCode.zh_Hans;
+        const test = fixture(LanguageCode.zh_Hans);
         test.page.request = { kind: 'blog', id: 'verified-update', input: {} };
         test.page.config = {
-            ...test.page.config,
+            ...(test.page.config as object),
             logoUrl: '/assets/store-logo.webp',
             customFields: { storefrontNameZh: '测试店铺' },
-        } as never;
+        };
         test.profile.descriptionZh = '中文店铺说明';
         test.page.blog = {
             title: '栏目标题',
