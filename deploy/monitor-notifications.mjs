@@ -28,13 +28,23 @@ const hostReasons = {
     'root-disk-high': ['P1', '服务器磁盘使用率达到百分之八十五或无法读取'],
 };
 export function hostSignals(failures) {
-    return Object.entries(hostReasons).map(([key, [severity, reason]]) => ({
-        key: `host:${key}`,
-        severity,
-        reason,
-        firing: failures.includes(key),
-        samples: key === 'mysql-unreachable' ? 2 : 1,
-    }));
+    return Object.entries(hostReasons).map(([key, [severity, reason]]) => {
+        const samples = [
+            'mysql-unreachable',
+            'public-health-failed',
+            'image-generation-health-failed',
+        ].includes(key)
+            ? 2
+            : 1;
+        return {
+            key: `host:${key}`,
+            severity,
+            reason,
+            firing: failures.includes(key),
+            samples,
+            recoverySamples: samples,
+        };
+    });
 }
 export function certificateSignal(host, certificate, now = new Date()) {
     const end = new Date(certificate.valid_to);
@@ -110,6 +120,7 @@ export async function publicSignals(config, { fetchImpl = fetch, certificateRead
                 firing: !ok,
                 reason: `${host}：店铺入口、后台或接口健康检查未通过`,
                 samples: 2,
+                recoverySamples: 2,
             });
         } catch {
             signals.push({
@@ -118,11 +129,18 @@ export async function publicSignals(config, { fetchImpl = fetch, certificateRead
                 firing: true,
                 reason: `${host}：公共入口持续无法访问，需核查网站与网络`,
                 samples: 2,
+                recoverySamples: 2,
             });
         }
         try {
             signals.push(certificateSignal(host, await certificateReader(host)));
-            signals.push({ key: `tls-probe:${host}`, severity: 'P1', firing: false });
+            signals.push({
+                key: `tls-probe:${host}`,
+                severity: 'P1',
+                firing: false,
+                reason: `${host}：证书巡检已恢复正常`,
+                recoverySamples: 2,
+            });
         } catch {
             signals.push({
                 key: `tls-probe:${host}`,
@@ -131,6 +149,7 @@ export async function publicSignals(config, { fetchImpl = fetch, certificateRead
                 monitor: true,
                 reason: `${host}：证书巡检未能完成，尚未确认网站证书失效`,
                 samples: 2,
+                recoverySamples: 2,
             });
         }
     }
@@ -143,7 +162,8 @@ export function externalSignal(result) {
             severity: 'P1',
             firing: false,
             reason: '外部主机巡检正常',
-            samples: 1,
+            samples: 2,
+            recoverySamples: 2,
         };
     const confirmed =
         result?.Status === 'Failed' && /Production health monitor failed:/.test(result?.Error ?? '');
@@ -152,34 +172,42 @@ export function externalSignal(result) {
         severity: 'P1',
         firing: true,
         monitor: !confirmed,
-        samples: 1,
+        samples: 2,
+        recoverySamples: 2,
         reason: confirmed
             ? '主机巡检确认健康检查未通过，请核查后台进程、备份、恢复验证与服务器状态'
             : '外部巡检自身未完成，尚未确认服务器故障；请检查巡检权限、远程管理连接及调度状态',
     };
 }
-/** Persist only public monitoring metadata. State advances only after a successful send. */
+/** Persist only public monitoring metadata. Failed sends retain incident state for retry. */
 export async function deliverSignals(
     signals,
     state,
     send,
     now = Date.now(),
-    { external = false, adminUrl } = {},
+    { external = false, adminUrl, sendResolved = true } = {},
 ) {
     const next = { ...state };
     let sent = 0;
     let failed = 0;
     for (const signal of signals) {
         const old = next[signal.key] ?? { failures: 0, active: false, sentAt: 0, revision: null };
-        const entry = { ...old, failures: signal.firing ? old.failures + 1 : 0 };
+        const entry = {
+            ...old,
+            failures: signal.firing ? old.failures + 1 : 0,
+            successes: signal.firing ? 0 : (old.successes ?? 0) + 1,
+        };
         const upgraded = signal.severity === 'P0' && old.severity !== 'P0';
         const repeat = now - old.sentAt >= (signal.severity === 'P0' ? 30 : 120) * 60000;
         const needsSend =
             signal.firing &&
             entry.failures >= (signal.samples ?? 1) &&
             (!old.active || upgraded || (signal.oneOff ? old.revision !== signal.revision : repeat));
-        const recovered = !signal.firing && old.active;
-        if (needsSend || recovered) {
+        const recovered = !signal.firing && old.active && entry.successes >= (signal.recoverySamples ?? 1);
+        if (recovered && !sendResolved) {
+            // Muting recovery messages must still close the incident for future alerts.
+            entry.active = false;
+        } else if (needsSend || recovered) {
             const title = recovered
                 ? '✅ 系统监测恢复'
                 : signal.monitor
@@ -194,8 +222,8 @@ export async function deliverSignals(
                 hour12: false,
             }).format(new Date(now));
             const recoveryReason = signal.key.startsWith('tls:')
-                ? '证书已恢复正常或完成续期'
-                : '本项监测已恢复正常';
+                ? `${signal.key.slice(4)}：证书已恢复正常或完成续期`
+                : `此前：${old.reason ?? signal.reason ?? signal.key}；现已恢复正常`;
             const text =
                 `${title}\n对象：平台与相关店铺\n事件：${recovered ? recoveryReason : signal.reason}` +
                 `\n时间：${time}\n处理入口：${adminUrl ?? '请打开现有管理后台的系统运维页面'}` +
@@ -206,6 +234,7 @@ export async function deliverSignals(
                 entry.sentAt = now;
                 entry.revision = signal.revision ?? null;
                 entry.severity = signal.severity;
+                if (!recovered) entry.reason = signal.reason;
                 sent++;
             } catch {
                 failed++;
@@ -287,7 +316,13 @@ async function main() {
             const host = new URL(origin).hostname;
             try {
                 signals.push(certificateSignal(host, await readCertificate(host)));
-                signals.push({ key: `tls-probe:${host}`, severity: 'P1', firing: false });
+                signals.push({
+                    key: `tls-probe:${host}`,
+                    severity: 'P1',
+                    firing: false,
+                    reason: `${host}：证书巡检已恢复正常`,
+                    recoverySamples: 2,
+                });
             } catch {
                 signals.push({
                     key: `tls-probe:${host}`,
@@ -296,6 +331,7 @@ async function main() {
                     monitor: true,
                     reason: `${host}：证书巡检自身失败，尚未确认网站故障`,
                     samples: 2,
+                    recoverySamples: 2,
                 });
             }
         }
@@ -311,7 +347,6 @@ async function main() {
             signals.push(externalSignal(remote));
         }
     }
-    if (!config.sendResolved) signals = signals.filter(signal => signal.firing || !state[signal.key]?.active);
     const result = await deliverSignals(
         signals,
         state,
@@ -329,7 +364,7 @@ async function main() {
             if (!response.ok || !payload.ok || !payload.result?.message_id) throw new Error('通知发送失败');
         },
         Date.now(),
-        { external: !hostMode, adminUrl: config.adminBaseUrl },
+        { external: !hostMode, adminUrl: config.adminBaseUrl, sendResolved: Boolean(config.sendResolved) },
     );
     await mkdir(dirname(statePath), { recursive: true, mode: 0o700 });
     await writeFile(`${statePath}.next`, JSON.stringify(result.state), { mode: 0o600 });
