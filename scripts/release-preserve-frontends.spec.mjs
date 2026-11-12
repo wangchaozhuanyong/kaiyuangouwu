@@ -110,19 +110,23 @@ test('the existing exact-main rebuild switch reaches both release lanes', () => 
     assert.equal(frontend.jobs.deploy.steps[0].with.ref, '${{ inputs.target_sha }}');
 });
 test('retain mode checks the mailbox backend while leaving unrelated frontend changes unpublished', () => {
+    const mailboxContract = 'packages/icloud-relay-plugin/e2e/admin-contract.e2e-spec.ts';
     const files = [
         'packages/icloud-relay-plugin/src/services/icloud-idle.service.ts',
+        mailboxContract,
         'packages/storefront/src/safe-image.tsx',
     ];
     const result = retainedFrontendPlan(classifyChanges(files, packages), packages);
     assert.equal(result.lane, 'runtime');
     assert.deepEqual(result.frontends, []);
     assert.deepEqual(result.changedPackages, ['icloud-relay-plugin']);
+    assert.ok(result.files.includes(mailboxContract));
     for (const extra of [
         'package.json',
         'bun.lock',
         'packages/core/src/index.ts',
         'deploy/nginx/damatong.conf',
+        'packages/icloud-relay-plugin/e2e/unreviewed.e2e-spec.ts',
     ])
         assert.throws(() => retainedFrontendPlan(classifyChanges([...files, extra], packages), packages));
     assert.throws(() =>
@@ -193,13 +197,13 @@ test('real pointer and full asset snapshots reject moved versions, changes, extr
     }
 });
 
-test('the real switch branch leaves all three pointers untouched in retain mode', () => {
+test('retain mode leaves all three pointers untouched and verifies the active 2FA artifact', () => {
     const script = readFileSync('deploy/deploy-production-from-s3.sh', 'utf8');
     const start = script.indexOf(
-        'if [[ "$retain_frontends" == true ]]; then',
+        'two_factor_verification_directory=',
         script.indexOf('# Initialize/switch the frontend'),
     );
-    const end = script.indexOf('sudo -n cp -p', start);
+    const end = script.indexOf('\nsudo -n ln -s "${candidate}"', start);
     assert.ok(start > 0 && end > start);
     const block = script.slice(start, end);
     const setup = `set -Eeuo pipefail
@@ -207,10 +211,14 @@ repository=/repo
 candidate=/candidate
 storefront_pointer=/storefront
 two_factor_pointer=/two-factor
+previous_two_factor=/active-two-factor
 admin_pointer=/admin
 frontend_preservation_receipt=/receipt
 expected_storefront_sha=first
 expected_admin_sha=second
+nginx_target=/nginx-live
+nginx_backup=/nginx-before
+deployment_id=test-release
 node(){ echo "node:$*"; }
 sudo(){ echo "sudo:$*"; }
 `;
@@ -222,7 +230,14 @@ sudo(){ echo "sudo:$*"; }
         if (retain === 'true') {
             assert.match(result.stdout, /verify \/receipt first second/u);
             assert.doesNotMatch(result.stdout, /switch/u);
-        } else assert.equal((result.stdout.match(/switch/g) ?? []).length, 3);
+            assert.match(result.stdout, /verify-two-factor \/active-two-factor test-release/u);
+        } else {
+            assert.equal((result.stdout.match(/switch/g) ?? []).length, 3);
+            assert.match(
+                result.stdout,
+                /verify-two-factor \/candidate\/packages\/storefront\/dist-two-factor test-release/u,
+            );
+        }
     }
     assert.ok(
         script.lastIndexOf('"$frontend_preservation_receipt"') < script.lastIndexOf('rollback_needed=0'),

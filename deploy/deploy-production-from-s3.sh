@@ -1210,17 +1210,23 @@ for attempt in $(seq 1 20); do
 done
 sudo -n systemctl is-active --quiet vendure-nginx-error-log.service
 sudo -n test -S /run/vendure-nginx-log/error.sock
-# Process health is not page readiness: a cold shared public read can still take
-# seconds after /health succeeds. Prepare actual configured home documents before
-# changing frontend pointers; the following public acceptance keeps its 10s limit.
-node "${repository}/deploy/verify-production-storefronts.mjs" \
-    --mode prepare --origin-url http://127.0.0.1:3002 --timeout-ms 20000
+# Process health is not page readiness. Keep the anonymous warm-up separate from
+# the strict public acceptance deadline.
+prepare_storefronts() {
+    node "${repository}/deploy/verify-production-storefronts.mjs" \
+        --mode prepare --origin-url http://127.0.0.1:3002 --timeout-ms 20000
+}
+if [[ "$retain_frontends" == false ]]; then
+    prepare_storefronts
+fi
 
 # Initialize/switch the frontend before Nginx starts using its independent pointer.
 # Both full releases and the fast lane are covered by the shared deployment lock.
+two_factor_verification_directory="${candidate}/packages/storefront/dist-two-factor"
 if [[ "$retain_frontends" == true ]]; then
     node "${repository}/scripts/release-preserve-frontends.mjs" verify \
         "$frontend_preservation_receipt" "$expected_storefront_sha" "$expected_admin_sha"
+    two_factor_verification_directory="$previous_two_factor"
 else
 # Preserve old document/chunk URLs before switching, without touching the new HTML/SSR artifact.
 sudo -n node "${repository}/deploy/frontend-asset-compatibility.mjs" "${candidate}/packages/storefront/dist" "${storefront_pointer}"
@@ -1242,7 +1248,7 @@ nginx_changed=1
 sudo -n nginx -t
 sudo -n systemctl reload nginx
 node "${repository}/deploy/frontend-release.mjs" verify-two-factor \
-    "${candidate}/packages/storefront/dist-two-factor" "${deployment_id}"
+    "$two_factor_verification_directory" "${deployment_id}"
 
 sudo -n ln -s "${candidate}" "/var/www/.kaiyuangouwu-current.new.$$"
 sudo -n mv -Tf "/var/www/.kaiyuangouwu-current.new.$$" "${current_pointer}"
@@ -1268,6 +1274,9 @@ printf 'PRODUCTION_AI_HEALTH_READY phase=post-pointer attempts=%s\n' "${image_he
 storefront_verification_sha="${target_sha}"
 if [[ "${retain_frontends}" == true ]]; then
     storefront_verification_sha="${expected_storefront_sha}"
+    # The existing renderer stays active. Warm its documents after runtime and
+    # image-worker readiness, before the public requests consume the cache.
+    prepare_storefronts
 fi
 node "${repository}/deploy/verify-production-storefronts.mjs" \
     --mode release \

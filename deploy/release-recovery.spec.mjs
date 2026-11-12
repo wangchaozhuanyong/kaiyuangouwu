@@ -809,12 +809,31 @@ test('the actual CLI rejects supplied proof arguments before making any request'
     assert.match(result.stderr, /No external proof arguments are accepted/u);
 });
 
-test('post-switch public checks bind the preserved storefront version during a backend-only release', () => {
+test('a backend-only release prepares the active storefront after readiness and verifies its version', () => {
+    const preparationStart = deploymentScript.indexOf('prepare_storefronts() {');
+    const frontendSwitch = deploymentScript.indexOf('# Initialize/switch the frontend', preparationStart);
+    const ready = deploymentScript.indexOf(
+        "printf 'PRODUCTION_AI_HEALTH_READY phase=post-pointer",
+        frontendSwitch,
+    );
     const start = deploymentScript.indexOf('storefront_verification_sha="${target_sha}"');
-    assert.ok(start >= 0);
+    assert.ok(
+        preparationStart >= 0 && frontendSwitch > preparationStart && ready > frontendSwitch && start > ready,
+    );
+    const preparation = deploymentScript.slice(preparationStart, frontendSwitch);
     const command = deploymentScript.slice(start, deploymentScript.indexOf('\nif jq ', start));
     const backend = 'a'.repeat(40);
     const frontend = 'b'.repeat(40);
+    const verifier = '/synthetic/deploy/verify-production-storefronts.mjs';
+    const warmup = [
+        verifier,
+        '--mode',
+        'prepare',
+        '--origin-url',
+        'http://127.0.0.1:3002',
+        '--timeout-ms',
+        '20000',
+    ];
     for (const retained of ['true', 'false']) {
         const result = spawnSync(
             'bash',
@@ -827,18 +846,19 @@ target_sha=${backend}
 expected_storefront_sha=${frontend}
 retain_frontends=${retained}
 node() { printf '%s\\n' "$@"; }
+${preparation}
+printf '%s\\n' runtime-ready
 ${command}
 `,
             ],
             { encoding: 'utf8' },
         );
         assert.equal(result.status, 0, result.stderr);
-        assert.deepEqual(result.stdout.trim().split('\n'), [
-            '/synthetic/deploy/verify-production-storefronts.mjs',
-            '--mode',
-            'release',
-            '--release-id',
-            retained === 'true' ? frontend : backend,
-        ]);
+        const verification = [verifier, '--mode', 'release', '--release-id'];
+        const expected =
+            retained === 'true'
+                ? ['runtime-ready', ...warmup, ...verification, frontend]
+                : [...warmup, 'runtime-ready', ...verification, backend];
+        assert.deepEqual(result.stdout.trim().split('\n'), expected);
     }
 });
