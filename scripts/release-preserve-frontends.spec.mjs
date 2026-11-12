@@ -133,6 +133,24 @@ test('retain mode checks the mailbox backend while leaving unrelated frontend ch
         retainedFrontendPlan(classifyChanges(['packages/storefront/src/safe-image.tsx'], packages), packages),
     );
 });
+test('the production monitor can be updated while preserving the active frontends', () => {
+    const files = [
+        'deploy/monitor-production-health.sh',
+        'packages/dev-server/scripts/deployment-security.spec.mjs',
+    ];
+    const result = retainedFrontendPlan(classifyChanges(files, packages), packages);
+    assert.equal(result.lane, 'runtime');
+    assert.deepEqual(result.frontends, []);
+    assert.deepEqual(result.changedPackages, []);
+    assert.throws(
+        () =>
+            retainedFrontendPlan(
+                classifyChanges([...files, 'deploy/systemd/vendure-production-healthcheck'], packages),
+                packages,
+            ),
+        /Runtime-only release cannot include deploy\/systemd\/vendure-production-healthcheck/u,
+    );
+});
 test('mailbox health governance files keep the frontend pointers while unrelated store logic is rejected', () => {
     const files = [
         'packages/store-management-plugin/src/constants.ts',

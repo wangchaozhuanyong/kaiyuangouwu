@@ -28,8 +28,12 @@ export function retainedFrontendPlan(plan, packageList = packageInventory()) {
                 ].includes(file) ||
                 isAutomationOnly(file) ||
                 isDocumentation(file) ||
-                ['deploy/deploy-production-from-s3.sh', 'deploy/release-route.mjs'].includes(file),
-            `Runtime-only mailbox release cannot include ${file}`,
+                [
+                    'deploy/deploy-production-from-s3.sh',
+                    'deploy/monitor-production-health.sh',
+                    'deploy/release-route.mjs',
+                ].includes(file),
+            `Runtime-only release cannot include ${file}`,
         );
     const selected = classifyChanges(
         plan.files.filter(file => !frontendOnly(file)),
@@ -38,7 +42,7 @@ export function retainedFrontendPlan(plan, packageList = packageInventory()) {
         packageList.filter(pkg => !STATIC_APPS.includes(pkg.directory)),
         false,
     );
-    assert.equal(selected.lane, 'runtime', 'Frontend preservation requires a pending mailbox runtime change');
+    assert.equal(selected.lane, 'runtime', 'Frontend preservation requires a pending runtime change');
     assert.deepEqual(selected.frontends, []);
     return selected;
 }
