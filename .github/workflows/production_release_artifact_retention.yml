@@ -1,0 +1,72 @@
+name: Production Release Artifact Retention
+
+on:
+    workflow_call:
+        inputs:
+            mode:
+                type: string
+                default: apply
+
+permissions: {}
+
+jobs:
+    prune:
+        name: verify and retain seven production releases
+        if: github.ref == 'refs/heads/main'
+        runs-on: ubuntu-24.04
+        timeout-minutes: 5
+        permissions:
+            actions: read
+            contents: read
+            id-token: write
+        env:
+            GH_TOKEN: ${{ github.token }}
+            VENDURE_PRODUCTION_LIGHTSAIL_ACTIVE: ${{ vars.VENDURE_PRODUCTION_LIGHTSAIL_ACTIVE }}
+            RETENTION_MODE: ${{ inputs.mode }}
+            RETENTION_ROLE_ARN: ${{ vars.VENDURE_RELEASE_ARTIFACT_RETENTION_ROLE_ARN }}
+        steps:
+            - name: Require the configured retention role and mode
+              run: |
+                  case "$RETENTION_MODE" in plan|apply) ;; *) exit 1 ;; esac
+                  test "$RETENTION_ROLE_ARN" = arn:aws:iam::098208446664:role/yunqiao-vendure-s3-release-retention || {
+                    echo 'Configure the dedicated release retention role before applying this policy.' >&2
+                    exit 1
+                  }
+
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+              with:
+                  ref: ${{ github.sha }}
+                  persist-credentials: false
+
+            - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+              with:
+                  node-version: '24.19.0'
+
+            - name: Use the existing production inspection role
+              uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+              with:
+                  role-to-assume: arn:aws:iam::098208446664:role/yunqiao-vendure-github-deploy
+                  aws-region: ap-northeast-1
+                  allowed-account-ids: '098208446664'
+                  role-session-name: vendure-release-refs-${{ github.run_id }}
+
+            - name: Read live component artifact references
+              run: node scripts/release-prune-artifacts.mjs inspect-host > "$RUNNER_TEMP/vendure-release-refs.json"
+
+            - name: Use the deployment-prefix retention role
+              uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+              with:
+                  role-to-assume: ${{ env.RETENTION_ROLE_ARN }}
+                  aws-region: ap-northeast-1
+                  allowed-account-ids: '098208446664'
+                  role-session-name: vendure-release-retention-${{ github.run_id }}
+                  role-duration-seconds: 900
+                  unset-current-credentials: true
+                  inline-session-policy: >-
+                      {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:ListBucketVersions",
+                      "Resource":"arn:aws:s3:::yunqiao-vendure-prod-backup-098208446664-apne1",
+                      "Condition":{"StringEquals":{"s3:prefix":"deployments/"}}}
+                      ${{ inputs.mode == 'apply' && ',{"Effect":"Allow","Action":"s3:DeleteObjectVersion","Resource":"arn:aws:s3:::yunqiao-vendure-prod-backup-098208446664-apne1/deployments/*"}' || '' }}]}
+
+            - name: Enforce the release retention limit
+              run: node scripts/release-prune-artifacts.mjs "$RETENTION_MODE" "$RUNNER_TEMP/vendure-release-refs.json"
