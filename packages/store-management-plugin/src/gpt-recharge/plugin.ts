@@ -1,4 +1,4 @@
-import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { Args, Info, Mutation, Query, Resolver } from '@nestjs/graphql';
 import {
     Allow,
     Ctx,
@@ -10,6 +10,7 @@ import {
     VendurePlugin,
 } from '@vendure/core';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
+import { getArgumentValues, type GraphQLResolveInfo } from 'graphql';
 
 import { ShopAbuseProtectionPlugin } from '../abuse-protection/plugin';
 import { StorefrontClientPluginAccessService } from '../storefront-client-plugin-access.service';
@@ -40,10 +41,20 @@ export class GptRechargeShopResolver {
     @Allow(Permission.Public)
     gptRechargeTask(
         @Ctx() ctx: RequestContext,
-        @Args('id') id: string,
+        @Info() info: GraphQLResolveInfo,
         @Args('credential') credential: string,
     ) {
-        return respond(ctx, () => this.service.task(ctx, id, credential));
+        return respond(ctx, () => {
+            // The entity ID interceptor decodes the resolver args, but this ID is
+            // an opaque receipt reference. Read the validated GraphQL argument.
+            const { id } = getArgumentValues(
+                info.parentType.getFields()[info.fieldName],
+                info.fieldNodes[0],
+                info.variableValues,
+            );
+            if (typeof id !== 'string') throw new ForbiddenError();
+            return this.service.task(ctx, id, credential);
+        });
     }
     @Mutation()
     @Allow(Permission.Public)

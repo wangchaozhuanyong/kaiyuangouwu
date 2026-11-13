@@ -213,47 +213,49 @@ export function GptRechargeGuide({
                 </ol>
             </section>
             <section className="gpt-guide-section">
-                <div className="gpt-guide-section-heading">
-                    <h2>{t('如何获取账号资料', 'How to get your session JSON')}</h2>
-                    <p>
-                        {t(
-                            '先登录，再打开资料页；这两个页面要在同一浏览器中。',
-                            'Sign in first, then open the session page in the same browser.',
-                        )}
-                    </p>
-                </div>
-                <div className="gpt-guide-links">
-                    <a
-                        className="secondary-action"
-                        href={CHATGPT_URL}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                    >
-                        {t('登录 ChatGPT', 'Sign in to ChatGPT')}
-                        <ArrowUpRight size={16} />
-                    </a>
-                    <a
-                        className="secondary-action"
-                        href={CHATGPT_SESSION_URL}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                    >
-                        {t('打开账号资料页', 'Open session page')}
-                        <ArrowUpRight size={16} />
-                    </a>
-                    <button
-                        className="secondary-action"
-                        type="button"
-                        onClick={() => void copySessionUrl()}
-                        disabled={copyState === 'copying'}
-                    >
-                        {copyState === 'copied' ? <Check size={16} /> : <Copy size={16} />}
-                        {copyState === 'copied'
-                            ? t('地址已复制', 'URL copied')
-                            : copyState === 'copying'
-                              ? t('复制中…', 'Copying…')
-                              : t('复制页面地址', 'Copy page URL')}
-                    </button>
+                <div className="gpt-guide-session-heading">
+                    <div className="gpt-guide-section-heading">
+                        <h2>{t('如何获取账号资料', 'How to get your session JSON')}</h2>
+                        <p>
+                            {t(
+                                '先登录，再打开资料页；这两个页面要在同一浏览器中。',
+                                'Sign in first, then open the session page in the same browser.',
+                            )}
+                        </p>
+                    </div>
+                    <div className="gpt-guide-links">
+                        <a
+                            className="secondary-action"
+                            href={CHATGPT_URL}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                        >
+                            {t('登录 ChatGPT', 'Sign in to ChatGPT')}
+                            <ArrowUpRight size={16} />
+                        </a>
+                        <a
+                            className="secondary-action"
+                            href={CHATGPT_SESSION_URL}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                        >
+                            {t('打开账号资料页', 'Open session page')}
+                            <ArrowUpRight size={16} />
+                        </a>
+                        <button
+                            className="secondary-action"
+                            type="button"
+                            onClick={() => void copySessionUrl()}
+                            disabled={copyState === 'copying'}
+                        >
+                            {copyState === 'copied' ? <Check size={16} /> : <Copy size={16} />}
+                            {copyState === 'copied'
+                                ? t('地址已复制', 'URL copied')
+                                : copyState === 'copying'
+                                  ? t('复制中…', 'Copying…')
+                                  : t('复制页面地址', 'Copy page URL')}
+                        </button>
+                    </div>
                 </div>
                 <div className="gpt-guide-url">
                     <label htmlFor={urlId}>{t('账号资料页面地址', 'Session page URL')}</label>
@@ -381,12 +383,12 @@ export function GptRechargeGuide({
                             'This website shows the recharge task. Confirm the actual subscription in the target ChatGPT account.',
                         )}
                     </p>
+                </div>
+                <div className="gpt-guide-footer-actions">
                     <a href={CHATGPT_URL} target="_blank" rel="noreferrer noopener">
                         {t('前往 ChatGPT 查看订阅', 'Open ChatGPT to check your subscription')}
                         <ArrowUpRight size={16} />
                     </a>
-                </div>
-                <div className="gpt-guide-footer-actions">
                     <button className="secondary-action" type="button" onClick={onQuery}>
                         {t('查询充值结果', 'Check recharge result')}
                     </button>

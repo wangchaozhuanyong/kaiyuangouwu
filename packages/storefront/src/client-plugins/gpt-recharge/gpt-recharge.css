@@ -14,7 +14,7 @@
 .gpt-recharge-trust {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-8);
+    gap: var(--space-16);
     list-style: none;
     padding: 0;
     margin: 0;
@@ -23,9 +23,7 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-8);
-    padding: var(--space-8) var(--space-12);
-    border-radius: var(--skin-control-radius);
-    background: var(--surface);
+    padding-block: var(--space-8);
     color: var(--muted);
     font-size: var(--type-helper-size);
     line-height: var(--type-helper-leading);
@@ -44,12 +42,12 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-8);
-    min-height: 48px;
+    min-height: 44px;
     min-width: 0;
-    padding: var(--space-12) var(--space-16);
+    padding: var(--space-8);
     border: 0;
-    font-size: var(--type-action-size);
-    line-height: var(--type-action-leading);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
     white-space: nowrap;
 }
 .gpt-recharge-page .gpt-recharge-quick-links button:disabled {
@@ -72,7 +70,7 @@
 }
 .gpt-recharge-tabs button {
     position: relative;
-    min-height: 60px;
+    min-height: 56px;
     min-width: 120px;
     padding: var(--space-12) var(--space-8);
     border: 0;
@@ -169,6 +167,12 @@
     font-size: var(--type-action-size);
     line-height: var(--type-action-leading);
     white-space: nowrap;
+}
+.gpt-recharge-field-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    max-width: 100%;
 }
 .gpt-recharge-field input,
 .gpt-recharge-field textarea,
@@ -398,10 +402,15 @@
     gap: var(--space-16);
 }
 .gpt-recharge-query {
+    display: grid;
+    grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+    align-items: start;
+    gap: var(--space-32);
     padding: var(--space-32);
-    max-width: 760px;
     width: 100%;
-    margin-inline: auto;
+}
+.gpt-recharge-query-input {
+    min-width: 0;
 }
 .gpt-recharge-query-title {
     display: flex;
@@ -411,20 +420,53 @@
 .gpt-recharge-query-title > svg {
     color: var(--selection);
 }
-.gpt-recharge-query > p {
+.gpt-recharge-query-input > p {
     color: var(--muted);
     margin: var(--space-8) 0 var(--space-24);
 }
 .gpt-recharge-query form {
     display: grid;
-    gap: var(--space-24);
+    gap: var(--space-16);
 }
 .gpt-recharge-query .primary-action {
     min-height: 48px;
 }
 .gpt-recharge-query-result {
-    margin-top: var(--space-24);
-    padding-top: var(--space-24);
+    min-width: 0;
+    padding: var(--space-24);
+    border-radius: var(--skin-control-radius);
+    background: var(--soft);
+}
+.gpt-recharge-query-note {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-8);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+.gpt-recharge-query-input > .gpt-recharge-query-note {
+    margin: var(--space-12) 0 0;
+}
+.gpt-recharge-query [data-gpt-challenge]:empty {
+    display: none;
+}
+.gpt-recharge-query-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: var(--space-12);
+    min-height: 236px;
+    color: var(--muted);
+}
+.gpt-recharge-query-empty h3 {
+    color: var(--text);
+}
+.gpt-recharge-query-empty p {
+    margin: 0;
+    max-width: 360px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
 }
 .gpt-recharge-result {
     padding: var(--space-32);
@@ -434,6 +476,128 @@
 }
 .gpt-recharge-query-result .gpt-recharge-result {
     padding: 0;
+}
+.gpt-recharge-task {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    align-items: start;
+    gap: var(--space-32);
+    max-width: none;
+    text-align: left;
+}
+.gpt-recharge-task-main,
+.gpt-recharge-task-details {
+    min-width: 0;
+}
+.gpt-recharge-task-caption {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-12);
+    margin-bottom: var(--space-16);
+    color: var(--muted);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+.gpt-recharge-sync {
+    color: var(--selection);
+    text-align: right;
+}
+.gpt-recharge-sync[data-sync='error'],
+.gpt-recharge-sync[data-sync='paused'] {
+    color: var(--muted);
+}
+.gpt-recharge-status-heading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+}
+.gpt-recharge-status-heading h2 {
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
+}
+.gpt-recharge-status-icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--skin-control-radius);
+    background: var(--selection-soft);
+    color: var(--selection);
+}
+.gpt-recharge-task[data-status='failed'] .gpt-recharge-status-icon {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+}
+.gpt-recharge-task[data-status='succeeded'] .gpt-recharge-status-icon {
+    color: var(--success);
+    background: color-mix(in srgb, var(--success) 10%, var(--surface));
+}
+.gpt-recharge-status-description {
+    margin: var(--space-16) 0 0;
+    color: var(--muted);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+}
+.gpt-recharge-current-step {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    margin-top: var(--space-16);
+    padding: var(--space-16);
+    border-radius: var(--skin-control-radius);
+    background: var(--soft);
+}
+.gpt-recharge-stage-dot {
+    width: 8px;
+    height: 8px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--selection);
+}
+.gpt-recharge-current-step div {
+    display: grid;
+    gap: var(--space-4);
+}
+.gpt-recharge-current-step div > span {
+    color: var(--muted);
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+}
+.gpt-recharge-current-step strong {
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+    font-weight: var(--font-weight-medium);
+}
+.gpt-recharge-task .gpt-recharge-summary {
+    margin: 0;
+    padding: var(--space-24);
+    gap: var(--space-16);
+}
+.gpt-recharge-summary .gpt-recharge-reference {
+    display: grid;
+    gap: var(--space-4);
+}
+.gpt-recharge-reference dd {
+    text-align: left;
+    font-family: var(--font-code);
+}
+.gpt-recharge-task .gpt-recharge-task-details > button {
+    min-height: 44px;
+    margin-top: var(--space-8);
+    padding-inline: 0;
+}
+.gpt-recharge-query-result .gpt-recharge-task {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-16);
+}
+.gpt-recharge-query-result .gpt-recharge-summary {
+    padding: 0;
+    background: transparent;
+}
+.gpt-recharge-query-result .gpt-recharge-current-step {
+    background: var(--surface);
 }
 .gpt-recharge-result > svg {
     color: var(--selection);
@@ -513,11 +677,29 @@
     .gpt-recharge-field textarea {
         height: 104px;
     }
+    .gpt-recharge-page .gpt-recharge-field-actions .gpt-recharge-session-link {
+        padding-inline: var(--space-8);
+    }
     .gpt-recharge-help-links {
         display: none;
     }
     .gpt-recharge-query,
     .gpt-recharge-result {
         padding: var(--space-24) var(--space-16);
+    }
+    .gpt-recharge-query,
+    .gpt-recharge-task {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--space-24);
+    }
+    .gpt-recharge-query-result,
+    .gpt-recharge-task .gpt-recharge-summary {
+        padding: var(--space-16);
+    }
+    .gpt-recharge-query-result .gpt-recharge-summary {
+        padding: 0;
+    }
+    .gpt-recharge-query-empty {
+        min-height: 160px;
     }
 }

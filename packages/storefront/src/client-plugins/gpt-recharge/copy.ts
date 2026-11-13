@@ -1,6 +1,20 @@
 import { type StorefrontLanguage } from '../../types';
 
-import { type RechargeStatus } from './contracts';
+import { type RechargeStatus, type RechargeTask } from './contracts';
+
+export function rechargeProgressCopy(task: RechargeTask, language: StorefrontLanguage): string {
+    const t = rechargeCopy(language);
+    if (task.status !== 'running') return rechargeStateCopy(task.status, language)[0];
+    const labels: Record<string, string> = {
+        started: t('已开始执行', 'Execution started'),
+        processing: t('正在处理充值任务', 'Processing your recharge'),
+        payment_details: t('正在填写充值资料', 'Entering recharge details'),
+        paying: t('正在提交付款', 'Processing payment'),
+        paid: t('付款已确认，等待订阅开通', 'Payment confirmed, awaiting activation'),
+        subscription_check: t('正在确认订阅状态', 'Checking subscription status'),
+    };
+    return labels[task.stage ?? 'processing'] ?? labels.processing;
+}
 
 export function rechargeCopy(language: StorefrontLanguage) {
     return (zh: string, en: string) => (language === 'zh' ? zh : en);
@@ -12,8 +26,8 @@ export function rechargeStateCopy(status: RechargeStatus, language: StorefrontLa
         queued: [
             t('已受理，等待处理', 'Accepted, waiting to process'),
             t(
-                '任务已提交，可用原兑换码查询进度。',
-                'Your task was submitted. Use the original code to check its progress.',
+                '任务已提交，开始执行后会自动更新进度。',
+                'Your task was submitted. Progress updates automatically when processing starts.',
             ),
         ],
         running: [

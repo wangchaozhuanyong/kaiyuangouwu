@@ -13,6 +13,7 @@ import {
 import {
     type GptRechargeClient,
     type RechargePlan,
+    type RechargeStage,
     type RechargeStatus,
 } from '../../src/client-plugins/gpt-recharge/contracts';
 import { GptRechargePage } from '../../src/client-plugins/gpt-recharge/gpt-recharge-page';
@@ -56,7 +57,7 @@ function Fixture() {
     const [preferencesOpen, setPreferencesOpen] = useState(false);
     const [previewDestination, setPreviewDestination] = useState('');
     const [demoCalls, setDemoCalls] = useState(0);
-    const [operationCalls, setOperationCalls] = useState({ verify: 0, query: 0, submit: 0 });
+    const [operationCalls, setOperationCalls] = useState({ verify: 0, query: 0, submit: 0, task: 0 });
     const t = (zh: string, en: string) => (language === 'zh' ? zh : en);
     const localePreferences = {
         storefrontName: '店铺预览',
@@ -67,6 +68,7 @@ function Fixture() {
         onCurrencyChange: (value: string) => setCurrency(value),
     };
     const [status, setStatus] = useState<RechargeStatus>('queued');
+    const [stage, setStage] = useState<RechargeStage>('started');
     const [key, setKey] = useState(0);
     const client = useMemo<GptRechargeClient>(() => {
         const availability = params.get('availability');
@@ -110,6 +112,7 @@ function Fixture() {
             credential: 'preview-only',
             plan: lastPlan,
             status,
+            stage: status === 'running' ? stage : status,
             updatedAt: '2026-10-16T10:30:00Z',
         });
         return {
@@ -178,9 +181,16 @@ function Fixture() {
                     task: task(),
                 });
             },
-            task: () => Promise.resolve(task()),
+            task: () => {
+                setOperationCalls(value => ({ ...value, task: value.task + 1 }));
+                if (params.get('error') === 'progress')
+                    throw Object.assign(new Error('Synthetic private progress failure'), {
+                        errorCode: 'FORBIDDEN',
+                    });
+                return Promise.resolve(task());
+            },
         };
-    }, [status, key]);
+    }, [status, stage, key]);
     function fill() {
         const input = document.getElementById('gpt-code') as HTMLInputElement | null;
         const textarea = document.getElementById('gpt-session') as HTMLTextAreaElement | null;
@@ -210,6 +220,7 @@ function Fixture() {
                     data-demo-verify-calls={operationCalls.verify}
                     data-demo-query-calls={operationCalls.query}
                     data-demo-submit-calls={operationCalls.submit}
+                    data-demo-task-calls={operationCalls.task}
                 />
                 <div className="gpt-preview-toolbar" hidden={params.get('presentation') === '1'}>
                     <span>设计预览 · 演示数据</span>
@@ -230,6 +241,19 @@ function Fixture() {
                             <option value="succeeded">成功</option>
                             <option value="failed">失败</option>
                             <option value="awaiting_review">待核对</option>
+                        </select>
+                    </label>
+                    <label>
+                        步骤演示
+                        <select
+                            value={stage}
+                            onChange={event => setStage(event.target.value as RechargeStage)}
+                        >
+                            <option value="started">已开始执行</option>
+                            <option value="payment_details">填写充值资料</option>
+                            <option value="paying">正在付款</option>
+                            <option value="paid">付款已确认</option>
+                            <option value="subscription_check">确认订阅</option>
                         </select>
                     </label>
                     <button onClick={() => setKey(value => value + 1)}>重置预览</button>

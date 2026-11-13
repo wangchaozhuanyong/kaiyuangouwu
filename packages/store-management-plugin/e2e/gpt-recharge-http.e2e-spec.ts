@@ -1,4 +1,4 @@
-import { buildSchema, graphql, print } from 'graphql';
+import { buildSchema, graphql, type GraphQLResolveInfo, print } from 'graphql';
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createRequire } from 'node:module';
@@ -253,8 +253,8 @@ describe('storefront API → Shop GraphQL → Vendure SQL receipts → ID Nest H
             queryGptRechargeCode: ({ code }: any, ctx: any) => resolver.queryGptRechargeCode(ctx, code),
             submitGptRecharge: ({ code, session: accountSession }: any, ctx: any) =>
                 resolver.submitGptRecharge(ctx, code, accountSession),
-            gptRechargeTask: ({ id, credential }: any, ctx: any) =>
-                resolver.gptRechargeTask(ctx, id, credential),
+            gptRechargeTask: ({ credential }: { credential: string }, ctx: any, info: GraphQLResolveInfo) =>
+                resolver.gptRechargeTask(ctx, info, credential),
         };
         const serveShop = async (request: IncomingMessage, response: ServerResponse) => {
             let raw = '';
@@ -304,7 +304,14 @@ describe('storefront API → Shop GraphQL → Vendure SQL receipts → ID Nest H
         expect(internal.payload.integrationSource).toBe('vendure-storefront');
         expect(receipt.id).not.toBe(internal.id);
         expect(JSON.stringify(receipt)).not.toContain(source);
-        expect(Object.keys(receipt).sort()).toEqual(['credential', 'id', 'plan', 'status', 'updatedAt']);
+        expect(Object.keys(receipt).sort()).toEqual([
+            'credential',
+            'id',
+            'plan',
+            'stage',
+            'status',
+            'updatedAt',
+        ]);
         const stored = JSON.stringify(await db.getRepository(GptRechargeReceipt).find());
         for (const secret of [
             code,

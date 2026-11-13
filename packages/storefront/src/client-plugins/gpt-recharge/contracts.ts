@@ -9,11 +9,14 @@ export const rechargePlans = [
 export type RechargePlan = (typeof rechargePlans)[number]['key'];
 export type RechargeStatus =
     'queued' | 'running' | 'succeeded' | 'failed' | 'awaiting_review' | 'awaiting_credentials';
+export type RechargeStage =
+    RechargeStatus | 'started' | 'processing' | 'payment_details' | 'paying' | 'paid' | 'subscription_check';
 export interface RechargeTask {
     id: string;
     credential: string;
     plan: RechargePlan;
     status: RechargeStatus;
+    stage?: RechargeStage;
     updatedAt: string;
 }
 export interface RechargeCode {

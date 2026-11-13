@@ -1,10 +1,17 @@
-import { RequestContext, TransactionalConnection } from '@vendure/core';
+import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host';
+import { AutoIncrementIdStrategy, RequestContext, TransactionalConnection } from '@vendure/core';
+import { buildSchema, graphql, type GraphQLResolveInfo, print } from 'graphql';
 import 'reflect-metadata';
+import { of } from 'rxjs';
 import { DataSource, EntitySchema } from 'typeorm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { IdCodecService } from '../../../core/src/api/common/id-codec.service';
+import { IdInterceptor } from '../../../core/src/api/middleware/id-interceptor';
+import { type ConfigService } from '../../../core/src/config/config.service';
 import { AddGptRecharge1792152000000 } from '../../../dev-server/migrations/1792152000000-add-gpt-recharge';
 
+import { shopSchema } from './api-extensions';
 import { GptRechargeConfig, GptRechargeReceipt } from './entities';
 import { GptRechargeShopResolver } from './plugin';
 import {
@@ -100,7 +107,7 @@ const schemas = [
 describe('GPT recharge real SQL migration and service boundary', () => {
     let db: DataSource;
     let service: GptRechargeService;
-    let remote: typeof upstream | null;
+    let remote: (typeof upstream & { stage?: string; message?: string }) | null;
     let plan: string;
     let mode: string;
     let submits: number;
@@ -138,7 +145,10 @@ describe('GPT recharge real SQL migration and service boundary', () => {
                     return Promise.resolve(
                         Response.json({ plan, status: remote ? 'reserved' : 'available', task: remote }),
                     );
-                if (action === 'task') return Promise.resolve(Response.json(remote ?? upstream));
+                if (action === 'task') {
+                    expect(Object.keys(JSON.parse(init.body as string)).sort()).toEqual(['id', 'taskToken']);
+                    return Promise.resolve(Response.json(remote ?? upstream));
+                }
                 submits++;
                 expect(Object.keys(JSON.parse(init.body as string)).sort()).toEqual(['code', 'session']);
                 if (mode === 'unknown') return Promise.reject(new Error(`transport ${source} ${key}`));
@@ -211,7 +221,14 @@ describe('GPT recharge real SQL migration and service boundary', () => {
             const result = await service.submit(ctx(), 'fixture-code', session);
             expect(result.plan).toBe(plan);
             expect(result.id).not.toBe(upstream.id);
-            expect(Object.keys(result).sort()).toEqual(['credential', 'id', 'plan', 'status', 'updatedAt']);
+            expect(Object.keys(result).sort()).toEqual([
+                'credential',
+                'id',
+                'plan',
+                'stage',
+                'status',
+                'updatedAt',
+            ]);
             expect(JSON.stringify(result)).not.toContain(source);
             expect(JSON.stringify(result)).not.toContain(upstream.taskToken);
             const stored = JSON.stringify(await db.getRepository(GptRechargeReceipt).find());
@@ -252,6 +269,94 @@ describe('GPT recharge real SQL migration and service boundary', () => {
         await expect(service.task(ctx(2), task.id, task.credential)).rejects.toThrow();
         await expect(service.task(ctx(), task.id, 'f'.repeat(64))).rejects.toThrow();
         await expect(service.task(ctx(), task.id, '中'.repeat(64))).rejects.toThrow();
+    });
+    it('accepts the existing task query through the real Vendure ID interceptor', async () => {
+        const accepted = await service.submit(ctx(), 'opaque-reference', session);
+        const resolver = new GptRechargeShopResolver(service);
+        const schema = buildSchema(
+            `scalar DateTime\ntype Query { test: Boolean }\ntype Mutation { test: Boolean }\n${print(shopSchema)}`,
+        );
+        const interceptor = new IdInterceptor(
+            new IdCodecService({
+                entityOptions: { entityIdStrategy: new AutoIncrementIdStrategy() },
+            } as ConfigService),
+        );
+        const query = (credential: string, fields: string) =>
+            graphql({
+                schema,
+                source: `query GptRechargeTask($id: ID!, $credential: String!) {
+                    gptRechargeTask(id: $id, credential: $credential) { ${fields} }
+                }`,
+                variableValues: { id: accepted.id, credential },
+                rootValue: {
+                    gptRechargeTask: (
+                        args: { id: string; credential: string },
+                        _context: unknown,
+                        info: GraphQLResolveInfo,
+                    ) => {
+                        const execution = new ExecutionContextHost([null, args, { req: {} }, info]);
+                        execution.setType('graphql');
+                        interceptor.intercept(execution, { handle: () => of(null) });
+                        expect(args.id).toBe(-1);
+                        return resolver.gptRechargeTask(ctx(), info, args.credential);
+                    },
+                },
+            });
+        const legacyFields = 'id credential plan status updatedAt';
+        await expect(query(accepted.credential, legacyFields)).resolves.toMatchObject({
+            data: { gptRechargeTask: { id: accepted.id, status: 'queued' } },
+        });
+        await expect(query(accepted.credential, `${legacyFields} stage`)).resolves.toMatchObject({
+            data: { gptRechargeTask: { id: accepted.id, status: 'queued', stage: 'queued' } },
+        });
+        await expect(query('f'.repeat(64), legacyFields)).resolves.toMatchObject({
+            errors: [expect.objectContaining({ extensions: expect.objectContaining({ code: 'FORBIDDEN' }) })],
+        });
+    });
+    it('retains only fixed real stages across identical and late polls, without leaking messages', async () => {
+        const accepted = await service.submit(ctx(), 'stage-proof', session);
+        remote = {
+            ...upstream,
+            status: 'running',
+            stage: 'payment_details',
+            message: 'synthetic-private-detail',
+            updatedAt: '2026-10-16T10:01:00.850Z',
+        };
+        const current = await service.task(ctx(), accepted.id, accepted.credential);
+        expect(current.stage).toBe('payment_details');
+        expect(current.updatedAt.toISOString()).toBe(remote.updatedAt);
+        expect(JSON.stringify(current)).not.toContain('synthetic-private-detail');
+        // Simulate the precision of the production datetime column.
+        await db
+            .getRepository(GptRechargeReceipt)
+            .update({ publicId: accepted.id }, { upstreamUpdatedAt: new Date('2026-10-16T10:01:00.000Z') });
+        const prior = await db.getRepository(GptRechargeReceipt).findOneByOrFail({ publicId: accepted.id });
+        expect((await service.task(ctx(), accepted.id, accepted.credential)).stage).toBe('payment_details');
+        remote = { ...remote, stage: 'started', updatedAt: '2026-10-16T10:01:00.500Z' };
+        expect((await service.task(ctx(), accepted.id, accepted.credential)).stage).toBe('payment_details');
+        const persisted = await db
+            .getRepository(GptRechargeReceipt)
+            .findOneByOrFail({ publicId: accepted.id });
+        expect(persisted.revision).toBe(prior.revision);
+        remote = { ...remote, stage: 'unknown-private-message', updatedAt: '2026-10-16T10:02:00.000Z' };
+        remote = { ...upstream, status: 'running', stage: 'payment_details' };
+        expect((await service.task(ctx(), accepted.id, accepted.credential)).stage).toBe('payment_details');
+        remote = { ...remote, status: 'succeeded', stage: 'paying', updatedAt: '2026-10-16T10:03:00.000Z' };
+        expect((await service.task(ctx(), accepted.id, accepted.credential)).stage).toBe('succeeded');
+    });
+    it('reads legacy running snapshots without inventing completed steps', async () => {
+        const accepted = await service.submit(ctx(), 'legacy-stage', session);
+        await db.getRepository(GptRechargeReceipt).update(
+            { publicId: accepted.id },
+            {
+                status: 'running',
+                encryptedUpstreamTask: sealRechargeSecret(
+                    JSON.stringify({ id: upstream.id, taskToken: upstream.taskToken }),
+                    `gpt:1:${accepted.id}`,
+                ),
+            },
+        );
+        expect((await service.task(ctx(), accepted.id, accepted.credential)).stage).toBe('processing');
     });
     it('verifies through the source while isolating task receipts and concurrent claims', async () => {
         await service.saveConfig(ctx(2), {
