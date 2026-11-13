@@ -98,7 +98,7 @@ jobs:
                   node --test scripts/release-preserve-frontends.spec.mjs scripts/release-lock.spec.mjs scripts/ci-impact.spec.mjs scripts/release-evidence.spec.mjs deploy/frontend-release.spec.mjs deploy/frontend-asset-compatibility.spec.mjs deploy/release-recovery.spec.mjs
                   node --test deploy/nginx-release.spec.mjs deploy/nginx/storefront-fallback.spec.mjs
                   node --test deploy/frontend-retention.spec.mjs deploy/frontend-disk-guard.spec.mjs deploy/runtime-disk-guard.spec.mjs deploy/file-retention-repair.spec.mjs
-                  node --test deploy/release-artifact-retention.spec.mjs deploy/monitor-notifications.spec.mjs
+                  node --test deploy/release-artifact-retention.spec.mjs scripts/release-prune-artifacts.spec.mjs deploy/monitor-notifications.spec.mjs
                   python3 deploy/systemd/tests/file-backup-retention.spec.py
                   python3 deploy/systemd/tests/file-backup.spec.py
                   python3 -B deploy/systemd/tests/backup-verification.spec.py

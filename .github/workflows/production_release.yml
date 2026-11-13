@@ -399,6 +399,16 @@ jobs:
                   esac
                   echo "Verified completed release route: $RELEASE_LANE"
 
+    retain-artifacts:
+        name: enforce S3 release artifact retention
+        needs: [route, ready, complete]
+        if: always() && !cancelled() && needs.ready.result == 'success' && needs.route.outputs.lane != 'none' && vars.VENDURE_RELEASE_ARTIFACT_RETENTION_ROLE_ARN != ''
+        uses: ./.github/workflows/production_release_artifact_retention.yml
+        permissions:
+            actions: read
+            contents: read
+            id-token: write
+
     recovery:
         name: explain release failure and bounded recovery
         needs:

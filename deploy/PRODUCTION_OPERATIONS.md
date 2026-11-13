@@ -120,17 +120,27 @@ an existing fresh backup under its writer lock before the applicable switch or
 migration. Later checks reuse the receipt. Keep the independent full offsite
 restore evidence and existing RPO and RTO gates.
 
-Read every page of the release bucket's `deployments/` object versions and feed
-the inventory to `node deploy/release-artifact-retention.mjs -`. This includes
-versions hidden by delete markers and reports their actual storage classes.
-For a retention proposal, pass the current release ledger as the second
-argument. Its `protectedShas` covers each component's running version, last two
-verified rollbacks and in-flight releases. Each entry in `closedRuns` supplies
-`sha`, `runId`, `status` (`failure` or reviewed `temporary`) and `closedAt`.
-The report only proposes exact versions from those runs after seven days.
-Reconcile the ledger and protected references again before any separately
-authorized deletion. Database and persistent-file backup prefixes use their
-own recovery policies.
+Production Release enforces a maximum of seven distinct revisions under the
+release bucket's `deployments/` prefix after the deployment attempt. The
+current runtime, storefront, Admin, 2FA and independent Nginx artifacts count
+toward the seven. Remaining slots go to the newest accepted release attempts.
+Artifacts from failed attempts are removed when they have no live references.
+The job removes exact S3 version IDs, including archived and hidden data,
+then verifies the remaining inventory. If an active artifact is missing or an
+unrecognized object is present, investigate before retrying the cleanup.
+
+The **Reconcile Production Release Artifacts** workflow can also preview or
+apply the same policy on `main` without rebuilding the application. Use it to
+recover from a cleanup-only failure. It shares the production release lock
+and uses a dedicated OIDC role scoped to list versions under `deployments/`
+and delete exact versions in that prefix. The deployment role supplies the
+read-only live reference snapshot. The `mysql/` and `files/` backups have
+independent recovery policies.
+
+Configure the `VENDURE_RELEASE_ARTIFACT_RETENTION_ROLE_ARN` repository
+variable after granting the dedicated role only those two S3 actions.
+The automatic job starts once the role is configured. Run the manual
+`plan` mode to verify permissions and production references without deletion.
 
 When changing production capacity, verify the new resource uses the existing
 Vendure billing scope and has a CPU burst capacity alarm before routing traffic

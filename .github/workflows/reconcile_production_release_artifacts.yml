@@ -1,0 +1,24 @@
+name: Reconcile Production Release Artifacts
+
+on:
+    workflow_dispatch:
+        inputs:
+            mode:
+                description: Preview or apply the existing seven-release retention policy
+                type: choice
+                options: [plan, apply]
+                default: plan
+
+concurrency:
+    group: production-release
+    cancel-in-progress: false
+
+jobs:
+    reconcile:
+        uses: ./.github/workflows/production_release_artifact_retention.yml
+        with:
+            mode: ${{ inputs.mode }}
+        permissions:
+            actions: read
+            contents: read
+            id-token: write
