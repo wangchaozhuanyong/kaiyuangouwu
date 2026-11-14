@@ -30,12 +30,15 @@ it('keeps the real route redemption draft across language changes and clears it 
     document.body.append(host);
     const root = createRoot(host);
     const render = async (visible = true) => {
-        await act(async () => {
+        act(() => {
             root.render(
                 <QueryClientProvider client={cache}>
                     <Suspense fallback={null}>{visible && <GptRechargeRoutePage />}</Suspense>
                 </QueryClientProvider>,
             );
+        });
+        // Commit the scope change before awaiting its query notifications.
+        await act(async () => {
             await new Promise(resolve => setTimeout(resolve, 20));
         });
     };

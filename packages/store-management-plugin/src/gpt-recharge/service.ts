@@ -18,12 +18,14 @@ import {
     rechargeAllowedPlans,
     rechargeCredentialMatches,
     rechargeFingerprint,
+    safeRechargeStage,
     safeRechargeTask,
     sealRechargeSecret,
     validateRechargeSession,
 } from './security';
 
 type InternalCode = { plan: string; status: string; reason?: 'manual_review_required'; task?: unknown };
+type UpstreamTaskSnapshot = { id: string; taskToken: string; stage?: string; updatedAt?: number };
 @Injectable()
 export class GptRechargeService {
     constructor(
@@ -219,15 +221,28 @@ export class GptRechargeService {
         }
         return row;
     }
+    private taskSnapshot(ctx: RequestContext, row: GptRechargeReceipt): UpstreamTaskSnapshot | null {
+        return row.encryptedUpstreamTask
+            ? (JSON.parse(
+                  openRechargeSecret(row.encryptedUpstreamTask, `${this.context(ctx)}:${row.publicId}`),
+              ) as UpstreamTaskSnapshot)
+            : null;
+    }
     private view(ctx: RequestContext, row: GptRechargeReceipt) {
+        const status = ['new', 'submitting', 'submission_unknown'].includes(row.status)
+            ? 'awaiting_review'
+            : row.status;
+        const snapshot = this.taskSnapshot(ctx, row);
         return {
             id: row.publicId,
             credential: rechargeFingerprint(row.publicId, `${this.context(ctx)}:task`),
             plan: row.plan,
-            status: ['new', 'submitting', 'submission_unknown'].includes(row.status)
-                ? 'awaiting_review'
-                : row.status,
-            updatedAt: row.upstreamUpdatedAt ?? row.updatedAt,
+            status,
+            stage: safeRechargeStage(status, snapshot?.stage),
+            updatedAt:
+                snapshot?.updatedAt === undefined
+                    ? (row.upstreamUpdatedAt ?? row.updatedAt)
+                    : new Date(snapshot.updatedAt),
         };
     }
     private async capture(ctx: RequestContext, row: GptRechargeReceipt, raw: unknown) {
@@ -237,20 +252,36 @@ export class GptRechargeService {
             const current = await repository.findOneOrFail({
                 where: { id: row.id, channelId: ctx.channelId },
             });
-            // Upstream timestamps and CAS keep late polls from replacing newer evidence.
-            if (
-                current.upstreamUpdatedAt &&
-                value.updatedAt <= current.upstreamUpdatedAt &&
-                current.encryptedUpstreamTask
-            )
-                return this.view(ctx, current);
-            const encryptedUpstreamTask = value.taskToken
-                ? sealRechargeSecret(
-                      JSON.stringify({ id: value.id, taskToken: value.taskToken }),
-                      `${this.context(ctx)}:${row.publicId}`,
-                  )
-                : current.encryptedUpstreamTask;
-            if (!encryptedUpstreamTask) throw new UserInputError('任务凭证暂不可用，请使用兑换码查询');
+            const previous = this.taskSnapshot(ctx, current);
+            const previousTime = previous?.updatedAt ?? current.upstreamUpdatedAt?.getTime();
+            const nextTime = value.updatedAt.getTime();
+            // The production datetime column stores whole seconds. Preserve the bridge's
+            // precise timestamp in the snapshot so repeated or late polls cannot replace it.
+            if (previous && previousTime !== undefined) {
+                if (nextTime < previousTime) return this.view(ctx, current);
+                if (
+                    nextTime === previousTime &&
+                    (previous.stage !== undefined || current.status !== value.status)
+                )
+                    return this.view(ctx, current);
+            }
+            const snapshot = value.taskToken
+                ? { id: value.id, taskToken: value.taskToken }
+                : previous?.id === value.id
+                  ? previous
+                  : null;
+            if (!snapshot) throw new UserInputError('任务凭证暂不可用，请使用兑换码查询');
+            // Retain the safe stage with the existing encrypted snapshot, under the same
+            // timestamp/CAS guard. Old receipts without a stage remain readable.
+            const encryptedUpstreamTask = sealRechargeSecret(
+                JSON.stringify({
+                    id: snapshot.id,
+                    taskToken: snapshot.taskToken,
+                    stage: value.stage,
+                    updatedAt: nextTime,
+                }),
+                `${this.context(ctx)}:${row.publicId}`,
+            );
             const updated = await repository.update(
                 { id: current.id, channelId: ctx.channelId, revision: current.revision },
                 {
@@ -335,10 +366,16 @@ export class GptRechargeService {
         if (!row) throw new ForbiddenError();
         if (!row.encryptedUpstreamTask || ['succeeded', 'failed'].includes(row.status))
             return this.view(ctx, row);
+        const input = this.taskSnapshot(ctx, row);
+        if (!input) return this.view(ctx, row);
         const config = await this.connectionConfig(ctx, false);
-        const input = JSON.parse(
-            openRechargeSecret(row.encryptedUpstreamTask, `${this.context(ctx)}:${row.publicId}`),
-        ) as { id: string; taskToken: string };
-        return this.capture(ctx, row, await this.upstream(ctx, config, 'task', input));
+        return this.capture(
+            ctx,
+            row,
+            await this.upstream(ctx, config, 'task', {
+                id: input.id,
+                taskToken: input.taskToken,
+            }),
+        );
     }
 }

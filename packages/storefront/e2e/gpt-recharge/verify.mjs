@@ -194,6 +194,124 @@ try {
             throw new Error(`Code rejection feedback overflow at ${width}`);
         await page.close();
     }
+    for (const [width, skin, language] of [
+        [1440, 'classic', 'zh'],
+        [390, 'classic', 'zh'],
+        [1440, 'neo-minimalist', 'en'],
+        [390, 'neo-minimalist', 'en'],
+    ]) {
+        const page = await browser.newPage({ viewport: { width, height: 960 }, reducedMotion: 'reduce' });
+        const en = language === 'en';
+        await page.goto(`${origin}/e2e/gpt-recharge/?skin=${skin}&language=${language}`);
+        await page.getByRole('button', { name: en ? 'Code lookup' : '兑换码查询', exact: true }).click();
+        await page.getByLabel('结果演示').selectOption('running');
+        await page.getByLabel('步骤演示').selectOption('payment_details');
+        await page.locator('#gpt-query').fill('DEMO-PLUS-001');
+        await page.getByRole('button', { name: en ? 'Look up result' : '查询充值结果' }).click();
+        await expect(page.locator('.gpt-recharge-current-step strong')).toHaveText(
+            en ? 'Entering recharge details' : '正在填写充值资料',
+        );
+        await page.screenshot({
+            path: path.join(output, `progress-${width}-${skin}-${language}.png`),
+            fullPage: true,
+        });
+        if (width === 1440 && skin === 'classic') {
+            const beforeHidden = await page
+                .locator('[data-demo-task-calls]')
+                .getAttribute('data-demo-task-calls');
+            await page.evaluate(() => {
+                Object.defineProperty(document, 'visibilityState', {
+                    configurable: true,
+                    get: () => 'hidden',
+                });
+                document.dispatchEvent(new Event('visibilitychange'));
+            });
+            await page.waitForTimeout(3300);
+            await expect(page.locator('[data-demo-task-calls]')).toHaveAttribute(
+                'data-demo-task-calls',
+                beforeHidden,
+            );
+            await page.evaluate(() => {
+                delete document.visibilityState;
+                document.dispatchEvent(new Event('visibilitychange'));
+            });
+            await expect
+                .poll(async () =>
+                    Number(await page.locator('[data-demo-task-calls]').getAttribute('data-demo-task-calls')),
+                )
+                .toBeGreaterThan(Number(beforeHidden));
+            await page.context().setOffline(true);
+            await page.evaluate(() => window.dispatchEvent(new Event('offline')));
+            const beforeOffline = await page
+                .locator('[data-demo-task-calls]')
+                .getAttribute('data-demo-task-calls');
+            await page.waitForTimeout(3300);
+            await expect(page.locator('[data-demo-task-calls]')).toHaveAttribute(
+                'data-demo-task-calls',
+                beforeOffline,
+            );
+            await expect(page.getByText('网络已断开', { exact: true })).toBeVisible();
+            await expect(page.locator('.gpt-recharge-current-step strong')).toHaveText('正在填写充值资料');
+            await page.context().setOffline(false);
+            await page.evaluate(() => window.dispatchEvent(new Event('online')));
+            await expect
+                .poll(async () =>
+                    Number(await page.locator('[data-demo-task-calls]').getAttribute('data-demo-task-calls')),
+                )
+                .toBeGreaterThan(Number(beforeOffline));
+            results.push({
+                hiddenPollingStopped: true,
+                offlinePollingStopped: true,
+                reconnectReadOnly: true,
+            });
+        }
+        await page.getByLabel('步骤演示').selectOption('subscription_check');
+        await expect(page.locator('.gpt-recharge-current-step strong')).toHaveText(
+            en ? 'Checking subscription status' : '正在确认订阅状态',
+            { timeout: 6500 },
+        );
+        await expect(page.locator('[data-demo-submit-calls]')).toHaveAttribute('data-demo-submit-calls', '0');
+        await expect(page.locator('[data-demo-query-calls]')).toHaveAttribute('data-demo-query-calls', '1');
+        await page.getByLabel('结果演示').selectOption('succeeded');
+        await expect(
+            page.getByRole('heading', { name: en ? 'Recharge complete' : '充值成功', exact: true }),
+        ).toBeVisible({ timeout: 6500 });
+        const calls = await page.locator('[data-demo-task-calls]').getAttribute('data-demo-task-calls');
+        await page.waitForTimeout(3300);
+        await expect(page.locator('[data-demo-task-calls]')).toHaveAttribute('data-demo-task-calls', calls);
+        if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth))
+            throw new Error(`Progress overflow at ${width}/${skin}/${language}`);
+        const inputBounds = await page.locator('.gpt-recharge-query-input').boundingBox();
+        const resultBounds = await page.locator('.gpt-recharge-query-result').boundingBox();
+        if (width >= 1024 && inputBounds.x + inputBounds.width > resultBounds.x)
+            throw new Error('Desktop query and result columns overlap');
+        if (width < 1024 && inputBounds.y + inputBounds.height > resultBounds.y)
+            throw new Error('Mobile query and result sections overlap');
+        results.push({
+            width,
+            skin,
+            language,
+            automaticProgress: true,
+            terminalPollingStopped: true,
+            rechargeWrites: 0,
+        });
+        await page.close();
+    }
+    const failed = await browser.newPage({ viewport: { width: 1440, height: 960 } });
+    await failed.goto(`${origin}/e2e/gpt-recharge/?error=progress`);
+    await failed.getByRole('button', { name: '兑换码查询', exact: true }).click();
+    await failed.getByLabel('结果演示').selectOption('running');
+    await failed.getByLabel('步骤演示').selectOption('payment_details');
+    await failed.locator('#gpt-query').fill('DEMO-PLUS-001');
+    await failed.getByRole('button', { name: '查询充值结果' }).click();
+    await expect(failed.getByText('更新暂时中断', { exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(failed.locator('.gpt-recharge-current-step strong')).toHaveText('正在填写充值资料');
+    await expect(failed.getByText('请确认登录状态', { exact: false })).toHaveCount(0);
+    await expect(failed.getByText('Synthetic private progress failure', { exact: false })).toHaveCount(0);
+    await expect(failed.locator('[data-demo-submit-calls]')).toHaveAttribute('data-demo-submit-calls', '0');
+    await failed.screenshot({ path: path.join(output, 'progress-query-error.png'), fullPage: true });
+    results.push({ updateFailureRetainsProgress: true, misleadingLoginMessage: false, rechargeWrites: 0 });
+    await failed.close();
     await writeFile(
         path.join(output, 'browser-result.json'),
         JSON.stringify(

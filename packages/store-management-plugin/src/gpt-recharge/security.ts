@@ -83,6 +83,15 @@ export const rechargeAllowedStatuses = [
     'succeeded',
     'failed',
 ];
+// These are the fixed public stages already supplied by the execution bridge.
+// Never derive a stage from free-form messages, elapsed time or percentages.
+export function safeRechargeStage(status: string, stage?: unknown): string {
+    if (status !== 'running') return rechargeAllowedStatuses.includes(status) ? status : 'awaiting_review';
+    return typeof stage === 'string' &&
+        ['started', 'processing', 'payment_details', 'paying', 'paid', 'subscription_check'].includes(stage)
+        ? stage
+        : 'processing';
+}
 export function safeRechargeTask(value: unknown) {
     const row = value as Record<string, unknown>;
     if (
@@ -100,6 +109,7 @@ export function safeRechargeTask(value: unknown) {
         id: row.id,
         plan: String(row.plan),
         status: String(row.status),
+        stage: safeRechargeStage(String(row.status), row.stage),
         taskToken:
             typeof row.taskToken === 'string' && row.taskToken.length <= 100 ? row.taskToken : undefined,
     };

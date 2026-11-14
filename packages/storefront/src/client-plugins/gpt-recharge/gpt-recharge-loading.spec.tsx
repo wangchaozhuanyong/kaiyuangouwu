@@ -53,6 +53,10 @@ afterEach(async () => {
     await render(false);
     cache.clear();
     config.mockReset();
+    verify.mockReset();
+    submit.mockReset();
+    task.mockReset();
+    lookupCode.mockReset();
 });
 afterAll(() => act(() => root.unmount()));
 
@@ -160,4 +164,66 @@ it('keeps first-load failure retryable and discards the separate task query on e
     await render(false);
     await new Promise(resolve => setTimeout(resolve, 20));
     expect(cache.getQueryCache().find({ queryKey: tasks[0].queryKey })).toBeUndefined();
+});
+
+it('tracks a looked-up task without retaining its credential or replacing it with an older poll', async () => {
+    config.mockResolvedValue({ enabled: true, maintenance: false });
+    const snapshot = {
+        id: 'synthetic-reference',
+        credential: 'synthetic-proof',
+        plan: 'plus' as const,
+        status: 'running' as const,
+        stage: 'payment_details' as const,
+        updatedAt: '2026-11-13T10:02:00Z',
+    };
+    lookupCode.mockResolvedValue({ plan: 'plus', status: 'reserved', task: snapshot });
+    task.mockResolvedValue({ ...snapshot, stage: 'started', updatedAt: '2026-11-13T10:01:00Z' });
+    await render();
+    act(() =>
+        [...container.querySelectorAll('button')]
+            .find(button => button.textContent === '兑换码查询')
+            ?.click(),
+    );
+    const input = container.querySelector<HTMLInputElement>('#gpt-query');
+    if (!input) throw new Error('Expected the code lookup field');
+    act(() => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+            input,
+            'synthetic-code',
+        );
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    act(() => {
+        input.closest('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(container.textContent).toContain('正在填写充值资料');
+    const tracked = cache
+        .getQueryCache()
+        .getAll()
+        .find(query => query.queryKey.at(-1) === snapshot.id);
+    expect(tracked?.gcTime).toBe(0);
+    act(() =>
+        [...container.querySelectorAll('button')].find(button => button.textContent === '刷新进度')?.click(),
+    );
+    await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(task).toHaveBeenCalledWith(snapshot.id, snapshot.credential, expect.any(AbortSignal));
+    expect(container.textContent).toContain('正在填写充值资料');
+    expect(container.textContent).not.toContain('已开始执行');
+    expect(submit).not.toHaveBeenCalled();
+    const setItem = vi.fn();
+    persistPublicQueryCache(cache, { setItem, removeItem: vi.fn() });
+    expect(setItem).not.toHaveBeenCalled();
+    await render(false);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(
+        cache
+            .getQueryCache()
+            .getAll()
+            .some(query => query.queryKey.at(-1) === snapshot.id),
+    ).toBe(false);
 });

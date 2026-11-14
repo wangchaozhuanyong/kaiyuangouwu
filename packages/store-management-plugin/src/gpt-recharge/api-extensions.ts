@@ -10,6 +10,7 @@ export const shopSchema = gql`
         credential: String!
         plan: String!
         status: String!
+        stage: String!
         updatedAt: DateTime!
     }
     type GptRechargeCode {

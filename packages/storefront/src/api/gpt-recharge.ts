@@ -9,7 +9,7 @@ import {
 import { type ShopApiContext } from './client-context';
 import { requestShopAbuseChallenge } from './shop-abuse';
 
-const taskFields = 'id credential plan status updatedAt';
+const taskFields = 'id credential plan status stage updatedAt';
 const codeFields = `plan status reason task { ${taskFields} }`;
 export class GptRechargeApi implements GptRechargeClient {
     createShopAbuseChallenge: ShopAbuseClient['createShopAbuseChallenge'];
