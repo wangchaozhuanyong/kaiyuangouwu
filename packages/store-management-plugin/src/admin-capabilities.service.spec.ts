@@ -9,6 +9,7 @@ import { StorefrontReviewAdminResolver } from '../../storefront-review-plugin/sr
 import { AdminCapabilitiesResolver } from './admin-capabilities.resolver';
 import { adminCapabilitiesSchema } from './admin-capabilities.schema';
 import { AdminCapabilitiesService } from './admin-capabilities.service';
+import { GptRechargeAdminResolver } from './gpt-recharge/plugin';
 
 vi.mock('@vendure/common/lib/admin-capabilities', () => import('../../common/src/admin-capabilities.js'));
 
@@ -67,6 +68,31 @@ async function status(f: ReturnType<typeof fixture>, id: string) {
 }
 
 describe('current administrator capabilities', () => {
+    it('matches the GPT recharge resolver permissions for the primary and other stores', async () => {
+        const read = Reflect.getMetadata(
+            '__permissions__',
+            Reflect.get(GptRechargeAdminResolver.prototype, 'gptRechargeAdminConfig'),
+        ) as string[];
+        const write = Reflect.getMetadata(
+            '__permissions__',
+            Reflect.get(GptRechargeAdminResolver.prototype, 'updateGptRechargeConfig'),
+        ) as string[];
+        expect(read).toEqual([Permission.SuperAdmin]);
+        expect(write).toEqual([Permission.SuperAdmin]);
+        const path = '/plugins/gpt-recharge';
+        const allowed = { state: 'READY', canRead: true, canWrite: true, canConfigure: true };
+        expect(await status(fixture(read, DEFAULT_CHANNEL_CODE, null), path)).toMatchObject(allowed);
+        expect(await status(fixture(read, 'store-a', 'DIGITAL_ONLY'), path)).toMatchObject(allowed);
+        expect(
+            await status(fixture([Permission.ReadSettings], 'store-a', 'DIGITAL_ONLY'), path),
+        ).toMatchObject({
+            state: 'FORBIDDEN',
+            canRead: false,
+            canWrite: false,
+            canConfigure: false,
+        });
+    });
+
     it('returns a usable current-store risk-review capability only for existing SuperAdmin accounts', async () => {
         const store = fixture([Permission.SuperAdmin], 'store-a', 'DIGITAL_ONLY');
         expect(await status(store, '/settings/governance-risk/cases')).toMatchObject({

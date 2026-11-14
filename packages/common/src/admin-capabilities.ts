@@ -204,6 +204,7 @@ export const ADMIN_CAPABILITY_DEFINITIONS: readonly AdminCapabilityDefinition[] 
     ),
     page('/plugins/news-blog', 'STORE', ['ManageNewsBlog'], ['ManageNewsBlog', 'PublishNewsBlog']),
     page('/plugins/client-plugins', 'STORE', ['ReadStorefrontContent'], ['UpdateStorefrontContent']),
+    page('/plugins/gpt-recharge', 'BOTH', ['SuperAdmin'], ['SuperAdmin']),
     ...section(
         '/plugins/ai-settings',
         ['config', 'jobs', 'usage'],
