@@ -249,6 +249,89 @@ function readProof(repository, artifactId) {
 const MAX_SOURCE_REFS = 32;
 const MAX_SOURCE_DEPTH = 4;
 const proofDigest = proof => createHash('sha256').update(JSON.stringify(proof)).digest('hex');
+const evidenceMarker = 'RELEASE_CI_EVIDENCE_V2 ';
+const logWriterStep = 'Record exact checked source and scope';
+const gateNames = {
+    '.github/workflows/build_and_test.yml': 'all-passed',
+    '.github/workflows/production_release.yml': 'validate missing checks once / all-passed',
+    '.github/workflows/deploy_storefront_fast_lane.yml':
+        'release / validate missing checks once / all-passed',
+};
+
+export function evidenceLogLine(proof) {
+    const line = `${evidenceMarker}${proofDigest(proof)} ${JSON.stringify(proof)}`;
+    assert.ok(Buffer.byteLength(line) < 512 * 1024, 'CI log proof exceeds the size budget');
+    return line;
+}
+
+function readGateEvidence({ api, logReader, repository, run, sourceTree, reference }) {
+    assert.equal(run.repository?.full_name, repository, 'CI gate repository differs');
+    assert.ok(Number.isSafeInteger(run.repository.id) && run.repository.id > 0);
+    assert.equal(run.head_repository?.id, run.repository.id, 'CI gate head repository differs');
+    const publishedAttempt = reference?.runAttempt ?? run.run_attempt;
+    assert.ok(
+        Number.isSafeInteger(publishedAttempt) && publishedAttempt > 0 && publishedAttempt <= run.run_attempt,
+    );
+    const prefix = `repos/${repository}/actions/runs/${run.id}`;
+    const latest = !reference && publishedAttempt > 1;
+    const response = api(`${prefix}${latest ? '' : '/attempts/' + publishedAttempt}/jobs?per_page=100`);
+    assert.ok(
+        Array.isArray(response.jobs) &&
+            response.jobs.length === response.total_count &&
+            response.total_count <= 100,
+        'Incomplete native CI gate jobs',
+    );
+    const gates = response.jobs.filter(job => job.name === gateNames[run.path]);
+    // A release may have reused CI from another run and skipped this gate.
+    if (!gates.length) return null;
+    assert.equal(gates.length, 1, 'Duplicate native CI gates');
+    const gate = gates[0];
+    if (gate.status !== 'completed' || gate.conclusion !== 'success') return null;
+    const runAttempt = gate.run_attempt;
+    assert.equal(gate.run_id, run.id);
+    assert.equal(gate.head_sha, run.head_sha);
+    assert.ok(Number.isSafeInteger(runAttempt) && runAttempt > 0 && runAttempt <= publishedAttempt);
+    if (!latest) assert.equal(runAttempt, publishedAttempt);
+    const attempt = api(`${prefix}/attempts/${runAttempt}`);
+    for (const key of ['id', 'head_sha', 'event', 'path']) assert.equal(attempt[key], run[key]);
+    assert.equal(attempt.run_attempt, runAttempt);
+    assert.equal(attempt.repository?.id, run.repository.id);
+    assert.equal(attempt.head_repository?.id, run.repository.id);
+    assert.ok(attempt.status === 'completed' || runAttempt === run.run_attempt);
+    if (reference || runAttempt < run.run_attempt) {
+        const completed = api(`${prefix}/attempts/${runAttempt}/jobs?per_page=100`);
+        assert.ok(
+            completed.jobs.some(job => job.id === gate.id && job.conclusion === 'success'),
+            'Native CI gate not present in its exact attempt',
+        );
+    }
+    assert.ok(Number.isSafeInteger(gate.id) && gate.id > 0);
+    const steps = gate.steps?.filter(step => step.name === logWriterStep);
+    assert.ok(steps?.length === 1 && steps[0].conclusion === 'success', 'CI proof writer did not pass');
+    if (reference) assert.equal(gate.id, reference.gateJobId, 'Native proof job differs');
+
+    const records = logReader(repository, gate.id)
+        .split('\n')
+        .map(line => line.replace(/^\d{4}-\d\d-\d\dT\S+\s/u, '').trimEnd())
+        .filter(line => line.startsWith(evidenceMarker));
+    assert.equal(records.length, 1, 'Missing or duplicate CI log proof');
+    const record = records[0].slice(evidenceMarker.length);
+    assert.match(record, /^[a-f0-9]{64} \{/u, 'Invalid CI log proof header');
+    const digest = record.slice(0, 64);
+    const proof = JSON.parse(record.slice(65));
+    assert.equal(proofDigest(proof), digest, 'CI log proof checksum differs');
+    if (reference) assert.equal(digest, reference.proofSha256, 'Referenced CI log proof differs');
+    assert.equal(proof.version, 2);
+    assert.equal(proof.sourceSha, run.head_sha);
+    assert.equal(proof.tree, sourceTree);
+    assert.equal(proof.runId, String(run.id));
+    assert.equal(proof.runAttempt, String(runAttempt));
+    return {
+        proof,
+        provenance: { evidenceKind: 'native-gate', runAttempt, gateJobId: gate.id, proofSha256: digest },
+    };
+}
+
 function checkedSourceRefs(refs = []) {
     assert.ok(Array.isArray(refs) && refs.length <= MAX_SOURCE_REFS, 'Invalid evidence source references');
     const seen = new Set();
@@ -263,6 +346,11 @@ function checkedSourceRefs(refs = []) {
             assert.ok(Number.isSafeInteger(ref.artifactId) && ref.artifactId > 0, 'Invalid source artifact');
             assert.match(ref.proofSha256 ?? '', /^[a-f0-9]{64}$/u, 'Invalid source proof hash');
             keys.push('artifactId', 'proofSha256');
+        } else if (ref.kind === 'native-gate') {
+            for (const key of ['runAttempt', 'gateJobId'])
+                assert.ok(Number.isSafeInteger(ref[key]) && ref[key] > 0, 'Invalid CI gate source ' + key);
+            assert.match(ref.proofSha256 ?? '', /^[a-f0-9]{64}$/u, 'Invalid CI gate proof hash');
+            keys.push('runAttempt', 'gateJobId', 'proofSha256');
         } else {
             assert.equal(ref.kind, 'partial-native', 'Invalid evidence source kind');
             for (const key of ['runAttempt', 'scopeJobId'])
@@ -282,23 +370,18 @@ function checkedSourceRefs(refs = []) {
 export function reusedSourceReferences(reused) {
     const refs = new Map();
     for (const item of reused) {
-        const ref =
-            item.evidenceKind === 'partial-native'
-                ? {
-                      kind: 'partial-native',
-                      runId: item.runId,
-                      sourceSha: item.sourceSha,
-                      runAttempt: item.runAttempt,
-                      scopeJobId: item.scopeJobId,
-                      scopeLogSha256: item.scopeLogSha256,
-                  }
-                : {
-                      kind: 'artifact',
-                      runId: item.runId,
-                      sourceSha: item.sourceSha,
-                      artifactId: item.artifactId,
-                      proofSha256: item.proofSha256,
-                  };
+        const ref = { kind: item.evidenceKind ?? 'artifact', runId: item.runId, sourceSha: item.sourceSha };
+        if (ref.kind === 'partial-native') {
+            ref.runAttempt = item.runAttempt;
+            ref.scopeJobId = item.scopeJobId;
+            ref.scopeLogSha256 = item.scopeLogSha256;
+        } else {
+            ref.proofSha256 = item.proofSha256;
+            if (ref.kind === 'native-gate') {
+                ref.runAttempt = item.runAttempt;
+                ref.gateJobId = item.gateJobId;
+            } else ref.artifactId = item.artifactId;
+        }
         if (refs.has(ref.runId))
             assert.deepEqual(refs.get(ref.runId), ref, 'Conflicting evidence source reference');
         refs.set(ref.runId, ref);
@@ -473,6 +556,7 @@ export async function findInputCoverage({
         if (!matching.length && sourceTree !== targetTree && !reference) continue;
         let artifact;
         let native;
+        let gateEvidence;
         let proof;
         if (failedNative) {
             try {
@@ -511,43 +595,80 @@ export async function findInputCoverage({
             const trustedPr = hasTrustedPullRequest(run, repository, api);
             if (reference) assert.ok(trustedPr, 'Referenced PR source is untrusted');
             if (!trustedPr) continue;
+            let hasLogWriter;
             try {
-                const artifacts = api(
-                    `repos/${repository}/actions/runs/${run.id}/artifacts?per_page=100`,
-                ).artifacts;
-                if (
-                    reference &&
-                    artifacts.some(
-                        item =>
-                            item.id === reference.artifactId &&
-                            item.expired === true &&
-                            item.name.startsWith(`ci-evidence-${run.id}-`),
-                    )
-                )
-                    continue;
-                artifact = artifacts
-                    .filter(item => !item.expired && item.name.startsWith(`ci-evidence-${run.id}-`))
-                    .sort((a, b) => b.id - a.id)
-                    .find(item => !reference || item.id === reference.artifactId);
-                if (reference) assert.ok(artifact, 'Referenced evidence artifact is unavailable');
-                if (!artifact) continue;
-                proof = proofReader(repository, artifact.id);
+                const workflow = reader.text(sourceRef, '.github/workflows/build_and_test.yml');
+                const finalGate = workflow.split('\n    all-passed:\n').at(1);
+                hasLogWriter = /^ {14}run: node scripts\/release-evidence\.mjs write-log$/mu.test(
+                    finalGate ?? '',
+                );
             } catch (error) {
-                // Native expiry or 404 only removes this source, never required coverage.
-                if (!isMissingGitHubProof(error)) throw error;
-                continue;
+                if (!isMissingGitObject(error)) throw error;
             }
-            const bound =
-                [1, 2].includes(proof.version) &&
-                proof.sourceSha === run.head_sha &&
-                proof.tree === sourceTree &&
-                String(proof.runId) === String(run.id);
-            if (reference) assert.ok(bound, 'Referenced evidence is not bound to its native run');
-            if (!bound) continue;
-            if (reference)
-                assert.equal(proofDigest(proof), reference.proofSha256, 'Referenced proof hash differs');
+            if (reference?.kind === 'native-gate' || (hasLogWriter && !reference)) {
+                assert.ok(hasLogWriter, 'Referenced native CI proof has no matching source writer');
+                try {
+                    if (!hasNativePullRequestProvenance(run, repository, api)) continue;
+                    gateEvidence = readGateEvidence({
+                        api,
+                        logReader: nativeLogReader,
+                        repository,
+                        run,
+                        sourceTree,
+                        reference,
+                    });
+                } catch (error) {
+                    if (isMissingGitHubProof(error)) continue;
+                    if (
+                        reference ||
+                        current ||
+                        !(error instanceof assert.AssertionError || error instanceof SyntaxError)
+                    )
+                        throw error;
+                    nativeRejected.push({ runId: run.id, reason: 'Native CI gate proof is invalid' });
+                    continue;
+                }
+                if (!gateEvidence) continue;
+                proof = gateEvidence.proof;
+            } else {
+                try {
+                    const artifacts = api(
+                        `repos/${repository}/actions/runs/${run.id}/artifacts?per_page=100`,
+                    ).artifacts;
+                    if (
+                        reference &&
+                        artifacts.some(
+                            item =>
+                                item.id === reference.artifactId &&
+                                item.expired === true &&
+                                item.name.startsWith(`ci-evidence-${run.id}-`),
+                        )
+                    )
+                        continue;
+                    artifact = artifacts
+                        .filter(item => !item.expired && item.name.startsWith(`ci-evidence-${run.id}-`))
+                        .sort((a, b) => b.id - a.id)
+                        .find(item => !reference || item.id === reference.artifactId);
+                    if (reference) assert.ok(artifact, 'Referenced evidence artifact is unavailable');
+                    if (!artifact) continue;
+                    proof = proofReader(repository, artifact.id);
+                } catch (error) {
+                    // Native expiry or 404 only removes this source, never required coverage.
+                    if (!isMissingGitHubProof(error)) throw error;
+                    continue;
+                }
+                const bound =
+                    [1, 2].includes(proof.version) &&
+                    proof.sourceSha === run.head_sha &&
+                    proof.tree === sourceTree &&
+                    String(proof.runId) === String(run.id);
+                if (reference) assert.ok(bound, 'Referenced evidence is not bound to its native run');
+                if (!bound) continue;
+                if (reference)
+                    assert.equal(proofDigest(proof), reference.proofSha256, 'Referenced proof hash differs');
+            }
         }
-        if (failedRelease) {
+        if (failedRelease && !gateEvidence) {
             if (proof.version !== 2) continue;
             const gates = api(`repos/${repository}/actions/runs/${run.id}/jobs?per_page=100`).jobs.filter(
                 job => /(^|\/ )all-passed$/u.test(job.name),
@@ -555,8 +676,13 @@ export async function findInputCoverage({
             if (!gates.length || gates.some(job => job.conclusion !== 'success')) continue;
         }
         if (!native && sourceTree === targetTree && !anchor)
-            anchor = { runId: run.id, artifactId: artifact.id };
-        // References come only from a verified, run-bound artifact. Every linked source
+            anchor = {
+                runId: run.id,
+                ...(gateEvidence
+                    ? { gateJobId: gateEvidence.provenance.gateJobId }
+                    : { artifactId: artifact.id }),
+            };
+        // References come only from verified, run-bound evidence. Every linked source
         // is fetched natively and passes the same provenance, coverage and input checks.
         // Squashed PR heads need not be linear ancestors of the target.
         const refs = checkedSourceRefs(proof.sourceRefs);
@@ -586,7 +712,10 @@ export async function findInputCoverage({
                 runId: run.id,
                 ...(native
                     ? { ...native.provenance, nativeJobs: native.jobs.get(check.id) }
-                    : { artifactId: artifact.id, proofSha256: proofDigest(proof) }),
+                    : (gateEvidence?.provenance ?? {
+                          artifactId: artifact.id,
+                          proofSha256: proofDigest(proof),
+                      })),
                 sourceSha: run.head_sha,
                 inputSha256: inputHash,
             });
@@ -664,18 +793,24 @@ export function executedEvidence(plan, inventory, results, source) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
     const [command, base, target = 'HEAD'] = process.argv.slice(2);
-    if (command === 'write') {
+    if (command === 'write' || command === 'write-log') {
         const plan = JSON.parse(base ? readFileSync(base, 'utf8') : process.env.CI_PLAN);
-        writeFileSync(
-            'ci-evidence.json',
-            JSON.stringify(
-                executedEvidence(plan, packageInventory(), JSON.parse(process.env.CI_JOB_RESULTS ?? '{}'), {
-                    tree: git('rev-parse', 'HEAD^{tree}'),
-                    sourceSha: git('rev-parse', 'HEAD'),
-                    runId: process.env.GITHUB_RUN_ID,
-                }),
-            ) + '\n',
+        const proof = executedEvidence(
+            plan,
+            packageInventory(),
+            JSON.parse(process.env.CI_JOB_RESULTS ?? '{}'),
+            {
+                tree: git('rev-parse', 'HEAD^{tree}'),
+                sourceSha: git('rev-parse', 'HEAD'),
+                runId: process.env.GITHUB_RUN_ID,
+            },
         );
+        if (command === 'write-log') {
+            assert.match(proof.runId ?? '', /^[1-9]\d*$/u);
+            const runAttempt = process.env.GITHUB_RUN_ATTEMPT;
+            assert.match(runAttempt ?? '', /^[1-9]\d*$/u);
+            process.stdout.write(evidenceLogLine({ ...proof, runAttempt }) + '\n');
+        } else writeFileSync('ci-evidence.json', JSON.stringify(proof) + '\n');
     } else if (command === 'plan') {
         const repository = process.env.GITHUB_REPOSITORY;
         assert.match(repository ?? '', /^[\w.-]+\/[\w.-]+$/u);
@@ -738,5 +873,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
             `Required checks have no matching valid input proof: ${result.missing.map(item => item.id).join(', ')}`,
         );
         process.stdout.write('RELEASE_CI_VERIFIED\n');
-    } else throw new Error('Expected plan, write, find or verify');
+    } else throw new Error('Expected plan, write, write-log, find or verify');
 }

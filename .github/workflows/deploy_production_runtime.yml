@@ -6,6 +6,12 @@ on:
             target_sha:
                 required: true
                 type: string
+            release_plan:
+                required: true
+                type: string
+            release_plan_sha256:
+                required: true
+                type: string
             retain_frontends:
                 type: boolean
                 default: false
@@ -19,9 +25,12 @@ on:
                 required: false
                 default: ''
                 type: string
+        outputs:
+            acceptance_receipt:
+                description: The committed production server acceptance receipt
+                value: ${{ jobs.deploy.outputs.acceptance_receipt }}
 
 permissions:
-    actions: read
     contents: read
     id-token: write
 
@@ -30,6 +39,8 @@ jobs:
         name: deploy verified runtime through AWS SSM
         runs-on: ubuntu-24.04
         timeout-minutes: 45
+        outputs:
+            acceptance_receipt: ${{ steps.switch.outputs.acceptance_receipt }}
         env:
             AWS_REGION: ap-northeast-1
             AWS_ACCOUNT_ID: '098208446664'
@@ -58,39 +69,42 @@ jobs:
                   ref: ${{ inputs.target_sha }}
                   persist-credentials: false
 
-            - name: Download verified runtime artifact
-              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+            - name: Configure short-lived AWS credentials
+              uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
               with:
-                  name: production-runtime-${{ inputs.target_sha }}
-                  path: artifacts
+                  role-to-assume: ${{ env.AWS_ROLE_ARN }}
+                  role-session-name: vendure-production-${{ github.run_id }}
+                  aws-region: ${{ env.AWS_REGION }}
+                  allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
 
-            - name: Validate downloaded archive
+            - name: Validate release plan and read back the S3 runtime checksums
+              env:
+                  RELEASE_PLAN: ${{ inputs.release_plan }}
+                  RELEASE_PLAN_SHA256: ${{ inputs.release_plan_sha256 }}
               run: |
-                  shopt -s nullglob
-                  archives=(artifacts/*.tar.gz)
-                  checksums=(artifacts/*.tar.gz.sha256)
-                  release_plans=(artifacts/release-plan.json)
-                  release_plan_checksums=(artifacts/release-plan.json.sha256)
-                  test "${#archives[@]}" -eq 1
-                  test "${#checksums[@]}" -eq 1
-                  test "${#release_plans[@]}" -eq 1
-                  test "${#release_plan_checksums[@]}" -eq 1
+                  [[ "$RELEASE_PLAN_SHA256" =~ ^[a-f0-9]{64}$ ]]
+                  RELEASE_PLAN_PATH="$RUNNER_TEMP/release-plan.json"
+                  printf '%s\n' "$RELEASE_PLAN" > "$RELEASE_PLAN_PATH"
+                  test "$(sha256sum "$RELEASE_PLAN_PATH" | cut -d ' ' -f 1)" = "$RELEASE_PLAN_SHA256"
 
-                  ARCHIVE_PATH="${archives[0]}"
-                  ARCHIVE_NAME="$(basename "$ARCHIVE_PATH")"
+                  ARCHIVE_NAME="$(jq -er '.archiveName' "$RELEASE_PLAN_PATH")"
+                  [[ "$ARCHIVE_NAME" =~ ^$TARGET_SHA-$SOURCE_RUN_ID-[1-9][0-9]*-linux-x64\.tar\.gz$ ]]
                   ARTIFACT_NAME="${ARCHIVE_NAME%.tar.gz}"
-                  CHECKSUM_PATH="${checksums[0]}"
-                  RELEASE_PLAN_PATH="${release_plans[0]}"
-                  RELEASE_PLAN_CHECKSUM_PATH="${release_plan_checksums[0]}"
+                  ARCHIVE_SHA256="$(jq -er '.archiveSha256' "$RELEASE_PLAN_PATH")"
+                  [[ "$ARCHIVE_SHA256" =~ ^[a-f0-9]{64}$ ]]
+                  expected_checksum="$(node -p 'Buffer.from(process.argv[1], "hex").toString("base64")' "$ARCHIVE_SHA256")"
+                  archive_key="deployments/$TARGET_SHA/$ARCHIVE_NAME"
+                  read -r bytes object_checksum encryption < <(aws s3api head-object \
+                    --bucket "$ARTIFACT_BUCKET" --expected-bucket-owner "$AWS_ACCOUNT_ID" \
+                    --key "$archive_key" --checksum-mode ENABLED \
+                    --query '[ContentLength, ChecksumSHA256, ServerSideEncryption]' --output text)
+                  [[ "$bytes" =~ ^[1-9][0-9]*$ && "$object_checksum" == "$expected_checksum" && "$encryption" == AES256 ]]
 
-                  [[ "$ARTIFACT_NAME" =~ ^${TARGET_SHA}-[0-9]+-[0-9]+-linux-x64$ ]]
-                  test "$(basename "$CHECKSUM_PATH")" = "${ARCHIVE_NAME}.sha256"
-                  (
-                    cd artifacts
-                    sha256sum --check "$(basename "$CHECKSUM_PATH")"
-                    sha256sum --check "$(basename "$RELEASE_PLAN_CHECKSUM_PATH")"
-                  )
-                  ARCHIVE_SHA256="$(cut -d ' ' -f 1 "$CHECKSUM_PATH")"
+                  CHECKSUM_PATH="$RUNNER_TEMP/$ARCHIVE_NAME.sha256"
+                  aws s3api get-object --bucket "$ARTIFACT_BUCKET" --expected-bucket-owner "$AWS_ACCOUNT_ID" \
+                    --key "$archive_key.sha256" "$CHECKSUM_PATH" >/dev/null
+                  printf '%s  %s\n' "$ARCHIVE_SHA256" "$ARCHIVE_NAME" | cmp -s - "$CHECKSUM_PATH"
+
                   jq -e \
                     --arg archiveName "$ARCHIVE_NAME" \
                     --arg archiveSha256 "$ARCHIVE_SHA256" \
@@ -208,10 +222,8 @@ jobs:
                     exit 1
                   fi
 
-                  echo "ARCHIVE_PATH=$ARCHIVE_PATH" >> "$GITHUB_ENV"
-                  echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> "$GITHUB_ENV"
                   echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> "$GITHUB_ENV"
-                  echo "CHECKSUM_PATH=$CHECKSUM_PATH" >> "$GITHUB_ENV"
+                  echo "ARCHIVE_SHA256=$ARCHIVE_SHA256" >> "$GITHUB_ENV"
                   echo "ARTIFACT_S3_PREFIX=s3://${ARTIFACT_BUCKET}/deployments/${TARGET_SHA}" >> "$GITHUB_ENV"
                   echo "MEDIA_CHANNEL_CODES=$MEDIA_CHANNEL_CODES" >> "$GITHUB_ENV"
                   echo "MEDIA_KEYS=$MEDIA_KEYS" >> "$GITHUB_ENV"
@@ -291,6 +303,7 @@ jobs:
                       'chmod 0755 "$deploy_script"',
                       'sudo -H -u ubuntu env ' + ' '.join([
                           f"GITHUB_RUN_ID={quote('GITHUB_RUN_ID')}",
+                          f"VENDURE_RELEASE_ARCHIVE_SHA256={quote('ARCHIVE_SHA256')}",
                           f"VENDURE_RELEASE_BASE_SHA={quote('RELEASE_BASE_SHA')}",
                           f"VENDURE_RELEASE_DATA_RISK={quote('RELEASE_DATA_RISK')}",
                           f"VENDURE_RELEASE_BACKUP_POLICY={quote('RELEASE_BACKUP_POLICY')}",
@@ -315,20 +328,15 @@ jobs:
                   Path(os.environ['RUNNER_TEMP'], 'ssm-parameters.json').write_text(payload)
                   PY
 
-            - name: Configure short-lived AWS credentials
-              uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
-              with:
-                  role-to-assume: ${{ env.AWS_ROLE_ARN }}
-                  role-session-name: vendure-production-${{ github.run_id }}
-                  aws-region: ${{ env.AWS_REGION }}
-                  allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
-
-            - name: Upload immutable runtime to private S3
+            - name: Recheck current main before deployment
+              env:
+                  GH_TOKEN: ${{ github.token }}
               run: |
-                  aws s3 cp "$ARCHIVE_PATH" "$ARTIFACT_S3_PREFIX/$ARCHIVE_NAME" --only-show-errors
-                  aws s3 cp "$CHECKSUM_PATH" "$ARTIFACT_S3_PREFIX/$ARCHIVE_NAME.sha256" --only-show-errors
+                  test "$GITHUB_REF" = refs/heads/main
+                  test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$TARGET_SHA"
 
             - name: Deploy through Systems Manager
+              id: switch
               run: |
                   COMMAND_ID="$(aws ssm send-command \
                     --region "$AWS_REGION" \
@@ -419,10 +427,4 @@ jobs:
                   AFFECTED_CHECKS="$RELEASE_AFFECTED_CHECKS" node deploy/acceptance-receipt.mjs \
                     extract "$SSM_RESULT" "$RUNNER_TEMP/acceptance-receipt.json"
 
-            - name: Preserve server acceptance receipt
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-              with:
-                  name: production-acceptance-${{ inputs.target_sha }}
-                  path: ${{ runner.temp }}/acceptance-receipt.json
-                  if-no-files-found: error
-                  retention-days: 7
+                  echo "acceptance_receipt=$(jq -c . "$RUNNER_TEMP/acceptance-receipt.json")" >> "$GITHUB_OUTPUT"

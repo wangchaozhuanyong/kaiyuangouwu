@@ -582,16 +582,12 @@ void test('repository and production workflows use the fail-closed retrying audi
             'u',
         ),
     );
+    const unitJob = repositoryWorkflow.split('    unit-tests:')[1].split('    dashboard-i18n:')[0];
     assert.match(
-        repositoryWorkflow,
-        new RegExp(
-            'Build missing test prerequisites[\\s\\S]+' +
-                "steps\\.compiled\\.outputs\\.restored != 'true' \\|\\| " +
-                "needs\\.detect-changes\\.outputs\\.translation == 'true'[\\s\\S]+" +
-                'node scripts/ci-run\\.mjs prepare-tests',
-            'u',
-        ),
+        unitJob,
+        /Build test prerequisites locally\n(?: {14}env:\n +NODE_OPTIONS: [^\n]+\n)? {14}run: node scripts\/ci-run\.mjs prepare-tests/u,
     );
+    assert.doesNotMatch(repositoryWorkflow, /actions\/(?:upload|download)-artifact@|restore-tests/u);
     assert.match(
         repositoryWorkflow,
         new RegExp(

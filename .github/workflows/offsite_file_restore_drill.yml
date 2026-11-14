@@ -44,7 +44,6 @@ jobs:
                   allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
 
             - name: Verify, restore if needed, and install the exact proof through Systems Manager
-              id: verify
               run: |
                   set -Eeuo pipefail
                   ssm_command() {
@@ -86,10 +85,6 @@ jobs:
                     --prior-receipt "$RUNNER_TEMP/prior-file-restore.json" \
                     --release-receipt "$RUNNER_TEMP/file-restore-verification.json"
 
-                  if [ -s "$RUNNER_TEMP/file-restore-drill.json" ]; then
-                      echo "downloaded=true" >> "$GITHUB_OUTPUT"
-                  fi
-
                   verification="$(base64 -w0 "$RUNNER_TEMP/file-restore-verification.json")"
                   proof_name="$TARGET_SHA-$GITHUB_RUN_ID.json"
                   result="$(ssm_command "$(cat <<INSTALL_PROOF
@@ -120,28 +115,20 @@ jobs:
                   fi
                   chmod 0644 "\$receipt"
                   mv -T -- "\$receipt" "\$readiness/file-restore-drill-runs/$proof_name"
-                  printf 'OFFSITE_FILE_RESTORE_VERIFIED sha=%s run=%s\n' '$TARGET_SHA' '$GITHUB_RUN_ID'
+                  proof_sha="\$(sha256sum "\$readiness/file-restore-drill-runs/$proof_name" | cut -d ' ' -f 1)"
+                  printf 'OFFSITE_FILE_RESTORE_VERIFIED sha=%s run=%s receipt_sha256=%s\n' \
+                    '$TARGET_SHA' '$GITHUB_RUN_ID' "\$proof_sha"
                   VENDURE_OFFSITE_PROOF
                   INSTALL_PROOF
                   )")"
-                  [[ "$result" == "OFFSITE_FILE_RESTORE_VERIFIED sha=$TARGET_SHA run=$GITHUB_RUN_ID" ]]
+                  proof_sha="$(sha256sum "$RUNNER_TEMP/file-restore-verification.json" | cut -d ' ' -f 1)"
+                  [[ "$result" == "OFFSITE_FILE_RESTORE_VERIFIED sha=$TARGET_SHA run=$GITHUB_RUN_ID receipt_sha256=$proof_sha" ]]
                   jq -r '"Verified " + .restoreProof.backupFile + " from restore run " + .restoreProof.runId
                     + ", downloaded archive bytes: " + (.downloadedArchiveBytes | tostring)' \
                     "$RUNNER_TEMP/file-restore-verification.json" >> "$GITHUB_STEP_SUMMARY"
 
-            - name: Preserve the new full-restore receipt
-              if: ${{ !cancelled() && steps.verify.outputs.downloaded == 'true' }}
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-              with:
-                  name: offsite-file-restore-${{ github.run_id }}-${{ github.run_attempt }}
-                  path: ${{ runner.temp }}/file-restore-drill.json
-                  if-no-files-found: error
-                  retention-days: 30
-
-            - name: Preserve release verification
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-              with:
-                  name: offsite-file-restore-verification-${{ github.run_id }}-${{ github.run_attempt }}
-                  path: ${{ runner.temp }}/file-restore-verification.json
-                  if-no-files-found: error
-                  retention-days: 30
+                  {
+                    printf 'Target SHA: %s\n\n' "$TARGET_SHA"
+                    printf 'Release run: %s\n\n' "$GITHUB_RUN_ID"
+                    printf 'Installed verification SHA-256: %s\n' "$proof_sha"
+                  } >> "$GITHUB_STEP_SUMMARY"
