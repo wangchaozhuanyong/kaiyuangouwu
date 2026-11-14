@@ -439,6 +439,9 @@ jobs:
               run: bunx playwright install-deps chromium
             - name: Storybook browser and accessibility tests
               working-directory: packages/dashboard
+              env:
+                  # The generated Storybook setup intermittently fails to load in concurrent Chromium workers.
+                  VITEST_MAX_WORKERS: '1'
               run: bun run test:storybook:ci
             - name: Build Storybook and check bundle budgets
               working-directory: packages/dashboard
@@ -588,7 +591,8 @@ jobs:
         needs: [detect-changes, build]
         if: needs.detect-changes.outputs.e2e_mysql == 'true'
         runs-on: ubuntu-latest
-        timeout-minutes: 45
+        # This job builds its own prerequisites before running the database suite.
+        timeout-minutes: 60
         permissions:
             contents: read
             actions: read
@@ -618,12 +622,16 @@ jobs:
               with:
                   node-version: ${{ matrix.node }}
             - name: Build test prerequisites locally
+              env:
+                  NODE_OPTIONS: --max-old-space-size=4096
               run: node scripts/ci-run.mjs prepare-tests
             - name: e2e tests
               env:
                   E2E_MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
                   E2E_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
                   DB: mysql
+                  # Lerna already runs multiple packages against this runner's one MySQL service.
+                  VITEST_MAX_WORKERS: '2'
               run: node scripts/ci-run.mjs e2e
             - name: Platform isolation, unified payment and cross-store card fulfillment
               if: contains(fromJSON(needs.detect-changes.outputs.packages), 'store-management-plugin')

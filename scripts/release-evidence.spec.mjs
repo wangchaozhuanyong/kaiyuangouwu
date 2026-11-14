@@ -561,13 +561,20 @@ test('squash and merge commit shapes can reuse the same checked tree', async () 
 test('scoped backend commands do not invoke the whole repository test script', () => {
     const plan = { full: false, packages: ['catalog'] };
     const inventory = [
-        { directory: 'catalog', name: '@vendure/catalog', scripts: { build: 'tsc', test: 'vitest' } },
+        {
+            directory: 'catalog',
+            name: '@vendure/catalog',
+            scripts: { build: 'tsc', test: 'vitest', e2e: 'vitest' },
+        },
         { directory: 'icloud', name: 'icloud', scripts: { test: 'vitest' } },
     ];
     assert.deepEqual(packageCommands(plan, 'test', inventory), [
         ['bunx', 'lerna', 'run', 'test', '--scope', '@vendure/catalog'],
     ]);
     assert.ok(packageCommands(plan, 'build', inventory)[0].includes('--include-dependencies'));
+    assert.deepEqual(packageCommands(plan, 'e2e', inventory), [
+        ['bunx', 'lerna', 'run', 'e2e', '--scope', '@vendure/catalog', '--stream'],
+    ]);
 });
 
 test('mixed frontend checks run the Node fixture separately from Vitest and exclude it from related checks', () => {
