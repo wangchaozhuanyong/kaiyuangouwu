@@ -8,7 +8,14 @@ export const rechargePlans = [
 ] as const;
 export type RechargePlan = (typeof rechargePlans)[number]['key'];
 export type RechargeStatus =
-    'queued' | 'running' | 'succeeded' | 'failed' | 'awaiting_review' | 'awaiting_credentials';
+    | 'queued'
+    | 'running'
+    | 'succeeded'
+    | 'failed'
+    | 'awaiting_review'
+    | 'awaiting_credentials'
+    | 'awaiting_authorization'
+    | 'expired';
 export type RechargeStage =
     RechargeStatus | 'started' | 'processing' | 'payment_details' | 'paying' | 'paid' | 'subscription_check';
 export interface RechargeTask {
@@ -31,6 +38,19 @@ export interface GptRechargeClient extends Partial<ShopAbuseClient> {
     submit(code: string, session: string, proof?: ShopAbuseProof): Promise<RechargeTask>;
     query(code: string, proof?: ShopAbuseProof): Promise<RechargeCode>;
     task(id: string, credential: string, signal?: AbortSignal): Promise<RechargeTask>;
+    authorize?(
+        code: string,
+        requestKey: string,
+        proof?: ShopAbuseProof,
+    ): Promise<{ authorizationUrl?: string | null; task: RechargeTask }>;
+}
+
+export function isPartnerRechargeCode(code: string): boolean {
+    return /^RA-[A-F0-9]{32}$/i.test(code.trim());
+}
+
+export function rechargeTaskFinished(status: RechargeStatus): boolean {
+    return status === 'succeeded' || status === 'failed' || status === 'expired';
 }
 
 /** Identify the account for confirmation only; the executor verifies the credential. */

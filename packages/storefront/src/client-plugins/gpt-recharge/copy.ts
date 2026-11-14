@@ -62,6 +62,14 @@ export function rechargeStateCopy(status: RechargeStatus, language: StorefrontLa
                 'The team is preparing the required execution details. Do not send your account data to support.',
             ),
         ],
+        awaiting_authorization: [
+            t('等待账号授权', 'Waiting for account authorization'),
+            t('请打开 ID 系统的授权链接完成充值。', 'Open the ID system authorization link to continue.'),
+        ],
+        expired: [
+            t('授权已过期', 'Authorization expired'),
+            t('请在自助充值页用原兑换码重新发起授权。', 'Start authorization again with the original code.'),
+        ],
     };
     return copy[status];
 }

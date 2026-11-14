@@ -12,6 +12,7 @@ import {
 } from '../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import {
     type GptRechargeClient,
+    isPartnerRechargeCode,
     type RechargePlan,
     type RechargeStage,
     type RechargeStatus,
@@ -154,7 +155,8 @@ function Fixture() {
                     );
                 if (errorMode === 'verify' || (errorMode === 'verify-repeat' && code === verifiedCode))
                     throw new Error('Synthetic private verification provider detail');
-                if (!code.startsWith('DEMO-')) return Promise.reject(new Error('Only demo codes'));
+                if (!code.startsWith('DEMO-') && code !== 'RA-' + 'A'.repeat(32))
+                    return Promise.reject(new Error('Only demo codes'));
                 verifiedCode = code;
                 lastPlan = code.includes('200') ? 'pro_20x' : code.includes('100') ? 'pro_5x' : 'plus';
                 return Promise.resolve({ plan: lastPlan, status: 'available' });
@@ -188,6 +190,15 @@ function Fixture() {
                     plan: code.includes('200') ? 'pro_20x' : code.includes('100') ? 'pro_5x' : 'plus',
                     status: status === 'succeeded' ? 'used' : 'reserved',
                     task: task(),
+                });
+            },
+            authorize: (code, _requestKey, proof) => {
+                admit('RECHARGE_SUBMIT', code, proof);
+                if (!isPartnerRechargeCode(code)) return Promise.reject(new Error('Only demo partner code'));
+                setStatus('awaiting_authorization');
+                return Promise.resolve({
+                    authorizationUrl: 'https://id.example.test/recharge/authorize#fixture',
+                    task: { ...task(), status: 'awaiting_authorization', stage: 'awaiting_authorization' },
                 });
             },
             task: () => {

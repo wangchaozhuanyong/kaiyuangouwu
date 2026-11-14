@@ -91,6 +91,7 @@ export function protectedOperation(
             target = args.code;
             break;
         case 'submitGptRecharge':
+        case 'startGptRechargeAuthorization':
             action = 'RECHARGE_SUBMIT';
             target = args.code;
             break;

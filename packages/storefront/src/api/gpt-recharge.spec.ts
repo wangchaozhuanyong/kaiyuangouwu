@@ -3,6 +3,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { GptRechargeApi } from './gpt-recharge';
 
 describe('GPT recharge challenge initialization', () => {
+    it('creates authorization with the code and retry key only', async () => {
+        const result = { task: { id: 'synthetic-task' } };
+        const request = vi.fn().mockResolvedValue({ startGptRechargeAuthorization: result });
+        const api = new GptRechargeApi({ request });
+        const code = 'RA-' + 'A'.repeat(32);
+        const requestKey = 'synthetic.auth.request.17';
+        await expect(api.authorize(code, requestKey)).resolves.toEqual(result);
+        const [document, variables] = request.mock.calls[0];
+        expect(document).toContain('startGptRechargeAuthorization');
+        expect(document).not.toContain('session');
+        expect(variables).toEqual({ code, requestKey });
+    });
     it('reads an opaque task reference and real stage with cancellation, without submitting recharge', async () => {
         const task = { id: '11111111-1111-4111-8111-111111111111', stage: 'payment_details' };
         const request = vi.fn().mockResolvedValue({ gptRechargeTask: task });

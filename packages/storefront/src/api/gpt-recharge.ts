@@ -51,6 +51,25 @@ export class GptRechargeApi implements GptRechargeClient {
             )
         ).submitGptRecharge;
     }
+    async authorize(code: string, requestKey: string, proof?: ShopAbuseProof) {
+        type Authorization = { authorizationUrl?: string | null; task: RechargeTask };
+        return (
+            await this.ctx.request<{ startGptRechargeAuthorization: Authorization }>(
+                `mutation StartGptRechargeAuthorization($code: String!, $requestKey: String!) {
+                    startGptRechargeAuthorization(code: $code, requestKey: $requestKey) {
+                        authorizationUrl
+                        task { ${taskFields} }
+                    }
+                }`,
+                { code, requestKey },
+                undefined,
+                25000,
+                true,
+                undefined,
+                proof,
+            )
+        ).startGptRechargeAuthorization;
+    }
     async query(code: string, proof?: ShopAbuseProof): Promise<RechargeCode> {
         return (
             await this.ctx.request<{ queryGptRechargeCode: RechargeCode }>(
