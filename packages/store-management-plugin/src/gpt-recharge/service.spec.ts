@@ -111,6 +111,7 @@ describe('GPT recharge real SQL migration and service boundary', () => {
     let plan: string;
     let mode: string;
     let submits: number;
+    let retryFor: string | undefined;
     let access: { assertEnabled: ReturnType<typeof vi.fn>; isEnabled: ReturnType<typeof vi.fn> };
     beforeEach(async () => {
         vi.stubEnv('GPT_RECHARGE_ENCRYPTION_KEY', 'ab'.repeat(32));
@@ -135,25 +136,45 @@ describe('GPT recharge real SQL migration and service boundary', () => {
         plan = 'plus';
         mode = 'ok';
         submits = 0;
+        retryFor = undefined;
         vi.stubGlobal(
             'fetch',
             vi.fn((url: string, init: RequestInit) => {
                 const action = url.split('/').at(-1);
                 if (action === 'config')
                     return Promise.resolve(Response.json({ maintenance: false, supplier: source }));
-                if (action === 'query' || action === 'verify')
+                if (action === 'query' || action === 'verify') {
+                    const retry = remote?.id === retryFor && retryFor !== undefined;
                     return Promise.resolve(
-                        Response.json({ plan, status: remote ? 'reserved' : 'available', task: remote }),
+                        Response.json({
+                            plan,
+                            status: !remote || retry ? 'available' : 'reserved',
+                            ...(retry && { reason: 'verified_retry_available' }),
+                            task: remote,
+                        }),
                     );
+                }
                 if (action === 'task') {
                     expect(Object.keys(JSON.parse(init.body as string)).sort()).toEqual(['id', 'taskToken']);
                     return Promise.resolve(Response.json(remote ?? upstream));
                 }
                 submits++;
-                expect(Object.keys(JSON.parse(init.body as string)).sort()).toEqual(['code', 'session']);
+                const input = JSON.parse(init.body as string);
+                if (retryFor && remote?.id === retryFor) {
+                    expect(input.afterFailedTask).toBe(retryFor);
+                    expect(Object.keys(input).sort()).toEqual(['afterFailedTask', 'code', 'session']);
+                } else expect(Object.keys(input).sort()).toEqual(['code', 'session']);
                 if (mode === 'unknown') return Promise.reject(new Error(`transport ${source} ${key}`));
                 if (mode === 'rejected') return Promise.resolve(Response.json({ rejected: true }));
-                remote = { ...upstream, plan };
+                if (mode === 'replay-old') return Promise.resolve(Response.json(remote));
+                remote = input.afterFailedTask
+                    ? {
+                          ...upstream,
+                          plan,
+                          id: '21111111-1111-4111-8111-111111111111',
+                          updatedAt: '2026-10-16T10:00:02.000Z',
+                      }
+                    : { ...upstream, plan };
                 return Promise.resolve(Response.json(remote));
             }),
         );
@@ -263,6 +284,79 @@ describe('GPT recharge real SQL migration and service boundary', () => {
         mode = 'ok';
         expect((await service.submit(ctx(), 'retry', session)).status).toBe('queued');
         expect(submits).toBe(2);
+    });
+    async function prepareFailedRetry(code: string) {
+        await service.submit(ctx(), code, session);
+        remote = { ...upstream, status: 'failed', updatedAt: '2026-10-16T10:00:01.000Z' };
+        retryFor = remote.id;
+    }
+
+    it('keeps the first failure visible and sends at most one explicit retry for that receipt', async () => {
+        const code = 'reviewed-retry';
+        await prepareFailedRetry(code);
+        expect(await service.verify(ctx(), code)).toMatchObject({
+            status: 'available',
+            reason: 'verified_retry_available',
+            task: null,
+        });
+        const previous = await service.query(ctx(), code);
+        expect(previous).toMatchObject({
+            status: 'available',
+            reason: 'verified_retry_available',
+            task: { status: 'failed' },
+        });
+        const results = await Promise.all([
+            service.submit(ctx(), code, session),
+            service.submit(ctx(), code, session),
+            service.submit(ctx(), code, session),
+        ]);
+        expect(results.some(task => task.status === 'queued')).toBe(true);
+        expect(submits).toBe(2);
+        expect(await service.query(ctx(), code)).toMatchObject({
+            status: 'reserved',
+            task: { id: previous.task?.id, status: 'queued' },
+        });
+    });
+
+    it.each(['unknown', 'replay-old'])(
+        'does not release an ambiguous retry on the previous failure (%s)',
+        async outcome => {
+            const code = 'pending-retry';
+            await prepareFailedRetry(code);
+            mode = outcome;
+            await expect(service.submit(ctx(), code, session)).rejects.toThrow('提交结果待核对');
+            expect(await service.verify(ctx(), code)).toMatchObject({
+                status: 'reserved',
+                reason: 'manual_review_required',
+            });
+            expect(await service.query(ctx(), code)).toMatchObject({
+                status: 'reserved',
+                reason: 'manual_review_required',
+                task: { status: 'awaiting_review' },
+            });
+            expect((await service.submit(ctx(), code, session)).status).toBe('awaiting_review');
+            expect(submits).toBe(2);
+            remote = {
+                ...upstream,
+                id: '21111111-1111-4111-8111-111111111111',
+                updatedAt: '2026-10-16T10:00:02.000Z',
+            };
+            expect((await service.query(ctx(), code)).task?.status).toBe('queued');
+            expect(submits).toBe(2);
+        },
+    );
+
+    it('allows another explicit submit after the executor proves a retry was not accepted', async () => {
+        const code = 'retry-rejected';
+        await prepareFailedRetry(code);
+        mode = 'rejected';
+        await expect(service.submit(ctx(), code, session)).rejects.toMatchObject({
+            code: 'GPT_RECHARGE_NOT_ACCEPTED',
+        });
+        expect((await service.query(ctx(), code)).task?.status).toBe('failed');
+        mode = 'ok';
+        expect((await service.submit(ctx(), code, session)).status).toBe('queued');
+        expect(submits).toBe(3);
     });
     it('rejects other channels and forged credentials', async () => {
         const task = await service.submit(ctx(), 'isolation', session);

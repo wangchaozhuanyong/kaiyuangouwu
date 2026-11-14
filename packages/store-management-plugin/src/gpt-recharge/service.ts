@@ -24,7 +24,14 @@ import {
     validateRechargeSession,
 } from './security';
 
-type InternalCode = { plan: string; status: string; reason?: 'manual_review_required'; task?: unknown };
+const retryReason = 'verified_retry_available';
+const pendingSubmission = ['submitting', 'submission_unknown'];
+type InternalCode = {
+    plan: string;
+    status: string;
+    reason?: 'manual_review_required' | typeof retryReason;
+    task?: unknown;
+};
 type UpstreamTaskSnapshot = { id: string; taskToken: string; stage?: string; updatedAt?: number };
 @Injectable()
 export class GptRechargeService {
@@ -169,7 +176,8 @@ export class GptRechargeService {
         return {
             plan: String(value.plan),
             status: String(value.status),
-            ...(value.status === 'reserved' && value.reason === 'manual_review_required'
+            ...((value.status === 'reserved' && value.reason === 'manual_review_required') ||
+            (value.status === 'available' && value.reason === retryReason)
                 ? { reason: value.reason }
                 : {}),
             task: value.task,
@@ -179,6 +187,19 @@ export class GptRechargeService {
         const config = await this.connectionConfig(ctx, true);
         code = this.code(code);
         const result = this.validateCodeResult(await this.upstream(ctx, config, 'verify', { code }));
+        if (result.reason === retryReason) {
+            await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
+            const row = await this.receipts(ctx).findOne({
+                where: { publicId: this.codePublicId(code, config.upstreamOrigin), channelId: ctx.channelId },
+            });
+            if (row && pendingSubmission.includes(row.status))
+                return {
+                    plan: result.plan,
+                    status: 'reserved',
+                    reason: 'manual_review_required',
+                    task: null,
+                };
+        }
         return { ...result, task: null };
     }
     private codePublicId(code: string, origin: string) {
@@ -253,6 +274,9 @@ export class GptRechargeService {
                 where: { id: row.id, channelId: ctx.channelId },
             });
             const previous = this.taskSnapshot(ctx, current);
+            // Reading the previous failure cannot settle a new submit whose response is missing.
+            if (previous?.id === value.id && pendingSubmission.includes(current.status))
+                return this.view(ctx, current);
             const previousTime = previous?.updatedAt ?? current.upstreamUpdatedAt?.getTime();
             const nextTime = value.updatedAt.getTime();
             // The production datetime column stores whole seconds. Preserve the bridge's
@@ -313,12 +337,28 @@ export class GptRechargeService {
                 where: { publicId: this.codePublicId(code, config.upstreamOrigin), channelId: ctx.channelId },
             });
             // An available-code read cannot disprove a timed-out submission still in flight.
-            if (pending && ['submitting', 'submission_unknown'].includes(pending.status))
+            if (pending && pendingSubmission.includes(pending.status))
                 return { plan: pending.plan, status: 'reserved', task: this.view(ctx, pending) };
             return { ...result, task: null };
         }
         const row = await this.receipt(ctx, code, result.plan, config.upstreamOrigin);
-        return { ...result, task: await this.capture(ctx, row, result.task) };
+        const task = await this.capture(ctx, row, result.task);
+        if (result.reason !== retryReason) return { ...result, task };
+        const current = await this.receipts(ctx).findOneOrFail({
+            where: { id: row.id, channelId: ctx.channelId },
+        });
+        const latest = this.view(ctx, current);
+        if (
+            latest.status === 'failed' &&
+            this.taskSnapshot(ctx, current)?.id === safeRechargeTask(result.task).id
+        )
+            return { ...result, task: latest };
+        return {
+            plan: latest.plan,
+            status: latest.status === 'succeeded' ? 'used' : 'reserved',
+            ...(latest.status === 'awaiting_review' && { reason: 'manual_review_required' }),
+            task: latest,
+        };
     }
     async submit(ctx: RequestContext, codeInput: string, session: string) {
         const code = this.code(codeInput);
@@ -327,35 +367,52 @@ export class GptRechargeService {
         await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
         // Recover first. A transport error must never create another payment attempt.
         const queried = this.validateCodeResult(await this.upstream(ctx, config, 'query', { code }));
-        if (!queried.task && queried.status !== 'available')
+        if (!queried.task && (queried.status !== 'available' || queried.reason === retryReason))
             throw new UserInputError(
                 queried.reason === 'manual_review_required' ? '上次开通结果待核对' : '兑换码暂不可用',
             );
-        const row = await this.receipt(ctx, code, queried.plan, config.upstreamOrigin);
-        if (queried.task) return this.capture(ctx, row, queried.task);
-        const claimed = await this.receipts(ctx).update(
-            { id: row.id, channelId: ctx.channelId, status: 'new' },
-            { status: 'submitting' },
+        const repository = this.receipts(ctx);
+        let row = await this.receipt(ctx, code, queried.plan, config.upstreamOrigin);
+        let afterFailedTask: string | undefined;
+        if (queried.task) {
+            const snapshot = await this.capture(ctx, row, queried.task);
+            if (queried.reason !== retryReason || snapshot.status !== 'failed') return snapshot;
+            const failed = safeRechargeTask(queried.task);
+            if (failed.status !== 'failed' || failed.plan !== queried.plan) return snapshot;
+            row = await repository.findOneOrFail({ where: { id: row.id, channelId: ctx.channelId } });
+            if (row.status !== 'failed' || this.taskSnapshot(ctx, row)?.id !== failed.id)
+                return this.view(ctx, row);
+            afterFailedTask = failed.id;
+        }
+        const expectedStatus = afterFailedTask ? 'failed' : 'new';
+        const claimRevision = row.revision + 1;
+        const claimed = await repository.update(
+            { id: row.id, channelId: ctx.channelId, revision: row.revision, status: expectedStatus },
+            { status: 'submitting', revision: claimRevision },
         );
         if (!claimed.affected)
             return this.view(
                 ctx,
-                await this.receipts(ctx).findOneOrFail({ where: { id: row.id, channelId: ctx.channelId } }),
+                await repository.findOneOrFail({ where: { id: row.id, channelId: ctx.channelId } }),
             );
+        const claim = { id: row.id, channelId: ctx.channelId, revision: claimRevision, status: 'submitting' };
         try {
-            const result = await this.upstream(ctx, config, 'submit', { code, session });
+            const result = await this.upstream(ctx, config, 'submit', {
+                code,
+                session,
+                ...(afterFailedTask && { afterFailedTask }),
+            });
             if (result.rejected === true) {
-                await this.receipts(ctx).update({ id: row.id, status: 'submitting' }, { status: 'new' });
+                await repository.update(claim, { status: expectedStatus, revision: claimRevision + 1 });
                 throw new GptRechargeNotAcceptedError();
             }
+            if (afterFailedTask && result.id === afterFailedTask)
+                throw new Error('Retry reply identifies the previous receipt');
             return await this.capture(ctx, row, result);
         } catch (error) {
             if (error instanceof GptRechargeNotAcceptedError) throw error;
             // Persist only an ambiguous state, never raw account JSON or the code.
-            await this.receipts(ctx).update(
-                { id: row.id, status: 'submitting' },
-                { status: 'submission_unknown' },
-            );
+            await repository.update(claim, { status: 'submission_unknown', revision: claimRevision + 1 });
             throw new UserInputError('提交结果待核对，请使用原兑换码查询');
         }
     }

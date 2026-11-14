@@ -185,6 +185,7 @@ export function GptRechargePage({
     const codeInput = useRef<HTMLInputElement>(null);
     const matchedPlanCard = useRef<HTMLLIElement>(null);
     const focusLookup = useRef(false);
+    const focusVerify = useRef(false);
     let account: { email: string } | null = null;
     let sessionError = '';
     if (session.trim()) {
@@ -224,6 +225,12 @@ export function GptRechargePage({
         focusLookup.current = false;
         document.getElementById('gpt-query')?.focus();
     }, [tab, busy]);
+
+    useEffect(() => {
+        if (tab !== 'recharge' || busy || !focusVerify.current || !canStartRecharge) return;
+        focusVerify.current = false;
+        codeInput.current?.focus();
+    }, [tab, busy, canStartRecharge]);
 
     useEffect(() => {
         const card = matchedPlanCard.current;
@@ -320,6 +327,12 @@ export function GptRechargePage({
         setConfirmed(false);
         setError(null);
         setFeedbackAttempt(null);
+    }
+    function changeLookupCode(value: string) {
+        if (value === queryCode) return;
+        queryChallenge.reset();
+        setQueryCode(value);
+        setQueryResult(null);
     }
     async function pasteCode() {
         const input = codeInput.current;
@@ -638,7 +651,7 @@ export function GptRechargePage({
                                     className="primary-action"
                                     type="button"
                                     onClick={() => {
-                                        if (!queryCode && code) setQueryCode(code);
+                                        if (!queryCode && code) changeLookupCode(code);
                                         setError(null);
                                         setFeedbackAttempt(null);
                                         focusLookup.current = true;
@@ -689,7 +702,7 @@ export function GptRechargePage({
                                 <button
                                     className="primary-action"
                                     onClick={() => {
-                                        setQueryCode(code);
+                                        changeLookupCode(code);
                                         setTab('query');
                                     }}
                                 >
@@ -980,9 +993,7 @@ export function GptRechargePage({
                                             id="gpt-query"
                                             value={queryCode}
                                             onChange={event => {
-                                                queryChallenge.reset();
-                                                setQueryCode(event.target.value);
-                                                setQueryResult(null);
+                                                changeLookupCode(event.target.value);
                                                 setError(null);
                                                 setFeedbackAttempt(null);
                                             }}
@@ -1039,6 +1050,21 @@ export function GptRechargePage({
                                                 onRefresh={refreshTask}
                                                 busy={taskQuery.isFetching}
                                                 sync={taskSync}
+                                                onRetry={
+                                                    queryResult.reason === 'verified_retry_available' &&
+                                                    (currentTask ?? queryResult.task).status === 'failed' &&
+                                                    canStartRecharge &&
+                                                    !busy
+                                                        ? () => {
+                                                              changeCode(queryCode.trim());
+                                                              setSession('');
+                                                              setTask(null);
+                                                              setUncertain(false);
+                                                              focusVerify.current = true;
+                                                              setTab('recharge');
+                                                          }
+                                                        : undefined
+                                                }
                                             />
                                         ) : queryResult.reason === 'manual_review_required' ? (
                                             <div className="gpt-recharge-query-empty">
@@ -1106,7 +1132,7 @@ export function GptRechargePage({
                         <button
                             className="gpt-recharge-text-button"
                             onClick={() => {
-                                setQueryCode(code);
+                                changeLookupCode(code);
                                 setTab('query');
                             }}
                         >
@@ -1156,12 +1182,14 @@ function TaskResult({
     busy,
     language,
     sync = 'live',
+    onRetry,
 }: {
     task: RechargeTask;
     onRefresh?: () => void;
     busy?: boolean;
     language: StorefrontLanguage;
     sync?: 'live' | 'error' | 'paused';
+    onRetry?: () => void;
 }) {
     const t = rechargeCopy(language);
     const [title, body] = rechargeStateCopy(task.status, language);
@@ -1188,7 +1216,19 @@ function TaskResult({
                     </span>
                     <h2>{title}</h2>
                 </div>
-                <p className="gpt-recharge-status-description">{body}</p>
+                <p className="gpt-recharge-status-description">
+                    {onRetry
+                        ? t(
+                              '已核对上次未完成，你可以用原兑换码重新验证并提交。',
+                              'The previous attempt was reviewed. You can verify your original code and submit again.',
+                          )
+                        : body}
+                </p>
+                {onRetry && (
+                    <button className="primary-action" type="button" onClick={onRetry}>
+                        {t('使用原码重新充值', 'Recharge again with original code')}
+                    </button>
+                )}
                 {task.status === 'running' && (
                     <div className="gpt-recharge-current-step">
                         <span className="gpt-recharge-stage-dot" aria-hidden="true" />

@@ -144,6 +144,8 @@ function Fixture() {
                     );
                 if (code === 'DEMO-HELD')
                     return { plan: 'plus', status: 'reserved', reason: 'manual_review_required' };
+                if (code === 'DEMO-REVIEWED')
+                    return { plan: 'plus', status: 'available', reason: 'verified_retry_available' };
                 if (errorMode === 'verify-code-rejected')
                     throw new ShopApiGraphQlError(
                         ['兑换码无效或已停用，请核对后重试'],
@@ -173,6 +175,13 @@ function Fixture() {
                 admit('RECHARGE_CODE', code, proof);
                 if (code === 'DEMO-HELD')
                     return { plan: 'plus', status: 'reserved', reason: 'manual_review_required' };
+                if (code === 'DEMO-REVIEWED')
+                    return {
+                        plan: 'plus',
+                        status: 'available',
+                        reason: 'verified_retry_available',
+                        task: { ...task(), status: 'failed', stage: 'failed' },
+                    };
                 if (params.get('error') === 'query')
                     throw new Error('Synthetic private lookup provider detail');
                 return Promise.resolve({
