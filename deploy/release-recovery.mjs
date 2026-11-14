@@ -40,9 +40,15 @@ const deploymentPrefixes = [
 // configuration-only release. A changed recipe supplies no
 // derived-failure evidence until it is independently reviewed and pinned.
 const guardRecipes = new Map([
-    ['ready', 'e09e08dd9d4d296c046fe5495b65163c27fd376a92141a29f77e54452516b4aa'],
-    ['complete', '4c4e2093dbfa438861a2b3f4a643a98454352f5edf094a5d9495056a2e1ba0ac'],
-    ['all-passed', '7e1e36d420cdbd6cee497f296601669135254dd32c60aec7f85cbd0c05e06305'],
+    ['ready', ['e09e08dd9d4d296c046fe5495b65163c27fd376a92141a29f77e54452516b4aa']],
+    ['complete', ['4c4e2093dbfa438861a2b3f4a643a98454352f5edf094a5d9495056a2e1ba0ac']],
+    [
+        'all-passed',
+        [
+            '7e1e36d420cdbd6cee497f296601669135254dd32c60aec7f85cbd0c05e06305',
+            'aebe5dc8cb29e8ca87727cbb39f66ab8cd6495b4960999ac0de3e17fb14e82ab',
+        ],
+    ],
 ]);
 
 export function classifyFailure(logs, attempt = 1) {
@@ -353,9 +359,8 @@ function workflowJob(reader, sha, path, id) {
     const start = source.indexOf(`\n    ${id}:\n`);
     assert.ok(start >= 0, 'Missing immutable guard recipe');
     const block = source.slice(start + 1).split(/\n(?=    [\w-]+:\n)/u)[0];
-    assert.equal(
-        createHash('sha256').update(block).digest('hex'),
-        guardRecipes.get(id),
+    assert.ok(
+        guardRecipes.get(id)?.includes(createHash('sha256').update(block).digest('hex')),
         'Unreviewed guard recipe',
     );
     return block;

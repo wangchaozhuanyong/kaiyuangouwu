@@ -273,6 +273,7 @@ jobs:
             actions: read
             contents: read
             pull-requests: read
+            id-token: write
 
     offhost_file_restore:
         name: prove complete offsite file restore before switching production
@@ -296,8 +297,9 @@ jobs:
             expected_admin_sha: ${{ needs.preflight.outputs.admin_sha }}
             target_sha: ${{ inputs.target_sha || github.sha }}
             governance_plan_sha256: ${{ inputs.governance_plan_sha256 || '' }}
+            release_plan: ${{ needs.build.outputs.release_plan }}
+            release_plan_sha256: ${{ needs.build.outputs.release_plan_sha256 }}
         permissions:
-            actions: read
             contents: read
             id-token: write
 
@@ -324,7 +326,6 @@ jobs:
         runs-on: ubuntu-24.04
         timeout-minutes: 15
         permissions:
-            actions: read
             contents: read
         env:
             AFFECTED_CHECKS: ${{ needs.build.outputs.affected_checks }}
@@ -341,14 +342,12 @@ jobs:
               with:
                   node-version: '24.19.0'
 
-            - name: Download the committed server acceptance receipt
-              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-              with:
-                  name: production-acceptance-${{ inputs.target_sha || github.sha }}
-                  path: artifacts
-
             - name: Verify the one completed acceptance pass
-              run: node deploy/acceptance-receipt.mjs verify artifacts/acceptance-receipt.json
+              env:
+                  ACCEPTANCE_RECEIPT: ${{ needs.deploy.outputs.acceptance_receipt }}
+              run: |
+                  printf '%s\n' "$ACCEPTANCE_RECEIPT" > "$RUNNER_TEMP/acceptance-receipt.json"
+                  node deploy/acceptance-receipt.mjs verify "$RUNNER_TEMP/acceptance-receipt.json"
 
             - name: Record acceptance evidence
               run: |

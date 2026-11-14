@@ -36,6 +36,7 @@ readonly reviewed_damatong_storefront="${VENDURE_REVIEWED_DAMATONG_STOREFRONT:-f
 readonly reviewed_damatong_channel_token="${VENDURE_REVIEWED_DAMATONG_CHANNEL_TOKEN:-}"
 readonly reviewed_damatong_publish_review="${VENDURE_REVIEWED_DAMATONG_PUBLISH_REVIEW:-}"
 readonly release_base_sha="${VENDURE_RELEASE_BASE_SHA:-}"
+readonly release_archive_sha256="${VENDURE_RELEASE_ARCHIVE_SHA256:-}"
 readonly release_data_risk="${VENDURE_RELEASE_DATA_RISK:-}"
 readonly release_backup_policy="${VENDURE_RELEASE_BACKUP_POLICY:-}"
 readonly release_affected_checks="${VENDURE_RELEASE_AFFECTED_CHECKS:-}"
@@ -123,6 +124,8 @@ if [[ ! "${artifact_name}" =~ ^${target_sha}-[0-9]+-[0-9]+-linux-x64$ ]]; then
     fail 'artifact name does not match the target SHA and release naming contract'
 fi
 [[ "${release_base_sha}" =~ ^[0-9a-f]{40}$ ]] || fail 'release base SHA must be a full lowercase Git SHA'
+[[ -z "${release_archive_sha256}" || "${release_archive_sha256}" =~ ^[a-f0-9]{64}$ ]] ||
+    fail 'release archive SHA-256 must match the verified build'
 case "${release_data_risk}:${release_backup_policy}" in
     runtime-only:reuse-recent-or-create|managed-content:fresh|schema:fresh) ;;
     *) fail 'release data risk and backup policy do not match the reviewed contract' ;;
@@ -715,6 +718,10 @@ deploy_stage="artifact-download"
 printf 'DEPLOY_DOWNLOAD_BEGIN\n'
 aws s3 cp "${artifact_s3_prefix}/${archive_name}" "${archive_path}" --only-show-errors
 aws s3 cp "${artifact_s3_prefix}/${checksum_name}" "${checksum_path}" --only-show-errors
+if [[ -n "${release_archive_sha256}" ]]; then
+    printf '%s  %s\n' "${release_archive_sha256}" "${archive_name}" | cmp -s - "${checksum_path}" ||
+        fail 'downloaded checksum differs from the verified build'
+fi
 (
     cd "${staging_dir}"
     sha256sum --check "${checksum_name}"

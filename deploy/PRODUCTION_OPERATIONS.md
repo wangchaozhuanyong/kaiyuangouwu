@@ -111,6 +111,19 @@ does not promote an application release or change its version marker.
 
 ## Backup verification and S3 release storage
 
+Build & Test records the exact checked source and scope in the successful
+`all-passed` job log. Release verification checks the native run, attempt,
+job, source tree and input coverage. It can still read earlier CI artifacts.
+Test jobs rebuild their local prerequisites when they run.
+
+Production Release builds on Linux from the locked `main` revision. The
+builder writes the runtime archive and its checksum directly to that release's
+existing private S3 prefix. Short-lived upload credentials are scoped to
+those two object keys. The deploy job checks the S3 checksum against the
+verified build before invoking Systems Manager. The host independently
+checks the downloaded bytes. The restore proof stays on the production
+host, and the verified server acceptance receipt travels as a job output.
+
 The backup writers publish a root-owned `.verified-backup.json` after validating
 the local archive and confirming the version IDs of the offsite objects. The
 five-minute health check reads this receipt and the small checksum sidecar and
