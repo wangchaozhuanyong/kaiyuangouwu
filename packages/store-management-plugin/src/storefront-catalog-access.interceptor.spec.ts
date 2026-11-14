@@ -76,6 +76,7 @@ describe('public storefront browsing boundary', () => {
             'verifyGptRechargeCode',
             'queryGptRechargeCode',
             'submitGptRecharge',
+            'startGptRechargeAuthorization',
             'createShopAbuseChallenge',
         ]) {
             const { run, next } = invoke(field, 'Mutation');

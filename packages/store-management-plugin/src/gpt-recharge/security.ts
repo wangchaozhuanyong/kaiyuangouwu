@@ -58,16 +58,20 @@ export function rechargeCredentialMatches(expected: string, supplied: unknown): 
         timingSafeEqual(Buffer.from(expected), Buffer.from(supplied))
     );
 }
-export function allowedRechargeOrigin(value: string): string {
+export const rechargePartnerApiPath = '/api/recharge/v1';
+export function allowedRechargeOrigin(value: string, allowPartnerPath = false): string {
     const url = new URL(value);
     const allowed = (process.env.GPT_RECHARGE_ALLOWED_ORIGINS ?? '').split(',').map(item => item.trim());
+    const validPath =
+        url.pathname === '/' ||
+        (allowPartnerPath && [rechargePartnerApiPath, rechargePartnerApiPath + '/'].includes(url.pathname));
     if (
         url.protocol !== 'https:' ||
         url.username ||
         url.password ||
         url.search ||
         url.hash ||
-        url.pathname !== '/' ||
+        !validPath ||
         !allowed.includes(url.origin)
     )
         throw new Error('Recharge destination is not allowed');
@@ -78,6 +82,8 @@ export const rechargeAllowedPlans = ['plus', 'pro_5x', 'pro_20x'];
 export const rechargeAllowedStatuses = [
     'queued',
     'running',
+    'awaiting_authorization',
+    'expired',
     'awaiting_credentials',
     'awaiting_review',
     'succeeded',

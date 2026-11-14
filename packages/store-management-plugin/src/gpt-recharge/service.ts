@@ -18,6 +18,7 @@ import {
     rechargeAllowedPlans,
     rechargeCredentialMatches,
     rechargeFingerprint,
+    rechargePartnerApiPath,
     safeRechargeStage,
     safeRechargeTask,
     sealRechargeSecret,
@@ -26,13 +27,23 @@ import {
 
 const retryReason = 'verified_retry_available';
 const pendingSubmission = ['submitting', 'submission_unknown'];
+const partnerCode = /^RA-[A-F0-9]{32}$/;
+const partnerKey = /^rp_[a-f0-9]{24}\.[A-Za-z0-9_-]{43}$/;
+const requestKeyPattern = /^[a-zA-Z0-9._-]{1,120}$/;
 type InternalCode = {
     plan: string;
     status: string;
     reason?: 'manual_review_required' | typeof retryReason;
     task?: unknown;
 };
-type UpstreamTaskSnapshot = { id: string; taskToken: string; stage?: string; updatedAt?: number };
+type UpstreamTaskSnapshot = {
+    id: string;
+    taskToken: string;
+    stage?: string;
+    updatedAt?: number;
+    partner?: boolean;
+};
+type RechargeCredentials = { legacy?: string; partner?: string };
 @Injectable()
 export class GptRechargeService {
     constructor(
@@ -52,16 +63,27 @@ export class GptRechargeService {
         if (typeof value !== 'string' || !value.trim() || value.trim().length > 190)
             throw new UserInputError('兑换码格式无效');
         const code = value.trim();
-        return /^KC-(?:[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{15}|[A-F0-9]{28})$/i.test(code)
+        return /^KC-(?:[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{15}|[A-F0-9]{28})$/i.test(code) ||
+            partnerCode.test(code.toUpperCase())
             ? code.toUpperCase()
             : code;
     }
+    private credentials(ctx: RequestContext, encrypted: string): RechargeCredentials {
+        const [legacy, partner] = encrypted.split('.partner.');
+        return {
+            legacy: openRechargeSecret(legacy, this.context(ctx)) || undefined,
+            partner: partner ? openRechargeSecret(partner, this.context(ctx) + ':partner') : undefined,
+        };
+    }
     async adminConfig(ctx: RequestContext) {
         const row = await this.configs(ctx).findOne({ where: { channelId: ctx.channelId } });
+        const keys = row && this.credentials(ctx, row.encryptedServiceKey);
         return {
             enabled: row?.enabled ?? false,
             upstreamOrigin: row?.upstreamOrigin ?? '',
             credentialConfigured: Boolean(row?.encryptedServiceKey),
+            legacyConfigured: Boolean(keys?.legacy),
+            partnerConfigured: Boolean(keys?.partner),
             revision: row?.revision ?? -1,
         };
     }
@@ -71,11 +93,12 @@ export class GptRechargeService {
             enabled: boolean;
             upstreamOrigin: string;
             serviceKey?: string | null;
+            partnerApiKey?: string | null;
             expectedRevision: number;
         },
     ) {
         try {
-            const origin = allowedRechargeOrigin(input.upstreamOrigin);
+            const origin = allowedRechargeOrigin(input.upstreamOrigin, true);
             const repository = this.configs(ctx);
             const prior = await repository.findOne({ where: { channelId: ctx.channelId } });
             if ((prior?.revision ?? -1) !== input.expectedRevision) throw new Error('Configuration changed');
@@ -85,14 +108,31 @@ export class GptRechargeService {
                 (await this.receipts(ctx).count({ where: { channelId: ctx.channelId } }))
             )
                 throw new Error('Existing tasks depend on this source');
-            const encryptedServiceKey = input.serviceKey
-                ? sealRechargeSecret(input.serviceKey, this.context(ctx))
-                : prior?.encryptedServiceKey;
+            const keys =
+                prior && origin === prior.upstreamOrigin
+                    ? this.credentials(ctx, prior.encryptedServiceKey)
+                    : {};
             if (
-                !encryptedServiceKey ||
-                (input.serviceKey && (input.serviceKey.length < 32 || input.serviceKey.length > 512))
+                (input.serviceKey && (input.serviceKey.length < 32 || input.serviceKey.length > 512)) ||
+                (input.partnerApiKey && !partnerKey.test(input.partnerApiKey))
             )
                 throw new Error('Invalid credential');
+            if (input.serviceKey) keys.legacy = input.serviceKey;
+            if (input.partnerApiKey) {
+                if (
+                    keys.partner &&
+                    keys.partner.split('.')[0] !== input.partnerApiKey.split('.')[0] &&
+                    (await this.receipts(ctx).count({ where: { channelId: ctx.channelId } }))
+                )
+                    throw new Error('Existing tasks belong to another partner');
+                keys.partner = input.partnerApiKey;
+            }
+            if (!keys.legacy && !keys.partner) throw new Error('Missing credential');
+            // The existing three segments still decrypt with older releases during a staged rollout.
+            const legacy = sealRechargeSecret(keys.legacy ?? '', this.context(ctx));
+            const encryptedServiceKey = keys.partner
+                ? legacy + '.partner.' + sealRechargeSecret(keys.partner, this.context(ctx) + ':partner')
+                : legacy;
             const values = {
                 enabled: input.enabled,
                 upstreamOrigin: origin,
@@ -138,10 +178,8 @@ export class GptRechargeService {
                     signal: AbortSignal.timeout(20000),
                     headers: {
                         'content-type': 'application/json',
-                        'x-vendure-recharge-key': openRechargeSecret(
-                            config.encryptedServiceKey,
-                            this.context(ctx),
-                        ),
+                        'x-vendure-recharge-key':
+                            this.credentials(ctx, config.encryptedServiceKey).legacy ?? '',
                         'x-vendure-client-ip': ctx.req?.ip?.replace(/^::ffff:/, '') ?? '',
                         ...(channel ? { 'x-vendure-recharge-channel': channel } : {}),
                     },
@@ -160,12 +198,58 @@ export class GptRechargeService {
             throw new UserInputError('充值服务暂时无法确认请求，请查询原兑换码');
         }
     }
+    private async partnerUpstream(
+        ctx: RequestContext,
+        config: GptRechargeConfig,
+        path: string,
+        body?: object,
+        requestKey?: string,
+    ) {
+        const key = this.credentials(ctx, config.encryptedServiceKey).partner;
+        if (!key) throw new UserInputError('当前店铺尚未配置合作方充值 API');
+        try {
+            const origin = allowedRechargeOrigin(config.upstreamOrigin);
+            const response = await fetch(origin + rechargePartnerApiPath + path, {
+                method: body ? 'POST' : 'GET',
+                redirect: 'error',
+                signal: AbortSignal.timeout(20000),
+                headers: {
+                    authorization: 'Bearer ' + key,
+                    ...(body && { 'content-type': 'application/json' }),
+                    ...(requestKey && { 'idempotency-key': requestKey }),
+                },
+                ...(body && { body: JSON.stringify(body) }),
+            });
+            if (!response.ok) {
+                await response.body?.cancel().catch(() => undefined);
+                if (response.status === 404) throw new UserInputError('兑换码或任务不可用，请核对后重试');
+                if (response.status === 409)
+                    throw new UserInputError('已有充值请求或兑换码状态已变化，请查询原兑换码');
+                throw new Error('Partner recharge request rejected');
+            }
+            return JSON.parse(await readRechargeResponse(response)) as Record<string, unknown>;
+        } catch (error) {
+            if (error instanceof UserInputError) throw error;
+            throw new UserInputError('充值服务暂时无法确认请求，请查询原兑换码');
+        }
+    }
     async publicConfig(ctx: RequestContext) {
         const configured = await this.configs(ctx).findOne({ where: { channelId: ctx.channelId } });
         if (!configured?.enabled || !(await this.access.isEnabled(ctx, 'gpt-recharge-entry')))
             return { enabled: false, maintenance: false };
-        const result = await this.upstream(ctx, configured, 'config', {});
-        return { enabled: true, maintenance: result.maintenance === true };
+        const keys = this.credentials(ctx, configured.encryptedServiceKey);
+        const checks = await Promise.allSettled([
+            ...(keys.legacy ? [this.upstream(ctx, configured, 'config', {})] : []),
+            ...(keys.partner ? [this.partnerUpstream(ctx, configured, '/config')] : []),
+        ]);
+        if (checks.every(result => result.status === 'rejected'))
+            throw new UserInputError('暂时无法确认充值服务');
+        return {
+            enabled: true,
+            maintenance: !checks.some(
+                result => result.status === 'fulfilled' && result.value.maintenance === false,
+            ),
+        };
     }
     private validateCodeResult(value: Record<string, unknown>): InternalCode {
         if (
@@ -186,6 +270,11 @@ export class GptRechargeService {
     async verify(ctx: RequestContext, code: string) {
         const config = await this.connectionConfig(ctx, true);
         code = this.code(code);
+        if (partnerCode.test(code)) {
+            await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
+            const checked = await this.partnerUpstream(ctx, config, '/codes/verify', { code });
+            return { ...this.validateCodeResult(checked), task: null };
+        }
         const result = this.validateCodeResult(await this.upstream(ctx, config, 'verify', { code }));
         if (result.reason === retryReason) {
             await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
@@ -266,7 +355,7 @@ export class GptRechargeService {
                     : new Date(snapshot.updatedAt),
         };
     }
-    private async capture(ctx: RequestContext, row: GptRechargeReceipt, raw: unknown) {
+    private async capture(ctx: RequestContext, row: GptRechargeReceipt, raw: unknown, partner = false) {
         const value = safeRechargeTask(raw);
         const repository = this.receipts(ctx);
         for (let attempt = 0; attempt < 4; attempt++) {
@@ -289,11 +378,13 @@ export class GptRechargeService {
                 )
                     return this.view(ctx, current);
             }
-            const snapshot = value.taskToken
-                ? { id: value.id, taskToken: value.taskToken }
-                : previous?.id === value.id
-                  ? previous
-                  : null;
+            const snapshot = partner
+                ? { id: value.id, taskToken: '', partner: true }
+                : value.taskToken
+                  ? { id: value.id, taskToken: value.taskToken }
+                  : previous?.id === value.id
+                    ? previous
+                    : null;
             if (!snapshot) throw new UserInputError('任务凭证暂不可用，请使用兑换码查询');
             // Retain the safe stage with the existing encrypted snapshot, under the same
             // timestamp/CAS guard. Old receipts without a stage remain readable.
@@ -301,6 +392,7 @@ export class GptRechargeService {
                 JSON.stringify({
                     id: snapshot.id,
                     taskToken: snapshot.taskToken,
+                    ...(snapshot.partner && { partner: true }),
                     stage: value.stage,
                     updatedAt: nextTime,
                 }),
@@ -331,7 +423,12 @@ export class GptRechargeService {
         const code = this.code(codeInput);
         const config = await this.connectionConfig(ctx, false);
         await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
-        const result = this.validateCodeResult(await this.upstream(ctx, config, 'query', { code }));
+        const partner = partnerCode.test(code);
+        const result = this.validateCodeResult(
+            partner
+                ? await this.partnerUpstream(ctx, config, '/codes/query', { code })
+                : await this.upstream(ctx, config, 'query', { code }),
+        );
         if (!result.task) {
             const pending = await this.receipts(ctx).findOne({
                 where: { publicId: this.codePublicId(code, config.upstreamOrigin), channelId: ctx.channelId },
@@ -342,8 +439,8 @@ export class GptRechargeService {
             return { ...result, task: null };
         }
         const row = await this.receipt(ctx, code, result.plan, config.upstreamOrigin);
-        const task = await this.capture(ctx, row, result.task);
-        if (result.reason !== retryReason) return { ...result, task };
+        const task = await this.capture(ctx, row, result.task, partner);
+        if (result.reason !== retryReason || partner) return { ...result, task };
         const current = await this.receipts(ctx).findOneOrFail({
             where: { id: row.id, channelId: ctx.channelId },
         });
@@ -362,6 +459,7 @@ export class GptRechargeService {
     }
     async submit(ctx: RequestContext, codeInput: string, session: string) {
         const code = this.code(codeInput);
+        if (partnerCode.test(code)) throw new GptRechargeNotAcceptedError();
         validateRechargeSession(session);
         const config = await this.connectionConfig(ctx, true);
         await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
@@ -416,16 +514,56 @@ export class GptRechargeService {
             throw new UserInputError('提交结果待核对，请使用原兑换码查询');
         }
     }
+    async startAuthorization(ctx: RequestContext, codeInput: string, requestKey: string) {
+        const code = this.code(codeInput);
+        if (!partnerCode.test(code) || !requestKeyPattern.test(requestKey))
+            throw new UserInputError('兑换码或请求编号格式无效');
+        const config = await this.connectionConfig(ctx, true);
+        await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
+        const checked = this.validateCodeResult(
+            await this.partnerUpstream(ctx, config, '/codes/query', { code }),
+        );
+        const row = await this.receipt(ctx, code, checked.plan, config.upstreamOrigin);
+        const raw = await this.partnerUpstream(ctx, config, '/redemptions', { code }, requestKey);
+        const task = await this.capture(ctx, row, raw, true);
+        let authorizationUrl: string | undefined;
+        if (
+            typeof raw.authorizationUrl === 'string' &&
+            typeof raw.id === 'string' &&
+            task.status === 'awaiting_authorization'
+        ) {
+            const url = new URL(raw.authorizationUrl);
+            if (
+                url.origin !== config.upstreamOrigin ||
+                url.username ||
+                url.password ||
+                url.search ||
+                url.pathname !== '/recharge/authorize' ||
+                !/^#[a-f0-9-]{36}\.[A-Za-z0-9_-]{43}$/.test(url.hash) ||
+                !url.hash.startsWith('#' + raw.id + '.')
+            )
+                throw new UserInputError('充值授权链接暂不可用');
+            authorizationUrl = url.href;
+        }
+        return { authorizationUrl, task };
+    }
     async task(ctx: RequestContext, publicId: string, credential: string) {
         const expected = rechargeFingerprint(publicId, `${this.context(ctx)}:task`);
         if (!rechargeCredentialMatches(expected, credential)) throw new ForbiddenError();
         const row = await this.receipts(ctx).findOne({ where: { publicId, channelId: ctx.channelId } });
         if (!row) throw new ForbiddenError();
-        if (!row.encryptedUpstreamTask || ['succeeded', 'failed'].includes(row.status))
+        if (!row.encryptedUpstreamTask || ['succeeded', 'failed', 'expired'].includes(row.status))
             return this.view(ctx, row);
         const input = this.taskSnapshot(ctx, row);
         if (!input) return this.view(ctx, row);
         const config = await this.connectionConfig(ctx, false);
+        if (input.partner)
+            return this.capture(
+                ctx,
+                row,
+                await this.partnerUpstream(ctx, config, '/redemptions/' + input.id),
+                true,
+            );
         return this.capture(
             ctx,
             row,

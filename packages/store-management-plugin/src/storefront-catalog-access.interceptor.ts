@@ -78,6 +78,7 @@ const publicMutations = new Set([
     'verifyGptRechargeCode',
     'queryGptRechargeCode',
     'submitGptRecharge',
+    'startGptRechargeAuthorization',
     'recordStorefrontPageView',
     'recordStorefrontAnalyticsConsent',
     'recordStorefrontHeartbeat',

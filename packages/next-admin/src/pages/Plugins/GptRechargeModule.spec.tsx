@@ -30,6 +30,8 @@ it('loads the actual admin schema, saves a secret once, clears it, and preserves
         enabled: false,
         upstreamOrigin: 'https://executor.example.test',
         credentialConfigured: true,
+        partnerConfigured: false,
+        legacyConfigured: true,
         revision: 0,
     };
     const writes: any[] = [];
@@ -41,6 +43,8 @@ it('loads the actual admin schema, saves a secret once, clears it, and preserves
                 enabled: input.enabled,
                 upstreamOrigin: input.upstreamOrigin,
                 credentialConfigured: true,
+                partnerConfigured: Boolean(input.partnerApiKey) || config.partnerConfigured,
+                legacyConfigured: true,
                 revision: config.revision + 1,
             };
             return config;
@@ -91,6 +95,12 @@ it('loads the actual admin schema, saves a secret once, clears it, and preserves
     expect(writes[0].expectedRevision).toBe(0);
     expect(document.querySelector<HTMLInputElement>('input[type=password]')?.value).toBe('');
     expect(JSON.stringify(client.cache.extract())).not.toContain(secret);
+    const apiKey = 'rp_' + 'a'.repeat(24) + '.' + 'b'.repeat(43);
+    await change('input[name="partnerApiKey"]', apiKey);
+    await act(async () => button('保存当前店铺配置').click());
+    expect(writes[1].partnerApiKey).toBe(apiKey);
+    expect(writes[1].serviceKey).toBeUndefined();
+    expect(JSON.stringify(client.cache.extract())).not.toContain(apiKey);
     await change('input[type=url]', 'https://draft.example.test');
     config = { ...config, revision: config.revision + 1, upstreamOrigin: 'https://changed.example.test' };
     await act(async () => button('重新读取').click());

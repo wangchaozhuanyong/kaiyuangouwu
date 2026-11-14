@@ -75,6 +75,15 @@ export class GptRechargeShopResolver {
     ) {
         return respond(ctx, () => this.service.submit(ctx, code, session));
     }
+    @Mutation()
+    @Allow(Permission.Public)
+    startGptRechargeAuthorization(
+        @Ctx() ctx: RequestContext,
+        @Args('code') code: string,
+        @Args('requestKey') requestKey: string,
+    ) {
+        return respond(ctx, () => this.service.startAuthorization(ctx, code, requestKey));
+    }
 }
 @Resolver()
 export class GptRechargeAdminResolver {
@@ -89,7 +98,13 @@ export class GptRechargeAdminResolver {
     updateGptRechargeConfig(
         @Ctx() ctx: RequestContext,
         @Args('input')
-        input: { enabled: boolean; upstreamOrigin: string; serviceKey?: string; expectedRevision: number },
+        input: {
+            enabled: boolean;
+            upstreamOrigin: string;
+            serviceKey?: string;
+            partnerApiKey?: string;
+            expectedRevision: number;
+        },
     ) {
         return respond(ctx, () => this.service.saveConfig(ctx, input));
     }

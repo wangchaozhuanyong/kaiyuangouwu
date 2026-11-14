@@ -19,6 +19,10 @@ export const shopSchema = gql`
         reason: String
         task: GptRechargeTask
     }
+    type GptRechargeAuthorization {
+        authorizationUrl: String
+        task: GptRechargeTask!
+    }
     extend type Query {
         gptRechargeConfig: GptRechargePublicConfig!
         gptRechargeTask(id: ID!, credential: String!): GptRechargeTask!
@@ -27,6 +31,7 @@ export const shopSchema = gql`
         verifyGptRechargeCode(code: String!): GptRechargeCode!
         queryGptRechargeCode(code: String!): GptRechargeCode!
         submitGptRecharge(code: String!, session: String!): GptRechargeTask!
+        startGptRechargeAuthorization(code: String!, requestKey: String!): GptRechargeAuthorization!
     }
 `;
 export const adminSchema = gql`
@@ -34,12 +39,15 @@ export const adminSchema = gql`
         enabled: Boolean!
         upstreamOrigin: String!
         credentialConfigured: Boolean!
+        partnerConfigured: Boolean!
+        legacyConfigured: Boolean!
         revision: Int!
     }
     input GptRechargeConfigInput {
         enabled: Boolean!
         upstreamOrigin: String!
         serviceKey: String
+        partnerApiKey: String
         expectedRevision: Int!
     }
     extend type Query {

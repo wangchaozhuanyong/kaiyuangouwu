@@ -14,6 +14,8 @@ type Configuration = {
     enabled: boolean;
     upstreamOrigin: string;
     credentialConfigured: boolean;
+    partnerConfigured: boolean;
+    legacyConfigured: boolean;
     revision: number;
 };
 type Draft = Pick<Configuration, 'enabled' | 'upstreamOrigin'> & { expectedRevision: number };
@@ -23,6 +25,8 @@ export const GPT_RECHARGE_ADMIN_CONFIG = gql`
             enabled
             upstreamOrigin
             credentialConfigured
+            partnerConfigured
+            legacyConfigured
             revision
         }
     }
@@ -33,6 +37,8 @@ export const UPDATE_GPT_RECHARGE_CONFIG = gql`
             enabled
             upstreamOrigin
             credentialConfigured
+            partnerConfigured
+            legacyConfigured
             revision
         }
     }
@@ -54,9 +60,10 @@ export function GptRechargeModule() {
         source ? String(source.revision) : '',
         source ? toDraft(source) : null,
     );
-    const [secret, setSecret] = useState({ scope, value: '' });
+    const [secret, setSecret] = useState({ scope, value: '', partner: '' });
     const serviceKey = secret.scope === scope ? secret.value : '';
-    useUnsavedChangesWarning(Boolean(serviceKey), '当前连接凭证尚未保存，确定离开吗？');
+    const partnerApiKey = secret.scope === scope ? secret.partner : '';
+    useUnsavedChangesWarning(Boolean(serviceKey || partnerApiKey), '当前连接凭证尚未保存，确定离开吗？');
     const [feedback, setFeedback] = useState({ scope, message: '', failed: false });
     const message = feedback.scope === scope ? feedback.message : '';
     const pending = useRef(false);
@@ -72,12 +79,20 @@ export function GptRechargeModule() {
         setFeedback({ scope, message: '', failed: false });
         try {
             const saved = (
-                await save({ variables: { input: { ...server.draft, serviceKey: serviceKey || undefined } } })
+                await save({
+                    variables: {
+                        input: {
+                            ...server.draft,
+                            serviceKey: serviceKey || undefined,
+                            partnerApiKey: partnerApiKey || undefined,
+                        },
+                    },
+                })
             ).data?.updateGptRechargeConfig;
             if (getAdminQueryScope() !== scope) return;
             if (!saved) throw new Error('No saved configuration');
             server.accept(toDraft(saved), String(saved.revision));
-            setSecret({ scope, value: '' });
+            setSecret({ scope, value: '', partner: '' });
             setFeedback({
                 scope,
                 message: '当前店铺的充值连接已保存。前台入口还需在客户端插件中启用并发布。',
@@ -114,7 +129,7 @@ export function GptRechargeModule() {
                             content={{
                                 purpose: '配置当前店铺的 GPT 自助充值服务。',
                                 requirements: [
-                                    '仅超级管理员可维护连接，使用已加入服务器白名单的服务地址和独立凭证',
+                                    '仅超级管理员可维护连接，使用已加入服务器白名单的 ID 系统地址和合作方 API 密钥',
                                     '保存连接后，在客户端插件中心启用并发布前台入口',
                                 ],
                                 example: '例如：为自营店开放兑换码充值，其他店铺保留原配置。',
@@ -165,7 +180,7 @@ export function GptRechargeModule() {
                     </AdminField>
                     <AdminField
                         label="服务地址"
-                        description="使用已加入服务器白名单的 HTTPS 地址；不包含接口路径。已有任务后不可更换。"
+                        description="填写 ID 系统提供的 HTTPS API 地址。已有任务后不可改用其他站点。"
                         layout="stacked"
                     >
                         <AdminInput
@@ -178,11 +193,11 @@ export function GptRechargeModule() {
                         />
                     </AdminField>
                     <AdminField
-                        label="独立服务凭证"
+                        label="原商城服务凭证"
                         description={
-                            source.credentialConfigured
+                            source.legacyConfigured
                                 ? '已配置。留空保留现有凭证，保存后不会回显。'
-                                : '尚未配置。请填写专用于本集成的凭证。'
+                                : '适用于先前通过商城专用通道发放的兑换码。'
                         }
                         layout="stacked"
                     >
@@ -192,9 +207,31 @@ export function GptRechargeModule() {
                             autoComplete="new-password"
                             minLength={32}
                             maxLength={512}
-                            required={!source.credentialConfigured}
                             disabled={saveState.loading}
-                            onChange={event => setSecret({ scope, value: event.target.value })}
+                            onChange={event =>
+                                setSecret({ scope, value: event.target.value, partner: partnerApiKey })
+                            }
+                        />
+                    </AdminField>
+                    <AdminField
+                        label="合作方 API 密钥"
+                        description={
+                            source.partnerConfigured
+                                ? '已配置。留空保留现有密钥，保存后不会回显。'
+                                : '填写在 ID 系统「充值 API 接入」为当前店铺发放的密钥。'
+                        }
+                        layout="stacked"
+                    >
+                        <AdminInput
+                            type="password"
+                            value={partnerApiKey}
+                            name="partnerApiKey"
+                            autoComplete="new-password"
+                            maxLength={71}
+                            disabled={saveState.loading}
+                            onChange={event =>
+                                setSecret({ scope, partner: event.target.value, value: serviceKey })
+                            }
                         />
                     </AdminField>
                     <p className="text-sm text-slate-500">
@@ -203,7 +240,12 @@ export function GptRechargeModule() {
                     <AdminButton
                         type="submit"
                         className="bg-blue-600 text-white"
-                        disabled={saveState.loading || server.sourceChanged || (!server.dirty && !serviceKey)}
+                        disabled={
+                            saveState.loading ||
+                            server.sourceChanged ||
+                            (!server.dirty && !serviceKey && !partnerApiKey) ||
+                            (!source.credentialConfigured && !serviceKey && !partnerApiKey)
+                        }
                         aria-busy={saveState.loading}
                     >
                         {saveState.loading ? '正在保存…' : '保存当前店铺配置'}
