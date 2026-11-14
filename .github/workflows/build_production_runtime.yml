@@ -65,11 +65,18 @@ on:
             data_risk:
                 description: Automatic production data-risk classification
                 value: ${{ jobs.build.outputs.data_risk }}
+            release_plan:
+                description: Verified release plan for the S3 runtime archive
+                value: ${{ jobs.build.outputs.release_plan }}
+            release_plan_sha256:
+                description: SHA-256 of the exact release plan bytes
+                value: ${{ jobs.build.outputs.release_plan_sha256 }}
 
 permissions:
     actions: read
     contents: read
     pull-requests: read
+    id-token: write
 
 env:
     CI: true
@@ -89,7 +96,13 @@ jobs:
         name: build verified linux/x64 runtime
         runs-on: ubuntu-24.04
         timeout-minutes: 120
+        env:
+            AWS_REGION: ap-northeast-1
+            AWS_ACCOUNT_ID: '098208446664'
+            ARTIFACT_BUCKET: yunqiao-vendure-prod-backup-098208446664-apne1
         outputs:
+            release_plan: ${{ steps.store.outputs.release_plan }}
+            release_plan_sha256: ${{ steps.store.outputs.release_plan_sha256 }}
             affected_checks: ${{ steps.impact.outputs.affected_checks }}
             backup_policy: ${{ steps.impact.outputs.backup_policy }}
             data_risk: ${{ steps.impact.outputs.data_risk }}
@@ -180,17 +193,19 @@ jobs:
               with:
                   ref: ${{ inputs.target_sha }}
                   fetch-depth: 0
+                  persist-credentials: false
 
             - name: Enforce release source invariants
               env:
+                  GH_TOKEN: ${{ github.token }}
                   BASE_SHA: ${{ inputs.base_sha }}
                   TARGET_SHA: ${{ inputs.target_sha }}
               run: |
                   test "$(uname -m)" = "x86_64"
                   test "$(git rev-parse HEAD^{commit})" = "$TARGET_SHA"
                   test -z "$(git status --porcelain)"
-                  git fetch origin main --no-tags --prune
-                  test "$(git rev-parse refs/remotes/origin/main^{commit})" = "$TARGET_SHA"
+                  test "$GITHUB_REF" = refs/heads/main
+                  test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$TARGET_SHA"
                   git merge-base --is-ancestor "$BASE_SHA" "$TARGET_SHA"
 
             - name: Determine data risk and affected acceptance
@@ -314,7 +329,6 @@ jobs:
               run: node deploy/build-artifact.mjs restore "$RUNNER_TEMP/compiled-input" "$CI_RUN_ID"
 
             - name: Build production bundles
-              id: bundles
               if: steps.compiled.outputs.restored != 'true'
               env:
                   NODE_ENV: production
@@ -356,19 +370,7 @@ jobs:
                   DB_PASSWORD: build-check-password
                   DB_NAME: build-check
                   DB_SYNCHRONIZE: 'false'
-              run: |
-                  bun run build
-                  CI_PLAN='{"full":true}' node deploy/build-artifact.mjs pack "$RUNNER_TEMP/compiled-output"
-
-            - name: Preserve verified production compilation for follow-up releases
-              if: steps.compiled.outputs.restored != 'true'
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-              with:
-                  name: ${{ steps.bundles.outputs.name }}
-                  path: ${{ runner.temp }}/compiled-output/
-                  if-no-files-found: error
-                  retention-days: 7
-                  compression-level: 0
+              run: bun run build
 
             - name: Validate prompt Skill release
               run: bun run --cwd packages/image-generation-plugin test:skill
@@ -415,7 +417,7 @@ jobs:
                     cd "$ARCHIVE_DIR"
                     sha256sum "$ARTIFACT_NAME.tar.gz" > "$ARTIFACT_NAME.tar.gz.sha256"
                   )
-                  jq -n \
+                  jq -cn \
                     --arg archiveName "$(basename "$ARCHIVE_PATH")" \
                     --arg archiveSha256 "$(cut -d ' ' -f 1 "$ARCHIVE_PATH.sha256")" \
                     --arg baseSha "${{ inputs.base_sha }}" \
@@ -484,11 +486,38 @@ jobs:
                   process.stdout.write(`- Runtime audit: ${report.summary.total} total, ${report.summary.high} high, ${report.summary.critical} critical\n`);
                   NODE
 
-            - name: Upload immutable runtime archive
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            - name: Recheck current main before uploading runtime
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  TARGET_SHA: ${{ inputs.target_sha }}
+              run: |
+                  test "$GITHUB_REF" = refs/heads/main
+                  test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$TARGET_SHA"
+
+            - name: Configure short-lived credentials scoped to release storage
+              uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
               with:
-                  name: production-runtime-${{ inputs.target_sha }}
-                  path: ${{ runner.temp }}/production-runtime/
-                  if-no-files-found: error
-                  retention-days: 7
-                  compression-level: 0
+                  role-to-assume: arn:aws:iam::098208446664:role/yunqiao-vendure-github-deploy
+                  role-session-name: vendure-runtime-upload-${{ github.run_id }}
+                  aws-region: ${{ env.AWS_REGION }}
+                  allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+                  inline-session-policy: >-
+                      {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:PutObject","Resource":["arn:aws:s3:::${{ env.ARTIFACT_BUCKET }}/deployments/${{ inputs.target_sha }}/${{ inputs.target_sha }}-${{ github.run_id }}-${{ github.run_attempt }}-linux-x64.tar.gz","arn:aws:s3:::${{ env.ARTIFACT_BUCKET }}/deployments/${{ inputs.target_sha }}/${{ inputs.target_sha }}-${{ github.run_id }}-${{ github.run_attempt }}-linux-x64.tar.gz.sha256"]}]}
+
+            - name: Store immutable runtime archive in private S3
+              id: store
+              env:
+                  TARGET_SHA: ${{ inputs.target_sha }}
+              run: |
+                  set -Eeuo pipefail
+                  for file in "$ARCHIVE_PATH" "$ARCHIVE_CHECKSUM_PATH"; do
+                    checksum="$(openssl dgst -sha256 -binary "$file" | base64 -w0)"
+                    aws s3api put-object --bucket "$ARTIFACT_BUCKET" --expected-bucket-owner "$AWS_ACCOUNT_ID" \
+                      --key "deployments/$TARGET_SHA/$(basename "$file")" --body "$file" \
+                      --if-none-match '*' --checksum-sha256 "$checksum" --server-side-encryption AES256 >/dev/null
+                  done
+                  plan="$(dirname "$ARCHIVE_PATH")/release-plan.json"
+                  {
+                    echo "release_plan=$(cat "$plan")"
+                    awk '{print "release_plan_sha256=" $1}' "$plan.sha256"
+                  } >> "$GITHUB_OUTPUT"

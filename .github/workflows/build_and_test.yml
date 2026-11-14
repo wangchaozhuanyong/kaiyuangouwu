@@ -216,7 +216,7 @@ jobs:
               with:
                   ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
             - uses: ./.github/actions/setup
-            - name: Build affected packages and preserve compiled output
+            - name: Build and validate affected package output
               env:
                   NODE_ENV: production
                   NODE_OPTIONS: --max-old-space-size=4096
@@ -261,16 +261,6 @@ jobs:
               run: |
                   node scripts/ci-run.mjs build
                   node deploy/build-artifact.mjs pack "$RUNNER_TEMP/compiled-artifact"
-            - name: Name compiled artifact
-              id: compiled
-              run: echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
-            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-              with:
-                  name: compiled-${{ steps.compiled.outputs.tree }}
-                  path: ${{ runner.temp }}/compiled-artifact
-                  if-no-files-found: error
-                  overwrite: true
-                  retention-days: 7
     unit-tests:
         name: affected unit tests
         env:
@@ -311,18 +301,12 @@ jobs:
             - uses: ./.github/actions/setup
               with:
                   node-version: ${{ matrix.node }}
-            - name: Restore this run's compiled output
-              id: compiled
-              env:
-                  GH_TOKEN: ${{ github.token }}
-              run: node deploy/build-artifact.mjs restore-tests "$RUNNER_TEMP/compiled-input" "$GITHUB_RUN_ID"
-            - name: Build missing test prerequisites
-              if: steps.compiled.outputs.restored != 'true' || needs.detect-changes.outputs.translation == 'true'
+            - name: Build test prerequisites locally
               env:
                   NODE_OPTIONS: --max-old-space-size=4096
               run: node scripts/ci-run.mjs prepare-tests
             - name: Build local application plugins
-              if: needs.detect-changes.outputs.full == 'true' && steps.compiled.outputs.restored != 'true'
+              if: needs.detect-changes.outputs.full == 'true'
               run: bun run --cwd packages/dev-server build:local-plugins
             - name: Unit tests
               run: node scripts/ci-run.mjs test
@@ -548,13 +532,7 @@ jobs:
             - uses: ./.github/actions/setup
               with:
                   node-version: ${{ matrix.node }}
-            - name: Restore compiled test prerequisites
-              id: compiled
-              env:
-                  GH_TOKEN: ${{ github.token }}
-              run: node deploy/build-artifact.mjs restore-tests "$RUNNER_TEMP/compiled-input" "$GITHUB_RUN_ID"
-            - name: Build missing prerequisites
-              if: steps.compiled.outputs.restored != 'true'
+            - name: Build test prerequisites locally
               run: node scripts/ci-run.mjs prepare-tests
             - name: e2e tests
               env:
@@ -597,13 +575,7 @@ jobs:
             - uses: ./.github/actions/setup
               with:
                   node-version: ${{ matrix.node }}
-            - name: Restore compiled test prerequisites
-              id: compiled
-              env:
-                  GH_TOKEN: ${{ github.token }}
-              run: node deploy/build-artifact.mjs restore-tests "$RUNNER_TEMP/compiled-input" "$GITHUB_RUN_ID"
-            - name: Build missing prerequisites
-              if: steps.compiled.outputs.restored != 'true'
+            - name: Build test prerequisites locally
               run: node scripts/ci-run.mjs prepare-tests
             - name: e2e tests
               env:
@@ -645,13 +617,7 @@ jobs:
             - uses: ./.github/actions/setup
               with:
                   node-version: ${{ matrix.node }}
-            - name: Restore compiled test prerequisites
-              id: compiled
-              env:
-                  GH_TOKEN: ${{ github.token }}
-              run: node deploy/build-artifact.mjs restore-tests "$RUNNER_TEMP/compiled-input" "$GITHUB_RUN_ID"
-            - name: Build missing prerequisites
-              if: steps.compiled.outputs.restored != 'true'
+            - name: Build test prerequisites locally
               run: node scripts/ci-run.mjs prepare-tests
             - name: e2e tests
               env:
@@ -703,13 +669,7 @@ jobs:
             - uses: ./.github/actions/setup
               with:
                   node-version: ${{ matrix.node }}
-            - name: Restore compiled test prerequisites
-              id: compiled
-              env:
-                  GH_TOKEN: ${{ github.token }}
-              run: node deploy/build-artifact.mjs restore-tests "$RUNNER_TEMP/compiled-input" "$GITHUB_RUN_ID"
-            - name: Build missing prerequisites
-              if: steps.compiled.outputs.restored != 'true'
+            - name: Build test prerequisites locally
               run: node scripts/ci-run.mjs prepare-tests
             - name: e2e tests
               env:
@@ -767,18 +727,10 @@ jobs:
                     --workdir "$PWD" "$image" \
                     /usr/local/bin/node e2e/seo-public/loading-continuity.mjs \
                     --cases=navigation,code-navigation,module-error,race,filter,scroll,cart,errors --widths=390,1440
-            - name: Package reusable frontend
+            - name: Validate frontend output
               env:
                   NODE_ENV: production
-              id: artifact
               run: node deploy/frontend-artifact.mjs pack "$COMPONENT" "$RUNNER_TEMP/frontend-artifact"
-            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-              with:
-                  name: ${{ steps.artifact.outputs.name }}
-                  path: ${{ runner.temp }}/frontend-artifact
-                  if-no-files-found: error
-                  overwrite: true
-                  retention-days: 7
     all-passed:
         name: all-passed
         runs-on: ubuntu-latest
@@ -811,11 +763,4 @@ jobs:
               env:
                   CI_JOB_RESULTS: ${{ toJSON(needs) }}
                   CI_PLAN: ${{ needs.detect-changes.outputs.plan }}
-              run: node scripts/release-evidence.mjs write
-            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-              with:
-                  name: ci-evidence-${{ github.run_id }}-${{ github.run_attempt }}
-                  path: ci-evidence.json
-                  if-no-files-found: error
-                  overwrite: true
-                  retention-days: 14
+              run: node scripts/release-evidence.mjs write-log

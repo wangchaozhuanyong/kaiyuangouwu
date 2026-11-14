@@ -24,6 +24,7 @@ import { frontendTestCommands, packageCommands } from './ci-run.mjs';
 import {
     coversChanges,
     downloadEvidenceArtifact,
+    evidenceLogLine,
     executedEvidence,
     findEvidence,
     findInputCoverage,
@@ -712,6 +713,10 @@ const inputInventory = [
 const sourceSha = 'a'.repeat(40);
 const targetSha = 'b'.repeat(40);
 const workflow = readFileSync(new URL('../.github/workflows/build_and_test.yml', import.meta.url), 'utf8');
+const artifactWorkflow = workflow.replace(
+    'node scripts/release-evidence.mjs write-log',
+    'node scripts/release-evidence.mjs write',
+);
 function inputFixture(changes = {}) {
     const source = {
         'package.json': '{}',
@@ -724,7 +729,7 @@ function inputFixture(changes = {}) {
         'scripts/ci-run.mjs': 'runner',
         'scripts/lint-check.mjs': 'lint',
         'deploy/systemd/backup.py': 'backup-v1',
-        '.github/workflows/build_and_test.yml': workflow,
+        '.github/workflows/build_and_test.yml': artifactWorkflow,
     };
     const target = { ...source, ...changes };
     const data = { [sourceSha]: source, [targetSha]: target };
@@ -794,6 +799,115 @@ function coverageFixture({ targetProof = true, changes, mutateRun, mutateProof, 
         reader: inputFixture({ 'deploy/systemd/backup.py': 'backup-v2', ...changes }).reader,
     };
 }
+
+function gateLogFixture() {
+    const fixture = coverageFixture();
+    const repository = { full_name: fixture.repository, id: 9 };
+    const { api, reader, proofReader } = fixture;
+    const gate = {
+        name: 'all-passed',
+        id: 32,
+        run_id: 2,
+        run_attempt: 1,
+        head_sha: targetSha,
+        status: 'completed',
+        conclusion: 'success',
+        steps: [{ name: 'Record exact checked source and scope', conclusion: 'success' }],
+    };
+    const proof = { ...proofReader(fixture.repository, 2), runId: '2', runAttempt: '1' };
+    const runFields = { repository, head_repository: repository, run_attempt: 1 };
+    const metadata = {
+        ...runFields,
+        id: 2,
+        head_sha: targetSha,
+        event: 'workflow_dispatch',
+        path: '.github/workflows/build_and_test.yml',
+        status: 'completed',
+        conclusion: 'success',
+    };
+    fixture.api = endpoint => {
+        if (endpoint.endsWith('/2/attempts/1')) return metadata;
+        if (endpoint.endsWith('/2/attempts/1/jobs?per_page=100')) return { total_count: 1, jobs: [gate] };
+        assert.ok(!endpoint.includes('/runs/2/artifacts'), 'Unexpected GitHub artifact read');
+        const data = api(endpoint);
+        return data.workflow_runs
+            ? {
+                  workflow_runs: data.workflow_runs.map(run =>
+                      run.id === 2 ? { ...run, ...runFields } : run,
+                  ),
+              }
+            : data;
+    };
+    fixture.reader = {
+        ...reader,
+        text: (ref, path) =>
+            ref === targetSha && path === metadata.path ? workflow : reader.text(ref, path),
+    };
+    fixture.nativeLogReader = (repo, job) => {
+        assert.equal(repo, fixture.repository);
+        assert.equal(job, gate.id);
+        return '2026-11-14T04:00:00.0000000Z ' + evidenceLogLine(proof) + '\n';
+    };
+    return { fixture, proof, gate };
+}
+
+test('native CI gate establishes the exact target anchor with no GitHub artifact', async () => {
+    const { fixture } = gateLogFixture();
+    const result = await findInputCoverage(fixture);
+    assert.deepEqual(result.anchor, { runId: 2, gateJobId: 32 });
+    assert.deepEqual(result.missing, []);
+    assert.deepEqual(
+        reusedSourceReferences(result.reused).find(source => source.runId === 2),
+        {
+            kind: 'native-gate',
+            runId: 2,
+            sourceSha: targetSha,
+            runAttempt: 1,
+            gateJobId: 32,
+            proofSha256: result.reused.find(check => check.runId === 2).proofSha256,
+        },
+    );
+});
+
+test('native CI gate rejects wrong run, attempt, commit, tree, writer or checksummed log contents', async () => {
+    for (const edit of [
+        ({ proof }) => {
+            proof.runId = '9';
+        },
+        ({ proof }) => {
+            proof.runAttempt = '2';
+        },
+        ({ proof }) => {
+            proof.sourceSha = sourceSha;
+        },
+        ({ proof }) => {
+            proof.tree = 'other-tree';
+        },
+        ({ gate }) => {
+            gate.steps[0].conclusion = 'skipped';
+        },
+        ({ gate }) => {
+            gate.run_attempt = 2;
+        },
+        ({ gate }) => {
+            gate.conclusion = 'failure';
+        },
+        ({ fixture }) => {
+            const read = fixture.nativeLogReader;
+            fixture.nativeLogReader = (...args) => read(...args).replace('target-tree', 'other-tree');
+        },
+        ({ fixture }) => {
+            const read = fixture.nativeLogReader;
+            fixture.nativeLogReader = (...args) => read(...args) + read(...args);
+        },
+    ]) {
+        const controls = gateLogFixture();
+        edit(controls);
+        const result = await findInputCoverage(controls.fixture);
+        assert.equal(result.anchor, undefined);
+        assert.ok(result.missing.length);
+    }
+});
 test('recent workflow indexes recover exact CI proof omitted by cached historical indexes', async () => {
     const fixture = coverageFixture();
     const api = fixture.api;
@@ -963,7 +1077,7 @@ test('native recovery rejects changed business input and changed execution recip
         { 'packages/core/src/service.ts': 'changed-business' },
         {
             '.github/workflows/build_and_test.yml': workflow.replace(
-                'Build affected packages and preserve compiled output',
+                'Build and validate affected package output',
                 'Changed execution step',
             ),
         },

@@ -1311,7 +1311,11 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
 
     assert.match(workflow, /workflow_call:/u);
     assert.match(workflow, /id-token: write/u);
-    assert.match(workflow, /actions\/download-artifact@[0-9a-f]{40}/u);
+    assert.match(workflow, /aws s3api head-object[\s\S]*?--checksum-mode ENABLED/u);
+    assert.match(workflow, /"\$object_checksum" == "\$expected_checksum"/u);
+    assert.match(workflow, /aws s3api get-object[\s\S]*?cmp -s - "\$CHECKSUM_PATH"/u);
+    for (const control of [artifactWorkflow, workflow, releaseWorkflow])
+        assert.doesNotMatch(control, /actions\/(?:upload|download)-artifact@/u);
     assert.match(workflow, /aws-actions\/configure-aws-credentials@[0-9a-f]{40}/u);
     assert.match(workflow, /yunqiao-vendure-github-deploy/u);
     assert.match(workflow, /i-01d6737449bc52460/u);
@@ -1361,7 +1365,8 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(acceptanceJob, /acceptance-receipt\.mjs verify/u);
     assert.doesNotMatch(acceptanceJob, /verify-production-storefronts\.mjs|production-runtime-/u);
     assert.match(workflow, /acceptance-receipt\.mjs/u);
-    assert.match(workflow, /production-acceptance-/u);
+    assert.match(workflow, /steps\.switch\.outputs\.acceptance_receipt/u);
+    assert.ok(acceptanceJob.includes('${{ needs.deploy.outputs.acceptance_receipt }}'));
     // SSM returns only the start of long output; keep the final committed receipt within its limit.
     assert.match(workflow, /2>&1 \| tail -c 12000/u);
     assert.match(script, /deploy_stage="database-migration"/u);
@@ -1397,6 +1402,8 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(artifactWorkflow, /dataRisk/u);
     assert.match(artifactWorkflow, /release-plan\.json\.sha256/u);
     assert.match(artifactWorkflow, /archiveSha256/u);
+    assert.match(artifactWorkflow, /inline-session-policy:[\s\S]*?"Action":"s3:PutObject"/u);
+    assert.match(artifactWorkflow, /aws s3api put-object[\s\S]*?--if-none-match '\*' --checksum-sha256/u);
     assert.match(artifactWorkflow, /mediaChannelCodes/u);
     assert.match(artifactWorkflow, /authVisuals/u);
     assert.match(artifactWorkflow, /moyaoBrand/u);
