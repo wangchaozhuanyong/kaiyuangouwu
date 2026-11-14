@@ -82,6 +82,38 @@ try {
         await page.getByRole('button', { name: '查询充值结果' }).click();
         await expect(page.locator('[data-demo-query-calls]')).toHaveAttribute('data-demo-query-calls', '1');
         await expect(page.getByRole('heading', { name: '上次开通结果待核对', exact: true })).toBeVisible();
+        const retry = page.getByRole('button', { name: '使用原码重新充值', exact: true });
+        await expect(retry).toHaveCount(0);
+        await page.locator('#gpt-query').fill('DEMO-REVIEWED');
+        await page.getByRole('button', { name: '查询充值结果' }).click();
+        await expect(page.getByRole('heading', { name: '本次充值未完成', exact: true })).toBeVisible();
+        await expect(retry).toBeVisible();
+        await expect(retry).toBeEnabled();
+        if (
+            !(await retry.evaluate(button => {
+                const bounds = button.getBoundingClientRect();
+                return bounds.left >= 0 && bounds.right <= innerWidth;
+            }))
+        )
+            throw new Error('Retry button extends beyond the viewport');
+        await page.screenshot({
+            path: path.join(output, `reviewed-retry-${width}-${skin}.png`),
+            fullPage: true,
+        });
+        await page.getByRole('button', { name: '自助充值', exact: true }).click();
+        await codeInput.fill('DEMO-DIFFERENT');
+        await page.getByRole('button', { name: '兑换码查询', exact: true }).click();
+        await page.locator('#gpt-query').fill('DEMO-DIFFERENT');
+        await expect(page.locator('#gpt-query')).toHaveValue('DEMO-DIFFERENT');
+        await expect(retry).toHaveCount(0);
+        await page.locator('#gpt-query').fill('DEMO-REVIEWED');
+        await page.getByRole('button', { name: '查询充值结果' }).click();
+        await retry.click();
+        await expect(codeInput).toHaveValue('DEMO-REVIEWED');
+        await expect(codeInput).toBeFocused();
+        await expect(page.locator('#gpt-session')).toHaveValue('');
+        await expect(page.getByRole('button', { name: '充值提交', exact: true })).toBeDisabled();
+        await expect(page.locator('[data-demo-submit-calls]')).toHaveAttribute('data-demo-submit-calls', '0');
         await page.getByRole('button', { name: '自助充值', exact: true }).click();
         await page.getByRole('button', { name: '填入演示资料' }).click();
         await page.getByRole('button', { name: '验证兑换码', exact: true }).click();
