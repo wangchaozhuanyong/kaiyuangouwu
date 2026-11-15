@@ -370,7 +370,8 @@ jobs:
                   DB_PASSWORD: build-check-password
                   DB_NAME: build-check
                   DB_SYNCHRONIZE: 'false'
-              run: bun run build
+              # Bound compiler memory on the local runner while keeping every build target.
+              run: bun run build ${{ runner.environment == 'self-hosted' && '--concurrency=1' || '' }}
 
             - name: Validate prompt Skill release
               run: bun run --cwd packages/image-generation-plugin test:skill
