@@ -601,6 +601,14 @@ const fixtureCustomer = {
     customFields: {},
 };
 const data: Record<string, unknown> = {
+    gptRechargeAdminConfig: {
+        enabled: !params.has('empty'),
+        upstreamOrigin: params.has('empty') ? '' : 'https://recharge.example.test',
+        credentialConfigured: !params.has('empty'),
+        partnerConfigured: !params.has('empty'),
+        legacyConfigured: false,
+        revision: 1,
+    },
     ...unconfiguredSetup,
     telegramNotificationConfig: {
         id: 'layout-telegram',
@@ -1402,7 +1410,27 @@ const client = new ApolloClient({
                     }
                     const input = operation.variables.input ?? {};
                     let result: unknown;
-                    if (categoryReadbackFixture && field.name.value === 'updateProduct') {
+                    if (params.has('rechargeFixture') && field.name.value === 'updateGptRechargeConfig') {
+                        const config = data.gptRechargeAdminConfig as {
+                            revision: number;
+                            legacyConfigured: boolean;
+                            partnerConfigured: boolean;
+                        };
+                        if (input.expectedRevision !== config.revision) {
+                            observer.error(new Error('模拟充值配置版本冲突'));
+                            return;
+                        }
+                        result = {
+                            ...config,
+                            enabled: input.enabled,
+                            upstreamOrigin: input.upstreamOrigin,
+                            credentialConfigured: true,
+                            legacyConfigured: config.legacyConfigured || Boolean(input.serviceKey),
+                            partnerConfigured: config.partnerConfigured || Boolean(input.partnerApiKey),
+                            revision: config.revision + 1,
+                        };
+                        data.gptRechargeAdminConfig = result;
+                    } else if (categoryReadbackFixture && field.name.value === 'updateProduct') {
                         product.translations = input.translations;
                         for (const fieldName of ['name', 'slug', 'description'] as const)
                             product[fieldName] = input.translations[0][fieldName] ?? product[fieldName];

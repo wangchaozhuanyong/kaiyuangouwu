@@ -4,6 +4,7 @@ import { ApolloProvider } from '@apollo/client/react';
 import { buildASTSchema, graphql, Kind, parse, print } from 'graphql';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it } from 'vitest';
 import { adminSchema } from '../../../../store-management-plugin/src/gpt-recharge/api-extensions';
 import { FeatureHelpProvider } from '../../components/FeatureHelp';
@@ -74,7 +75,9 @@ it('loads the actual admin schema, saves a secret once, clears it, and preserves
         root.render(
             <ApolloProvider client={client}>
                 <FeatureHelpProvider>
-                    <GptRechargeModule />
+                    <MemoryRouter>
+                        <GptRechargeModule />
+                    </MemoryRouter>
                 </FeatureHelpProvider>
             </ApolloProvider>,
         ),
