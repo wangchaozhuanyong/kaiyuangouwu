@@ -37,7 +37,7 @@ permissions:
 jobs:
     deploy:
         name: deploy verified runtime through AWS SSM
-        runs-on: ubuntu-24.04
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
         timeout-minutes: 45
         outputs:
             acceptance_receipt: ${{ steps.switch.outputs.acceptance_receipt }}

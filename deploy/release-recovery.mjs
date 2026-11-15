@@ -40,12 +40,25 @@ const deploymentPrefixes = [
 // configuration-only release. A changed recipe supplies no
 // derived-failure evidence until it is independently reviewed and pinned.
 const guardRecipes = new Map([
-    ['ready', ['e09e08dd9d4d296c046fe5495b65163c27fd376a92141a29f77e54452516b4aa']],
-    ['complete', ['4c4e2093dbfa438861a2b3f4a643a98454352f5edf094a5d9495056a2e1ba0ac']],
+    [
+        'ready',
+        [
+            'e09e08dd9d4d296c046fe5495b65163c27fd376a92141a29f77e54452516b4aa',
+            '643b637018e7d33ee73989a18af0e592823c1367c5ebc784f3b02794f3d28822',
+        ],
+    ],
+    [
+        'complete',
+        [
+            '4c4e2093dbfa438861a2b3f4a643a98454352f5edf094a5d9495056a2e1ba0ac',
+            'c04d6f932dde4d257f2f2497ac9c8d6421a28019baf6d979bf34e4b41e8d0d34',
+        ],
+    ],
     [
         'all-passed',
         [
             '7e1e36d420cdbd6cee497f296601669135254dd32c60aec7f85cbd0c05e06305',
+            '15029e968608f0dd46e2c2c61da130d18a4d71a436c691e4b33a2a7f54240f7c',
             'aebe5dc8cb29e8ca87727cbb39f66ab8cd6495b4960999ac0de3e17fb14e82ab',
         ],
     ],

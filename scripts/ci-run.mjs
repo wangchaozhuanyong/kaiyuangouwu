@@ -22,6 +22,7 @@ export function packageCommands(plan, operation, inventory) {
             script,
             ...packages.flatMap(pkg => ['--scope', pkg.name]),
             ...(script === 'build' ? ['--include-dependencies'] : []),
+            ...(script === 'e2e' ? ['--stream'] : []),
         ],
     ];
 }

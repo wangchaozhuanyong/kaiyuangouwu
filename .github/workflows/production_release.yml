@@ -104,7 +104,7 @@ concurrency:
 jobs:
     lock:
         name: lock exact revision and reject duplicate full runs
-        runs-on: ubuntu-24.04
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
         timeout-minutes: 5
         permissions:
             actions: read
@@ -134,7 +134,7 @@ jobs:
     route:
         name: select affected release and reusable checks
         needs: preflight
-        runs-on: ubuntu-24.04
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
         permissions:
             contents: read
             actions: read
@@ -199,7 +199,7 @@ jobs:
         name: confirm applicable checks passed
         needs: [route, checks]
         if: always() && needs.route.result == 'success'
-        runs-on: ubuntu-24.04
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
         permissions: {}
         steps:
             - name: Validate reused or newly completed checks
@@ -323,7 +323,7 @@ jobs:
             - build
             - deploy
             - postflight
-        runs-on: ubuntu-24.04
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
         timeout-minutes: 15
         permissions:
             contents: read
@@ -363,7 +363,7 @@ jobs:
         name: require completed deployment and acceptance
         needs: [route, ready, nginx, frontend, build, offhost_file_restore, deploy, postflight, acceptance]
         if: always() && !cancelled()
-        runs-on: ubuntu-24.04
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
         timeout-minutes: 5
         permissions: {}
         steps:
@@ -427,7 +427,7 @@ jobs:
                 complete,
             ]
         if: always() && contains(needs.*.result, 'failure')
-        runs-on: ubuntu-24.04
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
         permissions:
             contents: read
             actions: read

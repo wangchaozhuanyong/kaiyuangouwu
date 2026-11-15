@@ -58,7 +58,7 @@ jobs:
         name: repository quality gates
         needs: detect-changes
         if: needs.detect-changes.outputs.has_quality == 'true' || inputs.full
-        runs-on: ubuntu-latest
+        runs-on: ${{ vars.VENDURE_RELEASE_CHECKS_RUNNER_LABEL || vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-latest' }}
         timeout-minutes: 15
         permissions:
             contents: read
@@ -128,7 +128,7 @@ jobs:
                   bun run lint:check -- --base "$base"
     detect-changes:
         name: detect changes
-        runs-on: ubuntu-24.04
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
         timeout-minutes: 5
         permissions:
             contents: read
@@ -439,6 +439,9 @@ jobs:
               run: bunx playwright install-deps chromium
             - name: Storybook browser and accessibility tests
               working-directory: packages/dashboard
+              env:
+                  # The generated Storybook setup intermittently fails to load in concurrent Chromium workers.
+                  VITEST_MAX_WORKERS: '1'
               run: bun run test:storybook:ci
             - name: Build Storybook and check bundle budgets
               working-directory: packages/dashboard
@@ -588,7 +591,8 @@ jobs:
         needs: [detect-changes, build]
         if: needs.detect-changes.outputs.e2e_mysql == 'true'
         runs-on: ubuntu-latest
-        timeout-minutes: 45
+        # This job builds its own prerequisites before running the database suite.
+        timeout-minutes: 60
         permissions:
             contents: read
             actions: read
@@ -618,12 +622,16 @@ jobs:
               with:
                   node-version: ${{ matrix.node }}
             - name: Build test prerequisites locally
+              env:
+                  NODE_OPTIONS: --max-old-space-size=4096
               run: node scripts/ci-run.mjs prepare-tests
             - name: e2e tests
               env:
                   E2E_MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
                   E2E_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
                   DB: mysql
+                  # Lerna already runs multiple packages against this runner's one MySQL service.
+                  VITEST_MAX_WORKERS: '2'
               run: node scripts/ci-run.mjs e2e
             - name: Platform isolation, unified payment and cross-store card fulfillment
               if: contains(fromJSON(needs.detect-changes.outputs.packages), 'store-management-plugin')
@@ -681,7 +689,7 @@ jobs:
         name: frontend (${{ matrix.component }})
         needs: detect-changes
         if: needs.detect-changes.outputs.has_frontends == 'true' && needs.detect-changes.outputs.full != 'true'
-        runs-on: ubuntu-24.04
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
         timeout-minutes: 15
         permissions:
             contents: read
@@ -733,7 +741,7 @@ jobs:
               run: node deploy/frontend-artifact.mjs pack "$COMPONENT" "$RUNNER_TEMP/frontend-artifact"
     all-passed:
         name: all-passed
-        runs-on: ubuntu-latest
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-latest' }}
         timeout-minutes: 5
         permissions:
             contents: read

@@ -16,7 +16,7 @@ permissions:
 jobs:
     restore:
         name: verify the latest offsite file backup before production switch
-        runs-on: ubuntu-24.04
+        runs-on: ${{ github.workflow == 'Production Release' && vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
         timeout-minutes: 75
         concurrency:
             group: production-offsite-file-restore
