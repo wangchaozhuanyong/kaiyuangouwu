@@ -58,7 +58,7 @@ jobs:
         name: repository quality gates
         needs: detect-changes
         if: needs.detect-changes.outputs.has_quality == 'true' || inputs.full
-        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-latest' }}
+        runs-on: ${{ vars.VENDURE_RELEASE_QUALITY_RUNNER_LABEL || vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-latest' }}
         timeout-minutes: 15
         permissions:
             contents: read
