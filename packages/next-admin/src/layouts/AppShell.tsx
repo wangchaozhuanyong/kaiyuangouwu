@@ -1194,7 +1194,7 @@ export function AppShell() {
                                             type="button"
                                             onClick={event => closeTab(event, tab.path)}
                                             aria-label={`关闭${tab.label}标签`}
-                                            className="mr-1 rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                                            className="mr-1 min-w-8 rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
                                         >
                                             <X className="h-3 w-3" />
                                         </AdminButton>
@@ -1220,7 +1220,7 @@ export function AppShell() {
                             >
                                 <span className="px-3 py-1">{tab.label}</span>
                                 {tabs.length > 1 && (
-                                    <span className="mr-1 rounded-full p-0.5">
+                                    <span className="mr-1 inline-flex min-w-8 items-center justify-center rounded-full p-0.5">
                                         <X className="h-3 w-3" />
                                     </span>
                                 )}
@@ -1334,7 +1334,7 @@ export function AppShell() {
                                                         <AdminButton
                                                             type="button"
                                                             role="menuitem"
-                                                            className="mr-3 shrink-0 cursor-pointer rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                                                            className="mr-3 min-w-8 shrink-0 cursor-pointer rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
                                                             aria-label={`关闭${tab.label}标签`}
                                                             onClick={e => {
                                                                 closeTab(e, tab.path);

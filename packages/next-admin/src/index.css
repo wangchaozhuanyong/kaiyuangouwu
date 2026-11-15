@@ -212,7 +212,7 @@
     .admin-sidebar-nav-item[aria-current='page'],
     .admin-sidebar-section[data-current='true'] {
         background-color: color-mix(in srgb, var(--admin-focus) 10%, var(--admin-surface));
-        color: var(--admin-focus);
+        color: color-mix(in srgb, var(--admin-focus) 85%, var(--admin-text));
         font-weight: 600;
     }
     .admin-sidebar-submenu {

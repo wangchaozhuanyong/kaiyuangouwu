@@ -387,7 +387,7 @@ function FeatureHelpPopover({ state }: { state: FeatureHelpState }) {
                 </div>
 
                 <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                    <p className="text-[10px] text-slate-400">
+                    <p className="text-[10px] text-slate-500">
                         {state.pinned ? '已固定，点按钮或关闭图标收起' : '可选中说明文字复制'}
                     </p>
                     <AdminButton
