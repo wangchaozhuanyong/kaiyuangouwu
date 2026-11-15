@@ -121,7 +121,10 @@ export function GptRechargeModule() {
         }
     };
     return (
-        <section className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6" data-admin-page="gpt-recharge">
+        <section
+            className="mx-auto h-full w-full max-w-6xl space-y-6 overflow-y-auto p-4 sm:p-6"
+            data-admin-page="gpt-recharge"
+        >
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2">
                 <h1 className="flex flex-wrap items-center gap-2 text-xl font-semibold">
                     GPT自助充值
