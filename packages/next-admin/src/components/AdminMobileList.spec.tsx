@@ -25,6 +25,26 @@ async function mount(children: React.ReactNode) {
 }
 
 describe('mobile record interaction adapters', () => {
+    it('keeps the bulk-selection toolbar outside the announced record list', async () => {
+        const selectAll = vi.fn();
+        const element = await mount(
+            <AdminMobileList
+                ariaLabel="商品"
+                toolbar={<AdminInput type="checkbox" aria-label="全选本页" onChange={selectAll} />}
+            >
+                <AdminMobileRecord title="商品一">记录一</AdminMobileRecord>
+                <AdminMobileRecord title="商品二">记录二</AdminMobileRecord>
+            </AdminMobileList>,
+        );
+        const list = element.querySelector('[role="list"]')!;
+        const select = element.querySelector<HTMLInputElement>('input')!;
+        expect(list.getAttribute('aria-label')).toBe('商品');
+        expect(list.contains(select)).toBe(false);
+        expect([...list.children].map(child => child.getAttribute('role'))).toEqual(['listitem', 'listitem']);
+        await act(async () => select.click());
+        expect(selectAll).toHaveBeenCalledOnce();
+    });
+
     it('keeps selection separate from the detail action and renders missing values unchanged', async () => {
         const select = vi.fn();
         const open = vi.fn();

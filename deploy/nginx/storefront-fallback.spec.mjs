@@ -95,7 +95,7 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         block('map "$status|$uri" $build_asset_cache_control'),
         'map "$host|$http_x_storefront_original_uri" $environment_fixture_shell {',
         'default 0;',
-        '"~^127[.]0[.]0[.]1[|](?:/(?:zh|en))?/environment-monitor/?(?:[?]|$)" 1;',
+        '"~^127[.]0[.]0[.]1[|](?:/(?:zh|en))?/(?:environment-monitor|announcements|flash-sale|recommendations)/?(?:[?]|$)" 1;',
         '}',
         'upstream vendure_backend { server 127.0.0.1:8081; }',
         'server { listen 8081;',
@@ -246,6 +246,22 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         assert.equal(head.status, 404);
         assert.equal(await head.text(), '');
     });
+    await t.test(
+        'preserves successful client documents across locales without accepting unknown children',
+        async () => {
+            for (const route of ['announcements', 'flash-sale', 'recommendations']) {
+                for (const prefix of ['', '/zh', '/en']) {
+                    const response = await fetch(origin + prefix + '/' + route + '?fixture=1');
+                    assert.equal(response.status, 200, prefix + '/' + route);
+                    assert.match(response.headers.get('x-robots-tag'), /noindex/);
+                    assert.match(await response.text(), /Application shell/);
+                }
+                const unknown = await fetch(origin + '/zh/' + route + '/missing');
+                assert.equal(unknown.status, 404);
+                assert.match(unknown.headers.get('x-robots-tag'), /noindex/);
+            }
+        },
+    );
     await t.test('serves the enabled tool with 200 and keeps disabled stores at 404', async () => {
         for (const pathname of [
             '/environment-monitor',

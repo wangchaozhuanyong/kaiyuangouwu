@@ -1345,6 +1345,7 @@ function PromotionPageEditor({
                     <div className="mb-3 flex items-center justify-between gap-3">
                         <AdminSelect
                             value={contentType}
+                            aria-label="推广落地页源码格式"
                             onChange={event => setContentType(event.target.value as 'HTML' | 'MARKDOWN')}
                             className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold"
                         >
@@ -1355,6 +1356,7 @@ function PromotionPageEditor({
                     </div>
                     <AdminTextArea
                         value={source}
+                        aria-label="推广落地页源码"
                         onChange={event => setSource(event.target.value)}
                         rows={24}
                         spellCheck={false}

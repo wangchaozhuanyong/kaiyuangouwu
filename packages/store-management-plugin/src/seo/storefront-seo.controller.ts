@@ -34,15 +34,19 @@ const trackingKeys = [
     'wbraid',
 ];
 
-function renderCatalogNotFound(code: 'zh_Hans' | 'en'): string {
+function renderPublicNotFound(code: 'zh_Hans' | 'en', catalog: boolean): string {
     const chinese = code === 'zh_Hans';
     const path = chinese ? '/zh' : '/en';
     const title = chinese ? '页面未找到' : 'Page not found';
-    const description = chinese
-        ? '这个商品或分类可能已下架，或者链接已经失效。'
-        : 'This product or category may have been removed, or its link may have changed.';
+    const description = catalog
+        ? chinese
+            ? '这个商品或分类可能已下架，或者链接已经失效。'
+            : 'This product or category may have been removed, or its link may have changed.'
+        : chinese
+          ? '这个页面不存在'
+          : 'This page does not exist';
     const home = chinese ? '返回商城首页' : 'Back to store home';
-    const catalog = chinese ? '浏览商品' : 'Browse products';
+    const catalogLabel = chinese ? '浏览商品' : 'Browse products';
     return `<!doctype html>
 <html lang="${chinese ? 'zh-CN' : 'en'}">
 <head>
@@ -65,7 +69,7 @@ function renderCatalogNotFound(code: 'zh_Hans' | 'en'): string {
         <p>${description}</p>
         <nav aria-label="${chinese ? '商城导航' : 'Store navigation'}">
             <a href="${path}/">${home}</a>
-            <a href="${path}/category">${catalog}</a>
+            <a href="${path}/category">${catalogLabel}</a>
         </nav>
     </main>
 </body>
@@ -249,11 +253,11 @@ export class StorefrontSeoController {
             res.setHeader('X-Robots-Tag', 'noindex, follow');
             reportTiming();
             if (error instanceof NotFoundException) {
-                if (request.kind === 'product' || request.kind === 'catalog') {
-                    res.status(404).type('html').send(renderCatalogNotFound(code));
-                } else {
-                    res.status(404).type('text/plain').send('Public page not found');
-                }
+                res.status(404)
+                    .type('html')
+                    .send(
+                        renderPublicNotFound(code, request.kind === 'product' || request.kind === 'catalog'),
+                    );
             } else if (error instanceof ServiceUnavailableException) {
                 const requestId = randomUUID();
                 const ray = trustedPublicPageHeaders(req) ? req.headers['cf-ray'] : undefined;
@@ -280,7 +284,7 @@ export class StorefrontSeoController {
         }
     }
 
-    /** Resolve published redirects and explicitly enabled tool documents before Nginx falls back. */
+    /** Resolve published redirects and supported client documents before Nginx falls back. */
     @Get('redirect')
     async legacyRedirect(@Req() req: Request, @Res() res: Response) {
         res.setHeader('Cache-Control', 'no-store');
@@ -296,6 +300,17 @@ export class StorefrontSeoController {
         const redirect = path && settings?.redirects.find(item => item.from === path);
         if (redirect) {
             res.redirect(redirect.status, publicRedirectTracking(redirect.to, raw as string));
+            return;
+        }
+        // These shared routes render in the client and deliberately retain the shell's noindex policy.
+        // Only the verified internal document request may select the shell; unknown routes stay 404.
+        if (
+            trusted &&
+            path &&
+            /^(?:\/(?:zh|en))?\/(?:announcements|flash-sale|recommendations)\/?(?:[?]|$)/u.test(path)
+        ) {
+            res.setHeader('X-Accel-Redirect', '/index.html');
+            res.status(200).end();
             return;
         }
         const tool = trusted && path && /^(?:\/(zh|en))?\/environment-monitor\/?(?:[?]|$)/u.exec(path);

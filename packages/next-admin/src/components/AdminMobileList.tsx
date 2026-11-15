@@ -4,7 +4,25 @@ import { AdminButton, AdminSelect } from './AdminControls';
 import { AdminField } from './AdminField';
 
 /** Presentation only: callers retain their existing query, selection and action owners. */
-export function AdminMobileList({ children, ariaLabel }: { children: ReactNode; ariaLabel?: string }) {
+export function AdminMobileList({
+    children,
+    ariaLabel,
+    toolbar,
+}: {
+    children: ReactNode;
+    ariaLabel?: string;
+    toolbar?: ReactNode;
+}) {
+    if (toolbar) {
+        return (
+            <div className="admin-mobile-list">
+                {toolbar}
+                <div className="admin-mobile-list-records" role="list" aria-label={ariaLabel}>
+                    {children}
+                </div>
+            </div>
+        );
+    }
     return (
         <div className="admin-mobile-list" role="list" aria-label={ariaLabel}>
             {children}

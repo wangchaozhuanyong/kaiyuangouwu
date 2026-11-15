@@ -858,7 +858,7 @@ function SchedulesPanel({
                     />
                 </h2>
             </div>
-            <div className="admin-comparison-scroll">
+            <div className="admin-comparison-scroll" role="region" aria-label="定时任务调度表" tabIndex={0}>
                 <table className="admin-compact-table w-full min-w-[1720px] border-collapse text-left text-xs">
                     <thead>
                         <tr className={theadClass}>

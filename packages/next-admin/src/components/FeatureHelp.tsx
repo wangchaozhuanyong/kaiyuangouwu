@@ -211,7 +211,7 @@ export function FeatureHelpButton({
     return (
         <AdminButton
             type="button"
-            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 text-[10px] font-semibold leading-none text-slate-500 shadow-xs transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 text-[10px] font-semibold leading-none text-[var(--admin-text-muted)] shadow-xs transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
             aria-label={`查看“${title}”功能说明`}
             aria-haspopup="dialog"
             aria-expanded={isActive}

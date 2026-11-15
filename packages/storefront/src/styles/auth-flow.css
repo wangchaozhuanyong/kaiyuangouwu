@@ -404,16 +404,6 @@
 
 /* Skeleton loading styles have been extracted to dedicated styles/skeletons.css */
 
-@media (prefers-reduced-motion: reduce) {
-    .page-skeleton--route > *,
-    .review-center-loading span,
-    .product-review-loading span,
-    .storefront-update-prompt,
-    .sheet {
-        animation: none;
-    }
-}
-
 .network-banner {
     width: min(100%, var(--app-width));
     min-height: 38px;
@@ -808,8 +798,8 @@
     margin: 16px 0 0;
     padding: 8px 13px;
     border-radius: 10px;
-    background: color-mix(in srgb, var(--accent) 7%, white);
-    color: #d9473d;
+    background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+    color: var(--danger);
     display: flex;
     align-items: center;
     gap: 10px;
@@ -975,6 +965,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .page-skeleton--route > *,
+    .review-center-loading span,
+    .product-review-loading span,
+    .storefront-update-prompt,
+    .sheet {
+        animation: none;
+    }
+
     .coupon-browse-footer button {
         transition: none;
     }

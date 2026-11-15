@@ -226,6 +226,9 @@ export function GovernanceRiskPanel() {
                         />
                         <AdminTextArea
                             value={payloadJson}
+                            aria-label={
+                                namespace === 'REPORT_SCHEDULE' ? '治理日报计划 JSON' : '风控规则 JSON'
+                            }
                             onChange={event => setPayloadJson(event.target.value)}
                             className="min-h-44 rounded-xl border border-slate-300 bg-slate-950 p-3 font-mono text-xs text-slate-100 lg:col-span-2"
                             spellCheck={false}

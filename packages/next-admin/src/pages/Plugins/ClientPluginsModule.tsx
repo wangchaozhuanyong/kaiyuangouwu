@@ -577,7 +577,7 @@ function InstalledEditor({
                                 <option value="SELECTED">仅指定分类</option>
                             </AdminSelect>
                         </Field>
-                        <label className="mt-1 flex items-center gap-2 text-[10px] font-normal text-slate-500 sm:absolute sm:right-0 sm:top-0 sm:mt-0">
+                        <label className="mt-1 flex min-h-11 cursor-pointer items-center gap-2 text-[10px] font-normal text-slate-500 sm:absolute sm:right-0 sm:top-0 sm:mt-0 sm:min-h-6">
                             <AdminInput
                                 type="checkbox"
                                 checked={pluginIncludeChildren(item)}

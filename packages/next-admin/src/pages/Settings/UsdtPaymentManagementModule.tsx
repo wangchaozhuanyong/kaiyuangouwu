@@ -1069,6 +1069,7 @@ function Pager({
             <AdminButton
                 type="button"
                 onClick={() => onChange(page - 1)}
+                aria-label="上一页"
                 disabled={loading || page === 0}
                 className={pagerButton}
             >
@@ -1077,6 +1078,7 @@ function Pager({
             <AdminButton
                 type="button"
                 onClick={() => onChange(page + 1)}
+                aria-label="下一页"
                 disabled={loading || page + 1 >= pages}
                 className={pagerButton}
             >
