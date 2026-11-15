@@ -131,6 +131,7 @@ export function PurchaseOrdersModule() {
                     />
                     <AdminSelect
                         value={status}
+                        aria-label="采购单状态"
                         onChange={event => {
                             setStatus(event.target.value as typeof status);
                             setPage(0);

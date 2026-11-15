@@ -394,7 +394,12 @@ export function DataManagementModule() {
                                 {toUserFacingError(query.error, '数据保留记录读取失败')}
                             </div>
                         ) : (
-                            <div className="overflow-x-auto">
+                            <div
+                                className="overflow-x-auto"
+                                role="region"
+                                aria-label="数据保留记录表"
+                                tabIndex={0}
+                            >
                                 <table className="admin-mobile-record-table w-full min-w-[1320px] border-collapse text-left text-xs">
                                     <thead className="bg-slate-50 text-[11px] font-bold text-slate-500">
                                         <tr>

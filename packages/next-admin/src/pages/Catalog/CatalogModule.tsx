@@ -963,20 +963,24 @@ export function CatalogModule() {
                         )}
 
                         {productRows.length > 0 && (
-                            <AdminMobileList ariaLabel="商品摘要列表">
-                                <div className="flex flex-wrap items-end gap-3">
-                                    <label className="flex min-h-11 items-center gap-2 text-sm">
-                                        <AdminInput
-                                            type="checkbox"
-                                            aria-label="选择本页全部商品"
-                                            checked={displayProducts.every(product =>
-                                                selectedProductIds.includes(product.id),
-                                            )}
-                                            onChange={togglePageSelection}
-                                        />
-                                        全选本页
-                                    </label>
-                                </div>
+                            <AdminMobileList
+                                ariaLabel="商品摘要列表"
+                                toolbar={
+                                    <div className="flex flex-wrap items-end gap-3">
+                                        <label className="flex min-h-11 items-center gap-2 text-sm">
+                                            <AdminInput
+                                                type="checkbox"
+                                                aria-label="选择本页全部商品"
+                                                checked={displayProducts.every(product =>
+                                                    selectedProductIds.includes(product.id),
+                                                )}
+                                                onChange={togglePageSelection}
+                                            />
+                                            全选本页
+                                        </label>
+                                    </div>
+                                }
+                            >
                                 {productRows.map(
                                     ({
                                         product,

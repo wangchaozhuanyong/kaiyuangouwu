@@ -25,6 +25,8 @@ const FOCUSABLE_SELECTOR = [
     'input:not([disabled])',
     'select:not([disabled])',
     'textarea:not([disabled])',
+    'details > summary:first-of-type',
+    'iframe',
     '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
@@ -88,35 +90,60 @@ export function useAccessibleDialog(
 
         const handleKeyDown = (event: KeyboardEvent) => {
             if (isInputMethodKey(event)) return;
-            if (activeDialogStack.at(-1)?.key !== dialogKey) return;
             if (event.key === 'Escape') {
+                if (activeDialogStack.at(-1)?.key !== dialogKey) return;
                 event.preventDefault();
                 closeRef.current();
                 return;
             }
-            if (event.key !== 'Tab' || !dialog || !modal) return;
-
-            const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-                element =>
-                    !element.hidden &&
-                    element.getAttribute('aria-hidden') !== 'true' &&
-                    element.getClientRects().length > 0,
-            );
+            if (event.key !== 'Tab' || !dialog || !modal || event.ctrlKey || event.altKey || event.metaKey)
+                return;
+            const modalIndex = activeDialogStack.findLastIndex(entry => entry.modal);
+            if (activeDialogStack[modalIndex]?.key !== dialogKey) return;
+            // Non-modal help portals remain inside their owning modal's keyboard boundary.
+            const focusable = [
+                ...new Set(
+                    activeDialogStack
+                        .slice(modalIndex)
+                        .flatMap(entry =>
+                            Array.from(
+                                entry.element?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [],
+                            ),
+                        ),
+                ),
+            ]
+                .filter(
+                    element =>
+                        element.tabIndex >= 0 &&
+                        !element.matches(':disabled') &&
+                        visibleFocusTarget(element) &&
+                        element.getClientRects().length > 0 &&
+                        getComputedStyle(element).visibility !== 'hidden',
+                )
+                .filter((element, _index, elements) => {
+                    if (!(element instanceof HTMLInputElement) || element.type !== 'radio' || !element.name)
+                        return true;
+                    const group = elements.filter(
+                        (item): item is HTMLInputElement =>
+                            item instanceof HTMLInputElement &&
+                            item.type === 'radio' &&
+                            item.name === element.name &&
+                            item.form === element.form,
+                    );
+                    return element === (group.find(item => item.checked) ?? group[0]);
+                })
+                .sort((a, b) => (a.tabIndex || Infinity) - (b.tabIndex || Infinity));
+            event.preventDefault();
             if (!focusable.length) {
-                event.preventDefault();
                 dialog.focus();
                 return;
             }
-
-            const first = focusable[0];
-            const last = focusable[focusable.length - 1];
-            if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault();
-                last.focus();
-            } else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault();
-                first.focus();
-            }
+            // Own the sequence even when the browser's default Tab mode skips buttons.
+            const current = focusable.indexOf(document.activeElement as HTMLElement);
+            const next = event.shiftKey
+                ? (current <= 0 ? focusable.length : current) - 1
+                : (current + 1) % focusable.length;
+            focusable[next].focus();
         };
 
         const containFocus = (event: FocusEvent) => {
@@ -133,11 +160,14 @@ export function useAccessibleDialog(
                 !activeDialogStack.some(entry => entry.element === incoming)
             )
                 return;
+            const modalIndex = activeDialogStack.findLastIndex(entry => entry.modal);
             if (
                 modal &&
-                activeDialogStack.at(-1)?.key === dialogKey &&
+                activeDialogStack[modalIndex]?.key === dialogKey &&
                 dialog &&
-                !dialog.contains(event.target as Node)
+                !activeDialogStack
+                    .slice(modalIndex)
+                    .some(entry => entry.element?.contains(event.target as Node))
             )
                 dialog.focus();
         };
@@ -146,11 +176,14 @@ export function useAccessibleDialog(
         return () => {
             dialog?.removeAttribute('data-admin-modal-active');
             document.removeEventListener('keydown', handleKeyDown);
-            const wasTopDialog = activeDialogStack.at(-1)?.key === dialogKey;
+            // Closing a modal also dismisses its help portals, even if their cleanup runs later.
+            const shouldReturnFocus =
+                activeDialogStack.at(-1)?.key === dialogKey ||
+                (modal && activeDialogStack.findLast(entry => entry.modal)?.key === dialogKey);
             const shouldRestoreFocus = autoFocus || dialog?.contains(document.activeElement);
             document.removeEventListener('focusin', containFocus);
             releaseDialog(dialogKey);
-            if (wasTopDialog && shouldRestoreFocus && visibleFocusTarget(previousFocus))
+            if (shouldReturnFocus && shouldRestoreFocus && visibleFocusTarget(previousFocus))
                 previousFocus.focus();
         };
     }, [dialogActive, modal, autoFocus, returnFocusRef]);

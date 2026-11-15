@@ -390,6 +390,62 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
     });
 
     it.each([
+        '/zh/announcements',
+        '/en/announcements/?page=2',
+        '/announcements',
+        '/zh/flash-sale?utm_source=fixture',
+        '/en/flash-sale/',
+        '/flash-sale',
+        '/zh/recommendations',
+        '/en/recommendations?collectionId=fixture',
+        '/recommendations/',
+    ])('serves a successful client document for the registered route %s', async path => {
+        const test = fixture();
+        const response = responseMock();
+
+        await test.controller.legacyRedirect(test.req(path), response as unknown as Response);
+
+        expect(response.status).toHaveBeenCalledWith(200);
+        expect(response.setHeader).toHaveBeenCalledWith('X-Accel-Redirect', '/index.html');
+        expect(response.redirect).not.toHaveBeenCalled();
+        expect(test.html.render).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['/zh/announcements/missing', true],
+        ['/en/flash-sale-missing', true],
+        ['/fr/recommendations', true],
+        ['/zh/recommendations', false],
+    ] as const)('keeps unknown or untrusted client document %s unavailable', async (path, trusted) => {
+        const test = fixture();
+        const response = responseMock();
+        const request = test.req(path, trusted);
+        if (!trusted) request.query.path = path;
+
+        await test.controller.legacyRedirect(request, response as unknown as Response);
+
+        expect(response.status).toHaveBeenCalledWith(404);
+        expect(response.setHeader).not.toHaveBeenCalledWith('X-Accel-Redirect', expect.anything());
+    });
+
+    it('retains store access checks and configured redirects before selecting a client document', async () => {
+        const test = fixture();
+        test.settings.redirects.push({ from: '/zh/announcements', to: '/zh/news', status: 301 });
+        const response = responseMock();
+        await test.controller.legacyRedirect(test.req('/zh/announcements'), response as unknown as Response);
+        expect(response.redirect).toHaveBeenCalledWith(301, '/zh/news');
+        expect(response.setHeader).not.toHaveBeenCalledWith('X-Accel-Redirect', expect.anything());
+
+        const closed = new StorefrontClosedError();
+        test.access.resolveRequest.mockRejectedValue(closed);
+        const unavailable = responseMock();
+        await expect(
+            test.controller.legacyRedirect(test.req('/zh/flash-sale'), unavailable as unknown as Response),
+        ).rejects.toBe(closed);
+        expect(unavailable.setHeader).not.toHaveBeenCalledWith('X-Accel-Redirect', expect.anything());
+    });
+
+    it.each([
         ['/zh/environment-monitor?utm_source=fixture', 'zh_Hans'],
         ['/en/environment-monitor/', 'en'],
         ['/environment-monitor', 'en'],
@@ -496,6 +552,12 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
     it.each([
         ['/zh/product?id=missing-product', 'zh-CN', '页面未找到', '/zh'],
         ['/en/category?collectionId=missing-category', 'en', 'Page not found', '/en'],
+        ['/zh/blog/missing-post', 'zh-CN', '页面未找到', '/zh'],
+        ['/en/blog/missing-post', 'en', 'Page not found', '/en'],
+        ['/zh/blog', 'zh-CN', '页面未找到', '/zh'],
+        ['/en/blog', 'en', 'Page not found', '/en'],
+        ['/zh/guides/missing-guide', 'zh-CN', '页面未找到', '/zh'],
+        ['/en/services', 'en', 'Page not found', '/en'],
     ])('serves a localized recovery document for %s', async (path, lang, title, prefix) => {
         const test = fixture();
         test.pages.readForDocument.mockRejectedValue(new NotFoundException('Private diagnostic'));
@@ -518,7 +580,7 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
                 .get(),
         ).toEqual([`${prefix}/`, `${prefix}/category`]);
         expect($('script')).toHaveLength(0);
-        expect(body).not.toMatch(/Private diagnostic|missing-(?:product|category)/u);
+        expect(body).not.toMatch(/Private diagnostic|missing-(?:product|category|post|guide|page)/u);
     });
 
     it.each(['read-page', 'resolve-seo', 'render-html', 'verify-publication'] as const)(

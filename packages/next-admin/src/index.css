@@ -69,7 +69,7 @@
     --admin-border-strong: #cbd5e1;
     --admin-text: #0f172a;
     --admin-text-secondary: #334155;
-    --admin-text-muted: #64748b;
+    --admin-text-muted: #526175;
     --admin-radius-control: 0.5rem;
     --admin-radius-surface: 0.75rem;
     --admin-radius-dialog: 1rem;
@@ -124,7 +124,7 @@
         font-variant-numeric: tabular-nums;
     }
 
-    #root :where(button, a, input, select, textarea, summary):focus-visible {
+    #root :where(button, a, input, select, textarea, summary, [tabindex='0']):focus-visible {
         outline: var(--admin-focus-width) solid var(--admin-focus);
         outline-offset: var(--admin-focus-offset);
     }
@@ -277,6 +277,30 @@
 }
 
 @layer utilities {
+    /* Muted text still needs normal-text contrast on the shared light surfaces. */
+    :where(#root) :is(.text-slate-400, .text-slate-500) {
+        color: var(--admin-text-muted);
+    }
+
+    :where(#root) :is(.bg-slate-800, .bg-slate-900, .bg-slate-950) :where(.text-slate-400, .text-slate-500) {
+        color: var(--color-slate-400);
+    }
+
+    .admin-button.bg-orange-600 {
+        background-color: var(--color-orange-700);
+    }
+
+    .admin-button.bg-orange-600:hover:not(:disabled) {
+        background-color: var(--color-orange-800);
+    }
+
+    .admin-button.bg-emerald-600 {
+        background-color: var(--color-emerald-700);
+    }
+
+    .admin-button.bg-emerald-600:hover:not(:disabled) {
+        background-color: var(--color-emerald-800);
+    }
     /*
      * 旧业务页仍使用 Tailwind 的 slate/white 工具类。深色兼容层只在根节点
      * .dark 下重映射这些视觉令牌，浅色模式继续使用原有 Tailwind 输出。
@@ -876,6 +900,11 @@
     overflow-x: auto;
     overscroll-behavior-inline: contain;
     scrollbar-width: thin;
+}
+.admin-mobile-list-records {
+    display: grid;
+    min-width: 0;
+    gap: inherit;
 }
 .admin-dialog-surface {
     min-width: 0;

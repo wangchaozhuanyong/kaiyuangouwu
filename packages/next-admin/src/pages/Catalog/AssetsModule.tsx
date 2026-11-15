@@ -602,7 +602,7 @@ export function AssetsModule() {
                                     className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-left hover:border-blue-400 hover:shadow-md"
                                 >
                                     {canDelete && (
-                                        <label className="absolute left-2 top-2 z-10 rounded-md bg-white/90 p-1 shadow-sm">
+                                        <label className="absolute left-2 top-2 z-10 flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-md bg-white/90 p-1 shadow-sm">
                                             <AdminInput
                                                 type="checkbox"
                                                 aria-label={`选择素材 ${asset.name}`}
