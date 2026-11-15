@@ -689,7 +689,7 @@ jobs:
         name: frontend (${{ matrix.component }})
         needs: detect-changes
         if: needs.detect-changes.outputs.has_frontends == 'true' && needs.detect-changes.outputs.full != 'true'
-        runs-on: ${{ vars.VENDURE_RELEASE_CHECKS_RUNNER_LABEL || vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
         timeout-minutes: 15
         permissions:
             contents: read
