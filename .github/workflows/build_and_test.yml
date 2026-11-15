@@ -58,7 +58,7 @@ jobs:
         name: repository quality gates
         needs: detect-changes
         if: needs.detect-changes.outputs.has_quality == 'true' || inputs.full
-        runs-on: ubuntu-latest
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-latest' }}
         timeout-minutes: 15
         permissions:
             contents: read
@@ -128,7 +128,7 @@ jobs:
                   bun run lint:check -- --base "$base"
     detect-changes:
         name: detect changes
-        runs-on: ubuntu-24.04
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
         timeout-minutes: 5
         permissions:
             contents: read
@@ -689,7 +689,7 @@ jobs:
         name: frontend (${{ matrix.component }})
         needs: detect-changes
         if: needs.detect-changes.outputs.has_frontends == 'true' && needs.detect-changes.outputs.full != 'true'
-        runs-on: ubuntu-24.04
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
         timeout-minutes: 15
         permissions:
             contents: read
@@ -741,7 +741,7 @@ jobs:
               run: node deploy/frontend-artifact.mjs pack "$COMPONENT" "$RUNNER_TEMP/frontend-artifact"
     all-passed:
         name: all-passed
-        runs-on: ubuntu-latest
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-latest' }}
         timeout-minutes: 5
         permissions:
             contents: read

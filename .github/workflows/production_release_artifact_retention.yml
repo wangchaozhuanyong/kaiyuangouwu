@@ -13,7 +13,7 @@ jobs:
     prune:
         name: verify and retain seven production releases
         if: github.ref == 'refs/heads/main'
-        runs-on: ubuntu-24.04
+        runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
         timeout-minutes: 5
         permissions:
             actions: read

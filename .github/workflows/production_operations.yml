@@ -138,7 +138,7 @@ concurrency:
 jobs:
     operate:
         name: run reviewed production operations through AWS SSM
-        runs-on: ubuntu-24.04
+        runs-on: ${{ github.workflow == 'Production Release' && vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-24.04' }}
         timeout-minutes: 15
         outputs:
             storefront_sha: ${{ steps.operation.outputs.storefront_sha }}
