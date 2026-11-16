@@ -139,7 +139,11 @@ export function RechargeProgressPanel({
     return (
         <div className="gpt-recharge-progress" data-status={task?.status ?? 'empty'}>
             <div className="gpt-recharge-progress-toolbar">
-                <h2>{t('充值进度', 'Recharge progress')}</h2>
+                <h2>
+                    {task || code
+                        ? t('充值进度', 'Recharge progress')
+                        : t('在这里查看充值进度', 'Your progress appears here')}
+                </h2>
                 {task && (
                     <div className="gpt-recharge-progress-tools">
                         <span className="gpt-recharge-sync" data-sync={terminal ? 'finished' : sync}>
@@ -170,16 +174,15 @@ export function RechargeProgressPanel({
             </div>
             {!task ? (
                 <div className="gpt-recharge-progress-empty">
-                    <Clock3 size={28} aria-hidden="true" />
-                    <h3>
-                        {code
-                            ? code.reason === 'manual_review_required'
+                    {code && (
+                        <h3>
+                            {code.reason === 'manual_review_required'
                                 ? t('上次结果待核对', 'Previous result needs review')
                                 : code.status === 'available'
                                   ? t('兑换码尚未使用', 'Code not yet used')
-                                  : t('兑换码暂不可用', 'Code unavailable')
-                            : t('在这里查看充值进度', 'Your progress appears here')}
-                    </h3>
+                                  : t('兑换码暂不可用', 'Code unavailable')}
+                        </h3>
+                    )}
                     <p>
                         {code
                             ? t(

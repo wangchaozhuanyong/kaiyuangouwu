@@ -261,6 +261,18 @@
     outline-offset: 3px;
 }
 
+@media (max-width: 1023px) {
+    .two-factor-page > .standalone-tool-heading,
+    .two-factor-query > h2,
+    .two-factor-query > .two-factor-intro {
+        display: none;
+    }
+
+    .two-factor-quick-form {
+        margin-top: 0;
+    }
+}
+
 @media (max-width: 359px) {
     .two-factor-workspace > :is(.two-factor-query, .two-factor-accounts) {
         padding: 16px;

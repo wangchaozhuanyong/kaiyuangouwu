@@ -755,7 +755,6 @@ export function GptRechargePage({
                                     >
                                         <section className="gpt-recharge-code-section">
                                             <div className="gpt-recharge-section-title">
-                                                <span className="gpt-recharge-step">01</span>
                                                 <h2>{t('验证兑换码', 'Verify your code')}</h2>
                                             </div>
                                             <form
@@ -766,12 +765,10 @@ export function GptRechargePage({
                                                     if (!busy && !task && !uncertain) void verify();
                                                 }}
                                             >
-                                                <label className="gpt-recharge-label" htmlFor="gpt-code">
-                                                    {t('兑换码', 'Redemption code')}
-                                                </label>
                                                 <div className="gpt-recharge-code-row">
                                                     <input
                                                         id="gpt-code"
+                                                        aria-label={t('兑换码', 'Redemption code')}
                                                         ref={codeInput}
                                                         value={code}
                                                         onChange={event => changeCode(event.target.value)}
@@ -934,45 +931,40 @@ export function GptRechargePage({
                                             </section>
                                         ) : (
                                             <section className="gpt-recharge-account-section">
-                                                <div className="gpt-recharge-section-title">
-                                                    <span className="gpt-recharge-step">02</span>
+                                                <div className="gpt-recharge-section-title gpt-recharge-account-heading">
                                                     <h2>{t('填写账号并提交', 'Enter account and submit')}</h2>
+                                                    <div className="gpt-recharge-field-actions">
+                                                        <a
+                                                            className="secondary-action gpt-recharge-session-link"
+                                                            href={CHATGPT_SESSION_URL}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                        >
+                                                            {t('前往获取 JSON', 'Get JSON')}
+                                                            <ArrowUpRight size={16} aria-hidden="true" />
+                                                        </a>
+                                                        <button
+                                                            className="secondary-action gpt-recharge-session-link"
+                                                            type="button"
+                                                            disabled={Boolean(busy)}
+                                                            aria-busy={busy === 'paste'}
+                                                            aria-controls="gpt-session"
+                                                            onClick={() => void pasteSession()}
+                                                        >
+                                                            <ClipboardPaste size={16} aria-hidden="true" />
+                                                            {busy === 'paste'
+                                                                ? t('粘贴中…', 'Pasting…')
+                                                                : t('一键粘贴', 'Paste JSON')}
+                                                        </button>
+                                                    </div>
                                                 </div>
                                                 <div className="gpt-recharge-field">
-                                                    <div className="gpt-recharge-field-heading">
-                                                        <label htmlFor="gpt-session">
-                                                            {t('账号资料（JSON）', 'Account data (JSON)')}
-                                                        </label>
-                                                        <div className="gpt-recharge-field-actions">
-                                                            <a
-                                                                className="secondary-action gpt-recharge-session-link"
-                                                                href={CHATGPT_SESSION_URL}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                            >
-                                                                {t('前往获取 JSON', 'Get JSON')}
-                                                                <ArrowUpRight size={16} aria-hidden="true" />
-                                                            </a>
-                                                            <button
-                                                                className="secondary-action gpt-recharge-session-link"
-                                                                type="button"
-                                                                disabled={Boolean(busy)}
-                                                                aria-busy={busy === 'paste'}
-                                                                aria-controls="gpt-session"
-                                                                onClick={() => void pasteSession()}
-                                                            >
-                                                                <ClipboardPaste
-                                                                    size={16}
-                                                                    aria-hidden="true"
-                                                                />
-                                                                {busy === 'paste'
-                                                                    ? t('粘贴中…', 'Pasting…')
-                                                                    : t('一键粘贴', 'Paste JSON')}
-                                                            </button>
-                                                        </div>
-                                                    </div>
                                                     <textarea
                                                         id="gpt-session"
+                                                        aria-label={t(
+                                                            '账号资料（JSON）',
+                                                            'Account data (JSON)',
+                                                        )}
                                                         ref={sessionField}
                                                         value={session}
                                                         onChange={event => changeSession(event.target.value)}
@@ -981,8 +973,8 @@ export function GptRechargePage({
                                                         spellCheck={false}
                                                         maxLength={256000}
                                                         placeholder={t(
-                                                            '在此粘贴完整账号资料',
-                                                            'Paste the complete account data here',
+                                                            '在此粘贴完整账号资料（JSON）',
+                                                            'Paste the complete account data (JSON) here',
                                                         )}
                                                         aria-invalid={Boolean(sessionError)}
                                                         aria-describedby={
