@@ -39,7 +39,7 @@ const domainRules: Array<[ResourceDomain, RegExp]> = [
     ],
     [
         'plugins',
-        /newsblog|gptrecharge|icloud|twofactor|imagegeneration|imageprovider|imageskill|image(?:model|promptskill|output)|clientplugin|telegram|incident/iu,
+        /taxfreeaddress|newsblog|gptrecharge|icloud|twofactor|imagegeneration|imageprovider|imageskill|image(?:model|promptskill|output)|clientplugin|telegram|incident/iu,
     ],
 ];
 // Session transitions own their existing redirect/cache lifecycle, rather than page refresh.

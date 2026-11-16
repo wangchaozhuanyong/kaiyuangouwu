@@ -802,3 +802,22 @@ defineNextAdminExtension({
         },
     ],
 });
+
+const TaxFreeAddressModule = lazy(() =>
+    import('../pages/Plugins/TaxFreeAddressModule').then(module => ({
+        default: module.TaxFreeAddressModule,
+    })),
+);
+defineNextAdminExtension({
+    id: 'tax-free-address-dashboard-plugin',
+    routes: [
+        {
+            id: 'tax-free-address',
+            path: '/plugins/tax-free-address',
+            title: '免税地址管理',
+            component: TaxFreeAddressModule,
+            permissions: ['SuperAdmin'],
+            navItem: { label: '免税地址管理', sectionId: 'plugins', order: 76 },
+        },
+    ],
+});

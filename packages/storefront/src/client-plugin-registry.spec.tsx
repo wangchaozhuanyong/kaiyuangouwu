@@ -246,6 +246,26 @@ describe('category client plugin registry', () => {
         expect(resolveClientPlugins(enabled, 'BUSINESS_SERVICES_MAIN')).toHaveLength(1);
     });
 
+    it('only renders a configured address tool entry, with a clean external URL and no referral header', () => {
+        const app = (block: StorefrontContentBlock) =>
+            renderToStaticMarkup(
+                <ClientPluginSlot
+                    block={block}
+                    placement="BUSINESS_SERVICES_MAIN"
+                    language="en"
+                    onNavigate={() => undefined}
+                />,
+            );
+        const item = pluginItem('tax-free-address-entry', 'BUSINESS_SERVICES_MAIN', 0);
+        expect(app(pluginBlock([]))).not.toContain('address.moyaoai.com');
+        const html = app(pluginBlock([item]));
+        expect(html).toContain('href="https://address.moyaoai.com/?lang=en"');
+        expect(html).toMatch(/referrerPolicy="no-referrer"/i);
+        expect(html).not.toContain('#back');
+        item.enabled = false;
+        expect(app(pluginBlock([item]))).not.toContain('address.moyaoai.com');
+    });
+
     it('renders the registered 2FA client plugin', () => {
         const markup = renderToStaticMarkup(
             <ClientPluginSlot

@@ -9,5 +9,14 @@
         "noEmit": true,
         "types": ["vite/client"]
     },
-    "include": ["src", "vite", "vite.config.ts", "two-factor-tool", "vite.two-factor.config.ts", "vite.public-server.config.ts"]
+    "include": [
+        "src",
+        "vite",
+        "vite.config.ts",
+        "two-factor-tool",
+        "vite.two-factor.config.ts",
+        "vite.public-server.config.ts",
+        "tax-free-address-tool",
+        "vite.tax-free-address.config.ts"
+    ]
 }

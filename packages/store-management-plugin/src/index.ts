@@ -201,3 +201,5 @@ export { storefrontCdnPurgeConfiguration } from './performance/storefront-cdn-pu
 
 export { ShopAbuseProtectionPlugin } from './abuse-protection/plugin.js';
 export { GptRechargePlugin } from './gpt-recharge/plugin.js';
+
+export { TaxFreeAddressPlugin } from './tax-free-address/plugin.js';

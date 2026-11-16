@@ -1,0 +1,62 @@
+@import '../src/styles/experience-foundations.css';
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    border-color: var(--line-subtle);
+}
+body {
+    margin: 0;
+    color: var(--text);
+    background: var(--bg);
+}
+.tax-address-page {
+    min-height: 100dvh;
+    padding: var(--space-32) var(--experience-page-gutter-mobile) var(--space-48);
+}
+.tax-address-page :is(h1, h2, p) {
+    margin-block: 0;
+}
+.tax-address-page .tax-address-intro p {
+    margin-top: var(--space-8);
+}
+.tax-address-page button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-8);
+    padding: var(--space-8) var(--space-16);
+    border: 1px solid var(--control-border);
+    border-radius: var(--skin-control-radius);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+    cursor: pointer;
+}
+.tax-address-page .primary-action {
+    border-color: var(--accent);
+    color: var(--accent-foreground);
+    background: var(--accent);
+    font-weight: var(--font-weight-semibold);
+}
+.tax-address-page .primary-action:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+.tax-address-page button:disabled {
+    border-color: var(--line-subtle);
+    color: var(--accent-disabled-text);
+    background: var(--accent-disabled-bg);
+    cursor: not-allowed;
+}
+.tax-address-page :is(button, summary):focus-visible {
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
+}
+@media (min-width: 768px) {
+    .tax-address-page {
+        padding: var(--space-48) var(--experience-page-gutter-desktop);
+    }
+}
