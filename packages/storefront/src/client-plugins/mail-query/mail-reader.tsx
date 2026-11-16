@@ -1,9 +1,9 @@
 import { ArrowLeft, Copy, Expand, Image, Mail, Minimize2, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { IcloudMailItem } from '../../api';
-import type { StorefrontLanguage } from '../../types';
 
+import { type IcloudMailItem } from '../../api';
 import { Sheet } from '../../storefront-ui/page-shell';
+import { type StorefrontLanguage } from '../../types';
 
 import { createMailPreview } from './mail-preview';
 
