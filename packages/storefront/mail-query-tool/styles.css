@@ -1,5 +1,4 @@
-@import '../src/styles/experience-foundations.css';
-@import '../src/styles/subpage-content.css';
+@import '../src/styles/standalone-tool.css';
 
 *,
 *::before,
@@ -15,35 +14,12 @@ body {
 button {
     font: inherit;
 }
+button {
+    cursor: pointer;
+}
 input,
 select {
     font: inherit;
     font-size: var(--type-input-size);
     line-height: var(--type-input-leading);
-}
-.mail-query-page {
-    min-height: 100dvh;
-    max-width: var(--experience-content-max);
-    margin-inline: auto;
-    padding-bottom: var(--space-32);
-}
-.mail-query-page .subpage-header {
-    display: grid;
-}
-.mail-query-page .subpage-header > strong {
-    grid-column: 2;
-    grid-row: 1;
-}
-.mail-query-page .subpage-header-actions {
-    grid-column: 3;
-    grid-row: 1;
-}
-@media (min-width: 1024px) {
-    .mail-query-page {
-        padding: var(--space-24) var(--experience-page-gutter-desktop) var(--space-48);
-    }
-    .mail-query-page .subpage-header {
-        padding-inline: 0;
-        margin-bottom: var(--space-16);
-    }
 }

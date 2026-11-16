@@ -159,3 +159,10 @@
         --space-title-content: var(--space-16);
     }
 }
+
+/* Shared appearance approved for both independent customer tools. */
+:root[data-standalone-tool='customer'] {
+    --bg: #f4f5f1;
+    --accent: #174c3c;
+    --accent-soft: #eaf1ea;
+}

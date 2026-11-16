@@ -9,7 +9,7 @@ import {
     storefrontSkinCssVariables,
 } from '../../../storefront-content-plugin/src/shared/storefront-semantic-palette.ts';
 
-const output = fileURLToPath(new URL('../../../../outputs/customer-tools-20261116/', import.meta.url));
+const output = fileURLToPath(new URL('../../../../outputs/customer-tools-redesign/', import.meta.url));
 await mkdir(output, { recursive: true });
 const entry = 'http://127.0.0.1:5196/e2e/customer-tools/index.html';
 const tools = {
@@ -39,18 +39,39 @@ const result = {
             receivedAt: '2026-11-16T00:00:00Z',
             extractedCode: '123456',
             bodyText: 'Synthetic mail',
-            bodyHtml: '',
+            bodyHtml:
+                '<meta http-equiv="Content-Security-Policy" content="img-src data:">' +
+                '<style>.email-body{max-width:700px;margin:auto;font-family:system-ui}</style>' +
+                '<div class="email-body"><h1>邮件正文预览</h1><img src="https://images.example.test/preview.jpg" width="700">' +
+                '<script>window.parent.mailSenderScriptRan=true</script>' +
+                Array.from(
+                    { length: 12 },
+                    () => '<p style="padding:20px 0">Synthetic long email content.</p>',
+                ).join('') +
+                '</div>',
             targetEmail: 'fixture@example.test',
             virtualEmailId: null,
         },
     ],
 };
 async function mount(context) {
-    const fixture = { requests: [], rejected: [], fail: false };
+    const fixture = { requests: [], rejected: [], fail: false, imageRequests: 0, failImage: false };
     await context.route('**/*', async route => {
         const req = route.request();
         const url = new URL(req.url());
         if (url.origin === new URL(entry).origin) return route.continue();
+        if (url.origin === 'https://images.example.test') {
+            fixture.imageRequests++;
+            assert.equal(await req.headerValue('referer'), null);
+            return route.fulfill({
+                status: fixture.failImage ? 503 : 200,
+                contentType: 'image/jpeg',
+                headers: { 'Cache-Control': 'no-store' },
+                body: fixture.failImage
+                    ? ''
+                    : await readFile(new URL('../../public/storefront/hero-01-gateway.jpg', import.meta.url)),
+            });
+        }
         const tool = Object.values(tools).find(candidate => candidate.origin === url.origin);
         if (!tool) {
             fixture.rejected.push(url.origin);
@@ -136,10 +157,89 @@ try {
                             .evaluate(
                                 element => getComputedStyle(element).gridTemplateColumns.split(' ').length,
                             );
-                        assert.equal(columns, width >= 1024 ? 2 : 1);
+                        assert.equal(columns, 1);
                         await page.locator('#codeInput').fill('CaseSensitiveFixture');
                         await page.locator('#queryBtn').click();
                         await expect(page.locator('.otp-code-text')).toHaveText('123456');
+                        if (width < 768) await page.locator('.mail-reader-list > button').first().click();
+                        await expect(page.locator('.mail-reader-message')).toBeVisible();
+                        assert.equal(fixture.imageRequests, 0);
+                        const frame = page.frameLocator('.mail-iframe');
+                        await expect(frame.locator('#mail-preview-content')).toBeVisible();
+                        await expect
+                            .poll(() =>
+                                page
+                                    .locator('.mail-iframe')
+                                    .evaluate(el => el.getBoundingClientRect().height),
+                            )
+                            .toBeGreaterThan(800);
+                        const accessDenied = await frame.locator('body').evaluate(() => {
+                            try {
+                                void window.parent.document.body;
+                                return false;
+                            } catch {
+                                return true;
+                            }
+                        });
+                        assert.equal(accessDenied, true);
+                        assert.equal(await page.evaluate(() => window.mailSenderScriptRan), undefined);
+                        await page
+                            .getByRole('button', {
+                                name: lang === 'zh' ? '显示邮件图片' : 'Show email images',
+                                exact: true,
+                            })
+                            .click();
+                        await expect.poll(() => fixture.imageRequests).toBeGreaterThan(0);
+                        await expect
+                            .poll(() =>
+                                frame.locator('img').evaluate(el => el.complete && el.naturalWidth > 0),
+                            )
+                            .toBe(true);
+                        const imageFits = await frame
+                            .locator('img')
+                            .evaluate(el => el.getBoundingClientRect().width <= innerWidth + 1);
+                        assert.equal(imageFits, true);
+                        await page.screenshot({
+                            path: output + `mail-reader-${width}-${lang}-${preset}.png`,
+                            fullPage: true,
+                        });
+                        await page
+                            .getByRole('button', {
+                                name: lang === 'zh' ? '全屏阅读' : 'Full screen',
+                                exact: true,
+                            })
+                            .click();
+                        await expect(page.getByRole('dialog')).toBeVisible();
+                        await page.keyboard.press('Escape');
+                        await expect(page.getByRole('dialog')).toHaveCount(0);
+                        fixture.failImage = true;
+                        await page
+                            .getByRole('button', {
+                                name: lang === 'zh' ? '隐藏图片' : 'Hide images',
+                                exact: true,
+                            })
+                            .click();
+                        await expect(frame.locator('img')).toHaveCount(0);
+                        await page
+                            .getByRole('button', {
+                                name: lang === 'zh' ? '显示邮件图片' : 'Show email images',
+                                exact: true,
+                            })
+                            .click();
+                        await expect(page.locator('.mail-image-feedback')).toBeVisible();
+                        fixture.failImage = false;
+                        await page
+                            .getByRole('button', {
+                                name: lang === 'zh' ? '重试图片' : 'Retry images',
+                                exact: true,
+                            })
+                            .click();
+                        await expect
+                            .poll(() =>
+                                frame.locator('img').evaluate(el => el.complete && el.naturalWidth > 0),
+                            )
+                            .toBe(true);
+                        await expect(page.locator('.mail-image-feedback')).toHaveCount(0);
                         await page.locator('.page-back-button').click();
                         await expect(page.locator('#codeInput')).toBeVisible();
                         await expect(page.locator('.page-back-button, a')).toHaveCount(0);

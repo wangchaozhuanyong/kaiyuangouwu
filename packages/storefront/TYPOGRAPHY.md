@@ -28,6 +28,7 @@
 | `price-detail`       | 28／36         | 32／40         | 商品详情主价格                   |
 | `metric`             | 22／28         | 22／28         | 统计数字                         |
 | `identity`           | 22／30         | 28／36         | 身份卡主名称                     |
+| `otp` | 36／44         | 44／52         | 2FA 与邮箱查询的主要验证码结果 |
 | `code`               | 22／30         | 26／34         | 等宽验证码                       |
 
 营销标题使用 `hero / display / showcase / showcase-compact`，优惠券金额使用 `coupon`，活动大金额使用 `promotion`，认证标题使用 `auth / auth-compact`。这些是明确用途的角色，不能替代普通页面的标题、正文或按钮。

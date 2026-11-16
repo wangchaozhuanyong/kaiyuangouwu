@@ -1,5 +1,5 @@
 @import 'tailwindcss' source(none);
-@import '../src/styles/typography.css';
+@import '../src/styles/standalone-tool.css';
 @source '../src/client-plugins/two-factor';
 @source '../src/storefront-ui/page-shell.tsx';
 @source './main.tsx';
@@ -20,7 +20,7 @@
     font-size: var(--type-body-size);
     line-height: var(--type-body-leading);
     color: var(--text);
-    background: var(--surface);
+    background: var(--bg);
 }
 body {
     margin: 0;

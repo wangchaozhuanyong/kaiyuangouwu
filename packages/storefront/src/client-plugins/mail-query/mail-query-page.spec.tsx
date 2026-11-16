@@ -290,7 +290,9 @@ describe('MailQueryPage', () => {
             await Promise.resolve();
         });
         const frame = container.querySelector('iframe');
-        expect(frame?.getAttribute('sandbox')).toBe('allow-popups allow-popups-to-escape-sandbox');
+        expect(frame?.getAttribute('sandbox')).toBe(
+            'allow-scripts allow-popups allow-popups-to-escape-sandbox',
+        );
         expect(frame?.getAttribute('srcdoc')).toContain('https://example.invalid/login');
 
         // Check recent queries saved to localStorage
@@ -352,9 +354,10 @@ describe('MailQueryPage', () => {
             container.querySelector<HTMLButtonElement>('.toggle-body-btn')?.click();
             await Promise.resolve();
         });
-        expect(container.querySelector('iframe')?.getAttribute('srcdoc')).toBe(html);
+        expect(container.querySelector('iframe')?.getAttribute('srcdoc')).toContain('验证电子邮箱');
+        expect(container.querySelector('iframe')?.getAttribute('srcdoc')).toContain("connect-src 'none'");
         expect(container.querySelector('iframe')?.getAttribute('sandbox')).toBe(
-            'allow-popups allow-popups-to-escape-sandbox',
+            'allow-scripts allow-popups allow-popups-to-escape-sandbox',
         );
         expect(cleanCode(` ${code} `)).toBe(code);
         expect(cleanCode('buy-abcd-1234')).toBe('BUY-ABCD-1234');
@@ -788,9 +791,9 @@ describe('MailQueryPage', () => {
 });
 
 describe('mail preview navigation', () => {
-    it('allows user-opened windows without inheriting the email sandbox or enabling scripts', () => {
-        const source = readFileSync(new NodeURL('./mail-query-page.tsx', import.meta.url), 'utf8');
-        expect(source).toContain('sandbox="allow-popups allow-popups-to-escape-sandbox"');
-        expect(source).not.toContain('sandbox="allow-same-origin"');
+    it('keeps the resized mail frame opaque and allows only its application-owned script', () => {
+        const source = readFileSync(new NodeURL('./mail-reader.tsx', import.meta.url), 'utf8');
+        expect(source).toContain('sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"');
+        expect(source).not.toContain('allow-same-origin');
     });
 });

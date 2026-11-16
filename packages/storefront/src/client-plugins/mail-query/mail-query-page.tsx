@@ -1,6 +1,6 @@
 /* eslint-disable import/order, max-len -- Bilingual copy and clean relative types are intentional. */
-import { ChevronDown, Clipboard, Clock3, Search, X } from 'lucide-react';
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { ChevronDown, Clipboard, Clock3, Mail, RefreshCw, Search, X } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createDeferredContentReveal } from '../../content-reveal';
 import { SubHeader } from '../../storefront-ui/page-shell';
 
@@ -8,6 +8,8 @@ import type { IcloudQueryResult, ShopApi } from '../../api';
 import type { MailStreamStatus } from '../../api/mail-events';
 import type { RouteState } from '../../storefront-router';
 import type { StorefrontLanguage } from '../../types';
+
+import { MailBody, MailReader } from './mail-reader';
 
 import './mail-query.css';
 
@@ -136,7 +138,6 @@ export function MailQueryPage({
     const shakeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const reactId = useId();
 
     useLayoutEffect(() => {
         if (pageRef.current && (loading || result)) {
@@ -636,66 +637,92 @@ export function MailQueryPage({
               }
             : toast;
 
+    const liveControls = result ? (
+        <div className="mail-live-controls">
+            <span>{isZh ? '实时收信' : 'Live updates'}</span>
+            <label className="switch-toggle">
+                <input
+                    type="checkbox"
+                    id="liveUpdatesToggle"
+                    aria-label={isZh ? '实时收信' : 'Live updates'}
+                    checked={liveEnabled}
+                    disabled={result.targetType === 'MANAGED'}
+                    onChange={e => setLiveEnabled(e.target.checked)}
+                />
+                <span className="slider"></span>
+            </label>
+            <span className="mail-stream-status type-meta" role="status">
+                {result.targetType === 'MANAGED'
+                    ? isZh
+                        ? '请手动刷新收件结果'
+                        : 'Refresh mail results manually'
+                    : streamStatus === 'live'
+                      ? isZh
+                          ? '已连接'
+                          : 'Connected'
+                      : streamStatus === 'connecting'
+                        ? isZh
+                            ? '连接中'
+                            : 'Connecting'
+                        : streamStatus === 'reconnecting'
+                          ? isZh
+                              ? '正在重连'
+                              : 'Reconnecting'
+                          : streamStatus === 'unavailable'
+                            ? isZh
+                                ? '实时收信不可用，请手动刷新结果'
+                                : 'Live updates unavailable. Refresh results manually.'
+                            : streamStatus === 'denied'
+                              ? isZh
+                                  ? '授权已失效'
+                                  : 'Access expired'
+                              : isZh
+                                ? '已暂停'
+                                : 'Paused'}
+            </span>
+        </div>
+    ) : undefined;
+
     return (
         <main
             ref={pageRef}
-            className="page subpage mail-query-page"
+            className={`page subpage mail-query-page${standalone ? ' standalone-tool-page' : ''}`}
+            data-mail-view={result ? 'results' : 'query'}
             aria-label={isZh ? '邮箱查询服务' : 'Email lookup'}
         >
             <SubHeader
                 title={isZh ? '邮箱查询服务' : 'Email lookup'}
                 language={language}
                 onBack={result ? handleBackToQueryForm : handleBackClick}
-                back={standalone && !result && !onBack ? false : undefined}
-                backLabel={isZh ? '返回上一层' : 'Back'}
+                back={standalone && !result && !onBack ? <Mail aria-hidden="true" /> : undefined}
+                backLabel={standalone ? undefined : isZh ? '返回上一层' : 'Back'}
                 action={
-                    result ? (
-                        <div className="mail-live-controls">
-                            <span>{isZh ? '实时收信' : 'Live updates'}</span>
-                            <label className="switch-toggle">
-                                <input
-                                    type="checkbox"
-                                    id="liveUpdatesToggle"
-                                    aria-label={isZh ? '实时收信' : 'Live updates'}
-                                    checked={liveEnabled}
-                                    disabled={result.targetType === 'MANAGED'}
-                                    onChange={e => setLiveEnabled(e.target.checked)}
-                                />
-                                <span className="slider"></span>
-                            </label>
-                            <span className="mail-stream-status type-meta" role="status">
-                                {result.targetType === 'MANAGED'
-                                    ? isZh
-                                        ? '请手动刷新收件结果'
-                                        : 'Refresh mail results manually'
-                                    : streamStatus === 'live'
-                                      ? isZh
-                                          ? '已连接'
-                                          : 'Connected'
-                                      : streamStatus === 'connecting'
-                                        ? isZh
-                                            ? '连接中'
-                                            : 'Connecting'
-                                        : streamStatus === 'reconnecting'
-                                          ? isZh
-                                              ? '正在重连'
-                                              : 'Reconnecting'
-                                          : streamStatus === 'unavailable'
-                                            ? isZh
-                                                ? '实时收信不可用，请手动刷新结果'
-                                                : 'Live updates unavailable. Refresh results manually.'
-                                            : streamStatus === 'denied'
-                                              ? isZh
-                                                  ? '授权已失效'
-                                                  : 'Access expired'
-                                              : isZh
-                                                ? '已暂停'
-                                                : 'Paused'}
-                            </span>
-                        </div>
-                    ) : undefined
+                    standalone ? (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                document
+                                    .getElementById('mailQueryHelpTitle')
+                                    ?.scrollIntoView({ block: 'start' });
+                            }}
+                        >
+                            {isZh ? '使用帮助' : 'Help'}
+                        </button>
+                    ) : (
+                        liveControls
+                    )
                 }
             />
+            {standalone && !result && (
+                <div className="standalone-tool-heading">
+                    <h1>{isZh ? '查收邮件与验证码' : 'Find your emails and verification codes'}</h1>
+                    <p>
+                        {isZh
+                            ? '输入专属查询码，即可查看收件结果。'
+                            : 'Enter your query code to view your inbox.'}
+                    </p>
+                </div>
+            )}
             <div className="subpage-body mail-query-layout">
                 <div className="mail-query-workspace">
                     {/* Query Form Card */}
@@ -865,7 +892,11 @@ export function MailQueryPage({
                                                         void executeQuery(item.code);
                                                     }}
                                                 >
-                                                    <span className="recent-code">{item.code}</span>
+                                                    <span className="recent-code">
+                                                        {standalone
+                                                            ? `${item.code.slice(0, 4)}••••${item.code.slice(-4)}`
+                                                            : item.code}
+                                                    </span>
                                                     <span className="recent-meta">
                                                         {item.aliasEmail ? (
                                                             <span className="recent-alias">
@@ -896,6 +927,9 @@ export function MailQueryPage({
                         <section className="result-section" id="resultSection" data-content-reveal>
                             {/* Summary Card */}
                             <div className="result-summary-card">
+                                {standalone && (
+                                    <h1 className="mail-inbox-title">{isZh ? '收件箱' : 'Inbox'}</h1>
+                                )}
                                 <div className="summary-header">
                                     <div className="summary-email" id="summaryEmail">
                                         <span>
@@ -913,6 +947,15 @@ export function MailQueryPage({
                                             </span>
                                         )}
                                     </div>
+                                    {standalone && (
+                                        <button
+                                            type="button"
+                                            className="mail-change-query"
+                                            onClick={handleBackToQueryForm}
+                                        >
+                                            {isZh ? '更换查询码' : 'Change query code'}
+                                        </button>
+                                    )}
                                     <button
                                         type="button"
                                         className="refresh-now-btn"
@@ -922,7 +965,7 @@ export function MailQueryPage({
                                             void handleRefresh().catch(() => undefined);
                                         }}
                                     >
-                                        <span>🔄</span>{' '}
+                                        <RefreshCw aria-hidden="true" />{' '}
                                         {refreshing
                                             ? isZh
                                                 ? '正在刷新...'
@@ -975,6 +1018,8 @@ export function MailQueryPage({
                                     ) : null}
                                 </div>
                             </div>
+
+                            {standalone && <div className="mail-inbox-live">{liveControls}</div>}
 
                             {/* Refresh Error Banner */}
                             {refreshError ? (
@@ -1059,6 +1104,17 @@ export function MailQueryPage({
                                             ) : null}
                                         </div>
                                     </div>
+                                ) : standalone ? (
+                                    <MailReader
+                                        key={currentQueryCode}
+                                        items={filteredMails}
+                                        language={language}
+                                        copiedCode={copiedOtp}
+                                        onCopy={code => {
+                                            void handleCopyOtp(code);
+                                        }}
+                                        formatTime={time => formatTime(time, isZh)}
+                                    />
                                 ) : (
                                     filteredMails.map((mail, idx) => {
                                         const isExpanded = expandedMails.has(mail.id);
@@ -1129,23 +1185,7 @@ export function MailQueryPage({
                                                 </button>
 
                                                 {isExpanded ? (
-                                                    <div className="mail-body-content" id={`mailBody_${idx}`}>
-                                                        {mail.bodyHtml ? (
-                                                            <iframe
-                                                                title={`mail-body-${mail.id}-${reactId}`}
-                                                                className="mail-iframe"
-                                                                srcDoc={mail.bodyHtml}
-                                                                sandbox="allow-popups allow-popups-to-escape-sandbox"
-                                                            />
-                                                        ) : (
-                                                            <pre>
-                                                                {mail.bodyText ||
-                                                                    (isZh
-                                                                        ? '(此邮件无正文内容)'
-                                                                        : '(No content)')}
-                                                            </pre>
-                                                        )}
-                                                    </div>
+                                                    <MailBody mail={mail} language={language} />
                                                 ) : null}
                                             </div>
                                         );

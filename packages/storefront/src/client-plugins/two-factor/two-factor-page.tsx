@@ -7,6 +7,7 @@ import {
     Copy,
     Eye,
     EyeOff,
+    KeyRound,
     LockKeyhole,
     MoreHorizontal,
     Pencil,
@@ -336,7 +337,36 @@ function TwoFactorPageSession({
     };
 
     return (
-        <Subpage title={copy.title} language={language} onBack={onBack} back={onBack ? undefined : false}>
+        <Subpage
+            title={copy.title}
+            language={language}
+            onBack={onBack}
+            className={standalone ? 'standalone-tool-page two-factor-page' : 'two-factor-page'}
+            back={onBack ? undefined : standalone ? <KeyRound aria-hidden="true" /> : false}
+            action={
+                standalone ? (
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setShowQuickDescription(true);
+                            document.getElementById('two-factor-help')?.scrollIntoView({ block: 'nearest' });
+                        }}
+                    >
+                        {isZh ? '使用说明' : 'Help'}
+                    </button>
+                ) : undefined
+            }
+        >
+            {standalone && (
+                <div className="standalone-tool-heading">
+                    <h1>{isZh ? '快速获取动态码' : 'Get your verification code'}</h1>
+                    <p>
+                        {isZh
+                            ? '粘贴 2FA 密钥，获取实时验证码。'
+                            : 'Paste your 2FA secret to generate a live code.'}
+                    </p>
+                </div>
+            )}
             <div
                 className="desktop-two-factor-content two-factor-workspace"
                 data-view={activeView.toLowerCase()}
@@ -407,7 +437,11 @@ function TwoFactorPageSession({
                                 }}
                             />
                             <div className="two-factor-secret-actions">
-                                <button type="button" onClick={() => void pasteSecret()}>
+                                <button
+                                    className="two-factor-paste"
+                                    type="button"
+                                    onClick={() => void pasteSecret()}
+                                >
                                     <ClipboardPaste className="size-4" aria-hidden="true" />
                                     {copy.paste}
                                 </button>
@@ -435,10 +469,11 @@ function TwoFactorPageSession({
                                     onClick={() => void copyCode(quickInput, copy.secretCopied)}
                                 >
                                     <Copy className="size-4" aria-hidden="true" />
-                                    {copy.copy}
+                                    {copy.copySecret}
                                 </button>
                                 <button
                                     type="button"
+                                    className="two-factor-reveal"
                                     aria-controls="storefront-two-factor-secret"
                                     aria-label={showQuickSecret ? copy.hide : copy.reveal}
                                     aria-pressed={showQuickSecret}
@@ -450,7 +485,9 @@ function TwoFactorPageSession({
                                     ) : (
                                         <Eye className="size-4" aria-hidden="true" />
                                     )}
-                                    {showQuickSecret ? copy.hideValue : copy.showValue}
+                                    <span className="sr-only">
+                                        {showQuickSecret ? copy.hideValue : copy.showValue}
+                                    </span>
                                 </button>
                             </div>
                         </div>
@@ -476,9 +513,7 @@ function TwoFactorPageSession({
                                     <small className="weight-bold text-[var(--muted)]">
                                         {copy.currentCode}
                                     </small>
-                                    <p className="mb-0 mt-1 [font-family:var(--font-code)] type-page weight-bold [letter-spacing:var(--tracking-code)] text-[var(--text)] sm:type-display">
-                                        {formatTotpCode(quickCode)}
-                                    </p>
+                                    <p className="two-factor-code mb-0 mt-1">{formatTotpCode(quickCode)}</p>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
                                     <button
@@ -489,23 +524,21 @@ function TwoFactorPageSession({
                                         <Copy className="size-4" aria-hidden="true" />
                                         {copy.copy}
                                     </button>
-                                    {!accountsLocked ? (
-                                        <button
-                                            className={secondaryButtonClass}
-                                            type="button"
-                                            disabled={!storageAvailable}
-                                            onClick={() =>
-                                                quickSecret && openAccountForm(undefined, quickSecret)
-                                            }
-                                        >
-                                            <Plus className="size-4" aria-hidden="true" />
-                                            {copy.save}
-                                        </button>
-                                    ) : null}
                                 </div>
                             </div>
                             <Countdown seconds={secondsRemaining} label={copy.seconds} />
                         </div>
+                    ) : null}
+                    {quickCode && !accountsLocked ? (
+                        <button
+                            className="two-factor-save"
+                            type="button"
+                            disabled={!storageAvailable}
+                            onClick={() => quickSecret && openAccountForm(undefined, quickSecret)}
+                        >
+                            <Plus aria-hidden="true" />
+                            {copy.save}
+                        </button>
                     ) : null}
                     {accountsLocked ? (
                         <div className="two-factor-lock-notice">
@@ -532,7 +565,7 @@ function TwoFactorPageSession({
                     ) : null}
                 </section>
 
-                <aside className="two-factor-privacy">
+                <aside className="two-factor-privacy" id="two-factor-help">
                     <button
                         className={descriptionToggleClass}
                         type="button"
