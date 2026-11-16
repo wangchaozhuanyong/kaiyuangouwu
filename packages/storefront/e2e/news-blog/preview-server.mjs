@@ -41,8 +41,12 @@ const articles = Array.from({ length: 16 }, (_, index) => ({
         generated: false,
         kind: 'TEMPLATE',
     },
-    publishedAt: '2026-11-01T00:00:00Z',
-    reviewedAt: '2026-11-01T00:00:00Z',
+    publishedAt: '2026-11-03T00:00:00Z',
+    sourcePublishedAt:
+        index === 0
+            ? '2026-09-30T00:00:00Z'
+            : new Date(Date.parse('2026-11-02T00:00:00Z') - Math.floor(index / 3) * 86400000).toISOString(),
+    reviewedAt: '2026-11-03T00:00:00Z',
     reviewerName: '本地验收编辑',
     readingMinutes: 2,
 }));
@@ -128,7 +132,7 @@ articles.unshift({
         sourceCommit: 'synthetic',
     },
 });
-// Three distinct editorial profiles. All copy and metrics below are synthetic local QA.
+// Distinct editorial profiles. All copy and metrics below are synthetic local QA.
 const profiles = [
     {
         domain: 'development',
@@ -153,6 +157,14 @@ const profiles = [
         audience: '需要制作汇报和教学演示的人',
         name: 'slideshow',
         repository: 'heygen-com/hyperframes',
+    },
+    {
+        domain: 'design',
+        displayName: '按界面问题选择动效、手势和移动端优化技能',
+        purpose: '本地合成的设计分类示例，用于核对较长的标题、说明和独立封面在电脑与手机上的排版。',
+        audience: '正在设计界面、开发页面或验收交互效果的使用者',
+        name: 'synthetic-design-guide',
+        repository: 'anthropics/skills',
     },
 ];
 for (const [index, profile] of profiles.entries()) {
@@ -184,8 +196,12 @@ for (const [index, profile] of profiles.entries()) {
             repositoryUrl: 'https://github.com/' + profile.repository,
         },
         tags: [
-            { development: '软件开发', media: '视频音频', office: '办公效率' }[profile.domain],
-            { development: '缓存配置', media: '视频制作', office: '演示文稿' }[profile.domain],
+            { development: '软件开发', media: '视频音频', office: '办公效率', design: '设计创作' }[
+                profile.domain
+            ],
+            { development: '缓存配置', media: '视频制作', office: '演示文稿', design: '界面任务选型' }[
+                profile.domain
+            ],
         ],
     });
 }
@@ -203,11 +219,19 @@ export function newsBlogFixture(url, host) {
               skip: (Number(url.searchParams.get('page') || 1) - 1) * 12,
               take: 12,
           };
-    const filtered = articles.filter(
-        x =>
-            (!input.category || x.category === input.category) &&
-            (!input.term || [x.title, x.summary, ...x.tags].join(' ').includes(input.term)),
-    );
+    const filtered = articles
+        .filter(
+            x =>
+                (!input.category || x.category === input.category) &&
+                (!input.term || [x.title, x.summary, ...x.tags].join(' ').includes(input.term)),
+        )
+        .sort((a, b) => {
+            const date = article =>
+                article.category === 'skills'
+                    ? article.publishedAt
+                    : (article.sourcePublishedAt ?? article.publishedAt);
+            return Date.parse(date(b)) - Date.parse(date(a));
+        });
     page.request = {
         kind: 'blog',
         ...(slug ? { id: slug } : {}),
@@ -220,7 +244,7 @@ export function newsBlogFixture(url, host) {
         description: '本地合成验收页面：关注 ChatGPT、Claude、Gemini 的产品更新与使用方法。',
         items: filtered.slice(input.skip ?? 0, (input.skip ?? 0) + 12),
         totalItems: filtered.length,
-        featured: filtered[0] ?? null,
+        featured: filtered.find(article => article.skillProfile?.domain === 'design') ?? filtered[0] ?? null,
         article: slug ? (articles.find(x => x.slug === slug) ?? null) : null,
         relatedArticles: slug ? articles.filter(x => x.slug !== slug).slice(0, 3) : [],
     };

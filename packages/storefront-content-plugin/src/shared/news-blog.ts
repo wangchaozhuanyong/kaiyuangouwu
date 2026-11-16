@@ -115,6 +115,8 @@ export interface BlogPublishedArticle extends BlogDraft {
     slug: string;
     version: number;
     publishedAt: string;
+    /** Original source date resolved from this channel's collected event; null for editorial content. */
+    sourcePublishedAt?: string | null;
     reviewedAt: string | null;
     reviewerName: string | null;
     publicationMode?: 'MANUAL' | 'AUTOMATIC';

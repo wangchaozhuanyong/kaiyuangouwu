@@ -333,6 +333,104 @@ async function saveLegacySettings(ctx: any, raw: Record<string, unknown>, versio
     return saved;
 }
 describe('channel publication and budget boundaries', () => {
+    it('sorts collected news before pagination by source date, with editorial fallback and channel isolation', async () => {
+        const sources = db.getRepository('BlogSourceItem');
+        await sources.update(1, { sourcePublishedAt: new Date('2026-09-30T00:00:00Z') });
+        await sources.update(2, { sourcePublishedAt: new Date('2026-11-02T00:00:00Z') });
+        const evidence = await sources.findOneByOrFail({ id: 2 });
+        for (const [id, channelId, eventKey, sourceDate] of [
+            [3, 1, 'skill-event', '2026-09-01T00:00:00Z'],
+            [4, 1, 'tie-event', '2026-11-02T00:00:00Z'],
+            [5, 2, 'event-2', '2026-08-01T00:00:00Z'],
+        ] as const)
+            await sources.save({
+                ...evidence,
+                id,
+                channelId,
+                eventKey,
+                identityKey: `sorting-${id}`,
+                sourcePublishedAt: new Date(sourceDate),
+            });
+        const articles = db.getRepository('BlogArticle');
+        const seed = async (
+            id: number,
+            eventKey: string | null,
+            date: string,
+            category: BlogDraft['category'] = 'chatgpt',
+        ) => {
+            const content = {
+                ...draft(),
+                id: String(id),
+                slug: `sorted-${id}`,
+                version: 1,
+                category,
+                title: `排序快讯 ${id}`,
+                publishedAt: date,
+                reviewedAt: null,
+                reviewerName: null,
+                readingMinutes: 2,
+            };
+            await articles.save({
+                id,
+                channelId: 1,
+                eventKey,
+                slug: content.slug,
+                version: 1,
+                state: 'PUBLISHED',
+                draftJson: JSON.stringify(content),
+                publishedJson: JSON.stringify(content),
+                publishedAt: new Date(date),
+                publishedTitle: content.title,
+                publishedCategory: category,
+                publishedSearchText: content.title,
+                publishedPinned: false,
+                issuesJson: '[]',
+            });
+        };
+        await seed(105, 'event-1', '2026-11-05T00:00:00Z');
+        await seed(102, 'event-2', '2026-11-03T00:00:00Z');
+        await seed(101, 'tie-event', '2026-11-03T00:00:00Z');
+        await seed(103, null, '2026-11-04T00:00:00Z');
+        await seed(104, 'skill-event', '2026-11-06T00:00:00Z', 'skills');
+
+        const all = await service.read(contextFor());
+        expect(all.items.map(item => item.id)).toEqual(['104', '103', '102', '101', '105']);
+        expect(all.featured?.id).toBe('104');
+        expect(all.items[0].sourcePublishedAt).toBeNull();
+        expect(all.items[1].sourcePublishedAt).toBeNull();
+        expect(all.items[2].sourcePublishedAt).toBe('2026-11-02T00:00:00.000Z');
+        expect(all.items[4].publishedAt).toBe('2026-11-05T00:00:00Z');
+        expect(all.items[4].sourcePublishedAt).toBe('2026-09-30T00:00:00.000Z');
+        const first = await service.read(contextFor(), { category: 'chatgpt', term: '排序快讯', take: 2 });
+        const second = await service.read(contextFor(), {
+            category: 'chatgpt',
+            term: '排序快讯',
+            skip: 2,
+            take: 2,
+        });
+        expect(first.totalItems).toBe(4);
+        expect(first.items.map(item => item.id)).toEqual(['103', '102']);
+        expect(second.items.map(item => item.id)).toEqual(['101', '105']);
+        expect(first.items.every(item => item.body === '' && item.sources.length === 0)).toBe(true);
+        const detail = await service.read(contextFor(), {}, 'sorted-105');
+        expect(detail.article?.sourcePublishedAt).toBe('2026-09-30T00:00:00.000Z');
+        expect(detail.relatedArticles.map(item => item.id)).toEqual(['103', '102', '101']);
+        expect(detail.relatedArticles[1].sourcePublishedAt).toBe('2026-11-02T00:00:00.000Z');
+        await articles.update(105, { publishedPinned: true });
+        const pinned = await service.read(contextFor());
+        expect(pinned.featured?.id).toBe('105');
+        expect(pinned.items.map(item => item.id)).toEqual(all.items.map(item => item.id));
+        await sources.save({
+            ...evidence,
+            id: 6,
+            identityKey: 'sorting-6',
+            sourcePublishedAt: new Date('2026-11-01T00:00:00Z'),
+        });
+        const earliest = await service.read(contextFor(), { category: 'chatgpt' });
+        expect(earliest.items.map(item => item.id)).toEqual(['103', '101', '102', '105']);
+        expect(earliest.items[2].sourcePublishedAt).toBe('2026-11-01T00:00:00.000Z');
+    });
+
     it('keeps unpublished edits private and retains the reviewed snapshot until publication', async () => {
         const saved = await service.save(contextFor(), {
             slug: 'official-update',

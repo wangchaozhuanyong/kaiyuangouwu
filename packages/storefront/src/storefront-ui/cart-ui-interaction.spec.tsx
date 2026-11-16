@@ -509,7 +509,21 @@ describe('CouponSheet interactions', () => {
                 return element;
             };
             expect(group().getAttribute('role')).toBe('group');
-            expect(group().querySelector('output')?.textContent).toBe('1');
+            const quantityInput = group().querySelector<HTMLInputElement>('input');
+            if (!quantityInput) throw new Error('Quantity input is missing');
+            expect(quantityInput.value).toBe('1');
+            onQuantity.mockClear();
+            act(() => {
+                quantityInput.focus();
+                Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+                    quantityInput,
+                    '9',
+                );
+                quantityInput.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            expect(onQuantity).not.toHaveBeenCalled();
+            act(() => quantityInput.blur());
+            expect(onQuantity).toHaveBeenCalledExactlyOnceWith('line-stock', 2);
             const decrease = group().querySelector<HTMLButtonElement>('button');
             if (!decrease) throw new Error('Decrease button is missing');
             act(() => decrease.click());
@@ -521,6 +535,7 @@ describe('CouponSheet interactions', () => {
             expect(increase.disabled).toBe(true);
             await renderGroup(true, 1, true);
             expect([...group().querySelectorAll('button')].every(button => button.disabled)).toBe(true);
+            expect(group().querySelector<HTMLInputElement>('input')?.disabled).toBe(true);
         },
     );
 });
