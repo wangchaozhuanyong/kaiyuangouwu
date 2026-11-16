@@ -10,6 +10,7 @@ import { AuthOptions } from '../../config/vendure-config';
 export function setSessionToken(options: {
     sessionToken: string;
     rememberMe: boolean;
+    cookieMaxAge?: number;
     authOptions: Required<AuthOptions>;
     req: Request;
     res: Response;
@@ -25,7 +26,7 @@ export function setSessionToken(options: {
     if (usingCookie) {
         if (req.session) {
             if (rememberMe) {
-                req.sessionOptions.maxAge = ms('1y');
+                req.sessionOptions.maxAge = options.cookieMaxAge ?? ms('1y');
             }
             req.session.token = sessionToken;
         }

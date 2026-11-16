@@ -29,7 +29,7 @@ export function LoginModule() {
     const loginNotice = (location.state as { notice?: string } | null)?.notice;
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [rememberMe, setRememberMe] = useState(false);
+    const [rememberMe, setRememberMe] = useState(true);
     const [showPassword, setShowPassword] = useState(false);
     const [loginError, setLoginError] = useState('');
 

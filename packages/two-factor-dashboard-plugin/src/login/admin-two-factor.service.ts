@@ -241,7 +241,9 @@ export class AdminTwoFactorService {
         rememberMe: boolean,
         challenge?: AdminTwoFactorChallenge,
     ): Promise<AdminLoginResult> {
-        const session = await this.auth.createAuthenticatedSessionForUser(ctx, user, 'native');
+        const session = await this.auth.createAuthenticatedSessionForUser(ctx, user, 'native', {
+            rememberAdministrator: rememberMe,
+        });
         if (isGraphQlErrorResult(session)) return { status: 'ERROR', message: LOGIN_ERROR };
         if (challenge) {
             await this.proofs.save(

@@ -78,6 +78,7 @@ export class AuthService {
         ctx: RequestContext,
         user: User,
         authenticationStrategyName: string,
+        sessionOptions?: { rememberAdministrator?: boolean },
     ): Promise<AuthenticatedSession | NotVerifiedError> {
         if (!user.roles || !user.roles[0]?.channels) {
             const userWithRoles = await this.connection
@@ -105,6 +106,8 @@ export class AuthService {
             ctx,
             user,
             authenticationStrategyName,
+            undefined,
+            sessionOptions,
         );
         await this.eventBus.publish(new LoginEvent(ctx, user));
         return session;
