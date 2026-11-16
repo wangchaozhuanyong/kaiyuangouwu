@@ -87,12 +87,17 @@ it('pins the exact prepaint script in the production CSP without allowing arbitr
     const policy = readFileSync(join(__dirname, '../../../deploy/nginx/damatong.conf'), 'utf8');
     const hash = createHash('sha256').update(source).digest('base64');
     const hosts = policy.split(/^server \{/mu);
-    const addressHosts = hosts.filter(host => /^    server_name address\.moyaoai\.com;$/mu.test(host));
-    expect(addressHosts).toHaveLength(1);
-    // The standalone document never loads the storefront or its prepaint script.
-    expect(addressHosts[0].match(/script-src[^;]+;/gu)).toEqual(["script-src 'self';"]);
+    const toolHosts = ['2fa', 'mail', 'address'].map(name => {
+        const matches = hosts.filter(host =>
+            host.split('\n').includes(`    server_name ${name}.moyaoai.com;`),
+        );
+        expect(matches).toHaveLength(1);
+        // Standalone documents allow their own assets without the storefront prepaint script.
+        expect(matches[0].match(/script-src[^;]+;/gu)).toEqual(["script-src 'self';"]);
+        return matches[0];
+    });
     const directives = hosts
-        .filter(host => !addressHosts.includes(host))
+        .filter(host => !toolHosts.includes(host))
         .flatMap(host => host.match(/script-src 'self'[^;]*;/gu) ?? []);
     expect(directives.length).toBeGreaterThan(0);
     for (const directive of directives) {

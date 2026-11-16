@@ -78,12 +78,12 @@ describe('category client plugin registry', () => {
         const first = render();
         expect(first).toContain(title);
         expect(first).toContain(action);
-        expect(first.match(/<button /g)).toHaveLength(4);
+        expect(first.match(/<(?:button|a) /g)).toHaveLength(4);
         expect(first).not.toContain('data-msg="Switched to client rendering');
         block.items[3].enabled = false;
         const disabled = render();
         expect(disabled).not.toContain(title);
-        expect(disabled.match(/<button /g)).toHaveLength(3);
+        expect(disabled.match(/<(?:button|a) /g)).toHaveLength(3);
     });
 
     it('groups tools and assistance without losing managed order or rendering empty groups', () => {
@@ -107,7 +107,7 @@ describe('category client plugin registry', () => {
         expect(markup.indexOf('邮件验证码查询')).toBeLessThan(markup.indexOf('2FA 动态码'));
         expect(markup.indexOf('2FA 动态码')).toBeLessThan(markup.indexOf('选购遇到问题？'));
         expect(markup.indexOf('选购遇到问题？')).toBeLessThan(markup.indexOf('先领券，再选购'));
-        expect(markup.match(/<button /g)).toHaveLength(4);
+        expect(markup.match(/<(?:button|a) /g)).toHaveLength(4);
         expect(markup).toContain('category-client-plugin-group is-assistance');
         block.items[1].enabled = false;
         block.items[3].enabled = false;
@@ -264,6 +264,23 @@ describe('category client plugin registry', () => {
         expect(html).not.toContain('#back');
         item.enabled = false;
         expect(app(pluginBlock([item]))).not.toContain('address.moyaoai.com');
+    });
+
+    it.each([
+        ['two-factor-code-tool', '2fa'],
+        ['icloud-mail-query-entry', 'mail'],
+    ])('publishes a clean standalone link for %s', (code, subdomain) => {
+        const html = renderToStaticMarkup(
+            <ClientPluginSlot
+                block={pluginBlock([pluginItem(code, 'BUSINESS_SERVICES_MAIN', 0)])}
+                placement="BUSINESS_SERVICES_MAIN"
+                language="en"
+                onNavigate={() => undefined}
+            />,
+        );
+        expect(html).toContain(`href="https://${subdomain}.moyaoai.com/?lang=en"`);
+        expect(html).not.toContain('#back');
+        expect(html).toMatch(/referrerPolicy="no-referrer"/i);
     });
 
     it('renders the registered 2FA client plugin', () => {

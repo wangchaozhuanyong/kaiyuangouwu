@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { get } from 'node:http';
+import { get, request } from 'node:http';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -39,6 +39,13 @@ function block(label, after = 0) {
 const fallbackMap = block('map $request_uri $storefront_legacy_fallback');
 const coopMap = block('map "$request_method|$sent_http_content_type|$http_user_agent" $storefront_html_coop');
 const addressHost = 'address.moyaoai.com';
+function toolVhost(host, directory, productionRoot) {
+    return block('server', source.lastIndexOf('server {', source.indexOf(`server_name ${host};`)))
+        .replace(/^ +listen 443 ssl http2;$/mu, '    listen 8080;')
+        .replace(/^ +(?:listen \[::\]:443|ssl_certificate|access_log).*\n/gmu, '')
+        .replace(/^ +if \(\$trusted_cloudflare_origin.*\n/mu, '')
+        .replace(`root ${productionRoot};`, `root /fixtures/www/${directory};`);
+}
 const addressVhost = block(
     'server',
     source.lastIndexOf('server {', source.indexOf(`server_name ${addressHost};`)),
@@ -77,6 +84,14 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
     chmodSync(fixture, 0o755);
     mkdirSync(path.join(fixture, 'www'));
     mkdirSync(path.join(fixture, 'www/.address-tool/assets'), { recursive: true });
+    for (const directory of ['.mail-tool', '.two-factor']) {
+        mkdirSync(path.join(fixture, 'www', directory, 'assets'), { recursive: true });
+        writeFileSync(path.join(fixture, 'www', directory, 'index.html'), `<main>${directory}</main>`);
+        writeFileSync(
+            path.join(fixture, 'www', directory, 'assets/tool-A1234567.js'),
+            'export const tool = true;',
+        );
+    }
     writeFileSync(
         path.join(fixture, 'www/.address-tool/index.html'),
         '<main>Independent address tool</main>',
@@ -121,6 +136,8 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         '}',
         'upstream vendure_backend { server 127.0.0.1:8081; }',
         'server { listen 8081;',
+        'location ~ ^/(?:standalone-mail/query|storefront-realtime/mail-events)$ { return 200 ' +
+            '"cookie=$http_cookie; auth=$http_authorization; token=$http_vendure_token; path=$uri"; }',
         'location ~ ^/api/address/(?:status|claim)$ { return 200 "cookie=$http_cookie; auth=$http_authorization; token=$http_vendure_token; host=$http_host"; }',
         'location = /storefront/redirect {',
         'if ($http_x_storefront_original_uri ~ "^/old-route(?:[?]|$)") { return 301 /en/category; }',
@@ -157,6 +174,8 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         'location / { return 404; }',
         '}',
         addressVhost,
+        toolVhost('mail.moyaoai.com', '.mail-tool', '/var/www/kaiyuangouwu-storefront-current/.mail-tool'),
+        toolVhost('2fa.moyaoai.com', '.two-factor', '/var/www/kaiyuangouwu-two-factor-current'),
         '}',
     ].join('\n');
     writeFileSync(path.join(fixture, 'nginx.conf'), config);
@@ -251,6 +270,68 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
             assert.equal((await fetch(origin + '/.address-tool/index.html')).status, 404);
         },
     );
+    await t.test('2FA and mail hosts expose only their tools and anonymous mail operations', async () => {
+        const toolRequest = (host, pathname, method = 'GET') =>
+            new Promise((resolve, reject) => {
+                const req = request(
+                    origin + pathname,
+                    {
+                        method,
+                        headers: {
+                            host,
+                            cookie: 'session=synthetic',
+                            authorization: 'Bearer synthetic',
+                            'vendure-token': 'synthetic',
+                        },
+                    },
+                    response => {
+                        let text = '';
+                        response.setEncoding('utf8');
+                        response.on('data', chunk => {
+                            text += chunk;
+                        });
+                        response.on('end', () =>
+                            resolve({ status: response.statusCode, headers: response.headers, text }),
+                        );
+                    },
+                );
+                req.on('error', reject);
+                req.end();
+            });
+        for (const [host, name] of [
+            ['2fa.moyaoai.com', '.two-factor'],
+            ['mail.moyaoai.com', '.mail-tool'],
+        ]) {
+            const html = await toolRequest(host, '/');
+            assert.equal(html.text, `<main>${name}</main>`);
+            assert.equal(html.headers['referrer-policy'], 'no-referrer');
+            assert.equal((await toolRequest(host, '/assets/tool-A1234567.js')).status, 200);
+            for (const pathname of [
+                '/shop-api',
+                '/admin-api',
+                '/dashboard/',
+                '/zh/',
+                '/login',
+                '/support',
+                '/services',
+                '/api/address/claim',
+            ]) {
+                assert.equal((await toolRequest(host, pathname)).status, 404, host + pathname);
+            }
+        }
+        assert.equal((await toolRequest('2fa.moyaoai.com', '/api/mail/query', 'POST')).status, 404);
+        for (const [mailOperation, upstream] of [
+            ['query', '/standalone-mail/query'],
+            ['events', '/storefront-realtime/mail-events'],
+        ]) {
+            assert.equal((await toolRequest('mail.moyaoai.com', '/api/mail/' + mailOperation)).status, 405);
+            const result = await toolRequest('mail.moyaoai.com', '/api/mail/' + mailOperation, 'POST');
+            assert.equal(result.status, 200);
+            assert.equal(result.text, `cookie=; auth=; token=; path=${upstream}`);
+        }
+        assert.equal((await fetch(origin + '/.mail-tool/index.html')).status, 404);
+        assert.equal((await toolRequest('console.fixture', '/standalone-mail/query', 'POST')).status, 404);
+    });
     await t.test('marks only credential-free public preferences as anonymous presentation', async () => {
         for (const [headers, expected] of [
             [{}, '1'],

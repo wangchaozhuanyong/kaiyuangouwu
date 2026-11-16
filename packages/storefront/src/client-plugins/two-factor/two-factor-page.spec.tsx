@@ -74,6 +74,32 @@ describe('TwoFactorPage', () => {
         vi.unstubAllGlobals();
     });
 
+    it.each(['zh', 'en'] as const)(
+        'explains standalone storage without linking a storefront account in %s',
+        language => {
+            storageState.available = true;
+            act(() =>
+                root.render(
+                    <TwoFactorPage
+                        customer={null}
+                        language={language}
+                        standalone
+                        onSignIn={() => undefined}
+                        onNotify={() => undefined}
+                    />,
+                ),
+            );
+            const setup = [...container.querySelectorAll('button')].find(button =>
+                button.textContent?.includes(language === 'zh' ? '启用加密保存' : 'Enable encrypted saving'),
+            );
+            expect(setup).toBeDefined();
+            act(() => setup?.click());
+            expect(container.querySelector('.page-back-button, a')).toBeNull();
+            expect(container.textContent).toContain(language === 'zh' ? '同一保管库' : 'same vault');
+            expect(container.textContent).not.toMatch(/商城|store account/);
+        },
+    );
+
     it.each(['zh', 'en'] as const)('reveals, copies and clears the pasted secret in %s', async language => {
         const secret = 'JBSWY3DPEHPK3PXP';
         const writeText = vi.fn().mockResolvedValue(undefined);

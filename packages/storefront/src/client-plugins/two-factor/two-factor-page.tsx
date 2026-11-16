@@ -36,16 +36,23 @@ import { VaultControls } from './vault-controls';
 interface TwoFactorPageProps {
     customer: ActiveCustomer | null;
     language: StorefrontLanguage;
-    onBack: () => void;
+    onBack?: () => void;
     onSignIn: () => void;
     onNotify: (message: string) => void;
+    standalone?: boolean;
 }
 
 export function TwoFactorPage(props: Readonly<TwoFactorPageProps>) {
     return <TwoFactorPageSession key={props.customer?.id ?? 'anonymous'} {...props} />;
 }
 
-function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly<TwoFactorPageProps>) {
+function TwoFactorPageSession({
+    customer,
+    language,
+    onBack,
+    onNotify,
+    standalone,
+}: Readonly<TwoFactorPageProps>) {
     const isZh = language === 'zh';
     const [anonymousOwnerId] = useState(getAnonymousTwoFactorOwnerId);
     const ownerId = customer?.id ?? anonymousOwnerId;
@@ -329,7 +336,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
     };
 
     return (
-        <Subpage title={copy.title} language={language} onBack={onBack}>
+        <Subpage title={copy.title} language={language} onBack={onBack} back={onBack ? undefined : false}>
             <div
                 className="desktop-two-factor-content two-factor-workspace"
                 data-view={activeView.toLowerCase()}
@@ -650,6 +657,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                         key={`${ownerId}-${vault.unlocked}-${vault.exists}-${sensitiveRevision.current}`}
                         vault={vault}
                         isZh={isZh}
+                        standalone={standalone}
                     />
                     {!accountsLocked ? (
                         <>

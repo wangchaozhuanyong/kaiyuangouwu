@@ -7,7 +7,13 @@ import ts from 'typescript';
 
 export const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const owner = 'src/styles/typography.css';
-const sourceRoots = ['src', 'two-factor-tool', '../storefront-content-plugin/src/shared'];
+const sourceRoots = [
+    'src',
+    'two-factor-tool',
+    'mail-query-tool',
+    'tax-free-address-tool',
+    '../storefront-content-plugin/src/shared',
+];
 const properties = new Map([
     ['font-size', 'fontSize'],
     ['line-height', 'lineHeight'],

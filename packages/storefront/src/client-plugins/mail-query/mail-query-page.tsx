@@ -76,7 +76,7 @@ interface ToastState {
 }
 
 export interface MailQueryPageProps {
-    api: ShopApi;
+    api: Pick<ShopApi, 'queryMails' | 'watchMailEvents'>;
     marketCode: string;
     customerId?: string | null;
     brandingName?: string;
@@ -85,6 +85,7 @@ export interface MailQueryPageProps {
     onNavigate?: (route: RouteState) => void;
     onNotify?: (message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
     initialCode?: string;
+    standalone?: boolean;
 }
 
 export function MailQueryPage({
@@ -95,6 +96,7 @@ export function MailQueryPage({
     onBack,
     onNavigate,
     initialCode,
+    standalone = false,
 }: Readonly<MailQueryPageProps>) {
     const isZh = language === 'zh';
     const storageKey = storageKeyForIdentity(marketCode, customerId);
@@ -597,10 +599,10 @@ export function MailQueryPage({
         };
     }, [api, currentQueryCode, liveEnabled, storageKey, handleBackToQueryForm, showToast]);
 
-    // Initial mount query (initialCode or URL params)
+    // Standalone customers enter their code in the form, never in a shareable URL.
     useEffect(() => {
         let code = initialCode;
-        if (!code && typeof window !== 'undefined') {
+        if (!code && !standalone && typeof window !== 'undefined') {
             const urlParams = new URLSearchParams(window.location.search);
             code = urlParams.get('code') || urlParams.get('q') || undefined;
         }
@@ -613,7 +615,7 @@ export function MailQueryPage({
                 void executeQuery(cleaned);
             }
         }
-    }, [executeQuery, initialCode, storageKey]);
+    }, [executeQuery, initialCode, standalone, storageKey]);
 
     // Mails list filtering
     const mails = result?.items ?? [];
@@ -644,6 +646,7 @@ export function MailQueryPage({
                 title={isZh ? '邮箱查询服务' : 'Email lookup'}
                 language={language}
                 onBack={result ? handleBackToQueryForm : handleBackClick}
+                back={standalone && !result && !onBack ? false : undefined}
                 backLabel={isZh ? '返回上一层' : 'Back'}
                 action={
                     result ? (
@@ -1191,18 +1194,20 @@ export function MailQueryPage({
                             </p>
                         </details>
                     </div>
-                    <a
-                        className="mail-query-support"
-                        href="/support"
-                        onClick={e => {
-                            if (onNavigate) {
-                                e.preventDefault();
-                                onNavigate({ name: 'support' });
-                            }
-                        }}
-                    >
-                        {isZh ? '联系客服' : 'Contact support'}
-                    </a>
+                    {!standalone && (
+                        <a
+                            className="mail-query-support"
+                            href="/support"
+                            onClick={e => {
+                                if (onNavigate) {
+                                    e.preventDefault();
+                                    onNavigate({ name: 'support' });
+                                }
+                            }}
+                        >
+                            {isZh ? '联系客服' : 'Contact support'}
+                        </a>
+                    )}
                 </aside>
             </div>
         </main>

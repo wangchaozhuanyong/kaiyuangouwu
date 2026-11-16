@@ -55,6 +55,8 @@ button:disabled {
     height: 20px;
 }
 .subpage-header > strong {
+    grid-column: 2;
+    grid-row: 1;
     overflow: hidden;
     font-size: var(--type-topbar-size);
     line-height: var(--type-topbar-leading);
@@ -64,6 +66,8 @@ button:disabled {
     text-overflow: ellipsis;
 }
 .subpage-header-actions {
+    grid-column: 3;
+    grid-row: 1;
     display: grid;
     place-items: center;
     min-height: 44px;
