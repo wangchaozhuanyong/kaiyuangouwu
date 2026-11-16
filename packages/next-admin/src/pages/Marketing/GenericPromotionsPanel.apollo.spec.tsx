@@ -53,7 +53,7 @@ interface ManagementItem {
     claimEndsAt: string | null;
 }
 interface ListData {
-    activeChannel: { id: string; code: string; defaultLanguageCode: string };
+    activeChannel: { id: string; code: string };
     adminPromotionManagement: { items: ManagementItem[]; totalItems: number; stores: Store[] };
     promotionConditions: [];
     promotionActions: [];
@@ -107,7 +107,6 @@ function data(items: ManagementItem[], totalItems = items.length, channelId = 'p
         activeChannel: {
             id: channelId,
             code: channelId === 'platform' ? '__default_channel__' : channelId,
-            defaultLanguageCode: 'zh_Hans',
         },
         adminPromotionManagement: {
             items,

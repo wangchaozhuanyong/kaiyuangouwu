@@ -48,12 +48,11 @@ export const orderConfirmationHandler = new EmailEventListener('order-confirmati
 
 export const emailVerificationHandler = new EmailEventListener('email-verification')
     .on(AccountRegistrationEvent)
-    .filter(event => !!event.user.getNativeAuthenticationMethod().identifier)
     .filter(event => {
-        const nativeAuthMethod = event.user.authenticationMethods.find(
-            m => m instanceof NativeAuthenticationMethod,
-        ) as NativeAuthenticationMethod | undefined;
-        return (nativeAuthMethod && !!nativeAuthMethod.identifier) || false;
+        const nativeAuthMethod = event.user.authenticationMethods?.find(
+            (method): method is NativeAuthenticationMethod => method instanceof NativeAuthenticationMethod,
+        );
+        return !event.user.verified && !!nativeAuthMethod?.identifier && !!nativeAuthMethod.verificationToken;
     })
     .setRecipient(event => event.user.identifier)
     .setFrom('{{ fromAddress }}')

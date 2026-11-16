@@ -27,7 +27,7 @@ packaging {
 export const cartQuoteFields = `
 id code state orderPlacedAt totalQuantity subTotalWithTax shippingWithTax totalWithTax currencyCode
 customer{id emailAddress}
-payments { id kind method amount state transactionId metadata }
+payments { id method amount state transactionId metadata }
 discounts{adjustmentSource description amountWithTax}
 taxSummary{description taxRate taxBase taxTotal}
 couponCodes

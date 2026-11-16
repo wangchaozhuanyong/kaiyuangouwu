@@ -1,6 +1,29 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatUsdtPaymentAmount, usdtPaymentReceipt } from './order-payment-display';
+import { formatUsdtPaymentAmount, isSettledTestOrder, usdtPaymentReceipt } from './order-payment-display';
+
+describe('simulated checkout receipt', () => {
+    const payment = {
+        id: 'simulation',
+        method: 'controlled-test-payment-platform',
+        amount: 1990,
+        state: 'Settled',
+        metadata: { public: { testPayment: true } },
+    };
+    it('identifies a settled simulation and preserves the legacy settled state', () => {
+        expect(isSettledTestOrder({ state: 'PaymentSettled', payments: [payment] })).toBe(true);
+        expect(isSettledTestOrder({ state: 'TestPaymentSettled' })).toBe(true);
+    });
+    it('requires server simulation evidence and preserves later order states', () => {
+        expect(
+            isSettledTestOrder({ state: 'PaymentSettled', payments: [{ ...payment, metadata: null }] }),
+        ).toBe(false);
+        expect(
+            isSettledTestOrder({ state: 'PaymentSettled', payments: [{ ...payment, method: 'offline' }] }),
+        ).toBe(false);
+        expect(isSettledTestOrder({ state: 'Cancelled', payments: [payment] })).toBe(false);
+    });
+});
 
 describe('USDT payment display', () => {
     it('reads the exact settled USDT amount from public payment metadata', () => {

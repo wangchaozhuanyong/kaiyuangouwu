@@ -99,8 +99,32 @@
 .security-avatar-actions {
     grid-column: 1 / -1;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 12px;
+}
+
+.security-avatar-history {
+    padding-inline: 16px;
+}
+
+.security-avatar-history ul {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.security-avatar-history li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+.security-avatar-history li > :is(button, span:last-child) {
+    margin-inline-start: auto;
 }
 
 .security-avatar-actions button {

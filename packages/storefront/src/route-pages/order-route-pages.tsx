@@ -371,7 +371,6 @@ function AccountSecurityRouteContent({
     onConfirmedLogout: () => void;
 }) {
     const queryClient = useQueryClient();
-    const isZh = runtime.language === 'zh';
     const customerScope = storefrontQueryKeys.customerScope(
         storefrontQueryKeys.market(runtime.market),
         languageCodeFor(runtime.language),
@@ -438,20 +437,11 @@ function AccountSecurityRouteContent({
                         }
                         loadError={loadError}
                         onRetry={retryReads}
-                        onAvatarChange={async (file: File) => {
-                            const avatar = await runtime.api.uploadCustomerAvatar(file);
-                            runtime.setCustomer((current: ActiveCustomer | null) =>
-                                current ? { ...current, avatar } : current,
-                            );
-                            runtime.notify(isZh ? '头像已更新' : 'Profile photo updated');
-                        }}
-                        onAvatarRemove={async () => {
-                            await runtime.api.removeCustomerAvatar();
-                            runtime.setCustomer((current: ActiveCustomer | null) =>
-                                current ? { ...current, avatar: null } : current,
-                            );
-                            runtime.notify(isZh ? '头像已移除' : 'Profile photo removed');
-                        }}
+                        api={runtime.api}
+                        marketCode={runtime.market.code}
+                        customerScope={customerScope}
+                        setCustomer={runtime.setCustomer}
+                        onNotify={runtime.notify}
                         onRequestVerification={action => runtime.api.requestDataSubjectVerification(action)}
                         onDataExport={
                             runtime.contentQuery?.data?.settings.personalDataExportEnabled === true
