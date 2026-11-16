@@ -82,7 +82,7 @@ async function mountAddressFixture(context, loseResponse = false) {
 const browser = await chromium.launch({ headless: true });
 const results = [];
 try {
-    for (const width of [390, 1440])
+    for (const width of [360, 390, 1440])
         for (const lang of ['zh', 'en']) {
             const context = await browser.newContext({
                 viewport: { width, height: 960 },
@@ -129,6 +129,63 @@ try {
                 true,
             );
             assert.equal(await page.locator('a, iframe, [src*="moyaoai.com"]').count(), 0);
+            assert.equal(fixture.writes, 1);
+            await page.evaluate(() => {
+                const key = 'tax-address-history:v1:address-tool';
+                const [base] = JSON.parse(localStorage.getItem(key));
+                const sampleRows = Array.from({ length: 12 }, (_, index) => ({
+                    ...base,
+                    requestId: 'layout-history-' + index,
+                    address: {
+                        ...base.address,
+                        id: 'layout-' + index,
+                        line1: 123 + index + ' Example St',
+                        usedAt: new Date(Date.parse(base.address.usedAt) - index * 300000).toISOString(),
+                    },
+                }));
+                localStorage.setItem(key, JSON.stringify(sampleRows));
+                window.dispatchEvent(
+                    new CustomEvent('tax-address-history-changed', { detail: 'address-tool' }),
+                );
+            });
+            const history = page.getByRole('region', {
+                name: lang === 'zh' ? '提取记录' : 'Local history',
+                exact: true,
+            });
+            const rows = history.locator('.tax-address-history-row');
+            await expect(rows).toHaveCount(5);
+            await history
+                .getByRole('button', { name: lang === 'zh' ? '下一页' : 'Next', exact: true })
+                .click();
+            await expect(rows.first()).toContainText('128 Example St');
+            await rows.first().locator('[aria-expanded]').click();
+            await expect(history.locator('.tax-address-detail-row:not([hidden])')).toContainText(
+                '128 Example St',
+            );
+            assert.deepEqual(
+                await page.evaluate(() => {
+                    const result = document.querySelector('.tax-address-result').getBoundingClientRect();
+                    const historyBox = document.querySelector('.tax-address-history').getBoundingClientRect();
+                    const nestedScroll = [...document.querySelectorAll('.tax-address-page *')].some(
+                        element =>
+                            /auto|scroll/.test(getComputedStyle(element).overflowY) &&
+                            element.scrollHeight > element.clientHeight + 1,
+                    );
+                    return {
+                        stacked: historyBox.top >= result.bottom,
+                        horizontalOverflow: document.documentElement.scrollWidth > innerWidth + 1,
+                        nestedScroll,
+                    };
+                }),
+                { stacked: true, horizontalOverflow: false, nestedScroll: false },
+            );
+            await history
+                .getByRole('button', { name: lang === 'zh' ? '下一页' : 'Next', exact: true })
+                .click();
+            await expect(rows).toHaveCount(2);
+            await expect(
+                history.getByRole('button', { name: lang === 'zh' ? '下一页' : 'Next', exact: true }),
+            ).toBeDisabled();
             assert.equal(fixture.writes, 1);
             const screenshot = 'address-' + width + '-' + lang + '.png';
             await page.screenshot({ path: output + screenshot, fullPage: true });
