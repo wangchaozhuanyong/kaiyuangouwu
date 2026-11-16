@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/Shreeshrii/tessdata_ocrb",
+  "revision": "0daabbebc043922effa111711a5804467bf961d4",
+  "license": "Apache-2.0",
+  "file": "ocrb_int.traineddata.gz",
+  "sha256": "32c298d4442a6ddb3380351f69f028351861d924c8a827c53598c4d2f805ce68",
+  "sourceSha256": "814f0d862538249d4122db8d41807b08fd7c31181455df7f596a2ed5ce4434ee"
+}

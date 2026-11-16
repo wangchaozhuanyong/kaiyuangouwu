@@ -1,0 +1,4363 @@
+{
+  "nationality": [
+    [
+      "AFG",
+      "AFG - AFGHANISTAN"
+    ],
+    [
+      "ALB",
+      "ALB - ALBANIA"
+    ],
+    [
+      "DZA",
+      "DZA - ALGERIA"
+    ],
+    [
+      "ASM",
+      "ASM - AMERICAN SAMOA"
+    ],
+    [
+      "AND",
+      "AND - ANDORRA"
+    ],
+    [
+      "AGO",
+      "AGO - ANGOLA"
+    ],
+    [
+      "AIA",
+      "AIA - ANGUILLA"
+    ],
+    [
+      "ATA",
+      "ATA - ANTARCTICA"
+    ],
+    [
+      "ATG",
+      "ATG - ANTIGUA AND BARBUDA"
+    ],
+    [
+      "ARG",
+      "ARG - ARGENTINA"
+    ],
+    [
+      "ARM",
+      "ARM - ARMENIA"
+    ],
+    [
+      "ABW",
+      "ABW - ARUBA"
+    ],
+    [
+      "AUS",
+      "AUS - AUSTRALIA"
+    ],
+    [
+      "AUT",
+      "AUT - AUSTRIA"
+    ],
+    [
+      "AZE",
+      "AZE - AZERBAIJAN"
+    ],
+    [
+      "BHS",
+      "BHS - BAHAMAS"
+    ],
+    [
+      "BHR",
+      "BHR - BAHRAIN"
+    ],
+    [
+      "BGD",
+      "BGD - BANGLADESH"
+    ],
+    [
+      "BRB",
+      "BRB - BARBADOS"
+    ],
+    [
+      "BLR",
+      "BLR - BELARUS"
+    ],
+    [
+      "BEL",
+      "BEL - BELGIUM"
+    ],
+    [
+      "BLZ",
+      "BLZ - BELIZE"
+    ],
+    [
+      "BEN",
+      "BEN - BENIN"
+    ],
+    [
+      "BMU",
+      "BMU - BERMUDA"
+    ],
+    [
+      "BTN",
+      "BTN - BHUTAN"
+    ],
+    [
+      "BOL",
+      "BOL - BOLIVIA"
+    ],
+    [
+      "BIH",
+      "BIH - BOSNIA AND HERZEGOVINA"
+    ],
+    [
+      "BWA",
+      "BWA - BOTSWANA"
+    ],
+    [
+      "BVT",
+      "BVT - BOUVET ISLAND"
+    ],
+    [
+      "BRA",
+      "BRA - BRAZIL"
+    ],
+    [
+      "IOT",
+      "IOT - BRITISH INDIAN OCEAN TERRITORY"
+    ],
+    [
+      "GBN",
+      "GBN - BRITISH NATIONAL OVERSEAS"
+    ],
+    [
+      "GBO",
+      "GBO - BRITISH OVERSEAS CITIZENS"
+    ],
+    [
+      "GBP",
+      "GBP - BRITISH PROTECTED PERSON"
+    ],
+    [
+      "GBS",
+      "GBS - BRITISH SUBJECT"
+    ],
+    [
+      "BRN",
+      "BRN - BRUNEI DARUSSALAM"
+    ],
+    [
+      "BGR",
+      "BGR - BULGARIA"
+    ],
+    [
+      "BFA",
+      "BFA - BURKINA FASO"
+    ],
+    [
+      "BDI",
+      "BDI - BURUNDI"
+    ],
+    [
+      "KHM",
+      "KHM - CAMBODIA"
+    ],
+    [
+      "CMR",
+      "CMR - CAMEROON"
+    ],
+    [
+      "CAN",
+      "CAN - CANADA"
+    ],
+    [
+      "CPV",
+      "CPV - CAPE VERDE"
+    ],
+    [
+      "CYM",
+      "CYM - CAYMAN ISLANDS"
+    ],
+    [
+      "CAF",
+      "CAF - CENTRAL AFRICAN REPUBLIC"
+    ],
+    [
+      "TCD",
+      "TCD - CHAD"
+    ],
+    [
+      "CHL",
+      "CHL - CHILE"
+    ],
+    [
+      "CHN",
+      "CHN - CHINA"
+    ],
+    [
+      "CXR",
+      "CXR - CHRISTMAS ISLAND"
+    ],
+    [
+      "CCK",
+      "CCK - COCOS ISLANDS"
+    ],
+    [
+      "COL",
+      "COL - COLOMBIA"
+    ],
+    [
+      "COM",
+      "COM - COMOROS"
+    ],
+    [
+      "COG",
+      "COG - CONGO"
+    ],
+    [
+      "COK",
+      "COK - COOK ISLANDS"
+    ],
+    [
+      "CRI",
+      "CRI - COSTA RICA"
+    ],
+    [
+      "CIV",
+      "CIV - COTE D'IVOIRE"
+    ],
+    [
+      "HRV",
+      "HRV - CROATIA"
+    ],
+    [
+      "CUB",
+      "CUB - CUBA"
+    ],
+    [
+      "CYP",
+      "CYP - CYPRUS"
+    ],
+    [
+      "CZE",
+      "CZE - CZECH REPUBLIC"
+    ],
+    [
+      "PRK",
+      "PRK - DEMOCRATIC PEOPLE'S REPUBLIC OF KOREA"
+    ],
+    [
+      "DPR",
+      "DPR - DEMOCRATIC PEOPLES REPUBLIC OF KOREA"
+    ],
+    [
+      "COD",
+      "COD - DEMOCRATIC REPUBLIC OF THE CONGO"
+    ],
+    [
+      "DNK",
+      "DNK - DENMARK"
+    ],
+    [
+      "DJI",
+      "DJI - DJIBOUTI"
+    ],
+    [
+      "DMA",
+      "DMA - DOMINICA"
+    ],
+    [
+      "DOM",
+      "DOM - DOMINICAN REPUBLIC"
+    ],
+    [
+      "ECU",
+      "ECU - ECUADOR"
+    ],
+    [
+      "EGY",
+      "EGY - EGYPT"
+    ],
+    [
+      "SLV",
+      "SLV - EL SALVADOR"
+    ],
+    [
+      "GNQ",
+      "GNQ - EQUATORIAL GUINEA"
+    ],
+    [
+      "ERI",
+      "ERI - ERITREA"
+    ],
+    [
+      "EST",
+      "EST - ESTONIA"
+    ],
+    [
+      "ETH",
+      "ETH - ETHIOPIA"
+    ],
+    [
+      "EUE",
+      "EUE - EUROPEAN UNION LAISSER PASSER"
+    ],
+    [
+      "FLK",
+      "FLK - FALKLAND ISLAND (MALVINAS)"
+    ],
+    [
+      "FRO",
+      "FRO - FAROE ISLANDS"
+    ],
+    [
+      "FJI",
+      "FJI - FIJI"
+    ],
+    [
+      "FIN",
+      "FIN - FINLAND"
+    ],
+    [
+      "FXX",
+      "FXX - FINLAND, METROPOLITAN"
+    ],
+    [
+      "FRA",
+      "FRA - FRANCE"
+    ],
+    [
+      "GUF",
+      "GUF - FRENCH GUIANA"
+    ],
+    [
+      "PYF",
+      "PYF - FRENCH POLYNESIA"
+    ],
+    [
+      "ATF",
+      "ATF - FRENCH SOUTHERN TERRITORIES"
+    ],
+    [
+      "GAB",
+      "GAB - GABON"
+    ],
+    [
+      "GMB",
+      "GMB - GAMBIA"
+    ],
+    [
+      "GEO",
+      "GEO - GEORGIA"
+    ],
+    [
+      "DEU",
+      "DEU - GERMANY"
+    ],
+    [
+      "GHA",
+      "GHA - GHANA"
+    ],
+    [
+      "GIB",
+      "GIB - GIBRALTAR"
+    ],
+    [
+      "GRC",
+      "GRC - GREECE"
+    ],
+    [
+      "GRL",
+      "GRL - GREENLAND"
+    ],
+    [
+      "GRD",
+      "GRD - GRENADA"
+    ],
+    [
+      "GLP",
+      "GLP - GUADELOUPE"
+    ],
+    [
+      "GUM",
+      "GUM - GUAM"
+    ],
+    [
+      "GTM",
+      "GTM - GUATEMALA"
+    ],
+    [
+      "GNB",
+      "GNB - GUIENA-BISSAU"
+    ],
+    [
+      "GIN",
+      "GIN - GUINEA"
+    ],
+    [
+      "GUY",
+      "GUY - GUYANA"
+    ],
+    [
+      "HTI",
+      "HTI - HAITI"
+    ],
+    [
+      "HMD",
+      "HMD - HEARD AND MCDONALD ISLANDS"
+    ],
+    [
+      "VAT",
+      "VAT - HOLY SEE (VATICAN CITY STATE)"
+    ],
+    [
+      "HND",
+      "HND - HONDURAS"
+    ],
+    [
+      "HKG",
+      "HKG - HONG KONG SAR"
+    ],
+    [
+      "HUN",
+      "HUN - HUNGARY"
+    ],
+    [
+      "ISL",
+      "ISL - ICELAND"
+    ],
+    [
+      "IND",
+      "IND - INDIA"
+    ],
+    [
+      "IDN",
+      "IDN - INDONESIA"
+    ],
+    [
+      "IRN",
+      "IRN - IRAN"
+    ],
+    [
+      "IRQ",
+      "IRQ - IRAQ"
+    ],
+    [
+      "IRL",
+      "IRL - IRELAND"
+    ],
+    [
+      "ISR",
+      "ISR - ISRAEL"
+    ],
+    [
+      "ITA",
+      "ITA - ITALY"
+    ],
+    [
+      "JAM",
+      "JAM - JAMAICA"
+    ],
+    [
+      "JPN",
+      "JPN - JAPAN"
+    ],
+    [
+      "JOR",
+      "JOR - JORDAN"
+    ],
+    [
+      "KAZ",
+      "KAZ - KAZAKHSTAN"
+    ],
+    [
+      "KEN",
+      "KEN - KENYA"
+    ],
+    [
+      "KIR",
+      "KIR - KIRIBATI"
+    ],
+    [
+      "KWT",
+      "KWT - KUWAIT"
+    ],
+    [
+      "KGZ",
+      "KGZ - KYRGYZSTAN"
+    ],
+    [
+      "LAO",
+      "LAO - LAO PDR"
+    ],
+    [
+      "LVA",
+      "LVA - LATVIA"
+    ],
+    [
+      "LBN",
+      "LBN - LEBANON"
+    ],
+    [
+      "LSO",
+      "LSO - LESOTHO"
+    ],
+    [
+      "LBR",
+      "LBR - LIBERIA"
+    ],
+    [
+      "LBY",
+      "LBY - LIBYA"
+    ],
+    [
+      "LIE",
+      "LIE - LIECHTENSTEIN"
+    ],
+    [
+      "LTU",
+      "LTU - LITHUANIA"
+    ],
+    [
+      "LUX",
+      "LUX - LUXEMBOURG"
+    ],
+    [
+      "MAC",
+      "MAC - MACAO SAR"
+    ],
+    [
+      "MDG",
+      "MDG - MADAGASCAR"
+    ],
+    [
+      "MWI",
+      "MWI - MALAWI"
+    ],
+    [
+      "MYS",
+      "MYS - MALAYSIA"
+    ],
+    [
+      "MDV",
+      "MDV - MALDIVES"
+    ],
+    [
+      "MLI",
+      "MLI - MALI"
+    ],
+    [
+      "MLT",
+      "MLT - MALTA"
+    ],
+    [
+      "MHL",
+      "MHL - MARSHALL ISLANDS"
+    ],
+    [
+      "MTQ",
+      "MTQ - MARTINIQUE"
+    ],
+    [
+      "MRT",
+      "MRT - MAURITANIA"
+    ],
+    [
+      "MUS",
+      "MUS - MAURITIUS"
+    ],
+    [
+      "MYT",
+      "MYT - MAYOTTE"
+    ],
+    [
+      "MEX",
+      "MEX - MEXICO"
+    ],
+    [
+      "FSM",
+      "FSM - MICRONESIA,FEDERATED STATES OF"
+    ],
+    [
+      "MCO",
+      "MCO - MONACO"
+    ],
+    [
+      "MNG",
+      "MNG - MONGOLIA"
+    ],
+    [
+      "MNE",
+      "MNE - MONTENEGRO"
+    ],
+    [
+      "MSR",
+      "MSR - MONTSERRAT"
+    ],
+    [
+      "MAR",
+      "MAR - MOROCCO"
+    ],
+    [
+      "MOZ",
+      "MOZ - MOZAMBIQUE"
+    ],
+    [
+      "MMR",
+      "MMR - MYANMAR"
+    ],
+    [
+      "NAM",
+      "NAM - NAMIBIA"
+    ],
+    [
+      "NRU",
+      "NRU - NAURU"
+    ],
+    [
+      "NNS",
+      "NNS - NEGARA-NEGARA SUMBER"
+    ],
+    [
+      "NPL",
+      "NPL - NEPAL"
+    ],
+    [
+      "NLD",
+      "NLD - NETHERLANDS"
+    ],
+    [
+      "ANT",
+      "ANT - NETHERLANDS ANTILLES"
+    ],
+    [
+      "NTZ",
+      "NTZ - NEUTRAL ZONE"
+    ],
+    [
+      "NCL",
+      "NCL - NEW CELEDONIA"
+    ],
+    [
+      "NZL",
+      "NZL - NEW ZEALAND"
+    ],
+    [
+      "NIC",
+      "NIC - NICARAGUA"
+    ],
+    [
+      "NER",
+      "NER - NIGER"
+    ],
+    [
+      "NGA",
+      "NGA - NIGERIA"
+    ],
+    [
+      "ZZD",
+      "ZZD - NIL"
+    ],
+    [
+      "NIU",
+      "NIU - NIUE"
+    ],
+    [
+      "NFK",
+      "NFK - NORFOLK ISLAND"
+    ],
+    [
+      "MNP",
+      "MNP - NORTHERN MARIANA ISLANDS"
+    ],
+    [
+      "NOR",
+      "NOR - NORWAY"
+    ],
+    [
+      "OMN",
+      "OMN - OMAN"
+    ],
+    [
+      "PAK",
+      "PAK - PAKISTAN"
+    ],
+    [
+      "PLW",
+      "PLW - PALAU"
+    ],
+    [
+      "PAL",
+      "PAL - PALESTINE"
+    ],
+    [
+      "PSE",
+      "PSE - PALESTINE"
+    ],
+    [
+      "PAN",
+      "PAN - PANAMA"
+    ],
+    [
+      "PNG",
+      "PNG - PAPUA NEW GUINEA"
+    ],
+    [
+      "PRY",
+      "PRY - PARAGUAY"
+    ],
+    [
+      "PER",
+      "PER - PERU"
+    ],
+    [
+      "PHL",
+      "PHL - PHILIPPINES"
+    ],
+    [
+      "PCN",
+      "PCN - PITCAIRN ISLAND"
+    ],
+    [
+      "POL",
+      "POL - POLAND"
+    ],
+    [
+      "PRT",
+      "PRT - PORTUGAL"
+    ],
+    [
+      "PRI",
+      "PRI - PUERTO RICO"
+    ],
+    [
+      "QAT",
+      "QAT - QATAR"
+    ],
+    [
+      "XXC",
+      "XXC - REFUGEE"
+    ],
+    [
+      "XXB",
+      "XXB - REFUGEE ARTICLE 1/1951"
+    ],
+    [
+      "MDA",
+      "MDA - REP OF MOLDOVA"
+    ],
+    [
+      "RKS",
+      "RKS - REP. KOSOVO"
+    ],
+    [
+      "KOR",
+      "KOR - REPUBLIC OF KOREA"
+    ],
+    [
+      "KOS",
+      "KOS - REPUBLIC OF KOSOVO"
+    ],
+    [
+      "MKD",
+      "MKD - REPUBLIC OF MACEDONIA"
+    ],
+    [
+      "SSD",
+      "SSD - REPUBLIC OF SOUTH SUDAN"
+    ],
+    [
+      "REU",
+      "REU - REUNION"
+    ],
+    [
+      "ROM",
+      "ROM - ROMANIA"
+    ],
+    [
+      "ROU",
+      "ROU - ROMANIA"
+    ],
+    [
+      "RUS",
+      "RUS - RUSSIA"
+    ],
+    [
+      "RWA",
+      "RWA - RWANDA"
+    ],
+    [
+      "SHN",
+      "SHN - SAINT HELENA"
+    ],
+    [
+      "KNA",
+      "KNA - SAINT KITTS AND NEVIS"
+    ],
+    [
+      "LCA",
+      "LCA - SAINT LUCIA"
+    ],
+    [
+      "SPM",
+      "SPM - SAINT PIERRE AND MIQUELON"
+    ],
+    [
+      "VCT",
+      "VCT - SAINT VINCENT AND THE GRENADINES"
+    ],
+    [
+      "WSM",
+      "WSM - SAMOA"
+    ],
+    [
+      "SMR",
+      "SMR - SAN MARINO"
+    ],
+    [
+      "STP",
+      "STP - SAO TOME AND PRINCIPE"
+    ],
+    [
+      "SAU",
+      "SAU - SAUDI ARABIA"
+    ],
+    [
+      "SEN",
+      "SEN - SENEGAL"
+    ],
+    [
+      "SER",
+      "SER - SERBIA"
+    ],
+    [
+      "SRB",
+      "SRB - SERBIA"
+    ],
+    [
+      "SCG",
+      "SCG - SERBIA AND MONTENEGRO"
+    ],
+    [
+      "SYC",
+      "SYC - SEYCHELLES"
+    ],
+    [
+      "SLE",
+      "SLE - SIERRA LEONE"
+    ],
+    [
+      "SGP",
+      "SGP - SINGAPORE"
+    ],
+    [
+      "SVK",
+      "SVK - SLOVAKIA"
+    ],
+    [
+      "SVN",
+      "SVN - SLOVENIA"
+    ],
+    [
+      "SLB",
+      "SLB - SOLOMON ISLANDS"
+    ],
+    [
+      "SOM",
+      "SOM - SOMALIA"
+    ],
+    [
+      "ZAF",
+      "ZAF - SOUTH AFRICA"
+    ],
+    [
+      "SGS",
+      "SGS - SOUTH GEORGIA & THE SOUTH SANDWICH IS"
+    ],
+    [
+      "ESP",
+      "ESP - SPAIN"
+    ],
+    [
+      "LKA",
+      "LKA - SRI LANKA"
+    ],
+    [
+      "ZZA",
+      "ZZA - STATELESS"
+    ],
+    [
+      "XXA",
+      "XXA - STATELESS PERSON ARTICLE 1/1954"
+    ],
+    [
+      "SDN",
+      "SDN - SUDAN"
+    ],
+    [
+      "SUR",
+      "SUR - SURINAME"
+    ],
+    [
+      "SJM",
+      "SJM - SVALBARD AND JAN MAYEN ISLANDS"
+    ],
+    [
+      "SWZ",
+      "SWZ - SWAZILAND"
+    ],
+    [
+      "SWE",
+      "SWE - SWEDEN"
+    ],
+    [
+      "CHE",
+      "CHE - SWITZERLAND"
+    ],
+    [
+      "SYR",
+      "SYR - SYRIA"
+    ],
+    [
+      "TWN",
+      "TWN - TAIWAN"
+    ],
+    [
+      "TJK",
+      "TJK - TAJIKISTAN"
+    ],
+    [
+      "TZA",
+      "TZA - TANZANIA"
+    ],
+    [
+      "THA",
+      "THA - THAILAND"
+    ],
+    [
+      "FYR",
+      "FYR - THE FORMER YUGOSLAV REP. OF MACEDONIA"
+    ],
+    [
+      "ZZB",
+      "ZZB - TIDAK DINYATAKAN OLEH KLN"
+    ],
+    [
+      "TLS",
+      "TLS - TIMOR LESTE"
+    ],
+    [
+      "TMP",
+      "TMP - TIMOR LESTE"
+    ],
+    [
+      "TGO",
+      "TGO - TOGO"
+    ],
+    [
+      "TKL",
+      "TKL - TOKELAU"
+    ],
+    [
+      "TON",
+      "TON - TONGA"
+    ],
+    [
+      "TTO",
+      "TTO - TRINIDAD AND TOBAGO"
+    ],
+    [
+      "TUN",
+      "TUN - TUNISIA"
+    ],
+    [
+      "TUR",
+      "TUR - TURKIYE"
+    ],
+    [
+      "TKM",
+      "TKM - TURKMENISTAN"
+    ],
+    [
+      "TCA",
+      "TCA - TURKS AND CAICOS ISLANDS"
+    ],
+    [
+      "TUV",
+      "TUV - TUVALU"
+    ],
+    [
+      "UGA",
+      "UGA - UGANDA"
+    ],
+    [
+      "GBD",
+      "GBD - UK-DEPENDENT"
+    ],
+    [
+      "UKR",
+      "UKR - UKRAINE"
+    ],
+    [
+      "UNA",
+      "UNA - UN SPECIALIZED AGENCY"
+    ],
+    [
+      "UNH",
+      "UNH - UNHCR"
+    ],
+    [
+      "ARE",
+      "ARE - UNITED ARAB EMIRATES"
+    ],
+    [
+      "GBR",
+      "GBR - UNITED KINGDOM"
+    ],
+    [
+      "UNO",
+      "UNO - UNITED NATIONS ORGANIZATION"
+    ],
+    [
+      "UMI",
+      "UMI - UNITED STATES MINOR OUTLYING ISLANDS"
+    ],
+    [
+      "ZZZ",
+      "ZZZ - UNKNOWN"
+    ],
+    [
+      "ESH",
+      "ESH - UNKNOWN / UNSPECIFIED NATIONALITY"
+    ],
+    [
+      "XXX",
+      "XXX - UNSPECIFIED NATIONALITY"
+    ],
+    [
+      "URY",
+      "URY - URUGUAY"
+    ],
+    [
+      "USA",
+      "USA - USA"
+    ],
+    [
+      "UZB",
+      "UZB - UZBEKISTAN"
+    ],
+    [
+      "VUT",
+      "VUT - VANUATU"
+    ],
+    [
+      "VEN",
+      "VEN - VENEZUELA"
+    ],
+    [
+      "VNM",
+      "VNM - VIETNAM"
+    ],
+    [
+      "VGB",
+      "VGB - VIRGIN ISLANDS (BRITISH)"
+    ],
+    [
+      "VIR",
+      "VIR - VIRGIN ISLANDS (USA)"
+    ],
+    [
+      "WLF",
+      "WLF - WALLIS AND FUTURA ISLANDS"
+    ],
+    [
+      "YEM",
+      "YEM - YEMEN"
+    ],
+    [
+      "YUG",
+      "YUG - YUGOSLAVIA"
+    ],
+    [
+      "ZAR",
+      "ZAR - ZAIRE"
+    ],
+    [
+      "ZMB",
+      "ZMB - ZAMBIA"
+    ],
+    [
+      "ZWE",
+      "ZWE - ZIMBABWE"
+    ],
+    [
+      "ZIM",
+      "ZIM - ZIMBABWE"
+    ]
+  ],
+  "pob": [
+    [
+      "AFG",
+      "AFG - AFGHANISTAN"
+    ],
+    [
+      "ALB",
+      "ALB - ALBANIA"
+    ],
+    [
+      "DZA",
+      "DZA - ALGERIA"
+    ],
+    [
+      "ASM",
+      "ASM - AMERICAN SAMOA"
+    ],
+    [
+      "AND",
+      "AND - ANDORRA"
+    ],
+    [
+      "AGO",
+      "AGO - ANGOLA"
+    ],
+    [
+      "AIA",
+      "AIA - ANGUILLA"
+    ],
+    [
+      "ATA",
+      "ATA - ANTARCTICA"
+    ],
+    [
+      "ATG",
+      "ATG - ANTIGUA AND BARBUDA"
+    ],
+    [
+      "ARG",
+      "ARG - ARGENTINA"
+    ],
+    [
+      "ARM",
+      "ARM - ARMENIA"
+    ],
+    [
+      "ABW",
+      "ABW - ARUBA"
+    ],
+    [
+      "AUS",
+      "AUS - AUSTRALIA"
+    ],
+    [
+      "AUT",
+      "AUT - AUSTRIA"
+    ],
+    [
+      "AZE",
+      "AZE - AZERBAIJAN"
+    ],
+    [
+      "BHS",
+      "BHS - BAHAMAS"
+    ],
+    [
+      "BHR",
+      "BHR - BAHRAIN"
+    ],
+    [
+      "BGD",
+      "BGD - BANGLADESH"
+    ],
+    [
+      "BRB",
+      "BRB - BARBADOS"
+    ],
+    [
+      "BLR",
+      "BLR - BELARUS"
+    ],
+    [
+      "BEL",
+      "BEL - BELGIUM"
+    ],
+    [
+      "BLZ",
+      "BLZ - BELIZE"
+    ],
+    [
+      "BEN",
+      "BEN - BENIN"
+    ],
+    [
+      "BMU",
+      "BMU - BERMUDA"
+    ],
+    [
+      "BTN",
+      "BTN - BHUTAN"
+    ],
+    [
+      "BOL",
+      "BOL - BOLIVIA"
+    ],
+    [
+      "BIH",
+      "BIH - BOSNIA AND HERZEGOVINA"
+    ],
+    [
+      "BWA",
+      "BWA - BOTSWANA"
+    ],
+    [
+      "BVT",
+      "BVT - BOUVET ISLAND"
+    ],
+    [
+      "BRA",
+      "BRA - BRAZIL"
+    ],
+    [
+      "IOT",
+      "IOT - BRITISH INDIAN OCEAN TERRITORY"
+    ],
+    [
+      "GBN",
+      "GBN - BRITISH NATIONAL OVERSEAS"
+    ],
+    [
+      "GBO",
+      "GBO - BRITISH OVERSEAS CITIZENS"
+    ],
+    [
+      "GBP",
+      "GBP - BRITISH PROTECTED PERSON"
+    ],
+    [
+      "GBS",
+      "GBS - BRITISH SUBJECT"
+    ],
+    [
+      "BRN",
+      "BRN - BRUNEI DARUSSALAM"
+    ],
+    [
+      "BGR",
+      "BGR - BULGARIA"
+    ],
+    [
+      "BFA",
+      "BFA - BURKINA FASO"
+    ],
+    [
+      "BDI",
+      "BDI - BURUNDI"
+    ],
+    [
+      "KHM",
+      "KHM - CAMBODIA"
+    ],
+    [
+      "CMR",
+      "CMR - CAMEROON"
+    ],
+    [
+      "CAN",
+      "CAN - CANADA"
+    ],
+    [
+      "CPV",
+      "CPV - CAPE VERDE"
+    ],
+    [
+      "CYM",
+      "CYM - CAYMAN ISLANDS"
+    ],
+    [
+      "CAF",
+      "CAF - CENTRAL AFRICAN REPUBLIC"
+    ],
+    [
+      "TCD",
+      "TCD - CHAD"
+    ],
+    [
+      "CHL",
+      "CHL - CHILE"
+    ],
+    [
+      "CHN",
+      "CHN - CHINA"
+    ],
+    [
+      "CXR",
+      "CXR - CHRISTMAS ISLAND"
+    ],
+    [
+      "CCK",
+      "CCK - COCOS ISLANDS"
+    ],
+    [
+      "COL",
+      "COL - COLOMBIA"
+    ],
+    [
+      "COM",
+      "COM - COMOROS"
+    ],
+    [
+      "COG",
+      "COG - CONGO"
+    ],
+    [
+      "COK",
+      "COK - COOK ISLANDS"
+    ],
+    [
+      "CRI",
+      "CRI - COSTA RICA"
+    ],
+    [
+      "CIV",
+      "CIV - COTE D'IVOIRE"
+    ],
+    [
+      "HRV",
+      "HRV - CROATIA"
+    ],
+    [
+      "CUB",
+      "CUB - CUBA"
+    ],
+    [
+      "CYP",
+      "CYP - CYPRUS"
+    ],
+    [
+      "CZE",
+      "CZE - CZECH REPUBLIC"
+    ],
+    [
+      "PRK",
+      "PRK - DEMOCRATIC PEOPLE'S REPUBLIC OF KOREA"
+    ],
+    [
+      "DPR",
+      "DPR - DEMOCRATIC PEOPLES REPUBLIC OF KOREA"
+    ],
+    [
+      "COD",
+      "COD - DEMOCRATIC REPUBLIC OF THE CONGO"
+    ],
+    [
+      "DNK",
+      "DNK - DENMARK"
+    ],
+    [
+      "DJI",
+      "DJI - DJIBOUTI"
+    ],
+    [
+      "DMA",
+      "DMA - DOMINICA"
+    ],
+    [
+      "DOM",
+      "DOM - DOMINICAN REPUBLIC"
+    ],
+    [
+      "ECU",
+      "ECU - ECUADOR"
+    ],
+    [
+      "EGY",
+      "EGY - EGYPT"
+    ],
+    [
+      "SLV",
+      "SLV - EL SALVADOR"
+    ],
+    [
+      "GNQ",
+      "GNQ - EQUATORIAL GUINEA"
+    ],
+    [
+      "ERI",
+      "ERI - ERITREA"
+    ],
+    [
+      "EST",
+      "EST - ESTONIA"
+    ],
+    [
+      "ETH",
+      "ETH - ETHIOPIA"
+    ],
+    [
+      "EUE",
+      "EUE - EUROPEAN UNION LAISSER PASSER"
+    ],
+    [
+      "FLK",
+      "FLK - FALKLAND ISLAND (MALVINAS)"
+    ],
+    [
+      "FRO",
+      "FRO - FAROE ISLANDS"
+    ],
+    [
+      "FJI",
+      "FJI - FIJI"
+    ],
+    [
+      "FIN",
+      "FIN - FINLAND"
+    ],
+    [
+      "FXX",
+      "FXX - FINLAND, METROPOLITAN"
+    ],
+    [
+      "FRA",
+      "FRA - FRANCE"
+    ],
+    [
+      "GUF",
+      "GUF - FRENCH GUIANA"
+    ],
+    [
+      "PYF",
+      "PYF - FRENCH POLYNESIA"
+    ],
+    [
+      "ATF",
+      "ATF - FRENCH SOUTHERN TERRITORIES"
+    ],
+    [
+      "GAB",
+      "GAB - GABON"
+    ],
+    [
+      "GMB",
+      "GMB - GAMBIA"
+    ],
+    [
+      "GEO",
+      "GEO - GEORGIA"
+    ],
+    [
+      "DEU",
+      "DEU - GERMANY"
+    ],
+    [
+      "GHA",
+      "GHA - GHANA"
+    ],
+    [
+      "GIB",
+      "GIB - GIBRALTAR"
+    ],
+    [
+      "GRC",
+      "GRC - GREECE"
+    ],
+    [
+      "GRL",
+      "GRL - GREENLAND"
+    ],
+    [
+      "GRD",
+      "GRD - GRENADA"
+    ],
+    [
+      "GLP",
+      "GLP - GUADELOUPE"
+    ],
+    [
+      "GUM",
+      "GUM - GUAM"
+    ],
+    [
+      "GTM",
+      "GTM - GUATEMALA"
+    ],
+    [
+      "GNB",
+      "GNB - GUIENA-BISSAU"
+    ],
+    [
+      "GIN",
+      "GIN - GUINEA"
+    ],
+    [
+      "GUY",
+      "GUY - GUYANA"
+    ],
+    [
+      "HTI",
+      "HTI - HAITI"
+    ],
+    [
+      "HMD",
+      "HMD - HEARD AND MCDONALD ISLANDS"
+    ],
+    [
+      "VAT",
+      "VAT - HOLY SEE (VATICAN CITY STATE)"
+    ],
+    [
+      "HND",
+      "HND - HONDURAS"
+    ],
+    [
+      "HKG",
+      "HKG - HONG KONG SAR"
+    ],
+    [
+      "HUN",
+      "HUN - HUNGARY"
+    ],
+    [
+      "ISL",
+      "ISL - ICELAND"
+    ],
+    [
+      "IND",
+      "IND - INDIA"
+    ],
+    [
+      "IDN",
+      "IDN - INDONESIA"
+    ],
+    [
+      "IRN",
+      "IRN - IRAN"
+    ],
+    [
+      "IRQ",
+      "IRQ - IRAQ"
+    ],
+    [
+      "IRL",
+      "IRL - IRELAND"
+    ],
+    [
+      "ISR",
+      "ISR - ISRAEL"
+    ],
+    [
+      "ITA",
+      "ITA - ITALY"
+    ],
+    [
+      "JAM",
+      "JAM - JAMAICA"
+    ],
+    [
+      "JPN",
+      "JPN - JAPAN"
+    ],
+    [
+      "JOR",
+      "JOR - JORDAN"
+    ],
+    [
+      "KAZ",
+      "KAZ - KAZAKHSTAN"
+    ],
+    [
+      "KEN",
+      "KEN - KENYA"
+    ],
+    [
+      "KIR",
+      "KIR - KIRIBATI"
+    ],
+    [
+      "KWT",
+      "KWT - KUWAIT"
+    ],
+    [
+      "KGZ",
+      "KGZ - KYRGYZSTAN"
+    ],
+    [
+      "LAO",
+      "LAO - LAO PDR"
+    ],
+    [
+      "LVA",
+      "LVA - LATVIA"
+    ],
+    [
+      "LBN",
+      "LBN - LEBANON"
+    ],
+    [
+      "LSO",
+      "LSO - LESOTHO"
+    ],
+    [
+      "LBR",
+      "LBR - LIBERIA"
+    ],
+    [
+      "LBY",
+      "LBY - LIBYA"
+    ],
+    [
+      "LIE",
+      "LIE - LIECHTENSTEIN"
+    ],
+    [
+      "LTU",
+      "LTU - LITHUANIA"
+    ],
+    [
+      "LUX",
+      "LUX - LUXEMBOURG"
+    ],
+    [
+      "MAC",
+      "MAC - MACAO SAR"
+    ],
+    [
+      "MDG",
+      "MDG - MADAGASCAR"
+    ],
+    [
+      "MWI",
+      "MWI - MALAWI"
+    ],
+    [
+      "MYS",
+      "MYS - MALAYSIA"
+    ],
+    [
+      "MDV",
+      "MDV - MALDIVES"
+    ],
+    [
+      "MLI",
+      "MLI - MALI"
+    ],
+    [
+      "MLT",
+      "MLT - MALTA"
+    ],
+    [
+      "MHL",
+      "MHL - MARSHALL ISLANDS"
+    ],
+    [
+      "MTQ",
+      "MTQ - MARTINIQUE"
+    ],
+    [
+      "MRT",
+      "MRT - MAURITANIA"
+    ],
+    [
+      "MUS",
+      "MUS - MAURITIUS"
+    ],
+    [
+      "MYT",
+      "MYT - MAYOTTE"
+    ],
+    [
+      "MEX",
+      "MEX - MEXICO"
+    ],
+    [
+      "FSM",
+      "FSM - MICRONESIA,FEDERATED STATES OF"
+    ],
+    [
+      "MCO",
+      "MCO - MONACO"
+    ],
+    [
+      "MNG",
+      "MNG - MONGOLIA"
+    ],
+    [
+      "MNE",
+      "MNE - MONTENEGRO"
+    ],
+    [
+      "MSR",
+      "MSR - MONTSERRAT"
+    ],
+    [
+      "MAR",
+      "MAR - MOROCCO"
+    ],
+    [
+      "MOZ",
+      "MOZ - MOZAMBIQUE"
+    ],
+    [
+      "MMR",
+      "MMR - MYANMAR"
+    ],
+    [
+      "NAM",
+      "NAM - NAMIBIA"
+    ],
+    [
+      "NRU",
+      "NRU - NAURU"
+    ],
+    [
+      "NNS",
+      "NNS - NEGARA-NEGARA SUMBER"
+    ],
+    [
+      "NPL",
+      "NPL - NEPAL"
+    ],
+    [
+      "NLD",
+      "NLD - NETHERLANDS"
+    ],
+    [
+      "ANT",
+      "ANT - NETHERLANDS ANTILLES"
+    ],
+    [
+      "NTZ",
+      "NTZ - NEUTRAL ZONE"
+    ],
+    [
+      "NCL",
+      "NCL - NEW CELEDONIA"
+    ],
+    [
+      "NZL",
+      "NZL - NEW ZEALAND"
+    ],
+    [
+      "NIC",
+      "NIC - NICARAGUA"
+    ],
+    [
+      "NER",
+      "NER - NIGER"
+    ],
+    [
+      "NGA",
+      "NGA - NIGERIA"
+    ],
+    [
+      "ZZD",
+      "ZZD - NIL"
+    ],
+    [
+      "NIU",
+      "NIU - NIUE"
+    ],
+    [
+      "NFK",
+      "NFK - NORFOLK ISLAND"
+    ],
+    [
+      "MNP",
+      "MNP - NORTHERN MARIANA ISLANDS"
+    ],
+    [
+      "NOR",
+      "NOR - NORWAY"
+    ],
+    [
+      "OMN",
+      "OMN - OMAN"
+    ],
+    [
+      "PAK",
+      "PAK - PAKISTAN"
+    ],
+    [
+      "PLW",
+      "PLW - PALAU"
+    ],
+    [
+      "PAL",
+      "PAL - PALESTINE"
+    ],
+    [
+      "PSE",
+      "PSE - PALESTINE"
+    ],
+    [
+      "PAN",
+      "PAN - PANAMA"
+    ],
+    [
+      "PNG",
+      "PNG - PAPUA NEW GUINEA"
+    ],
+    [
+      "PRY",
+      "PRY - PARAGUAY"
+    ],
+    [
+      "PER",
+      "PER - PERU"
+    ],
+    [
+      "PHL",
+      "PHL - PHILIPPINES"
+    ],
+    [
+      "PCN",
+      "PCN - PITCAIRN ISLAND"
+    ],
+    [
+      "POL",
+      "POL - POLAND"
+    ],
+    [
+      "PRT",
+      "PRT - PORTUGAL"
+    ],
+    [
+      "PRI",
+      "PRI - PUERTO RICO"
+    ],
+    [
+      "QAT",
+      "QAT - QATAR"
+    ],
+    [
+      "XXC",
+      "XXC - REFUGEE"
+    ],
+    [
+      "XXB",
+      "XXB - REFUGEE ARTICLE 1/1951"
+    ],
+    [
+      "MDA",
+      "MDA - REP OF MOLDOVA"
+    ],
+    [
+      "RKS",
+      "RKS - REP. KOSOVO"
+    ],
+    [
+      "KOR",
+      "KOR - REPUBLIC OF KOREA"
+    ],
+    [
+      "KOS",
+      "KOS - REPUBLIC OF KOSOVO"
+    ],
+    [
+      "MKD",
+      "MKD - REPUBLIC OF MACEDONIA"
+    ],
+    [
+      "SSD",
+      "SSD - REPUBLIC OF SOUTH SUDAN"
+    ],
+    [
+      "REU",
+      "REU - REUNION"
+    ],
+    [
+      "ROM",
+      "ROM - ROMANIA"
+    ],
+    [
+      "ROU",
+      "ROU - ROMANIA"
+    ],
+    [
+      "RUS",
+      "RUS - RUSSIA"
+    ],
+    [
+      "RWA",
+      "RWA - RWANDA"
+    ],
+    [
+      "SHN",
+      "SHN - SAINT HELENA"
+    ],
+    [
+      "KNA",
+      "KNA - SAINT KITTS AND NEVIS"
+    ],
+    [
+      "LCA",
+      "LCA - SAINT LUCIA"
+    ],
+    [
+      "SPM",
+      "SPM - SAINT PIERRE AND MIQUELON"
+    ],
+    [
+      "VCT",
+      "VCT - SAINT VINCENT AND THE GRENADINES"
+    ],
+    [
+      "WSM",
+      "WSM - SAMOA"
+    ],
+    [
+      "SMR",
+      "SMR - SAN MARINO"
+    ],
+    [
+      "STP",
+      "STP - SAO TOME AND PRINCIPE"
+    ],
+    [
+      "SAU",
+      "SAU - SAUDI ARABIA"
+    ],
+    [
+      "SEN",
+      "SEN - SENEGAL"
+    ],
+    [
+      "SER",
+      "SER - SERBIA"
+    ],
+    [
+      "SRB",
+      "SRB - SERBIA"
+    ],
+    [
+      "SCG",
+      "SCG - SERBIA AND MONTENEGRO"
+    ],
+    [
+      "SYC",
+      "SYC - SEYCHELLES"
+    ],
+    [
+      "SLE",
+      "SLE - SIERRA LEONE"
+    ],
+    [
+      "SGP",
+      "SGP - SINGAPORE"
+    ],
+    [
+      "SVK",
+      "SVK - SLOVAKIA"
+    ],
+    [
+      "SVN",
+      "SVN - SLOVENIA"
+    ],
+    [
+      "SLB",
+      "SLB - SOLOMON ISLANDS"
+    ],
+    [
+      "SOM",
+      "SOM - SOMALIA"
+    ],
+    [
+      "ZAF",
+      "ZAF - SOUTH AFRICA"
+    ],
+    [
+      "SGS",
+      "SGS - SOUTH GEORGIA & THE SOUTH SANDWICH IS"
+    ],
+    [
+      "ESP",
+      "ESP - SPAIN"
+    ],
+    [
+      "LKA",
+      "LKA - SRI LANKA"
+    ],
+    [
+      "ZZA",
+      "ZZA - STATELESS"
+    ],
+    [
+      "XXA",
+      "XXA - STATELESS PERSON ARTICLE 1/1954"
+    ],
+    [
+      "SDN",
+      "SDN - SUDAN"
+    ],
+    [
+      "SUR",
+      "SUR - SURINAME"
+    ],
+    [
+      "SJM",
+      "SJM - SVALBARD AND JAN MAYEN ISLANDS"
+    ],
+    [
+      "SWZ",
+      "SWZ - SWAZILAND"
+    ],
+    [
+      "SWE",
+      "SWE - SWEDEN"
+    ],
+    [
+      "CHE",
+      "CHE - SWITZERLAND"
+    ],
+    [
+      "SYR",
+      "SYR - SYRIA"
+    ],
+    [
+      "TWN",
+      "TWN - TAIWAN"
+    ],
+    [
+      "TJK",
+      "TJK - TAJIKISTAN"
+    ],
+    [
+      "TZA",
+      "TZA - TANZANIA"
+    ],
+    [
+      "THA",
+      "THA - THAILAND"
+    ],
+    [
+      "FYR",
+      "FYR - THE FORMER YUGOSLAV REP. OF MACEDONIA"
+    ],
+    [
+      "ZZB",
+      "ZZB - TIDAK DINYATAKAN OLEH KLN"
+    ],
+    [
+      "TLS",
+      "TLS - TIMOR LESTE"
+    ],
+    [
+      "TMP",
+      "TMP - TIMOR LESTE"
+    ],
+    [
+      "TGO",
+      "TGO - TOGO"
+    ],
+    [
+      "TKL",
+      "TKL - TOKELAU"
+    ],
+    [
+      "TON",
+      "TON - TONGA"
+    ],
+    [
+      "TTO",
+      "TTO - TRINIDAD AND TOBAGO"
+    ],
+    [
+      "TUN",
+      "TUN - TUNISIA"
+    ],
+    [
+      "TUR",
+      "TUR - TURKIYE"
+    ],
+    [
+      "TKM",
+      "TKM - TURKMENISTAN"
+    ],
+    [
+      "TCA",
+      "TCA - TURKS AND CAICOS ISLANDS"
+    ],
+    [
+      "TUV",
+      "TUV - TUVALU"
+    ],
+    [
+      "UGA",
+      "UGA - UGANDA"
+    ],
+    [
+      "GBD",
+      "GBD - UK-DEPENDENT"
+    ],
+    [
+      "UKR",
+      "UKR - UKRAINE"
+    ],
+    [
+      "UNA",
+      "UNA - UN SPECIALIZED AGENCY"
+    ],
+    [
+      "UNH",
+      "UNH - UNHCR"
+    ],
+    [
+      "ARE",
+      "ARE - UNITED ARAB EMIRATES"
+    ],
+    [
+      "GBR",
+      "GBR - UNITED KINGDOM"
+    ],
+    [
+      "UNO",
+      "UNO - UNITED NATIONS ORGANIZATION"
+    ],
+    [
+      "UMI",
+      "UMI - UNITED STATES MINOR OUTLYING ISLANDS"
+    ],
+    [
+      "ZZZ",
+      "ZZZ - UNKNOWN"
+    ],
+    [
+      "ESH",
+      "ESH - UNKNOWN / UNSPECIFIED NATIONALITY"
+    ],
+    [
+      "XXX",
+      "XXX - UNSPECIFIED NATIONALITY"
+    ],
+    [
+      "URY",
+      "URY - URUGUAY"
+    ],
+    [
+      "USA",
+      "USA - USA"
+    ],
+    [
+      "UZB",
+      "UZB - UZBEKISTAN"
+    ],
+    [
+      "VUT",
+      "VUT - VANUATU"
+    ],
+    [
+      "VEN",
+      "VEN - VENEZUELA"
+    ],
+    [
+      "VNM",
+      "VNM - VIETNAM"
+    ],
+    [
+      "VGB",
+      "VGB - VIRGIN ISLANDS (BRITISH)"
+    ],
+    [
+      "VIR",
+      "VIR - VIRGIN ISLANDS (USA)"
+    ],
+    [
+      "WLF",
+      "WLF - WALLIS AND FUTURA ISLANDS"
+    ],
+    [
+      "YEM",
+      "YEM - YEMEN"
+    ],
+    [
+      "YUG",
+      "YUG - YUGOSLAVIA"
+    ],
+    [
+      "ZAR",
+      "ZAR - ZAIRE"
+    ],
+    [
+      "ZMB",
+      "ZMB - ZAMBIA"
+    ],
+    [
+      "ZWE",
+      "ZWE - ZIMBABWE"
+    ],
+    [
+      "ZIM",
+      "ZIM - ZIMBABWE"
+    ]
+  ],
+  "sex": [
+    [
+      "1",
+      "MALE"
+    ],
+    [
+      "2",
+      "FEMALE"
+    ]
+  ],
+  "region": [
+    [
+      "1",
+      "( 1         ) CANADA"
+    ],
+    [
+      "1",
+      "( 1         ) UNITED STATES"
+    ],
+    [
+      "1242",
+      "( 1242      ) BAHAMAS"
+    ],
+    [
+      "1246",
+      "( 1246      ) BARBADOS"
+    ],
+    [
+      "1264",
+      "( 1264      ) ANGUILLA"
+    ],
+    [
+      "1268",
+      "( 1268      ) ANTIGUA AND BARBUDA"
+    ],
+    [
+      "1284",
+      "( 1284      ) BRITISH VIRGIN ISLANDS"
+    ],
+    [
+      "1340",
+      "( 1340      ) U.S. VIRGIN ISLANDS"
+    ],
+    [
+      "1345",
+      "( 1345      ) CAYMAN ISLANDS"
+    ],
+    [
+      "1441",
+      "( 1441      ) BERMUDA"
+    ],
+    [
+      "1473",
+      "( 1473      ) GRENADA"
+    ],
+    [
+      "1649",
+      "( 1649      ) TURKS AND CAICOS ISLANDS"
+    ],
+    [
+      "1664",
+      "( 1664      ) MONTSERRAT"
+    ],
+    [
+      "1670",
+      "( 1670      ) NORTHERN MARIANA ISLANDS"
+    ],
+    [
+      "1671",
+      "( 1671      ) GUAM"
+    ],
+    [
+      "1684",
+      "( 1684      ) AMERICAN SAMOA"
+    ],
+    [
+      "1721",
+      "( 1721      ) SINT MAARTEN"
+    ],
+    [
+      "1758",
+      "( 1758      ) SAINT LUCIA"
+    ],
+    [
+      "1767",
+      "( 1767      ) DOMINICA"
+    ],
+    [
+      "1784",
+      "( 1784      ) SAINT VINCENT AND THE GRENADINES"
+    ],
+    [
+      "1787",
+      "( 1787      ) PUERTO RICO"
+    ],
+    [
+      "1809",
+      "( 1809      ) DOMINICAN REPUBLIC"
+    ],
+    [
+      "1829",
+      "( 1829      ) DOMINICAN REPUBLIC"
+    ],
+    [
+      "1849",
+      "( 1849      ) DOMINICAN REPUBLIC"
+    ],
+    [
+      "1868",
+      "( 1868      ) TRINIDAD AND TOBAGO"
+    ],
+    [
+      "1869",
+      "( 1869      ) SAINT KITTS AND NEVIS"
+    ],
+    [
+      "1876",
+      "( 1876      ) JAMAICA"
+    ],
+    [
+      "1939",
+      "( 1939      ) PUERTO RICO"
+    ],
+    [
+      "20",
+      "( 20        ) EGYPT"
+    ],
+    [
+      "211",
+      "( 211       ) SOUTH SUDAN"
+    ],
+    [
+      "212",
+      "( 212       ) MOROCCO"
+    ],
+    [
+      "213",
+      "( 213       ) ALGERIA"
+    ],
+    [
+      "216",
+      "( 216       ) TUNISIA"
+    ],
+    [
+      "218",
+      "( 218       ) LIBYA"
+    ],
+    [
+      "220",
+      "( 220       ) GAMBIA"
+    ],
+    [
+      "221",
+      "( 221       ) SENEGAL"
+    ],
+    [
+      "222",
+      "( 222       ) MAURITANIA"
+    ],
+    [
+      "223",
+      "( 223       ) MALI"
+    ],
+    [
+      "224",
+      "( 224       ) GUINEA"
+    ],
+    [
+      "225",
+      "( 225       ) IVORY COAST"
+    ],
+    [
+      "226",
+      "( 226       ) BURKINA FASO"
+    ],
+    [
+      "227",
+      "( 227       ) NIGER"
+    ],
+    [
+      "228",
+      "( 228       ) TOGO"
+    ],
+    [
+      "229",
+      "( 229       ) BENIN"
+    ],
+    [
+      "230",
+      "( 230       ) MAURITIUS"
+    ],
+    [
+      "231",
+      "( 231       ) LIBERIA"
+    ],
+    [
+      "232",
+      "( 232       ) SIERRA LEONE"
+    ],
+    [
+      "233",
+      "( 233       ) GHANA"
+    ],
+    [
+      "234",
+      "( 234       ) NIGERIA"
+    ],
+    [
+      "235",
+      "( 235       ) CHAD"
+    ],
+    [
+      "236",
+      "( 236       ) CENTRAL AFRICAN REPUBLIC"
+    ],
+    [
+      "237",
+      "( 237       ) CAMEROON"
+    ],
+    [
+      "238",
+      "( 238       ) CAPE VERDE"
+    ],
+    [
+      "239",
+      "( 239       ) SAO TOME AND PRINCIPE"
+    ],
+    [
+      "240",
+      "( 240       ) EQUATORIAL GUINEA"
+    ],
+    [
+      "241",
+      "( 241       ) GABON"
+    ],
+    [
+      "242",
+      "( 242       ) REPUBLIC OF THE CONGO"
+    ],
+    [
+      "243",
+      "( 243       ) DEMOCRATIC REPUBLIC OF THE CONGO"
+    ],
+    [
+      "244",
+      "( 244       ) ANGOLA"
+    ],
+    [
+      "245",
+      "( 245       ) GUINEABISSAU"
+    ],
+    [
+      "246",
+      "( 246       ) BRITISH INDIAN OCEAN TERRITORY"
+    ],
+    [
+      "248",
+      "( 248       ) SEYCHELLES"
+    ],
+    [
+      "249",
+      "( 249       ) SUDAN"
+    ],
+    [
+      "250",
+      "( 250       ) RWANDA"
+    ],
+    [
+      "251",
+      "( 251       ) ETHIOPIA"
+    ],
+    [
+      "252",
+      "( 252       ) SOMALIA"
+    ],
+    [
+      "253",
+      "( 253       ) DJIBOUTI"
+    ],
+    [
+      "254",
+      "( 254       ) KENYA"
+    ],
+    [
+      "255",
+      "( 255       ) TANZANIA"
+    ],
+    [
+      "256",
+      "( 256       ) UGANDA"
+    ],
+    [
+      "257",
+      "( 257       ) BURUNDI"
+    ],
+    [
+      "258",
+      "( 258       ) MOZAMBIQUE"
+    ],
+    [
+      "260",
+      "( 260       ) ZAMBIA"
+    ],
+    [
+      "261",
+      "( 261       ) MADAGASCAR"
+    ],
+    [
+      "262",
+      "( 262       ) MAYOTTE"
+    ],
+    [
+      "262",
+      "( 262       ) REUNION"
+    ],
+    [
+      "263",
+      "( 263       ) ZIMBABWE"
+    ],
+    [
+      "264",
+      "( 264       ) NAMIBIA"
+    ],
+    [
+      "265",
+      "( 265       ) MALAWI"
+    ],
+    [
+      "266",
+      "( 266       ) LESOTHO"
+    ],
+    [
+      "267",
+      "( 267       ) BOTSWANA"
+    ],
+    [
+      "268",
+      "( 268       ) SWAZILAND"
+    ],
+    [
+      "269",
+      "( 269       ) COMOROS"
+    ],
+    [
+      "27",
+      "( 27        ) SOUTH AFRICA"
+    ],
+    [
+      "290",
+      "( 290       ) SAINT HELENA"
+    ],
+    [
+      "291",
+      "( 291       ) ERITREA"
+    ],
+    [
+      "297",
+      "( 297       ) ARUBA"
+    ],
+    [
+      "298",
+      "( 298       ) FAROE ISLANDS"
+    ],
+    [
+      "299",
+      "( 299       ) GREENLAND"
+    ],
+    [
+      "30",
+      "( 30        ) GREECE"
+    ],
+    [
+      "31",
+      "( 31        ) NETHERLANDS"
+    ],
+    [
+      "32",
+      "( 32        ) BELGIUM"
+    ],
+    [
+      "33",
+      "( 33        ) FRANCE"
+    ],
+    [
+      "34",
+      "( 34        ) SPAIN"
+    ],
+    [
+      "350",
+      "( 350       ) GIBRALTAR"
+    ],
+    [
+      "351",
+      "( 351       ) PORTUGAL"
+    ],
+    [
+      "352",
+      "( 352       ) LUXEMBOURG"
+    ],
+    [
+      "353",
+      "( 353       ) IRELAND"
+    ],
+    [
+      "354",
+      "( 354       ) ICELAND"
+    ],
+    [
+      "355",
+      "( 355       ) ALBANIA"
+    ],
+    [
+      "356",
+      "( 356       ) MALTA"
+    ],
+    [
+      "357",
+      "( 357       ) CYPRUS"
+    ],
+    [
+      "358",
+      "( 358       ) FINLAND"
+    ],
+    [
+      "359",
+      "( 359       ) BULGARIA"
+    ],
+    [
+      "36",
+      "( 36        ) HUNGARY"
+    ],
+    [
+      "370",
+      "( 370       ) LITHUANIA"
+    ],
+    [
+      "371",
+      "( 371       ) LATVIA"
+    ],
+    [
+      "372",
+      "( 372       ) ESTONIA"
+    ],
+    [
+      "373",
+      "( 373       ) MOLDOVA"
+    ],
+    [
+      "374",
+      "( 374       ) ARMENIA"
+    ],
+    [
+      "375",
+      "( 375       ) BELARUS"
+    ],
+    [
+      "376",
+      "( 376       ) ANDORRA"
+    ],
+    [
+      "377",
+      "( 377       ) MONACO"
+    ],
+    [
+      "378",
+      "( 378       ) SAN MARINO"
+    ],
+    [
+      "379",
+      "( 379       ) VATICAN"
+    ],
+    [
+      "380",
+      "( 380       ) UKRAINE"
+    ],
+    [
+      "381",
+      "( 381       ) SERBIA"
+    ],
+    [
+      "382",
+      "( 382       ) MONTENEGRO"
+    ],
+    [
+      "383",
+      "( 383       ) KOSOVO"
+    ],
+    [
+      "385",
+      "( 385       ) CROATIA"
+    ],
+    [
+      "386",
+      "( 386       ) SLOVENIA"
+    ],
+    [
+      "387",
+      "( 387       ) BOSNIA AND HERZEGOVINA"
+    ],
+    [
+      "389",
+      "( 389       ) MACEDONIA"
+    ],
+    [
+      "39",
+      "( 39        ) ITALY"
+    ],
+    [
+      "40",
+      "( 40        ) ROMANIA"
+    ],
+    [
+      "41",
+      "( 41        ) SWITZERLAND"
+    ],
+    [
+      "420",
+      "( 420       ) CZECH REPUBLIC"
+    ],
+    [
+      "421",
+      "( 421       ) SLOVAKIA"
+    ],
+    [
+      "423",
+      "( 423       ) LIECHTENSTEIN"
+    ],
+    [
+      "43",
+      "( 43        ) AUSTRIA"
+    ],
+    [
+      "44",
+      "( 44        ) UNITED KINGDOM"
+    ],
+    [
+      "441481",
+      "( 441481    ) GUERNSEY"
+    ],
+    [
+      "441534",
+      "( 441534    ) JERSEY"
+    ],
+    [
+      "441624",
+      "( 441624    ) ISLE OF MAN"
+    ],
+    [
+      "45",
+      "( 45        ) DENMARK"
+    ],
+    [
+      "46",
+      "( 46        ) SWEDEN"
+    ],
+    [
+      "47",
+      "( 47        ) NORWAY"
+    ],
+    [
+      "47",
+      "( 47        ) SVALBARD AND JAN MAYEN"
+    ],
+    [
+      "48",
+      "( 48        ) POLAND"
+    ],
+    [
+      "49",
+      "( 49        ) GERMANY"
+    ],
+    [
+      "500",
+      "( 500       ) FALKLAND ISLANDS"
+    ],
+    [
+      "501",
+      "( 501       ) BELIZE"
+    ],
+    [
+      "502",
+      "( 502       ) GUATEMALA"
+    ],
+    [
+      "503",
+      "( 503       ) EL SALVADOR"
+    ],
+    [
+      "504",
+      "( 504       ) HONDURAS"
+    ],
+    [
+      "505",
+      "( 505       ) NICARAGUA"
+    ],
+    [
+      "506",
+      "( 506       ) COSTA RICA"
+    ],
+    [
+      "507",
+      "( 507       ) PANAMA"
+    ],
+    [
+      "508",
+      "( 508       ) SAINT PIERRE AND MIQUELON"
+    ],
+    [
+      "509",
+      "( 509       ) HAITI"
+    ],
+    [
+      "51",
+      "( 51        ) PERU"
+    ],
+    [
+      "52",
+      "( 52        ) MEXICO"
+    ],
+    [
+      "53",
+      "( 53        ) CUBA"
+    ],
+    [
+      "54",
+      "( 54        ) ARGENTINA"
+    ],
+    [
+      "55",
+      "( 55        ) BRAZIL"
+    ],
+    [
+      "56",
+      "( 56        ) CHILE"
+    ],
+    [
+      "57",
+      "( 57        ) COLOMBIA"
+    ],
+    [
+      "58",
+      "( 58        ) VENEZUELA"
+    ],
+    [
+      "590",
+      "( 590       ) SAINT BARTHELEMY"
+    ],
+    [
+      "590",
+      "( 590       ) SAINT MARTIN"
+    ],
+    [
+      "591",
+      "( 591       ) BOLIVIA"
+    ],
+    [
+      "592",
+      "( 592       ) GUYANA"
+    ],
+    [
+      "593",
+      "( 593       ) ECUADOR"
+    ],
+    [
+      "595",
+      "( 595       ) PARAGUAY"
+    ],
+    [
+      "597",
+      "( 597       ) SURINAME"
+    ],
+    [
+      "598",
+      "( 598       ) URUGUAY"
+    ],
+    [
+      "599",
+      "( 599       ) NETHERLANDS ANTILLES"
+    ],
+    [
+      "599",
+      "( 599       ) CURACAO"
+    ],
+    [
+      "60",
+      "( 60        ) MALAYSIA"
+    ],
+    [
+      "61",
+      "( 61        ) AUSTRALIA"
+    ],
+    [
+      "61",
+      "( 61        ) COCOS ISLANDS"
+    ],
+    [
+      "61",
+      "( 61        ) CHRISTMAS ISLAND"
+    ],
+    [
+      "62",
+      "( 62        ) INDONESIA"
+    ],
+    [
+      "63",
+      "( 63        ) PHILIPPINES"
+    ],
+    [
+      "64",
+      "( 64        ) NEW ZEALAND"
+    ],
+    [
+      "64",
+      "( 64        ) PITCAIRN"
+    ],
+    [
+      "65",
+      "( 65        ) SINGAPORE"
+    ],
+    [
+      "66",
+      "( 66        ) THAILAND"
+    ],
+    [
+      "670",
+      "( 670       ) EAST TIMOR"
+    ],
+    [
+      "672",
+      "( 672       ) ANTARCTICA"
+    ],
+    [
+      "673",
+      "( 673       ) BRUNEI"
+    ],
+    [
+      "674",
+      "( 674       ) NAURU"
+    ],
+    [
+      "675",
+      "( 675       ) PAPUA NEW GUINEA"
+    ],
+    [
+      "676",
+      "( 676       ) TONGA"
+    ],
+    [
+      "677",
+      "( 677       ) SOLOMON ISLANDS"
+    ],
+    [
+      "678",
+      "( 678       ) VANUATU"
+    ],
+    [
+      "679",
+      "( 679       ) FIJI"
+    ],
+    [
+      "680",
+      "( 680       ) PALAU"
+    ],
+    [
+      "681",
+      "( 681       ) WALLIS AND FUTUNA"
+    ],
+    [
+      "682",
+      "( 682       ) COOK ISLANDS"
+    ],
+    [
+      "683",
+      "( 683       ) NIUE"
+    ],
+    [
+      "685",
+      "( 685       ) SAMOA"
+    ],
+    [
+      "686",
+      "( 686       ) KIRIBATI"
+    ],
+    [
+      "687",
+      "( 687       ) NEW CALEDONIA"
+    ],
+    [
+      "688",
+      "( 688       ) TUVALU"
+    ],
+    [
+      "689",
+      "( 689       ) FRENCH POLYNESIA"
+    ],
+    [
+      "690",
+      "( 690       ) TOKELAU"
+    ],
+    [
+      "691",
+      "( 691       ) MICRONESIA"
+    ],
+    [
+      "692",
+      "( 692       ) MARSHALL ISLANDS"
+    ],
+    [
+      "7",
+      "( 7         ) KAZAKHSTAN"
+    ],
+    [
+      "7",
+      "( 7         ) RUSSIA"
+    ],
+    [
+      "81",
+      "( 81        ) JAPAN"
+    ],
+    [
+      "82",
+      "( 82        ) SOUTH KOREA"
+    ],
+    [
+      "84",
+      "( 84        ) VIETNAM"
+    ],
+    [
+      "850",
+      "( 850       ) NORTH KOREA"
+    ],
+    [
+      "852",
+      "( 852       ) HONG KONG"
+    ],
+    [
+      "853",
+      "( 853       ) MACAU"
+    ],
+    [
+      "855",
+      "( 855       ) CAMBODIA"
+    ],
+    [
+      "856",
+      "( 856       ) LAOS"
+    ],
+    [
+      "86",
+      "( 86        ) CHINA"
+    ],
+    [
+      "880",
+      "( 880       ) BANGLADESH"
+    ],
+    [
+      "886",
+      "( 886       ) TAIWAN"
+    ],
+    [
+      "90",
+      "( 90        ) TURKIYE"
+    ],
+    [
+      "91",
+      "( 91        ) INDIA"
+    ],
+    [
+      "92",
+      "( 92        ) PAKISTAN"
+    ],
+    [
+      "93",
+      "( 93        ) AFGHANISTAN"
+    ],
+    [
+      "94",
+      "( 94        ) SRI LANKA"
+    ],
+    [
+      "95",
+      "( 95        ) MYANMAR"
+    ],
+    [
+      "960",
+      "( 960       ) MALDIVES"
+    ],
+    [
+      "961",
+      "( 961       ) LEBANON"
+    ],
+    [
+      "962",
+      "( 962       ) JORDAN"
+    ],
+    [
+      "963",
+      "( 963       ) SYRIA"
+    ],
+    [
+      "964",
+      "( 964       ) IRAQ"
+    ],
+    [
+      "965",
+      "( 965       ) KUWAIT"
+    ],
+    [
+      "966",
+      "( 966       ) SAUDI ARABIA"
+    ],
+    [
+      "967",
+      "( 967       ) YEMEN"
+    ],
+    [
+      "968",
+      "( 968       ) OMAN"
+    ],
+    [
+      "970",
+      "( 970       ) PALESTINE"
+    ],
+    [
+      "971",
+      "( 971       ) UNITED ARAB EMIRATES"
+    ],
+    [
+      "972",
+      "( 972       ) ISRAEL"
+    ],
+    [
+      "973",
+      "( 973       ) BAHRAIN"
+    ],
+    [
+      "974",
+      "( 974       ) QATAR"
+    ],
+    [
+      "975",
+      "( 975       ) BHUTAN"
+    ],
+    [
+      "976",
+      "( 976       ) MONGOLIA"
+    ],
+    [
+      "977",
+      "( 977       ) NEPAL"
+    ],
+    [
+      "98",
+      "( 98        ) IRAN"
+    ],
+    [
+      "992",
+      "( 992       ) TAJIKISTAN"
+    ],
+    [
+      "993",
+      "( 993       ) TURKMENISTAN"
+    ],
+    [
+      "994",
+      "( 994       ) AZERBAIJAN"
+    ],
+    [
+      "995",
+      "( 995       ) GEORGIA"
+    ],
+    [
+      "996",
+      "( 996       ) KYRGYZSTAN"
+    ],
+    [
+      "998",
+      "( 998       ) UZBEKISTAN"
+    ]
+  ],
+  "trvlMode": [
+    [
+      "1",
+      "AIR"
+    ],
+    [
+      "2",
+      "LAND"
+    ],
+    [
+      "3",
+      "SEA"
+    ]
+  ],
+  "embark": [
+    [
+      "AFG",
+      "AFG - AFGHANISTAN"
+    ],
+    [
+      "ALB",
+      "ALB - ALBANIA"
+    ],
+    [
+      "DZA",
+      "DZA - ALGERIA"
+    ],
+    [
+      "ASM",
+      "ASM - AMERICAN SAMOA"
+    ],
+    [
+      "AND",
+      "AND - ANDORRA"
+    ],
+    [
+      "AGO",
+      "AGO - ANGOLA"
+    ],
+    [
+      "AIA",
+      "AIA - ANGUILLA"
+    ],
+    [
+      "ATA",
+      "ATA - ANTARCTICA"
+    ],
+    [
+      "ATG",
+      "ATG - ANTIGUA AND BARBUDA"
+    ],
+    [
+      "ARG",
+      "ARG - ARGENTINA"
+    ],
+    [
+      "ARM",
+      "ARM - ARMENIA"
+    ],
+    [
+      "ABW",
+      "ABW - ARUBA"
+    ],
+    [
+      "AUS",
+      "AUS - AUSTRALIA"
+    ],
+    [
+      "AUT",
+      "AUT - AUSTRIA"
+    ],
+    [
+      "AZE",
+      "AZE - AZERBAIJAN"
+    ],
+    [
+      "BHS",
+      "BHS - BAHAMAS"
+    ],
+    [
+      "BHR",
+      "BHR - BAHRAIN"
+    ],
+    [
+      "BGD",
+      "BGD - BANGLADESH"
+    ],
+    [
+      "BRB",
+      "BRB - BARBADOS"
+    ],
+    [
+      "BLR",
+      "BLR - BELARUS"
+    ],
+    [
+      "BEL",
+      "BEL - BELGIUM"
+    ],
+    [
+      "BLZ",
+      "BLZ - BELIZE"
+    ],
+    [
+      "BEN",
+      "BEN - BENIN"
+    ],
+    [
+      "BMU",
+      "BMU - BERMUDA"
+    ],
+    [
+      "BTN",
+      "BTN - BHUTAN"
+    ],
+    [
+      "BOL",
+      "BOL - BOLIVIA"
+    ],
+    [
+      "BIH",
+      "BIH - BOSNIA AND HERZEGOVINA"
+    ],
+    [
+      "BWA",
+      "BWA - BOTSWANA"
+    ],
+    [
+      "BVT",
+      "BVT - BOUVET ISLAND"
+    ],
+    [
+      "BRA",
+      "BRA - BRAZIL"
+    ],
+    [
+      "IOT",
+      "IOT - BRITISH INDIAN OCEAN TERRITORY"
+    ],
+    [
+      "GBN",
+      "GBN - BRITISH NATIONAL OVERSEAS"
+    ],
+    [
+      "GBO",
+      "GBO - BRITISH OVERSEAS CITIZENS"
+    ],
+    [
+      "GBP",
+      "GBP - BRITISH PROTECTED PERSON"
+    ],
+    [
+      "GBS",
+      "GBS - BRITISH SUBJECT"
+    ],
+    [
+      "BRN",
+      "BRN - BRUNEI DARUSSALAM"
+    ],
+    [
+      "BGR",
+      "BGR - BULGARIA"
+    ],
+    [
+      "BFA",
+      "BFA - BURKINA FASO"
+    ],
+    [
+      "BDI",
+      "BDI - BURUNDI"
+    ],
+    [
+      "KHM",
+      "KHM - CAMBODIA"
+    ],
+    [
+      "CMR",
+      "CMR - CAMEROON"
+    ],
+    [
+      "CAN",
+      "CAN - CANADA"
+    ],
+    [
+      "CPV",
+      "CPV - CAPE VERDE"
+    ],
+    [
+      "CYM",
+      "CYM - CAYMAN ISLANDS"
+    ],
+    [
+      "CAF",
+      "CAF - CENTRAL AFRICAN REPUBLIC"
+    ],
+    [
+      "TCD",
+      "TCD - CHAD"
+    ],
+    [
+      "CHL",
+      "CHL - CHILE"
+    ],
+    [
+      "CHN",
+      "CHN - CHINA"
+    ],
+    [
+      "CXR",
+      "CXR - CHRISTMAS ISLAND"
+    ],
+    [
+      "CCK",
+      "CCK - COCOS ISLANDS"
+    ],
+    [
+      "COL",
+      "COL - COLOMBIA"
+    ],
+    [
+      "COM",
+      "COM - COMOROS"
+    ],
+    [
+      "COG",
+      "COG - CONGO"
+    ],
+    [
+      "COK",
+      "COK - COOK ISLANDS"
+    ],
+    [
+      "CRI",
+      "CRI - COSTA RICA"
+    ],
+    [
+      "CIV",
+      "CIV - COTE D'IVOIRE"
+    ],
+    [
+      "HRV",
+      "HRV - CROATIA"
+    ],
+    [
+      "CUB",
+      "CUB - CUBA"
+    ],
+    [
+      "CYP",
+      "CYP - CYPRUS"
+    ],
+    [
+      "CZE",
+      "CZE - CZECH REPUBLIC"
+    ],
+    [
+      "PRK",
+      "PRK - DEMOCRATIC PEOPLE'S REPUBLIC OF KOREA"
+    ],
+    [
+      "DPR",
+      "DPR - DEMOCRATIC PEOPLES REPUBLIC OF KOREA"
+    ],
+    [
+      "COD",
+      "COD - DEMOCRATIC REPUBLIC OF THE CONGO"
+    ],
+    [
+      "DNK",
+      "DNK - DENMARK"
+    ],
+    [
+      "DJI",
+      "DJI - DJIBOUTI"
+    ],
+    [
+      "DMA",
+      "DMA - DOMINICA"
+    ],
+    [
+      "DOM",
+      "DOM - DOMINICAN REPUBLIC"
+    ],
+    [
+      "ECU",
+      "ECU - ECUADOR"
+    ],
+    [
+      "EGY",
+      "EGY - EGYPT"
+    ],
+    [
+      "SLV",
+      "SLV - EL SALVADOR"
+    ],
+    [
+      "GNQ",
+      "GNQ - EQUATORIAL GUINEA"
+    ],
+    [
+      "ERI",
+      "ERI - ERITREA"
+    ],
+    [
+      "EST",
+      "EST - ESTONIA"
+    ],
+    [
+      "ETH",
+      "ETH - ETHIOPIA"
+    ],
+    [
+      "EUE",
+      "EUE - EUROPEAN UNION LAISSER PASSER"
+    ],
+    [
+      "FLK",
+      "FLK - FALKLAND ISLAND (MALVINAS)"
+    ],
+    [
+      "FRO",
+      "FRO - FAROE ISLANDS"
+    ],
+    [
+      "FJI",
+      "FJI - FIJI"
+    ],
+    [
+      "FIN",
+      "FIN - FINLAND"
+    ],
+    [
+      "FXX",
+      "FXX - FINLAND, METROPOLITAN"
+    ],
+    [
+      "FRA",
+      "FRA - FRANCE"
+    ],
+    [
+      "GUF",
+      "GUF - FRENCH GUIANA"
+    ],
+    [
+      "PYF",
+      "PYF - FRENCH POLYNESIA"
+    ],
+    [
+      "ATF",
+      "ATF - FRENCH SOUTHERN TERRITORIES"
+    ],
+    [
+      "GAB",
+      "GAB - GABON"
+    ],
+    [
+      "GMB",
+      "GMB - GAMBIA"
+    ],
+    [
+      "GEO",
+      "GEO - GEORGIA"
+    ],
+    [
+      "DEU",
+      "DEU - GERMANY"
+    ],
+    [
+      "GHA",
+      "GHA - GHANA"
+    ],
+    [
+      "GIB",
+      "GIB - GIBRALTAR"
+    ],
+    [
+      "GRC",
+      "GRC - GREECE"
+    ],
+    [
+      "GRL",
+      "GRL - GREENLAND"
+    ],
+    [
+      "GRD",
+      "GRD - GRENADA"
+    ],
+    [
+      "GLP",
+      "GLP - GUADELOUPE"
+    ],
+    [
+      "GUM",
+      "GUM - GUAM"
+    ],
+    [
+      "GTM",
+      "GTM - GUATEMALA"
+    ],
+    [
+      "GNB",
+      "GNB - GUIENA-BISSAU"
+    ],
+    [
+      "GIN",
+      "GIN - GUINEA"
+    ],
+    [
+      "GUY",
+      "GUY - GUYANA"
+    ],
+    [
+      "HTI",
+      "HTI - HAITI"
+    ],
+    [
+      "HMD",
+      "HMD - HEARD AND MCDONALD ISLANDS"
+    ],
+    [
+      "VAT",
+      "VAT - HOLY SEE (VATICAN CITY STATE)"
+    ],
+    [
+      "HND",
+      "HND - HONDURAS"
+    ],
+    [
+      "HKG",
+      "HKG - HONG KONG SAR"
+    ],
+    [
+      "HUN",
+      "HUN - HUNGARY"
+    ],
+    [
+      "ISL",
+      "ISL - ICELAND"
+    ],
+    [
+      "IND",
+      "IND - INDIA"
+    ],
+    [
+      "IDN",
+      "IDN - INDONESIA"
+    ],
+    [
+      "IRN",
+      "IRN - IRAN"
+    ],
+    [
+      "IRQ",
+      "IRQ - IRAQ"
+    ],
+    [
+      "IRL",
+      "IRL - IRELAND"
+    ],
+    [
+      "ISR",
+      "ISR - ISRAEL"
+    ],
+    [
+      "ITA",
+      "ITA - ITALY"
+    ],
+    [
+      "JAM",
+      "JAM - JAMAICA"
+    ],
+    [
+      "JPN",
+      "JPN - JAPAN"
+    ],
+    [
+      "JOR",
+      "JOR - JORDAN"
+    ],
+    [
+      "KAZ",
+      "KAZ - KAZAKHSTAN"
+    ],
+    [
+      "KEN",
+      "KEN - KENYA"
+    ],
+    [
+      "KIR",
+      "KIR - KIRIBATI"
+    ],
+    [
+      "KWT",
+      "KWT - KUWAIT"
+    ],
+    [
+      "KGZ",
+      "KGZ - KYRGYZSTAN"
+    ],
+    [
+      "LAO",
+      "LAO - LAO PDR"
+    ],
+    [
+      "LVA",
+      "LVA - LATVIA"
+    ],
+    [
+      "LBN",
+      "LBN - LEBANON"
+    ],
+    [
+      "LSO",
+      "LSO - LESOTHO"
+    ],
+    [
+      "LBR",
+      "LBR - LIBERIA"
+    ],
+    [
+      "LBY",
+      "LBY - LIBYA"
+    ],
+    [
+      "LIE",
+      "LIE - LIECHTENSTEIN"
+    ],
+    [
+      "LTU",
+      "LTU - LITHUANIA"
+    ],
+    [
+      "LUX",
+      "LUX - LUXEMBOURG"
+    ],
+    [
+      "MAC",
+      "MAC - MACAO SAR"
+    ],
+    [
+      "MDG",
+      "MDG - MADAGASCAR"
+    ],
+    [
+      "MWI",
+      "MWI - MALAWI"
+    ],
+    [
+      "MYS",
+      "MYS - MALAYSIA"
+    ],
+    [
+      "MDV",
+      "MDV - MALDIVES"
+    ],
+    [
+      "MLI",
+      "MLI - MALI"
+    ],
+    [
+      "MLT",
+      "MLT - MALTA"
+    ],
+    [
+      "MHL",
+      "MHL - MARSHALL ISLANDS"
+    ],
+    [
+      "MTQ",
+      "MTQ - MARTINIQUE"
+    ],
+    [
+      "MRT",
+      "MRT - MAURITANIA"
+    ],
+    [
+      "MUS",
+      "MUS - MAURITIUS"
+    ],
+    [
+      "MYT",
+      "MYT - MAYOTTE"
+    ],
+    [
+      "MEX",
+      "MEX - MEXICO"
+    ],
+    [
+      "FSM",
+      "FSM - MICRONESIA,FEDERATED STATES OF"
+    ],
+    [
+      "MCO",
+      "MCO - MONACO"
+    ],
+    [
+      "MNG",
+      "MNG - MONGOLIA"
+    ],
+    [
+      "MNE",
+      "MNE - MONTENEGRO"
+    ],
+    [
+      "MSR",
+      "MSR - MONTSERRAT"
+    ],
+    [
+      "MAR",
+      "MAR - MOROCCO"
+    ],
+    [
+      "MOZ",
+      "MOZ - MOZAMBIQUE"
+    ],
+    [
+      "MMR",
+      "MMR - MYANMAR"
+    ],
+    [
+      "NAM",
+      "NAM - NAMIBIA"
+    ],
+    [
+      "NRU",
+      "NRU - NAURU"
+    ],
+    [
+      "NNS",
+      "NNS - NEGARA-NEGARA SUMBER"
+    ],
+    [
+      "NPL",
+      "NPL - NEPAL"
+    ],
+    [
+      "NLD",
+      "NLD - NETHERLANDS"
+    ],
+    [
+      "ANT",
+      "ANT - NETHERLANDS ANTILLES"
+    ],
+    [
+      "NTZ",
+      "NTZ - NEUTRAL ZONE"
+    ],
+    [
+      "NCL",
+      "NCL - NEW CELEDONIA"
+    ],
+    [
+      "NZL",
+      "NZL - NEW ZEALAND"
+    ],
+    [
+      "NIC",
+      "NIC - NICARAGUA"
+    ],
+    [
+      "NER",
+      "NER - NIGER"
+    ],
+    [
+      "NGA",
+      "NGA - NIGERIA"
+    ],
+    [
+      "ZZD",
+      "ZZD - NIL"
+    ],
+    [
+      "NIU",
+      "NIU - NIUE"
+    ],
+    [
+      "NFK",
+      "NFK - NORFOLK ISLAND"
+    ],
+    [
+      "MNP",
+      "MNP - NORTHERN MARIANA ISLANDS"
+    ],
+    [
+      "NOR",
+      "NOR - NORWAY"
+    ],
+    [
+      "OMN",
+      "OMN - OMAN"
+    ],
+    [
+      "PAK",
+      "PAK - PAKISTAN"
+    ],
+    [
+      "PLW",
+      "PLW - PALAU"
+    ],
+    [
+      "PAL",
+      "PAL - PALESTINE"
+    ],
+    [
+      "PSE",
+      "PSE - PALESTINE"
+    ],
+    [
+      "PAN",
+      "PAN - PANAMA"
+    ],
+    [
+      "PNG",
+      "PNG - PAPUA NEW GUINEA"
+    ],
+    [
+      "PRY",
+      "PRY - PARAGUAY"
+    ],
+    [
+      "PER",
+      "PER - PERU"
+    ],
+    [
+      "PHL",
+      "PHL - PHILIPPINES"
+    ],
+    [
+      "PCN",
+      "PCN - PITCAIRN ISLAND"
+    ],
+    [
+      "POL",
+      "POL - POLAND"
+    ],
+    [
+      "PRT",
+      "PRT - PORTUGAL"
+    ],
+    [
+      "PRI",
+      "PRI - PUERTO RICO"
+    ],
+    [
+      "QAT",
+      "QAT - QATAR"
+    ],
+    [
+      "XXC",
+      "XXC - REFUGEE"
+    ],
+    [
+      "XXB",
+      "XXB - REFUGEE ARTICLE 1/1951"
+    ],
+    [
+      "MDA",
+      "MDA - REP OF MOLDOVA"
+    ],
+    [
+      "RKS",
+      "RKS - REP. KOSOVO"
+    ],
+    [
+      "KOR",
+      "KOR - REPUBLIC OF KOREA"
+    ],
+    [
+      "KOS",
+      "KOS - REPUBLIC OF KOSOVO"
+    ],
+    [
+      "MKD",
+      "MKD - REPUBLIC OF MACEDONIA"
+    ],
+    [
+      "ROS",
+      "ROS - REPUBLIC OF SOMALILAND"
+    ],
+    [
+      "SSD",
+      "SSD - REPUBLIC OF SOUTH SUDAN"
+    ],
+    [
+      "REU",
+      "REU - REUNION"
+    ],
+    [
+      "ROM",
+      "ROM - ROMANIA"
+    ],
+    [
+      "ROU",
+      "ROU - ROMANIA"
+    ],
+    [
+      "RUS",
+      "RUS - RUSSIA"
+    ],
+    [
+      "RWA",
+      "RWA - RWANDA"
+    ],
+    [
+      "SHN",
+      "SHN - SAINT HELENA"
+    ],
+    [
+      "KNA",
+      "KNA - SAINT KITTS AND NEVIS"
+    ],
+    [
+      "LCA",
+      "LCA - SAINT LUCIA"
+    ],
+    [
+      "SPM",
+      "SPM - SAINT PIERRE AND MIQUELON"
+    ],
+    [
+      "VCT",
+      "VCT - SAINT VINCENT AND THE GRENADINES"
+    ],
+    [
+      "WSM",
+      "WSM - SAMOA"
+    ],
+    [
+      "SMR",
+      "SMR - SAN MARINO"
+    ],
+    [
+      "STP",
+      "STP - SAO TOME AND PRINCIPE"
+    ],
+    [
+      "SAU",
+      "SAU - SAUDI ARABIA"
+    ],
+    [
+      "SEN",
+      "SEN - SENEGAL"
+    ],
+    [
+      "SER",
+      "SER - SERBIA"
+    ],
+    [
+      "SRB",
+      "SRB - SERBIA"
+    ],
+    [
+      "SCG",
+      "SCG - SERBIA AND MONTENEGRO"
+    ],
+    [
+      "SYC",
+      "SYC - SEYCHELLES"
+    ],
+    [
+      "SLE",
+      "SLE - SIERRA LEONE"
+    ],
+    [
+      "SGP",
+      "SGP - SINGAPORE"
+    ],
+    [
+      "SVK",
+      "SVK - SLOVAKIA"
+    ],
+    [
+      "SVN",
+      "SVN - SLOVENIA"
+    ],
+    [
+      "SLB",
+      "SLB - SOLOMON ISLANDS"
+    ],
+    [
+      "SOM",
+      "SOM - SOMALIA"
+    ],
+    [
+      "ZAF",
+      "ZAF - SOUTH AFRICA"
+    ],
+    [
+      "SGS",
+      "SGS - SOUTH GEORGIA & THE SOUTH SANDWICH IS"
+    ],
+    [
+      "ESP",
+      "ESP - SPAIN"
+    ],
+    [
+      "LKA",
+      "LKA - SRI LANKA"
+    ],
+    [
+      "ZZA",
+      "ZZA - STATELESS"
+    ],
+    [
+      "XXA",
+      "XXA - STATELESS PERSON ARTICLE 1/1954"
+    ],
+    [
+      "SDN",
+      "SDN - SUDAN"
+    ],
+    [
+      "SUR",
+      "SUR - SURINAME"
+    ],
+    [
+      "SJM",
+      "SJM - SVALBARD AND JAN MAYEN ISLANDS"
+    ],
+    [
+      "SWZ",
+      "SWZ - SWAZILAND"
+    ],
+    [
+      "SWE",
+      "SWE - SWEDEN"
+    ],
+    [
+      "CHE",
+      "CHE - SWITZERLAND"
+    ],
+    [
+      "SYR",
+      "SYR - SYRIA"
+    ],
+    [
+      "TWN",
+      "TWN - TAIWAN"
+    ],
+    [
+      "TJK",
+      "TJK - TAJIKISTAN"
+    ],
+    [
+      "TZA",
+      "TZA - TANZANIA"
+    ],
+    [
+      "THA",
+      "THA - THAILAND"
+    ],
+    [
+      "FYR",
+      "FYR - THE FORMER YUGOSLAV REP. OF MACEDONIA"
+    ],
+    [
+      "ZZB",
+      "ZZB - TIDAK DINYATAKAN OLEH KLN"
+    ],
+    [
+      "TLS",
+      "TLS - TIMOR LESTE"
+    ],
+    [
+      "TMP",
+      "TMP - TIMOR LESTE"
+    ],
+    [
+      "TGO",
+      "TGO - TOGO"
+    ],
+    [
+      "TKL",
+      "TKL - TOKELAU"
+    ],
+    [
+      "TON",
+      "TON - TONGA"
+    ],
+    [
+      "TTO",
+      "TTO - TRINIDAD AND TOBAGO"
+    ],
+    [
+      "TUN",
+      "TUN - TUNISIA"
+    ],
+    [
+      "TUR",
+      "TUR - TURKIYE"
+    ],
+    [
+      "TKM",
+      "TKM - TURKMENISTAN"
+    ],
+    [
+      "TCA",
+      "TCA - TURKS AND CAICOS ISLANDS"
+    ],
+    [
+      "TUV",
+      "TUV - TUVALU"
+    ],
+    [
+      "UGA",
+      "UGA - UGANDA"
+    ],
+    [
+      "GBD",
+      "GBD - UK-DEPENDENT"
+    ],
+    [
+      "UKR",
+      "UKR - UKRAINE"
+    ],
+    [
+      "UNA",
+      "UNA - UN SPECIALIZED AGENCY"
+    ],
+    [
+      "UNH",
+      "UNH - UNHCR"
+    ],
+    [
+      "ARE",
+      "ARE - UNITED ARAB EMIRATES"
+    ],
+    [
+      "GBR",
+      "GBR - UNITED KINGDOM"
+    ],
+    [
+      "UNO",
+      "UNO - UNITED NATIONS ORGANIZATION"
+    ],
+    [
+      "UMI",
+      "UMI - UNITED STATES MINOR OUTLYING ISLANDS"
+    ],
+    [
+      "ZZZ",
+      "ZZZ - UNKNOWN"
+    ],
+    [
+      "ESH",
+      "ESH - UNKNOWN / UNSPECIFIED NATIONALITY"
+    ],
+    [
+      "XXX",
+      "XXX - UNSPECIFIED NATIONALITY"
+    ],
+    [
+      "URY",
+      "URY - URUGUAY"
+    ],
+    [
+      "USA",
+      "USA - USA"
+    ],
+    [
+      "UZB",
+      "UZB - UZBEKISTAN"
+    ],
+    [
+      "VUT",
+      "VUT - VANUATU"
+    ],
+    [
+      "VEN",
+      "VEN - VENEZUELA"
+    ],
+    [
+      "VNM",
+      "VNM - VIETNAM"
+    ],
+    [
+      "VGB",
+      "VGB - VIRGIN ISLANDS (BRITISH)"
+    ],
+    [
+      "VIR",
+      "VIR - VIRGIN ISLANDS (USA)"
+    ],
+    [
+      "WLF",
+      "WLF - WALLIS AND FUTURA ISLANDS"
+    ],
+    [
+      "YEM",
+      "YEM - YEMEN"
+    ],
+    [
+      "YUG",
+      "YUG - YUGOSLAVIA"
+    ],
+    [
+      "ZAR",
+      "ZAR - ZAIRE"
+    ],
+    [
+      "ZMB",
+      "ZMB - ZAMBIA"
+    ],
+    [
+      "ZWE",
+      "ZWE - ZIMBABWE"
+    ],
+    [
+      "ZIM",
+      "ZIM - ZIMBABWE"
+    ]
+  ],
+  "accommodationStay": [
+    [
+      "01",
+      "HOTEL/MOTEL/REST HOUSE"
+    ],
+    [
+      "02",
+      "RESIDENCE OF FRIENDS/RELATIVES"
+    ],
+    [
+      "99",
+      "OTHERS"
+    ]
+  ],
+  "accommodationState": [
+    [
+      "01",
+      "JOHOR"
+    ],
+    [
+      "02",
+      "KEDAH"
+    ],
+    [
+      "03",
+      "KELANTAN"
+    ],
+    [
+      "04",
+      "MELAKA"
+    ],
+    [
+      "05",
+      "NEGERI SEMBILAN"
+    ],
+    [
+      "06",
+      "PAHANG"
+    ],
+    [
+      "07",
+      "PULAU PINANG"
+    ],
+    [
+      "08",
+      "PERAK"
+    ],
+    [
+      "09",
+      "PERLIS"
+    ],
+    [
+      "10",
+      "SELANGOR"
+    ],
+    [
+      "11",
+      "TERENGGANU"
+    ],
+    [
+      "12",
+      "SABAH"
+    ],
+    [
+      "13",
+      "SARAWAK"
+    ],
+    [
+      "14",
+      "WP KUALA LUMPUR"
+    ],
+    [
+      "15",
+      "WP LABUAN"
+    ],
+    [
+      "16",
+      "WP PUTRAJAYA"
+    ]
+  ],
+  "accommodationCity": []
+}

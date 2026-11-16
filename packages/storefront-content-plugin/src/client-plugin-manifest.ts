@@ -97,6 +97,16 @@ export const storefrontClientPluginCatalog: readonly StorefrontClientPluginDefin
         defaultPlacement: 'BUSINESS_SERVICES_MAIN',
     },
     {
+        code: 'mdac-entry',
+        name: '马来西亚入境卡',
+        englishName: 'Malaysia arrival card',
+        description: '免登录填写入境卡，支持本机护照识别。旅客资料仅保存在旅客浏览器。',
+        englishDescription:
+            'Guest arrival-card assistant with local passport recognition and browser-only drafts.',
+        version: '1.0.0',
+        defaultPlacement: 'BUSINESS_SERVICES_MAIN',
+    },
+    {
         code: 'tax-free-address-entry',
         name: '免税地址提取',
         englishName: 'Tax-free address templates',
