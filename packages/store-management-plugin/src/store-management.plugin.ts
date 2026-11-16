@@ -126,6 +126,8 @@ import { reconcileFraudRiskCasesTask } from './fraud-risk.tasks';
 import { GovernanceRiskAdminResolver, GovernanceRiskShopResolver } from './governance-risk.resolver';
 import { GovernanceService } from './governance.service';
 import { generateGovernanceReportsTask } from './governance.tasks';
+import { GptRechargePlugin } from './gpt-recharge/plugin';
+import { GptRechargeStreamController } from './gpt-recharge/stream.controller';
 import { MarketingAttributionService } from './marketing-attribution.service';
 import { purgeExpiredMarketingAnalyticsTask } from './marketing-attribution.tasks';
 import { MerchantCatalogAccessInterceptor } from './merchant-catalog-access.interceptor';
@@ -271,6 +273,7 @@ import {
 
 @VendurePlugin({
     imports: [
+        GptRechargePlugin,
         OperationsDashboardPlugin,
         PluginCommonModule,
         ContentTranslationPlugin,
@@ -332,6 +335,7 @@ import {
         FraudRiskAppeal,
     ],
     controllers: [
+        GptRechargeStreamController,
         StorefrontPromotionController,
         StorefrontSeoController,
         StorefrontRealtimeController,

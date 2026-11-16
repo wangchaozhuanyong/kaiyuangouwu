@@ -29,6 +29,12 @@ const routePreloaders = {
     services: preload(contentRoutes, 'Services'),
     support: preload(contentRoutes, 'Support'),
     legal: preload(() => import('./route-pages/legal-route-page'), 'Legal'),
+    blog: async () => {
+        await import('./pages/blog-page');
+    },
+    'blog-article': async () => {
+        await import('./pages/blog-page');
+    },
 } satisfies Partial<Record<RouteName, RoutePreloader>>;
 
 export async function preloadStorefrontRouteComponent(name: RouteName): Promise<void> {

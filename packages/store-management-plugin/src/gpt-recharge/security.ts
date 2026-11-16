@@ -1,6 +1,8 @@
 import { UserInputError } from '@vendure/core';
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
+import { safeRechargeProgress } from './progress';
+
 /** Limit decoded bytes while reading; a timeout or a character-count check cannot bound allocation. */
 export async function readRechargeResponse(response: Response): Promise<string> {
     const maximumBytes = 65_536;
@@ -112,6 +114,13 @@ export function safeRechargeTask(value: unknown) {
     if (!Number.isFinite(updatedAt.getTime())) throw new Error('Invalid task timestamp');
     return {
         updatedAt,
+        progress: safeRechargeProgress(row.progress),
+        accountEmail:
+            typeof row.accountEmail === 'string' &&
+            row.accountEmail.length <= 320 &&
+            /^[^\s@]+@[^\s@]+$/.test(row.accountEmail)
+                ? row.accountEmail
+                : undefined,
         id: row.id,
         plan: String(row.plan),
         status: String(row.status),

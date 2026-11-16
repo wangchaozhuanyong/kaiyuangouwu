@@ -288,7 +288,7 @@ it('tracks a looked-up task without retaining its credential or replacing it wit
         .find(query => query.queryKey.at(-1) === snapshot.id);
     expect(tracked?.gcTime).toBe(0);
     act(() =>
-        [...container.querySelectorAll('button')].find(button => button.textContent === '刷新进度')?.click(),
+        [...container.querySelectorAll('button')].find(button => button.textContent === '核对进度')?.click(),
     );
     await act(async () => {
         await new Promise(resolve => setTimeout(resolve, 20));
@@ -309,3 +309,105 @@ it('tracks a looked-up task without retaining its credential or replacing it wit
             .some(query => query.queryKey.at(-1) === snapshot.id),
     ).toBe(false);
 });
+
+it('shares detailed task progress, ignores old revisions, suspends offline and stops the stream at completion', async () => {
+    config.mockResolvedValue({ enabled: true, maintenance: false });
+    const snapshot = {
+        id: 'shared-task',
+        credential: 'synthetic-proof',
+        plan: 'plus' as const,
+        status: 'running' as const,
+        stage: 'processing' as const,
+        updatedAt: '2026-11-16T10:00:00Z',
+        accountEmail: 'customer@example.test',
+        progress: {
+            attempt: 'attempt-a',
+            execution: 1,
+            version: 3,
+            changedAt: '2026-11-16T10:00:00Z',
+            milestones: [
+                { key: 'card' as const, state: 'complete' as const, at: '2026-11-16T09:59:00Z' },
+                { key: 'billing' as const, state: 'active' as const, at: '2026-11-16T10:00:00Z' },
+            ],
+        },
+    };
+    lookupCode.mockResolvedValue({ plan: 'plus', status: 'reserved', task: snapshot });
+    task.mockResolvedValue(snapshot);
+    const subscriptions: Array<{ signal: AbortSignal; emit: (task: typeof snapshot) => void }> = [];
+    client.watch = vi.fn(async (_id, _credential, signal, onTask, onConnection) => {
+        subscriptions.push({ signal, emit: onTask });
+        onConnection('live');
+        await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    try {
+        await render();
+        act(() =>
+            [...container.querySelectorAll('button')]
+                .find(button => button.textContent === '兑换码查询')
+                ?.click(),
+        );
+        const input = container.querySelector<HTMLInputElement>('#gpt-query');
+        if (!input) throw new Error('Query input missing');
+        act(() => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+                input,
+                'test-code',
+            );
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        act(() => {
+            input.closest('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        });
+        await act(async () => {
+            await new Promise(resolve => setTimeout(resolve, 30));
+        });
+        expect(subscriptions).toHaveLength(1);
+        expect(container.textContent).toContain('银行卡资料已填写');
+        expect(container.textContent).toContain('正在填写账单地址');
+        await act(async () => {
+            await new Promise(resolve => setTimeout(resolve, 5200));
+        });
+        expect(task).not.toHaveBeenCalled();
+        act(() =>
+            subscriptions[0].emit({
+                ...snapshot,
+                updatedAt: '2026-11-16T10:05:00Z',
+                progress: { ...snapshot.progress, version: 2, milestones: [] },
+            }),
+        );
+        expect(container.textContent).toContain('银行卡资料已填写');
+        act(() =>
+            [...container.querySelectorAll('button')]
+                .find(button => button.textContent === '使用说明')
+                ?.click(),
+        );
+        expect(subscriptions).toHaveLength(1);
+        expect(container.querySelectorAll('.gpt-recharge-progress')).toHaveLength(1);
+        act(() => {
+            Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+            window.dispatchEvent(new Event('offline'));
+        });
+        expect(subscriptions[0].signal.aborted).toBe(true);
+        expect(container.textContent).toContain('更新已暂停');
+        await act(async () => {
+            Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+            window.dispatchEvent(new Event('online'));
+            await new Promise(resolve => setTimeout(resolve, 20));
+        });
+        expect(subscriptions).toHaveLength(2);
+        await act(async () => {
+            subscriptions[1].emit({
+                ...snapshot,
+                status: 'succeeded',
+                progress: { ...snapshot.progress, version: 4 },
+            } as never);
+            await new Promise(resolve => setTimeout(resolve, 20));
+        });
+        expect(subscriptions[1].signal.aborted).toBe(true);
+        expect(container.textContent).toContain('充值成功');
+        expect(submit).not.toHaveBeenCalled();
+    } finally {
+        delete client.watch;
+        Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    }
+}, 10000);

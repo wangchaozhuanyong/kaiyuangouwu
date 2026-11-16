@@ -18,6 +18,26 @@ export type RechargeStatus =
     | 'expired';
 export type RechargeStage =
     RechargeStatus | 'started' | 'processing' | 'payment_details' | 'paying' | 'paid' | 'subscription_check';
+export interface RechargeProgress {
+    attempt: string;
+    execution: number;
+    version: number;
+    changedAt: string;
+    retryAt?: string | null;
+    milestones: Array<{
+        key:
+            | 'accepted'
+            | 'account'
+            | 'checkout'
+            | 'card'
+            | 'billing'
+            | 'payment'
+            | 'subscription'
+            | 'complete';
+        state: 'active' | 'complete' | 'waiting';
+        at: string;
+    }>;
+}
 export interface RechargeTask {
     id: string;
     credential: string;
@@ -25,6 +45,8 @@ export interface RechargeTask {
     status: RechargeStatus;
     stage?: RechargeStage;
     updatedAt: string;
+    accountEmail?: string | null;
+    progress?: RechargeProgress | null;
 }
 export interface RechargeCode {
     plan: RechargePlan;
@@ -38,6 +60,13 @@ export interface GptRechargeClient extends Partial<ShopAbuseClient> {
     submit(code: string, session: string, proof?: ShopAbuseProof): Promise<RechargeTask>;
     query(code: string, proof?: ShopAbuseProof): Promise<RechargeCode>;
     task(id: string, credential: string, signal?: AbortSignal): Promise<RechargeTask>;
+    watch?(
+        id: string,
+        credential: string,
+        signal: AbortSignal,
+        onTask: (task: RechargeTask) => void,
+        onConnection: (state: 'connecting' | 'live' | 'error' | 'denied') => void,
+    ): Promise<void>;
     authorize?(
         code: string,
         requestKey: string,
@@ -114,9 +143,17 @@ export function inspectRechargeSession(
     }
     if (typeof payload?.exp === 'number' && payload.exp * 1000 <= Date.now())
         throw new Error(t('账号资料已过期，请重新获取。', 'Account data has expired. Get a fresh copy.'));
-    return { email: value.user.email.replace(/^(.).*(@.*)$/, '$1***$2') };
+    return { email: value.user.email };
 }
 
 export function rechargePlanLabel(plan: RechargePlan): string {
     return rechargePlans.find(item => item.key === plan)?.label ?? '—';
+}
+
+/** Compare business revisions first; transport heartbeats are not progress. */
+export function newestRechargeTask(before: RechargeTask | undefined, after: RechargeTask): RechargeTask {
+    if (!before || before.id !== after.id) return after;
+    if (before.progress && after.progress && before.progress.attempt === after.progress.attempt)
+        return before.progress.version >= after.progress.version ? before : after;
+    return Date.parse(before.updatedAt) > Date.parse(after.updatedAt) ? before : after;
 }

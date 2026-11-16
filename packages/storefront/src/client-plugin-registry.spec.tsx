@@ -52,6 +52,20 @@ function pluginBlock(items: StorefrontContentItem[]): StorefrontContentBlock {
 }
 
 describe('category client plugin registry', () => {
+    it('renders the blog entry as its real Chinese destination before hydration', () => {
+        const block = pluginBlock([pluginItem('news-blog-entry', 'BUSINESS_SERVICES_MAIN', 0)]);
+        const html = renderToString(
+            <ClientPluginSlot
+                block={block}
+                placement="BUSINESS_SERVICES_MAIN"
+                language="zh"
+                onNavigate={() => undefined}
+            />,
+        );
+        expect(html).toContain('href="/zh/blog"');
+        expect(html).toContain('新闻博客');
+        expect(html).not.toContain('<button');
+    });
     it.each([
         ['zh', 'GPT自助充值', '进入充值'],
         ['en', 'GPT self-service recharge', 'Recharge'],

@@ -2,6 +2,7 @@
 import {
     Check,
     ChevronDown,
+    CircleHelp,
     ClipboardPaste,
     Clock3,
     Copy,
@@ -339,10 +340,11 @@ function TwoFactorPageSession({
     return (
         <Subpage
             title={copy.title}
+            titleIcon={standalone ? <KeyRound /> : undefined}
             language={language}
             onBack={onBack}
             className={standalone ? 'standalone-tool-page two-factor-page' : 'two-factor-page'}
-            back={onBack ? undefined : standalone ? <KeyRound aria-hidden="true" /> : false}
+            back={onBack ? undefined : false}
             action={
                 standalone ? (
                     <button
@@ -352,6 +354,7 @@ function TwoFactorPageSession({
                             document.getElementById('two-factor-help')?.scrollIntoView({ block: 'nearest' });
                         }}
                     >
+                        <CircleHelp aria-hidden="true" />
                         {isZh ? '使用说明' : 'Help'}
                     </button>
                 ) : undefined

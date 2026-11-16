@@ -76,7 +76,7 @@ function BrowserIllustration({
                                 </span>
                                 <div>
                                     <span>{t('当前登录账号', 'Signed-in account')}</span>
-                                    <strong>d***@example.com</strong>
+                                    <strong>demo@example.com</strong>
                                 </div>
                                 <Check size={20} />
                             </div>
@@ -136,8 +136,8 @@ export function GptRechargeGuide({
         [
             t('核对并提交', 'Check and submit'),
             t(
-                '粘贴资料，核对脱敏邮箱和套餐，勾选确认后提交。',
-                'Paste the data, check the masked email and plan, then confirm and submit.',
+                '粘贴资料，核对完整邮箱和套餐，勾选确认后提交。',
+                'Paste the data, check the full email address and plan, then confirm and submit.',
             ),
         ],
         [

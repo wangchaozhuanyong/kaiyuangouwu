@@ -5,6 +5,19 @@ export const shopSchema = gql`
         enabled: Boolean!
         maintenance: Boolean!
     }
+    type GptRechargeMilestone {
+        key: String!
+        state: String!
+        at: DateTime!
+    }
+    type GptRechargeProgress {
+        attempt: String!
+        execution: Int!
+        version: Int!
+        changedAt: DateTime!
+        retryAt: DateTime
+        milestones: [GptRechargeMilestone!]!
+    }
     type GptRechargeTask {
         id: ID!
         credential: String!
@@ -12,6 +25,8 @@ export const shopSchema = gql`
         status: String!
         stage: String!
         updatedAt: DateTime!
+        accountEmail: String
+        progress: GptRechargeProgress
     }
     type GptRechargeCode {
         plan: String!

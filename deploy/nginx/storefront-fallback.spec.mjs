@@ -51,6 +51,17 @@ function block(label, after = 0) {
     }
     throw new Error('Unclosed Nginx block: ' + label);
 }
+test('private recharge progress uses the bounded unbuffered realtime route', () => {
+    const route = block('location ~ ^/storefront-realtime/(events|mail-events|recharge-events)$');
+    for (const expected of [
+        'proxy_buffering off;',
+        'proxy_cache off;',
+        'proxy_ignore_client_abort off;',
+        'limit_conn vendure_realtime_per_ip 12;',
+        'proxy_set_header vendure-token "";',
+    ])
+        assert.ok(route.includes(expected), expected);
+});
 const fallbackMap = block('map $request_uri $storefront_legacy_fallback');
 const coopMap = block('map "$request_method|$sent_http_content_type|$http_user_agent" $storefront_html_coop');
 const addressHost = 'address.moyaoai.com';
@@ -268,7 +279,11 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
             assert.equal(html.text, '<main>Independent address tool</main>');
             assert.equal(html.headers['referrer-policy'], 'no-referrer');
             assert.match(html.headers['content-security-policy'], /connect-src 'self';/u);
-            assert.equal((await getTool('/assets/tool-A1234567.js')).status, 200);
+            assert.match(html.headers['cache-control'], /no-store/);
+            const asset = await getTool('/assets/tool-A1234567.js');
+            assert.equal(asset.status, 200);
+            assert.match(asset.headers['cache-control'], /public, max-age=31536000, immutable/);
+            assert.equal(asset.headers['content-security-policy'], html.headers['content-security-policy']);
             for (const pathname of [
                 '/shop-api',
                 '/admin-api',
@@ -281,6 +296,7 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
             ]) {
                 const denied = await getTool(pathname);
                 assert.equal(denied.status, 404, pathname);
+                assert.match(denied.headers['cache-control'], /no-store/);
                 assert.ok(!denied.text.includes('Published public page'), pathname);
             }
             const cookie = '__Host-tax_address_browser=' + 'a'.repeat(115);
@@ -290,6 +306,7 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
                 'vendure-token': 'fixture',
             });
             assert.equal(status.text, `cookie=${cookie}; auth=; token=; host=${addressHost}`);
+            assert.match(status.headers['cache-control'], /no-store/);
             assert.equal((await fetch(origin + '/.address-tool/index.html')).status, 404);
         },
     );
@@ -328,7 +345,14 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
             const html = await toolRequest(host, '/');
             assert.equal(html.text, `<main>${name}</main>`);
             assert.equal(html.headers['referrer-policy'], 'no-referrer');
-            assert.equal((await toolRequest(host, '/assets/tool-A1234567.js')).status, 200);
+            assert.match(html.headers['cache-control'], /no-store/);
+            const asset = await toolRequest(host, '/assets/tool-A1234567.js');
+            assert.equal(asset.status, 200);
+            assert.match(asset.headers['cache-control'], /public, max-age=31536000, immutable/);
+            assert.equal(asset.headers['content-security-policy'], html.headers['content-security-policy']);
+            const missing = await toolRequest(host, '/assets/missing-A1234567.js');
+            assert.equal(missing.status, 404);
+            assert.match(missing.headers['cache-control'], /no-store/);
             for (const pathname of [
                 '/shop-api',
                 '/admin-api',
@@ -350,6 +374,7 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
             assert.equal((await toolRequest('mail.moyaoai.com', '/api/mail/' + mailOperation)).status, 405);
             const result = await toolRequest('mail.moyaoai.com', '/api/mail/' + mailOperation, 'POST');
             assert.equal(result.status, 200);
+            assert.match(result.headers['cache-control'], /no-store/);
             assert.equal(result.text, `cookie=; auth=; token=; path=${upstream}`);
         }
         assert.equal((await fetch(origin + '/.mail-tool/index.html')).status, 404);
