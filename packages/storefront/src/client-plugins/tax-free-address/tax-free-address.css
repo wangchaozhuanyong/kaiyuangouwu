@@ -319,7 +319,8 @@
 }
 .tax-address-history-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     table-layout: fixed;
     font-size: var(--type-body-size);
     line-height: var(--type-body-leading);
@@ -345,6 +346,7 @@
 }
 .tax-address-history-table th:nth-child(5) {
     width: 26%;
+    text-align: center;
 }
 .tax-address-history-row td {
     padding: var(--space-8);
@@ -355,6 +357,15 @@
 .tax-address-history-row:nth-of-type(4n + 3) {
     background: var(--control-surface, var(--soft));
 }
+.tax-address-history-row[data-expanded='true'] {
+    background: var(--accent-soft);
+}
+.tax-address-history-row[data-expanded='true'] > td:first-child {
+    border-top-left-radius: var(--skin-control-radius);
+}
+.tax-address-history-row[data-expanded='true'] > td:last-child {
+    border-top-right-radius: var(--skin-control-radius);
+}
 .tax-address-record-time {
     color: var(--muted);
     font-variant-numeric: tabular-nums;
@@ -362,10 +373,22 @@
 .tax-address-record-street {
     font-weight: var(--font-weight-medium);
 }
-.tax-address-record-actions {
-    text-align: right;
+.tax-address-record-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+    gap: var(--space-8);
+    width: 100%;
+    max-width: 208px;
+    margin-inline: auto;
 }
-.tax-address-page .tax-address-record-actions button {
+.tax-address-page .tax-address-record-buttons button {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: var(--space-4);
+    padding-inline: var(--space-4);
+    text-align: left;
+    white-space: nowrap;
     font-size: var(--type-label-size);
     line-height: var(--type-label-leading);
 }
@@ -376,7 +399,24 @@
     padding: 0;
 }
 .tax-address-record-detail {
-    padding-block: var(--space-16);
+    padding: var(--space-16);
+    margin-bottom: var(--space-24);
+    background: var(--accent-soft);
+    border-radius: 0 0 var(--skin-control-radius) var(--skin-control-radius);
+}
+.tax-address-page .tax-address-record-detail-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-4) var(--space-12);
+    margin-bottom: var(--space-12);
+}
+.tax-address-record-detail-heading > span {
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+.tax-address-record-detail .tax-address-fields > div {
+    background: var(--surface);
 }
 .tax-address-pagination,
 .tax-address-pagination-controls {
@@ -532,6 +572,9 @@
         padding: var(--space-4) 0;
         border: 0;
     }
+    .tax-address-history-row[data-expanded='true'] {
+        border-radius: var(--skin-control-radius) var(--skin-control-radius) 0 0;
+    }
     .tax-address-record-time,
     .tax-address-record-street,
     .tax-address-record-actions {
@@ -543,8 +586,8 @@
     .tax-address-record-zip {
         grid-column: 2;
     }
-    .tax-address-record-actions {
-        text-align: left;
+    .tax-address-record-buttons {
+        margin-inline: 0;
     }
     .tax-address-detail-row:not([hidden]),
     .tax-address-detail-row > td {
