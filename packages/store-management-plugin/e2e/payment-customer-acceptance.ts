@@ -54,8 +54,14 @@ export function registerPaymentCustomerAcceptance(
             true,
         );
         await methods.setStorePaymentOptionEnabled(a, method.id, true);
+        await expect(
+            connection.withTransaction(a, tx => methods.setStorePaymentOptionEnabled(tx, method.id, true)),
+        ).resolves.toMatchObject({ enabled: true, effectiveEnabled: true });
         await methods.setStorePaymentOptionEnabled(b, method.id, true);
         await methods.setStorePaymentOptionEnabled(a, method.id, false);
+        await expect(
+            connection.withTransaction(a, tx => methods.setStorePaymentOptionEnabled(tx, method.id, false)),
+        ).resolves.toMatchObject({ enabled: false, effectiveEnabled: false });
         expect(await methods.getActivePaymentMethods(a)).toHaveLength(0);
         const shopB = new RequestContext({
             apiType: 'shop',

@@ -235,10 +235,13 @@ export class PaymentMethodService {
         if (enabled && !method.platformEnabled) throw new UserInputError('平台尚未启用该支付方式');
         await this.connection
             .getRepository(ctx, StorePaymentMethodState)
-            .upsert({ channelId: ctx.channelId, paymentMethodId: id, enabled }, [
-                'channelId',
-                'paymentMethodId',
-            ]);
+            .createQueryBuilder()
+            .insert()
+            .values({ channelId: ctx.channelId, paymentMethodId: id, enabled })
+            .orUpdate(['enabled'], ['channelId', 'paymentMethodId'])
+            // MySQL can return insertId 0 when a repeated save leaves the switch unchanged.
+            .updateEntity(false)
+            .execute();
         return { ...method, enabled, effectiveEnabled: enabled && method.platformEnabled };
     }
 
