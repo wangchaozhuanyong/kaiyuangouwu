@@ -17,6 +17,8 @@
         "vite.two-factor.config.ts",
         "vite.public-server.config.ts",
         "tax-free-address-tool",
-        "vite.tax-free-address.config.ts"
+        "vite.tax-free-address.config.ts",
+        "mail-query-tool",
+        "vite.mail-query.config.ts"
     ]
 }

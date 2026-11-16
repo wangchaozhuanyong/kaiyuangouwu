@@ -5,6 +5,7 @@ import { IcloudAdminResolver } from './api/icloud-admin.resolver';
 import { IcloudMailStreamController } from './api/icloud-mail-stream.controller';
 import { IcloudPortalController } from './api/icloud-portal.controller';
 import { IcloudPublicResolver } from './api/icloud-public.resolver';
+import { IcloudStandaloneQueryController } from './api/icloud-standalone-query.controller';
 import { ICLOUD_RELAY_PLUGIN_OPTIONS, manageIcloudRelayPermission } from './constants';
 import { IcloudMailOutbox } from './entities/icloud-mail-outbox.entity';
 import { IcloudPrimaryAccount } from './entities/icloud-primary-account.entity';
@@ -67,7 +68,7 @@ import { IcloudRelayPluginOptions } from './types';
         IcloudQueryAuditLog,
         IcloudMailOutbox,
     ],
-    controllers: [IcloudPortalController, IcloudMailStreamController],
+    controllers: [IcloudPortalController, IcloudMailStreamController, IcloudStandaloneQueryController],
     providers: [
         { provide: ICLOUD_RELAY_PLUGIN_OPTIONS, useFactory: () => IcloudRelayPlugin.options },
         IcloudCipherService,

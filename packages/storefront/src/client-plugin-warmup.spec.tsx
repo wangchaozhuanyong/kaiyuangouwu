@@ -164,7 +164,7 @@ describe('configured image-studio warmup intent', () => {
     });
 
     it.each(['zh', 'en'] as const)(
-        'keeps the three synchronous %s tool entries and their own routes',
+        'keeps the three synchronous %s tool entries and their destinations',
         async language => {
             const onNavigate = vi.fn();
             const tools = {
@@ -188,32 +188,32 @@ describe('configured image-studio warmup intent', () => {
                     />,
                 );
                 return Promise.resolve();
-                return Promise.resolve();
             });
-            const buttons = [...host.querySelectorAll('button')];
-            expect(buttons.map(button => button.querySelector('strong')?.textContent)).toEqual(
+            const entries = [...host.querySelectorAll('a, button')];
+            expect(entries.map(entry => entry.querySelector('strong')?.textContent)).toEqual(
                 language === 'zh'
                     ? ['2FA 动态码', '邮件验证码查询', 'GPT自助充值']
                     : ['2FA codes', 'Mail verification codes', 'GPT self-service recharge'],
             );
-            expect(buttons.map(button => button.className)).toEqual([
+            expect(entries.map(entry => entry.className)).toEqual([
                 'category-client-plugin category-client-plugin-two-factor',
                 'category-client-plugin category-client-plugin-mail-query',
                 'category-client-plugin',
             ]);
             expect(
-                buttons.map(button => button.querySelector('svg')?.classList.contains('lucide-mail')),
+                entries.map(entry => entry.querySelector('svg')?.classList.contains('lucide-mail')),
             ).toEqual([false, true, false]);
+            const locale = language === 'en' ? '?lang=en' : '';
+            expect(entries.map(entry => entry.getAttribute('href'))).toEqual([
+                `https://2fa.moyaoai.com/${locale}`,
+                `https://mail.moyaoai.com/${locale}`,
+                null,
+            ]);
             await act(() => {
-                buttons.forEach(button => button.click());
-                return Promise.resolve();
+                host.querySelector('button')?.click();
                 return Promise.resolve();
             });
-            expect(onNavigate.mock.calls).toEqual([
-                [{ name: 'two-factor' }],
-                [{ name: 'mail-query' }],
-                [{ name: 'gpt-recharge' }],
-            ]);
+            expect(onNavigate.mock.calls).toEqual([[{ name: 'gpt-recharge' }]]);
             expect(runtime.route).not.toHaveBeenCalled();
             expect(runtime.prepare).not.toHaveBeenCalled();
         },

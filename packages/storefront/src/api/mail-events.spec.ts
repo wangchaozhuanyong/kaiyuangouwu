@@ -26,6 +26,42 @@ afterEach(() => {
 });
 
 describe('private mailbox transport', () => {
+    it('connects the standalone tool without storefront cookies, headers or URL query codes', async () => {
+        vi.useFakeTimers();
+        const f = fixture();
+        const fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            headers: new Headers({ 'content-type': 'text/event-stream' }),
+            body: f.body,
+        });
+        vi.stubGlobal('fetch', fetch);
+        const onChange = vi.fn();
+        const watching = watchMailEvents(
+            'BUY-TEST-0001',
+            {},
+            { onChange, onStatus: vi.fn() },
+            f.controller.signal,
+            {
+                url: 'https://mail.example.test/api/mail/events',
+                credentials: 'omit',
+            },
+        );
+        await vi.advanceTimersByTimeAsync(0);
+        f.ready();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(fetch).toHaveBeenCalledWith(
+            'https://mail.example.test/api/mail/events',
+            expect.objectContaining({
+                credentials: 'omit',
+                referrerPolicy: 'no-referrer',
+                redirect: 'error',
+                headers: { accept: 'text/event-stream', 'content-type': 'application/json' },
+            }),
+        );
+        expect(onChange).toHaveBeenCalledOnce();
+        f.controller.abort();
+        await watching;
+    });
     it('keeps the code out of the URL, deduplicates events and never reads business data on heartbeat', async () => {
         vi.useFakeTimers();
         const f = fixture();

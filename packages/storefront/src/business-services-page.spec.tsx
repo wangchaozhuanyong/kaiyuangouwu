@@ -208,9 +208,9 @@ describe('business services page', () => {
                 const tools = host.querySelector('.is-tools');
                 if (!tools) throw new Error('Tool directory is missing');
                 expect(row.contains(tools)).toBe(false);
-                expect(tools.querySelectorAll('button')).toHaveLength(3);
+                expect(tools.querySelectorAll('button, a')).toHaveLength(3);
                 expect(
-                    tools.querySelector('button')?.classList.contains('category-client-plugin-two-factor'),
+                    tools.querySelector('button, a')?.classList.contains('category-client-plugin-two-factor'),
                 ).toBe(true);
                 expect(row.compareDocumentPosition(tools)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
             }
@@ -251,9 +251,7 @@ describe('business services page', () => {
             for (const [className, route] of [
                 ['support', 'support'],
                 ['coupon', 'coupons'],
-                ['two-factor', 'two-factor'],
                 ['image-studio', 'image-studio'],
-                ['mail-query', 'mail-query'],
             ]) {
                 await act(async () => {
                     (host.querySelector(`.category-client-plugin-${className}`) as HTMLButtonElement).click();
@@ -261,7 +259,15 @@ describe('business services page', () => {
                 });
                 expect(navigate).toHaveBeenLastCalledWith({ name: route });
             }
-            expect(navigate).toHaveBeenCalledTimes(5);
+            expect(navigate).toHaveBeenCalledTimes(3);
+            for (const [name, origin] of [
+                ['two-factor', '2fa'],
+                ['mail-query', 'mail'],
+            ]) {
+                const link = host.querySelector(`a.category-client-plugin-${name}`);
+                expect(link?.getAttribute('href')).toBe(`https://${origin}.moyaoai.com/`);
+                expect(link?.getAttribute('referrerpolicy')).toBe('no-referrer');
+            }
         } finally {
             await act(async () => {
                 root.unmount();

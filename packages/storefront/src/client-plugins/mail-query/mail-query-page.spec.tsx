@@ -45,6 +45,62 @@ describe('MailQueryPage', () => {
         vi.useRealTimers();
     });
 
+    it('hides storefront navigation in direct mode but keeps the internal result back action', async () => {
+        const onBack = vi.fn();
+        const api = {
+            queryMails: vi.fn().mockResolvedValue({
+                success: true,
+                targetType: 'buyer',
+                aliasEmail: 'fixture@example.test',
+                items: [],
+                totalEmails: 0,
+                virtualEmailsList: [],
+            }),
+        } as unknown as ShopApi;
+        await act(async () => {
+            root.render(
+                <MailQueryPage
+                    api={api}
+                    marketCode="standalone-mail"
+                    standalone
+                    initialCode="BUY-TEST-0001"
+                />,
+            );
+            await Promise.resolve();
+        });
+        expect(container.querySelector('a[href="/support"]')).toBeNull();
+        expect(container.querySelector('.page-back-button')).not.toBeNull();
+        act(() => container.querySelector<HTMLButtonElement>('.page-back-button')?.click());
+        expect(container.querySelector('.page-back-button')).toBeNull();
+        act(() =>
+            root.render(<MailQueryPage api={api} marketCode="standalone-mail" standalone onBack={onBack} />),
+        );
+        act(() => container.querySelector<HTMLButtonElement>('.page-back-button')?.click());
+        expect(onBack).toHaveBeenCalledOnce();
+        expect(container.querySelector('a')).toBeNull();
+    });
+
+    it('does not use URL query codes in standalone mode', () => {
+        const queryMails = vi.fn();
+        const originalUrl = window.location.href;
+        window.history.replaceState(null, '', '?code=CaseSensitiveFixture');
+        try {
+            act(() =>
+                root.render(
+                    <MailQueryPage
+                        api={{ queryMails, watchMailEvents: vi.fn() }}
+                        marketCode="standalone-mail"
+                        standalone
+                    />,
+                ),
+            );
+            expect(queryMails).not.toHaveBeenCalled();
+            expect(container.querySelector<HTMLInputElement>('#codeInput')?.value).toBe('');
+        } finally {
+            window.history.replaceState(null, '', originalUrl);
+        }
+    });
+
     it('keeps recent query codes in their own store and account without exposing legacy records', () => {
         const record = (code: string) =>
             JSON.stringify([{ code, updatedAt: Date.now(), aliasEmail: `${code}@example.test` }]);
@@ -280,7 +336,7 @@ describe('MailQueryPage', () => {
         await act(async () => {
             root.render(
                 <MailQueryPage
-                    api={{ queryMails, watchMailEvents } as unknown as ShopApi}
+                    api={{ queryMails, watchMailEvents }}
                     marketCode="store-a"
                     initialCode={code}
                 />,
@@ -317,7 +373,7 @@ describe('MailQueryPage', () => {
         await act(async () => {
             root.render(
                 <MailQueryPage
-                    api={{ queryMails, watchMailEvents } as unknown as ShopApi}
+                    api={{ queryMails, watchMailEvents }}
                     marketCode="store-a"
                     initialCode={code}
                 />,

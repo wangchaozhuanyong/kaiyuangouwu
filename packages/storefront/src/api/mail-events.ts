@@ -29,9 +29,10 @@ export async function watchMailEvents(
     headers: Record<string, string> | (() => Record<string, string>),
     callbacks: MailStreamCallbacks,
     signal: AbortSignal,
+    transport?: { url: string; credentials: 'omit' },
 ): Promise<void> {
-    const url = new URL(storefrontRealtimeUrl());
-    url.pathname = url.pathname.replace(/\/events$/u, '/mail-events');
+    const url = new URL(transport?.url ?? storefrontRealtimeUrl());
+    if (!transport) url.pathname = url.pathname.replace(/\/events$/u, '/mail-events');
     url.search = '';
     let cursor = '0';
     let connectedOnce = false;
@@ -59,11 +60,14 @@ export async function watchMailEvents(
             const request = createRequestSignal(connection.signal, 10_000);
             let response: Response;
             try {
-                response = await sessionTransport(url.toString(), false, request.signal, () =>
+                const send = () =>
                     fetch(url.toString(), {
                         method: 'POST',
-                        credentials: 'include',
+                        credentials: transport?.credentials ?? 'include',
                         cache: 'no-store',
+                        ...(transport
+                            ? { redirect: 'error' as const, referrerPolicy: 'no-referrer' as const }
+                            : {}),
                         headers: {
                             ...(typeof headers === 'function' ? headers() : headers),
                             accept: 'text/event-stream',
@@ -71,8 +75,10 @@ export async function watchMailEvents(
                         },
                         body: JSON.stringify({ queryCode, cursor }),
                         signal: request.signal,
-                    }),
-                );
+                    });
+                response = transport
+                    ? await send()
+                    : await sessionTransport(url.toString(), false, request.signal, send);
             } finally {
                 request.cleanup();
             }

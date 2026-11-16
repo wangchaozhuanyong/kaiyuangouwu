@@ -7,6 +7,7 @@ import {
     storefrontSkinCssVariables,
 } from '../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import { TwoFactorPage } from '../src/client-plugins/two-factor/two-factor-page';
+import { standaloneToolNavigation } from '../src/standalone-tool-navigation';
 import { ActiveCustomer, StorefrontLanguage } from '../src/types';
 
 import './styles.css';
@@ -14,6 +15,34 @@ import './styles.css';
 const allowedParents = new Set<string>(
     (import.meta.env.VITE_TWO_FACTOR_PARENT_ORIGINS || '').split(',').filter(Boolean),
 );
+
+const standalone = window.parent === window;
+const navigation = standalone ? standaloneToolNavigation(() => window.history.back()) : undefined;
+if (navigation) {
+    document.documentElement.lang = navigation.language === 'zh' ? 'zh-CN' : 'en';
+    document.title = navigation.language === 'zh' ? '2FA 动态码' : '2FA codes';
+}
+
+function StandaloneVault() {
+    const [notice, setNotice] = useState('');
+    return (
+        <>
+            {notice && (
+                <p role="status" className="p-3 type-body">
+                    {notice}
+                </p>
+            )}
+            <TwoFactorPage
+                customer={null}
+                language={navigation?.language ?? 'zh'}
+                onBack={navigation?.onBack}
+                onSignIn={() => undefined}
+                onNotify={setNotice}
+                standalone
+            />
+        </>
+    );
+}
 
 function IsolatedVault() {
     const [session, setSession] = useState<{
@@ -91,4 +120,4 @@ for (const [property, value] of Object.entries({
 })) {
     document.documentElement.style.setProperty(property, value);
 }
-createRoot(root).render(<IsolatedVault />);
+createRoot(root).render(standalone ? <StandaloneVault /> : <IsolatedVault />);

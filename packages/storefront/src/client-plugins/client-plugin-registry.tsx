@@ -2,11 +2,13 @@ import { Headphones, KeyRound, Mail, MapPin, TicketPercent, WandSparkles } from 
 import { type ComponentType, useCallback, useContext, useEffect, useRef } from 'react';
 
 import { addressToolOrigin } from '../../vite/address-tool-deployment';
+import { customerToolOrigins } from '../../vite/customer-tool-deployment';
 import { shouldPrefetchMedia } from '../hooks/useOnlineStatus';
 import { useStorefrontPageActivity } from '../hooks/useStorefrontPageActivity';
 import { languageCodeFor } from '../i18n';
 import { prepareImageStudioData } from '../pages/ai-image-studio-preload';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
+import { openStandaloneTool } from '../standalone-tool-navigation';
 import { type RouteState } from '../storefront-router';
 import { StorefrontContext } from '../StorefrontContext';
 import { type StorefrontContentBlock, type StorefrontContentItem, type StorefrontLanguage } from '../types';
@@ -144,15 +146,7 @@ function TaxFreeAddressEntry({ language }: Readonly<ClientPluginComponentProps>)
             className={`${entryClass} ${entryClass}-tax-free-address`}
             href={url}
             referrerPolicy="no-referrer"
-            onClick={event => {
-                if (event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-                event.preventDefault();
-                // The normal href stays clean for new tabs and copied links.
-                const link = document.createElement('a');
-                link.href = url + '#back';
-                link.referrerPolicy = 'no-referrer';
-                link.click();
-            }}
+            onClick={openStandaloneTool}
         >
             <span className={`${entryClass}-icon`} aria-hidden="true">
                 <MapPin />
@@ -187,6 +181,25 @@ function ToolEntryPlugin({
     }[name];
     const assistance = name === 'coupons' || name === 'support';
     const suffix = name === 'gpt-recharge' ? '' : ` ${entryClass}-${name === 'coupons' ? 'coupon' : name}`;
+    if (name === 'two-factor' || name === 'mail-query') {
+        return (
+            <a
+                className={`${entryClass}${suffix}`}
+                href={`${customerToolOrigins[name]}/${language === 'en' ? '?lang=en' : ''}`}
+                referrerPolicy="no-referrer"
+                onClick={openStandaloneTool}
+            >
+                <span className={`${entryClass}-icon`} aria-hidden="true">
+                    <Icon />
+                </span>
+                <span className={`${entryClass}-copy`}>
+                    <strong>{title}</strong>
+                    <span>{description}</span>
+                </span>
+                <span className={`${entryClass}-action`}>{action}</span>
+            </a>
+        );
+    }
     return (
         <button
             type="button"

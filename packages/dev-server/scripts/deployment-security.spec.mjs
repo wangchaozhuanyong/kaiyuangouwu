@@ -704,11 +704,13 @@ void test('every production ingress uses credential-safe access logs, including 
     assert.ok(config.includes('~*^/image-generation/private(?:/|$) /image-generation/private/[redacted];'));
 
     const servers = config.split(/^server \{/mu).slice(1);
-    assert.equal(servers.length, 7);
-    assert.equal(
-        servers.filter(server => /^    server_name address\.moyaoai\.com;$/mu.test(server)).length,
-        1,
-    );
+    assert.equal(servers.length, 9);
+    for (const name of ['address', '2fa', 'mail']) {
+        assert.equal(
+            servers.filter(server => server.includes(`\n    server_name ${name}.moyaoai.com;`)).length,
+            1,
+        );
+    }
     for (const server of servers) {
         assert.match(server, /^    access_log \S+ vendure_access;$/mu);
     }
@@ -758,7 +760,7 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.match(trustedOriginGeo.groups.body, /^\s+127\.0\.0\.0\/8 1;$/mu);
     assert.match(trustedOriginGeo.groups.body, /^\s+::1\/128 1;$/mu);
     const httpsServers = config.split(/^server \{/mu).filter(server => /^    listen 443 ssl /mu.test(server));
-    assert.equal(httpsServers.length, 5);
+    assert.equal(httpsServers.length, 7);
     for (const server of httpsServers) {
         assert.match(server, /^    if \(\$trusted_cloudflare_origin = 0\) \{ return 444; \}$/mu);
     }
@@ -779,10 +781,22 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
         config.indexOf('server_name moyaoai.com www.moyaoai.com console.moyaoai.com'),
     );
     assert.match(httpDefaultServer, /return 301 https:\/\/\$host\$request_uri;/u);
-    const storefrontServer = config.slice(
-        config.indexOf('listen 443 ssl http2 default_server;'),
-        config.indexOf('server_name address.moyaoai.com;'),
+    for (const [name, root] of [
+        ['2fa', '/var/www/kaiyuangouwu-two-factor-current'],
+        ['mail', '/var/www/kaiyuangouwu-storefront-current/.mail-tool'],
+    ]) {
+        const tool = httpsServers.find(server => server.includes(`\n    server_name ${name}.moyaoai.com;`));
+        assert.ok(tool);
+        assert.ok(
+            tool.includes(`\n    ssl_certificate /etc/letsencrypt/live/${name}.moyaoai.com/fullchain.pem;`),
+        );
+        assert.ok(tool.includes(`\n    root ${root};`));
+        assert.doesNotMatch(tool, /\/shop-api|\/admin-api|\/dashboard\//u);
+    }
+    const storefrontServer = httpsServers.find(server =>
+        /^    listen 443 ssl http2 default_server;$/mu.test(server),
     );
+    assert.ok(storefrontServer);
     assert.match(storefrontServer, /listen 443 ssl http2 default_server;/u);
     assert.match(storefrontServer, /server_name moyaoai\.com damatong\.net _;/u);
     assert.doesNotMatch(storefrontServer, /auth_request \/_storefront_authenticated;/u);

@@ -669,6 +669,22 @@ describe('iCloud admin contract persistence', () => {
             totalEmails: 1,
             items: [{ subject: 'own mailbox' }],
         });
+        const standalone = (queryCode: string) =>
+            fetch(`http://127.0.0.1:${port}/standalone-mail/query`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ queryCode }),
+            });
+        const isolatedBuyer = await standalone(alias.buyerQueryCode);
+        expect(isolatedBuyer.status).toBe(200);
+        expect(isolatedBuyer.headers.get('cache-control')).toContain('no-store');
+        expect(await isolatedBuyer.json()).toMatchObject({
+            success: true,
+            targetType: 'VIRTUAL',
+            totalEmails: 1,
+            items: [{ subject: 'own mailbox' }],
+        });
+        expect((await standalone('')).status).toBe(400);
         const master = await shopClient.query(query, { code: primary.masterQueryCode });
         expect(master.icloudQueryMails).toMatchObject({
             success: true,
@@ -690,6 +706,12 @@ describe('iCloud admin contract persistence', () => {
         const expired = await shopClient.query(query, { code: alias.buyerQueryCode });
         expect(expired.icloudQueryMails).toMatchObject({ success: false, items: [] });
         expect(expired.icloudQueryMails.message).toContain('过期');
+        const isolatedExpired = await standalone(alias.buyerQueryCode);
+        expect(await isolatedExpired.json()).toMatchObject({
+            success: false,
+            message: expired.icloudQueryMails.message,
+            items: [],
+        });
     });
 
     it('continues to reject anonymous private operations and admin mailbox queries', async () => {

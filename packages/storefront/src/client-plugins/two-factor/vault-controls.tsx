@@ -6,9 +6,11 @@ import { useBrowserVault } from './use-browser-vault';
 export function VaultControls({
     vault,
     isZh,
+    standalone = false,
 }: Readonly<{
     vault: ReturnType<typeof useBrowserVault>;
     isZh: boolean;
+    standalone?: boolean;
 }>) {
     const [showSetup, setShowSetup] = useState(false);
     const [passphrase, setPassphrase] = useState('');
@@ -51,10 +53,15 @@ export function VaultControls({
             </strong>
             <p className="mb-3 mt-2 type-body [line-height:var(--line-height-body)] text-[var(--muted)]">
                 {vault.unlocked
-                    ? text(
-                          '已启用本地加密保护。闲置 5 分钟、离开页面或退出登录后将自动锁定；离开设备前也可点击“立即上锁”。',
-                          'Local encryption active. Locks automatically after 5 minutes idle, leaving or signing out; you can also lock manually before leaving.',
-                      )
+                    ? standalone
+                        ? text(
+                              '已启用本地加密保护。闲置 5 分钟或离开页面后将自动锁定；离开设备前也可点击“立即上锁”。',
+                              'Local encryption active. Locks after 5 minutes idle or leaving; you can also lock manually.',
+                          )
+                        : text(
+                              '已启用本地加密保护。闲置 5 分钟、离开页面或退出登录后将自动锁定；离开设备前也可点击“立即上锁”。',
+                              'Local encryption active. Locks automatically after 5 minutes idle, leaving or signing out; you can also lock manually before leaving.',
+                          )
                     : vault.exists
                       ? text(
                             '账号数据已安全锁定隐藏。请输入独立口令解锁以查看和管理。',
@@ -126,10 +133,16 @@ export function VaultControls({
                     }}
                 >
                     <p className="m-0 type-helper text-[var(--muted)]">
-                        {text(
-                            '使用至少 12 个字符的独立口令，不要使用商城登录密码。忘记口令无法解密，商城不能代为重置。加密备份只能用原口令恢复到同一商城账号。',
-                            'Use a separate 12+ character passphrase. It cannot be reset. Backups need the original passphrase and store account.',
-                        )}
+                        {standalone
+                            ? text(
+                                  '使用至少 12 个字符的独立口令，不要重复使用其他账号的密码。忘记口令无法解密或重置。加密备份仅能用原口令恢复到当前浏览器的同一保管库。',
+                                  'Use a separate 12+ character passphrase. It cannot be reset. ' +
+                                      'Backups require the original passphrase and the same vault in this browser.',
+                              )
+                            : text(
+                                  '使用至少 12 个字符的独立口令，不要使用商城登录密码。忘记口令无法解密，商城不能代为重置。加密备份只能用原口令恢复到同一商城账号。',
+                                  'Use a separate 12+ character passphrase. It cannot be reset. Backups need the original passphrase and store account.',
+                              )}
                     </p>
                     <label className="grid gap-1 type-body">
                         {text('解锁口令', 'Unlock passphrase')}

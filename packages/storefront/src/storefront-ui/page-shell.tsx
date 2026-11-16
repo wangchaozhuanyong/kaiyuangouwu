@@ -176,7 +176,8 @@ export function Subpage({
 }: {
     title: string;
     language: StorefrontLanguage;
-    onBack: () => void;
+    onBack?: () => void;
+    back?: ReactNode;
     backLabel?: string;
     surfaceColor?: string | null;
     className?: string;
