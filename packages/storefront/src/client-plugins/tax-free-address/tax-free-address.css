@@ -53,16 +53,15 @@
 .tax-address-section-title,
 .tax-address-heading,
 .tax-address-toolbar,
-.tax-address-availability,
-.tax-address-availability p,
+.tax-address-action-row,
+.tax-address-action-row > p,
 .tax-address-badge {
     display: flex;
     align-items: center;
     gap: var(--space-8);
 }
 .tax-address-masthead,
-.tax-address-heading,
-.tax-address-availability {
+.tax-address-heading {
     justify-content: space-between;
 }
 .tax-address-masthead {
@@ -135,17 +134,20 @@
 .tax-address-fields {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--space-24) var(--space-16);
+    gap: var(--space-16);
     margin: 0;
 }
 .tax-address-fields > div {
     display: grid;
     align-content: start;
-    gap: var(--space-8);
+    gap: var(--space-4);
     min-width: 0;
+    padding: var(--space-12) var(--space-16);
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface, var(--soft));
 }
-.tax-address-fields > .tax-address-field-wide {
-    grid-column: 1 / -1;
+.tax-address-field-line1 {
+    grid-column: span 2;
 }
 .tax-address-fields dt {
     color: var(--muted);
@@ -159,6 +161,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-4);
+    justify-content: space-between;
     min-height: var(--experience-control-min);
 }
 .tax-address-field-value > span:first-child {
@@ -175,8 +178,9 @@
     right: 0;
     padding: var(--space-4) var(--space-8);
     border-radius: var(--skin-control-radius);
-    color: var(--accent-foreground);
-    background: var(--accent);
+    color: var(--success);
+    background: var(--surface);
+    box-shadow: var(--skin-card-shadow);
     white-space: nowrap;
     pointer-events: none;
 }
@@ -211,28 +215,29 @@
     max-width: 34ch;
 }
 .tax-address-actions {
-    padding: var(--space-12) var(--space-card) 0;
-    background: var(--control-surface, var(--soft));
+    margin-inline: var(--space-card);
+    padding-top: var(--space-16);
+    border-top: 1px solid var(--line-subtle);
 }
-.tax-address-availability {
+.tax-address-action-row {
     gap: var(--space-12);
-    margin-bottom: var(--space-8);
     flex-wrap: wrap;
 }
-.tax-address-availability p {
+.tax-address-action-row > p {
     color: var(--muted);
 }
-.tax-address-availability p svg {
+.tax-address-action-row > p svg {
     width: 14px;
     height: 14px;
     flex-shrink: 0;
 }
+.tax-address-action-row > button:last-child:not(.tax-address-quiet):not(.tax-address-extract) {
+    margin-left: auto;
+    min-width: 160px;
+}
 .tax-address-toolbar {
     gap: var(--space-12);
     flex-wrap: wrap;
-}
-.tax-address-extract {
-    flex: 1;
 }
 .tax-address-timer {
     font-variant-numeric: tabular-nums;
@@ -313,63 +318,93 @@
     max-width: 30ch;
     color: var(--muted);
 }
-.tax-address-history-list {
-    max-height: 530px;
-    overflow-y: auto;
-    scrollbar-width: thin;
+.tax-address-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
 }
-.tax-address-history-row + .tax-address-history-row {
-    margin-top: var(--space-8);
-}
-.tax-address-history-row summary {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-12);
-    padding-block: var(--space-16);
-    min-height: var(--experience-control-min);
-    cursor: pointer;
-    list-style: none;
-}
-.tax-address-history-row summary::-webkit-details-marker {
-    display: none;
-}
-.tax-address-history-row summary > svg {
-    width: 16px;
-    height: 16px;
-    flex-shrink: 0;
+.tax-address-history-table th {
+    padding: var(--space-12) var(--space-8);
+    text-align: left;
+    font-weight: var(--font-weight-medium);
     color: var(--muted);
+    background: var(--control-surface, var(--soft));
 }
-.tax-address-history-row[open] summary > svg {
+.tax-address-history-table th:nth-child(1) {
+    width: 14%;
+}
+.tax-address-history-table th:nth-child(2) {
+    width: 26%;
+}
+.tax-address-history-table th:nth-child(3) {
+    width: 25%;
+}
+.tax-address-history-table th:nth-child(4) {
+    width: 9%;
+}
+.tax-address-history-table th:nth-child(5) {
+    width: 26%;
+}
+.tax-address-history-row td {
+    padding: var(--space-8);
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+    border-bottom: 1px solid var(--line-subtle);
+}
+.tax-address-record-time {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+.tax-address-record-street {
+    font-weight: var(--font-weight-medium);
+}
+.tax-address-record-actions {
+    text-align: right;
+}
+.tax-address-page .tax-address-record-actions button {
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+}
+.tax-address-record-toggle[aria-expanded='true'] svg {
     transform: rotate(180deg);
 }
-.tax-address-record {
-    display: grid;
-    gap: var(--space-8);
-    overflow-wrap: anywhere;
-    min-width: 0;
-}
-.tax-address-record time {
-    color: var(--muted);
+.tax-address-detail-row > td {
+    padding: 0;
 }
 .tax-address-record-detail {
-    padding-bottom: var(--space-16);
+    padding-block: var(--space-16);
+    border-bottom: 1px solid var(--line-subtle);
 }
-.tax-address-record-detail .tax-address-fields {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-12);
-}
-.tax-address-record-detail .tax-address-fields > div {
-    display: grid;
-    grid-template-columns: 100px minmax(0, 1fr);
+.tax-address-pagination,
+.tax-address-pagination-controls {
+    display: flex;
+    align-items: center;
     gap: var(--space-8);
-}
-.tax-address-record-detail button {
-    margin-top: var(--space-16);
 }
 .tax-address-pagination {
     justify-content: space-between;
     padding-top: var(--space-16);
+    color: var(--muted);
+}
+.tax-address-page .tax-address-page-number {
+    min-width: var(--experience-control-min);
+    padding-inline: var(--space-8);
+}
+.tax-address-page-count {
+    display: none;
+}
+.tax-address-history-table .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 .tax-address-page .tax-address-history-note {
     padding-top: var(--space-16);
@@ -446,26 +481,87 @@
         padding: var(--space-32) var(--experience-page-gutter-desktop) var(--space-48);
     }
     .tax-address-workspace {
-        grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
         margin-top: var(--space-32);
     }
 }
-@media (max-width: 479px) {
+@media (max-width: 767px) {
     .tax-address-fields {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: var(--space-16);
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--space-12);
     }
-    .tax-address-availability {
-        gap: 0;
+    .tax-address-field-line1 {
+        grid-column: auto;
     }
-    .tax-address-availability .tax-address-quiet {
-        margin-left: auto;
+    .tax-address-action-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: var(--space-8);
     }
-    .tax-address-extract {
-        flex-basis: 100%;
+    .tax-address-action-row > p {
+        grid-column: 1;
     }
-    .tax-address-actions .tax-address-toolbar > button {
+    .tax-address-action-row > .tax-address-quiet {
+        grid-column: 2;
+        grid-row: 1;
+    }
+    .tax-address-action-row > .tax-address-extract {
+        grid-column: 1 / -1;
+    }
+    .tax-address-page
+        .tax-address-action-row
+        > button:last-child:not(.tax-address-quiet):not(.tax-address-extract) {
+        grid-column: 1 / -1;
+        margin-left: 0;
         width: 100%;
+    }
+    .tax-address-history-table,
+    .tax-address-history-table tbody {
+        display: block;
+    }
+    .tax-address-history-table thead {
+        display: none;
+    }
+    .tax-address-history-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        column-gap: var(--space-8);
+        padding-block: var(--space-12);
+        border-bottom: 1px solid var(--line-subtle);
+    }
+    .tax-address-history-row td {
+        padding: var(--space-4) 0;
+        border: 0;
+    }
+    .tax-address-record-time,
+    .tax-address-record-street,
+    .tax-address-record-actions {
+        grid-column: 1 / -1;
+    }
+    .tax-address-record-city {
+        grid-column: 1;
+    }
+    .tax-address-record-zip {
+        grid-column: 2;
+    }
+    .tax-address-record-actions {
+        text-align: left;
+    }
+    .tax-address-detail-row:not([hidden]),
+    .tax-address-detail-row > td {
+        display: block;
+    }
+    .tax-address-pagination {
+        flex-wrap: wrap;
+    }
+    .tax-address-pagination-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+    .tax-address-page-count {
+        display: inline;
+    }
+    .tax-address-page .tax-address-page-number {
+        display: none;
     }
 }
 @media (prefers-reduced-motion: reduce) {
