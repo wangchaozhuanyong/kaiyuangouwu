@@ -119,6 +119,7 @@ export const shopSchema = gql`
         format: String!
         tags: [String!]!
         publishedAt: String!
+        sourcePublishedAt: String
         reviewedAt: String
         reviewerName: String
         publicationMode: String

@@ -434,7 +434,7 @@ try {
                     await expect(review).toBeEnabled();
                     await expect(checkout).toBeDisabled();
                     // Failed receipt recovery retains the last confirmed view; it does not run an extra read.
-                    await expect(page.locator('.cart-page .quantity-control output')).toHaveText('1');
+                    await expect(page.locator('.cart-page .quantity-control input')).toHaveValue('1');
                     await page.reload();
                     await expect(review).toBeEnabled();
                     expect(commands).toHaveLength(1);
@@ -461,7 +461,7 @@ try {
                     await expect(checkout).toBeEnabled();
                     await expect(page.locator('.cart-recovery-panel')).toHaveCount(0);
                     if (scenario === 'lost-response')
-                        await expect(page.locator('.cart-page .quantity-control output')).toHaveText('2');
+                        await expect(page.locator('.cart-page .quantity-control input')).toHaveValue('2');
                 }
                 if (scenario === 'checkout-recovery')
                     expect(commands.filter(command => command.beginCheckout)).toHaveLength(1);

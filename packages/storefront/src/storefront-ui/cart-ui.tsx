@@ -279,6 +279,9 @@ function DesktopCartLine({
             <div className="desktop-cart-quantity">
                 <QuantityControl
                     value={line.quantity}
+                    onChange={quantity => onQuantity(line.id, quantity)}
+                    max={stock ?? undefined}
+                    inputDisabled={loading || !line.available || !variant || quoteOnly || stock === 0}
                     label={isZh ? `${name} 购买数量` : `${name} quantity`}
                     decreaseLabel={isZh ? `减少 ${name} 数量` : `Decrease ${name} quantity`}
                     increaseLabel={isZh ? `增加 ${name} 数量` : `Increase ${name} quantity`}
@@ -723,6 +726,9 @@ export function SwipeableCartLine({
                         <QuantityControl
                             compact
                             value={line.quantity}
+                            onChange={quantity => onQuantity(line.id, quantity)}
+                            max={stock ?? undefined}
+                            inputDisabled={loading || !line.available || !variant || quoteOnly || stock === 0}
                             label={isZh ? `${productName} 购买数量` : `${productName} quantity`}
                             decreaseLabel={
                                 line.quantity === 1

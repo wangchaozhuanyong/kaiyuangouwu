@@ -23,7 +23,7 @@ import {
     useShopAbuseChallenge,
 } from '../../components/common/shop-abuse-challenge';
 import { storefrontQueryPresentation } from '../../loading-state';
-import { usePageReadiness } from '../../page-readiness';
+import { usePageLoadingState, usePageReadiness } from '../../page-readiness';
 import { storefrontQueryKeys } from '../../query-client';
 import { shopAbuseFailure } from '../../shop-abuse-failure';
 import { StorefrontDisplayError, storefrontErrorCode, storefrontErrorMessage } from '../../storefront-errors';
@@ -139,7 +139,15 @@ export function GptRechargePage({
     const config = configQuery.data;
     const configPresentation = storefrontQueryPresentation(configQuery);
     const canStartRecharge = config?.enabled === true && !config.maintenance;
-    usePageReadiness(configPresentation.initialLoading);
+    const checkingService = tab === 'recharge' && configPresentation.initialLoading;
+    const serviceReadKey = `${marketKey}:${language}`;
+    const serviceLoading = usePageLoadingState({ pending: checkingService, key: serviceReadKey });
+    usePageReadiness(
+        checkingService,
+        'local',
+        serviceReadKey,
+        tab === 'recharge' && (configPresentation.initialError || configPresentation.paused),
+    );
     const taskQuery = useQuery({
         queryKey: taskKey(trackedTask?.id ?? ''),
         queryFn: async ({ signal }) => {
@@ -551,28 +559,29 @@ export function GptRechargePage({
             }
         });
     };
-    const retainDraftWhileChecking = configPresentation.initialLoading && Boolean(code || session);
+    // Keep the form mounted during the initial read and require confirmed availability for actions.
     const showServiceStatus =
-        !canStartRecharge && !retainDraftWhileChecking && !currentTask && !uncertain && busy !== 'submit';
+        !canStartRecharge && !checkingService && !currentTask && !uncertain && busy !== 'submit';
     const serviceStatusTitle = config
         ? config.maintenance
             ? t('充值服务维护中', 'Recharge is under maintenance')
             : t('充值服务暂未开放', 'Recharge is currently unavailable')
-        : configPresentation.initialLoading
-          ? t('正在确认充值服务状态', 'Checking recharge availability')
+        : configPresentation.paused
+          ? t('网络连接不可用', 'You are offline')
           : t('暂时无法确认充值服务状态', 'Could not confirm recharge availability');
-    const submitHelp = !canStartRecharge
-        ? serviceStatusTitle
-        : !verified || verified.status !== 'available'
-          ? t('请先验证兑换码。', 'Verify your redemption code first.')
-          : !account
-            ? t('请填写有效的账号资料。', 'Enter valid account data.')
-            : !confirmed
-              ? t(
-                    '请核对账号与套餐，并勾选确认。',
-                    'Check the account and plan, then select the confirmation checkbox.',
-                )
-              : '';
+    const submitHelp =
+        !canStartRecharge && !checkingService
+            ? serviceStatusTitle
+            : !verified || verified.status !== 'available'
+              ? t('请先验证兑换码。', 'Verify your redemption code first.')
+              : !account
+                ? t('请填写有效的账号资料。', 'Enter valid account data.')
+                : !confirmed
+                  ? t(
+                        '请核对账号与套餐，并勾选确认。',
+                        'Check the account and plan, then select the confirmation checkbox.',
+                    )
+                  : '';
     return (
         <main className="page subpage gpt-recharge-page">
             <SubHeader
@@ -682,19 +691,17 @@ export function GptRechargePage({
                                 >
                                     {t('查询已有任务', 'Look up an existing task')}
                                 </button>
-                                {!configPresentation.initialLoading && (
-                                    <button
-                                        className="secondary-action"
-                                        type="button"
-                                        disabled={configQuery.isFetching}
-                                        aria-busy={configQuery.isFetching}
-                                        onClick={() => void configQuery.refetch({ cancelRefetch: false })}
-                                    >
-                                        {configQuery.isFetching
-                                            ? t('正在检查…', 'Checking…')
-                                            : t('重新检查服务状态', 'Check service status again')}
-                                    </button>
-                                )}
+                                <button
+                                    className="secondary-action"
+                                    type="button"
+                                    disabled={configQuery.isFetching}
+                                    aria-busy={configQuery.isFetching}
+                                    onClick={() => void configQuery.refetch({ cancelRefetch: false })}
+                                >
+                                    {configQuery.isFetching
+                                        ? t('正在检查…', 'Checking…')
+                                        : t('重新检查服务状态', 'Check service status again')}
+                                </button>
                             </div>
                         </div>
                     )}
@@ -829,10 +836,13 @@ export function GptRechargePage({
                                                 Boolean(busy) ||
                                                 codeChallenge.state?.loading
                                             }
+                                            aria-busy={checkingService || busy === 'verify'}
                                         >
                                             {busy === 'verify'
                                                 ? t('验证中…', 'Checking…')
-                                                : t('验证兑换码', 'Verify code')}
+                                                : checkingService && serviceLoading?.slow
+                                                  ? t('服务响应较慢，请稍候', 'Waiting for service…')
+                                                  : t('验证兑换码', 'Verify code')}
                                         </button>
                                     </form>
                                     <section

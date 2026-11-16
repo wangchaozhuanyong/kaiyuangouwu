@@ -1078,12 +1078,28 @@ export class BlogService {
         const ctx = raw as RequestContext;
         const settings = await this.publicEnabled(ctx);
         const config = this.config(settings);
+        // Existing event evidence supplies the original news date, including historical imports.
+        // Match the channel as well as the event; editorial Skills retain their own publication date.
+        const sourceDateQuery = this.connection
+            .getRepository(ctx, BlogSourceItem)
+            .createQueryBuilder('source')
+            .select('MIN(source.sourcePublishedAt)')
+            .where('source.channelId = article.channelId')
+            .andWhere('source.eventKey = article.eventKey')
+            .getQuery();
         const base = () =>
             this.connection
                 .getRepository(ctx, BlogArticle)
                 .createQueryBuilder('article')
+                .addSelect(
+                    `COALESCE(CASE WHEN article.publishedCategory <> 'skills' THEN (${sourceDateQuery}) END, article.publishedAt)`,
+                    'news_display_date',
+                )
                 .where('article.channelId = :channelId', { channelId: ctx.channelId })
-                .andWhere('article.publishedJson IS NOT NULL');
+                .andWhere('article.publishedJson IS NOT NULL')
+                .orderBy('news_display_date', 'DESC')
+                .addOrderBy('article.publishedAt', 'DESC')
+                .addOrderBy('article.id', 'DESC');
         const filtered = () => {
             const query = base();
             if (input.category)
@@ -1106,15 +1122,12 @@ export class BlogService {
             take > 48
         )
             throw new Error('分页无效');
-        const [rows, totalItems] = await filtered()
-            .orderBy('article.publishedAt', 'DESC')
-            .addOrderBy('article.id', 'DESC')
-            .skip(skip)
-            .take(take)
-            .getManyAndCount();
+        const [rows, totalItems] = await filtered().skip(skip).take(take).getManyAndCount();
         const featuredRow = await filtered()
             .orderBy('article.publishedPinned', 'DESC')
+            .addOrderBy('news_display_date', 'DESC')
             .addOrderBy('article.publishedAt', 'DESC')
+            .addOrderBy('article.id', 'DESC')
             .getOne();
         const articleRow = slug ? await base().andWhere('article.slug = :slug', { slug }).getOne() : null;
         if (slug && !articleRow) throw new NotFoundException('已发布文章不存在');
@@ -1123,18 +1136,44 @@ export class BlogService {
             ? await base()
                   .andWhere('article.publishedCategory = :category', { category: article.category })
                   .andWhere('article.id != :id', { id: article.id })
-                  .orderBy('article.publishedAt', 'DESC')
                   .take(3)
                   .getMany()
             : [];
+        const visibleRows = [...rows, ...related, ...[featuredRow, articleRow].filter(x => x !== null)];
+        const eventKeys = [
+            ...new Set(
+                visibleRows.flatMap(row =>
+                    row.publishedCategory !== 'skills' && row.eventKey ? [row.eventKey] : [],
+                ),
+            ),
+        ];
+        // Hydrate Date values through the repository, avoiding driver-specific raw date parsing.
+        const evidence = eventKeys.length
+            ? await this.connection.getRepository(ctx, BlogSourceItem).find({
+                  where: { channelId: ctx.channelId, eventKey: In(eventKeys) },
+                  select: { eventKey: true, sourcePublishedAt: true },
+                  order: { sourcePublishedAt: 'ASC' },
+              })
+            : [];
+        const sourceDates = new Map<string, string>();
+        for (const item of evidence)
+            if (!sourceDates.has(item.eventKey))
+                sourceDates.set(item.eventKey, item.sourcePublishedAt.toISOString());
+        const snapshot = (row: BlogArticle, detail = false): BlogPublishedArticle => ({
+            ...this.publicSnapshot(row.publishedJson, detail),
+            sourcePublishedAt:
+                row.publishedCategory !== 'skills' && row.eventKey
+                    ? (sourceDates.get(row.eventKey) ?? null)
+                    : null,
+        });
         return {
             title: config.title,
             description: config.description,
             totalItems,
-            items: rows.map(x => this.publicSnapshot(x.publishedJson)),
-            featured: featuredRow ? this.publicSnapshot(featuredRow.publishedJson) : null,
-            article,
-            relatedArticles: related.map(x => this.publicSnapshot(x.publishedJson)),
+            items: rows.map(row => snapshot(row)),
+            featured: featuredRow ? snapshot(featuredRow) : null,
+            article: articleRow ? snapshot(articleRow, true) : null,
+            relatedArticles: related.map(row => snapshot(row)),
         };
     }
     async sitemap(raw: unknown) {

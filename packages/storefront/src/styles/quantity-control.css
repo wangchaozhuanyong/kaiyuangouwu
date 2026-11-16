@@ -2,7 +2,6 @@
     display: inline-grid;
     grid-template-columns: 44px minmax(32px, auto) 44px;
     align-items: stretch;
-    gap: 0;
     flex-shrink: 0;
     width: max-content;
     overflow: hidden;
@@ -34,14 +33,12 @@
     background: var(--control-surface-pressed);
 }
 
-.quantity-control > button:focus-visible {
-    --experience-focus-offset: -3px;
-
+.quantity-control > :focus-visible {
     outline: var(--experience-focus-width) solid var(--focus);
     outline-offset: -3px;
 }
 
-.quantity-control > button:disabled {
+.quantity-control > :disabled {
     color: var(--muted);
     opacity: 0.45;
     cursor: not-allowed;
@@ -52,17 +49,22 @@
     height: 16px;
 }
 
-.quantity-control > output {
+.quantity-control > :is(output, input) {
     display: grid;
     place-items: center;
     min-width: 32px;
     padding-inline: 8px;
     background: var(--surface);
     color: var(--text);
-    font-size: var(--type-body-size);
     font-weight: var(--font-weight-semibold);
     font-variant-numeric: tabular-nums;
-    line-height: var(--type-body-leading);
+}
+
+.quantity-control > input {
+    width: 4ch;
+    border: 0;
+    border-radius: 0;
+    text-align: center;
 }
 
 .quantity-control.is-compact {
@@ -79,9 +81,7 @@
     height: 14px;
 }
 
-.quantity-control.is-compact > output {
+.quantity-control.is-compact > :is(output, input) {
     min-width: 24px;
     padding-inline: 4px;
-    font-size: var(--type-meta-size);
-    line-height: var(--type-meta-leading);
 }

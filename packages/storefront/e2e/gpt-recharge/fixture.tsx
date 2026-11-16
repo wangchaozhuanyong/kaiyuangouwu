@@ -23,6 +23,7 @@ import {
     LocalePreferencesTrigger,
 } from '../../src/components/common/locale-preferences';
 import { DesktopLayoutContext, useDesktopViewport } from '../../src/desktop-layout';
+import { PageReadinessBoundary } from '../../src/page-readiness';
 import { createStorefrontQueryClient } from '../../src/query-client';
 import { ShopApiGraphQlError } from '../../src/shop-api-errors';
 import { StorefrontQueryFeedback } from '../../src/StorefrontQueryFeedback';
@@ -117,12 +118,13 @@ function Fixture() {
             updatedAt: '2026-10-16T10:30:00Z',
         });
         return {
-            config: () => {
-                if (availability === 'error')
-                    return Promise.reject(new Error('Synthetic configuration outage'));
+            config: async () => {
+                const delay = Math.min(20_000, Math.max(0, Number(params.get('config-delay')) || 0));
+                if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+                if (availability === 'error') throw new Error('Synthetic configuration outage');
                 const config = { enabled: availability !== 'disabled', maintenance };
                 maintenance = false;
-                return Promise.resolve(config);
+                return config;
             },
             createShopAbuseChallenge: (action, target) => {
                 const id = (++challengeSequence).toString(16).padStart(48, '0');
@@ -362,7 +364,15 @@ if (!container) throw new Error('Preview root missing');
 const root = createRoot(container);
 root.render(
     <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
+        <PageReadinessBoundary
+            pending={false}
+            online
+            language={params.get('language') === 'en' ? 'en' : 'zh'}
+            onRetry={() => undefined}
+            onBack={() => undefined}
+        >
+            <RouterProvider router={router} />
+        </PageReadinessBoundary>
         <StorefrontQueryFeedback
             scope={{ marketCode: 'preview:CNY', languageCode: 'zh', includePrivate: true }}
             language="zh"

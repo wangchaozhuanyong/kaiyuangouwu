@@ -1,4 +1,5 @@
 import {
+    blogCategoryLabels,
     skillDomains,
     type BlogCategory,
     type BlogPublishedArticle,
@@ -35,10 +36,43 @@ function themeCaption(article: BlogPublishedArticle) {
 }
 
 /** Keep print proportions on wide detail banners as well as narrow list cards. */
-export function BlogTheme({ article }: { article: BlogPublishedArticle }) {
+export function BlogTheme({
+    article,
+    featured = false,
+}: {
+    article: BlogPublishedArticle;
+    featured?: boolean;
+}) {
     const { category } = article;
     const caption = themeCaption(article);
     const characters = Array.from(caption);
+    if (featured) {
+        return (
+            <div
+                className="blog-theme"
+                data-category={category}
+                data-layout="feature"
+                aria-hidden="true"
+                style={{ color: captions[category][1] }}
+            >
+                <svg className="blog-feature-paper" focusable="false">
+                    <rect width="100%" height="100%" fill={`url(#blog-paper-${category})`} />
+                </svg>
+                <strong className="blog-feature-cover-title type-section">
+                    {blogCategoryLabels[category]}
+                </strong>
+                <svg
+                    className="blog-feature-art"
+                    viewBox={category === 'skills' ? '230 0 160 132' : '200 0 200 132'}
+                    preserveAspectRatio="xMidYMid meet"
+                    focusable="false"
+                >
+                    <use href={`#blog-art-${category}`} />
+                </svg>
+                <p className="blog-feature-caption type-helper">{caption}</p>
+            </div>
+        );
+    }
     return (
         <div className="blog-theme" data-category={category} aria-hidden="true">
             <svg focusable="false">

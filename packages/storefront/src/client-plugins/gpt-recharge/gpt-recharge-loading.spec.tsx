@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { QueryClientProvider } from '@tanstack/react-query';
+import { onlineManager, QueryClientProvider } from '@tanstack/react-query';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterAll, afterEach, expect, it, vi } from 'vitest';
 
+import { PAGE_DATA_TIMEOUT_MS, PageReadinessBoundary } from '../../page-readiness';
 import { createStorefrontQueryClient, storefrontQueryKeys } from '../../query-client';
 import { persistPublicQueryCache } from '../../query-persistence';
 
@@ -37,20 +38,31 @@ const render = async (visible = true, market = 'test:MYR', language: 'zh' | 'en'
         root.render(
             <QueryClientProvider client={cache}>
                 {visible && (
-                    <GptRechargePage
-                        client={client}
-                        marketKey={market}
+                    <PageReadinessBoundary
+                        pending={false}
+                        online
                         language={language}
+                        onRetry={() => undefined}
                         onBack={() => undefined}
-                    />
+                    >
+                        <GptRechargePage
+                            client={client}
+                            marketKey={market}
+                            language={language}
+                            onBack={() => undefined}
+                        />
+                    </PageReadinessBoundary>
                 )}
             </QueryClientProvider>,
         );
-        await new Promise(resolve => setTimeout(resolve, 10));
+        if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(10);
+        else await new Promise(resolve => setTimeout(resolve, 10));
     });
 };
 afterEach(async () => {
     await render(false);
+    vi.useRealTimers();
+    onlineManager.setOnline(true);
     cache.clear();
     config.mockReset();
     verify.mockReset();
@@ -59,6 +71,76 @@ afterEach(async () => {
     lookupCode.mockReset();
 });
 afterAll(() => act(() => root.unmount()));
+
+it.each(['zh', 'en'] as const)(
+    'keeps the cold-load form and draft stable while availability resolves (%s)',
+    async language => {
+        let finish!: (value: { enabled: boolean; maintenance: boolean }) => void;
+        config.mockImplementationOnce(() => new Promise(resolve => (finish = resolve)));
+        await render(true, 'test:MYR', language);
+        const input = container.querySelector<HTMLInputElement>('#gpt-code');
+        const sessionInput = container.querySelector<HTMLTextAreaElement>('#gpt-session');
+        if (!input?.form) throw new Error('Recharge code form is missing');
+        const form = input.form;
+        expect(sessionInput).not.toBeNull();
+        expect(container.querySelector('.gpt-recharge-result')).toBeNull();
+        expect(container.querySelector<HTMLButtonElement>('.gpt-recharge-verify')?.disabled).toBe(true);
+        expect(container.querySelector<HTMLButtonElement>('.gpt-recharge-submit')?.disabled).toBe(true);
+        expect(container.querySelector('.gpt-recharge-verify')?.textContent).not.toContain('服务响应较慢');
+        act(() => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+                input,
+                'draft-code',
+            );
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        });
+        expect(verify).not.toHaveBeenCalled();
+        expect(submit).not.toHaveBeenCalled();
+        await act(async () => {
+            finish({ enabled: true, maintenance: false });
+            await new Promise(resolve => setTimeout(resolve, 10));
+        });
+        expect(container.querySelector('#gpt-code')).toBe(input);
+        expect(container.querySelector('#gpt-session')).toBe(sessionInput);
+        expect(input.value).toBe('draft-code');
+        expect(container.querySelector<HTMLButtonElement>('.gpt-recharge-verify')?.disabled).toBe(false);
+        expect(container.querySelector<HTMLButtonElement>('.gpt-recharge-submit')?.disabled).toBe(true);
+        expect(verify).not.toHaveBeenCalled();
+        expect(submit).not.toHaveBeenCalled();
+    },
+);
+
+it('shows only a local slow-read hint after the shared deadline and keeps other tabs usable', async () => {
+    vi.useFakeTimers();
+    config.mockImplementationOnce(() => new Promise(() => undefined));
+    await render();
+    await act(() => vi.advanceTimersByTimeAsync(PAGE_DATA_TIMEOUT_MS - 100));
+    expect(container.querySelector('.gpt-recharge-verify')?.textContent).not.toContain('服务响应较慢');
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    expect(container.querySelector('.gpt-recharge-verify')?.textContent).toContain('服务响应较慢');
+    expect(container.querySelector('#gpt-code')).not.toBeNull();
+    expect(container.querySelector('.page-readiness-overlay')).toBeNull();
+    act(() =>
+        [...container.querySelectorAll('button')]
+            .find(button => button.textContent === '兑换码查询')
+            ?.click(),
+    );
+    expect(container.querySelector('#gpt-query')).not.toBeNull();
+    expect(container.querySelector('.page-readiness-overlay')).toBeNull();
+    expect(verify).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+});
+
+it('shows offline recovery instead of an indefinite availability wait', async () => {
+    onlineManager.setOnline(false);
+    await render();
+    expect(container.textContent).toContain('网络连接不可用');
+    expect(container.textContent).toContain('重新检查服务状态');
+    expect(container.querySelector('#gpt-code')).toBeNull();
+    expect(config).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+});
 
 it('reuses a fresh scoped service configuration after leaving and returning', async () => {
     config.mockResolvedValue({ enabled: true, maintenance: false });
@@ -136,8 +218,8 @@ it('keeps first-load failure retryable and discards the separate task query on e
     let fail!: (error: Error) => void;
     config.mockImplementationOnce(() => new Promise((_, reject) => (fail = reject)));
     await render();
-    expect(container.textContent).toContain('正在确认充值服务状态');
-    expect(container.querySelector('#gpt-code')).toBeNull();
+    expect(container.textContent).not.toContain('正在确认充值服务状态');
+    expect(container.querySelector('#gpt-code')).not.toBeNull();
     await act(async () => {
         fail(new Error('Synthetic configuration outage'));
         await new Promise(resolve => setTimeout(resolve, 10));

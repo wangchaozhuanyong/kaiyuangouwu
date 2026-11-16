@@ -37,10 +37,20 @@ const formatLabels: Record<BlogFormat, string> = {
     COMPARISON: '对比分析',
     SKILL: '用途指南',
 };
-function DateLine({ article }: { article: BlogPublishedArticle }) {
+function DateLine({ article, detail = false }: { article: BlogPublishedArticle; detail?: boolean }) {
+    const sourceDate = article.category === 'skills' ? null : article.sourcePublishedAt;
+    const date = sourceDate ?? article.publishedAt;
     return (
         <p className="blog-meta type-meta">
-            <time dateTime={article.publishedAt}>{dateLabel(article.publishedAt)}</time>
+            <span>
+                {sourceDate ? '消息日期：' : article.category === 'skills' ? '' : '本站发布：'}
+                <time dateTime={date}>{dateLabel(date)}</time>
+            </span>
+            {detail && sourceDate && (
+                <span>
+                    本站发布：<time dateTime={article.publishedAt}>{dateLabel(article.publishedAt)}</time>
+                </span>
+            )}
             <span>约 {article.readingMinutes} 分钟阅读</span>
         </p>
     );
@@ -170,7 +180,7 @@ export function BlogContent({
                 data-image-kind={article.cover?.kind}
                 aria-label={`阅读：${article.title}`}
             >
-                <BlogTheme article={article} />
+                <BlogTheme article={article} featured={isFeatured} />
             </a>
             <div className="blog-card-copy">
                 <ArticleLabels article={article} featured={isFeatured} />
@@ -253,7 +263,7 @@ export function BlogContent({
                                     )}
                                 </p>
                             )}
-                        <DateLine article={article} />
+                        <DateLine article={article} detail />
                         {article.skill && (
                             <a
                                 className="blog-detail-github blog-primary-link type-action"

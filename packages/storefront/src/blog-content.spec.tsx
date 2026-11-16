@@ -36,6 +36,39 @@ const page: BlogPublicPage = {
     relatedArticles: [],
 };
 describe('news blog server-renderable content', () => {
+    it('uses source dates on news cards and labels the original site publication separately in details', () => {
+        const news = { ...article, sourcePublishedAt: '2026-09-30T00:00:00Z' };
+        const list = renderToStaticMarkup(<BlogContent page={{ ...page, items: [news], featured: null }} />);
+        expect(list).toContain('消息日期：');
+        expect(list).toContain('2026年9月30日');
+        expect(list).not.toContain('2026年11月1日');
+        const detail = renderToStaticMarkup(<BlogContent page={{ ...page, article: news }} />);
+        expect(detail).toContain('消息日期：');
+        expect(detail).toContain('本站发布：');
+        expect(detail).toContain('2026年9月30日');
+        expect(detail).toContain('2026年11月1日');
+        const fallback = renderToStaticMarkup(<BlogContent page={{ ...page, featured: null }} />);
+        expect(fallback).toContain('本站发布：');
+        const skill = { ...news, category: 'skills' as const };
+        const editorial = renderToStaticMarkup(
+            <BlogContent page={{ ...page, items: [skill], featured: null }} />,
+        );
+        expect(editorial).not.toContain('消息日期：');
+        expect(editorial).toContain('2026年11月1日');
+    });
+
+    it('gives only the featured cover its independent composition and keeps list and detail banners compact', () => {
+        const other = { ...article, id: '2', slug: 'other' };
+        const list = renderToStaticMarkup(<BlogContent page={{ ...page, items: [article, other] }} />);
+        expect(list.match(/data-layout="feature"/g)).toHaveLength(1);
+        expect(list).toContain('class="blog-feature-art"');
+        expect(list).toContain('viewBox="200 0 200 132"');
+        const category = renderToStaticMarkup(<BlogContent page={page} input={{ category: 'chatgpt' }} />);
+        expect(category).not.toContain('data-layout="feature"');
+        const detail = renderToStaticMarkup(<BlogContent page={{ ...page, article }} />);
+        expect(detail).not.toContain('data-layout="feature"');
+    });
+
     it.each([
         [null, '/zh/', '返回首页'],
         [article, '/zh/blog?category=chatgpt', '返回新闻博客'],
