@@ -229,6 +229,7 @@ export const ADMIN_CAPABILITY_DEFINITIONS: readonly AdminCapabilityDefinition[] 
     ),
     page('/plugins/translations', 'BOTH', ['ReadSettings', 'ReadCatalog'], ['UpdateSettings']),
     page('/plugins/icloud-relay', 'PLATFORM', ['SuperAdmin'], ['SuperAdmin']),
+    page('/plugins/tax-free-address', 'PLATFORM', ['SuperAdmin'], ['SuperAdmin']),
     page('/settings/incident-response', 'PLATFORM', ['ReadSettings'], ['UpdateSettings']),
     ...section(
         '/settings/team',

@@ -10,6 +10,7 @@ import { AdminCapabilitiesResolver } from './admin-capabilities.resolver';
 import { adminCapabilitiesSchema } from './admin-capabilities.schema';
 import { AdminCapabilitiesService } from './admin-capabilities.service';
 import { GptRechargeAdminResolver } from './gpt-recharge/plugin';
+import { TaxFreeAddressAdminResolver } from './tax-free-address/plugin';
 
 vi.mock('@vendure/common/lib/admin-capabilities', () => import('../../common/src/admin-capabilities.js'));
 
@@ -68,6 +69,27 @@ async function status(f: ReturnType<typeof fixture>, id: string) {
 }
 
 describe('current administrator capabilities', () => {
+    it('exposes the shared address pool in platform navigation to its API-authorized administrators', async () => {
+        const readPermissions = Reflect.getMetadata(
+            '__permissions__',
+            Reflect.get(TaxFreeAddressAdminResolver.prototype, 'taxFreeAddresses'),
+        ) as string[];
+        const path = '/plugins/tax-free-address';
+        expect(await status(fixture(readPermissions, DEFAULT_CHANNEL_CODE, null), path)).toMatchObject({
+            state: 'READY',
+            canRead: true,
+            canWrite: true,
+        });
+        expect(
+            await status(fixture([Permission.ReadSettings], DEFAULT_CHANNEL_CODE, null), path),
+        ).toMatchObject({ state: 'FORBIDDEN', canRead: false, canWrite: false });
+        expect(await status(fixture(readPermissions, 'store-a', 'DIGITAL_ONLY'), path)).toMatchObject({
+            state: 'UNSUPPORTED',
+            canRead: false,
+            canWrite: false,
+        });
+    });
+
     it('matches the GPT recharge resolver permissions for the primary and other stores', async () => {
         const read = Reflect.getMetadata(
             '__permissions__',
