@@ -351,6 +351,10 @@
     vertical-align: middle;
     overflow-wrap: anywhere;
 }
+/* Alternate summary surfaces distinguish records without nested frames or rules. */
+.tax-address-history-row:nth-of-type(4n + 3) {
+    background: var(--control-surface, var(--soft));
+}
 .tax-address-record-time {
     color: var(--muted);
     font-variant-numeric: tabular-nums;
@@ -522,7 +526,7 @@
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
         column-gap: var(--space-8);
-        padding-block: var(--space-12);
+        padding: var(--space-12) var(--space-8);
     }
     .tax-address-history-row td {
         padding: var(--space-4) 0;
