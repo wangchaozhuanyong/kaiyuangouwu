@@ -12,10 +12,9 @@ import {
     RefreshCw,
     ShieldCheck,
 } from 'lucide-react';
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { Fragment, useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
 import {
-    formatTaxFreeAddressSummary,
     type TaxFreeAddress,
     type TaxFreeAddressClaim,
 } from '../../../../storefront-content-plugin/src/tax-free-address-contract';
@@ -38,6 +37,7 @@ import './tax-free-address.css';
 type SavedClaim = TaxFreeAddressClaim & { savedLocally: boolean };
 const statusKey = ['address-tool', 'availability'];
 const historyScope = 'address-tool';
+const historyPageSize = 5;
 const billingFields = [
     { field: 'country', chinese: '国家', english: 'Country / Region' },
     { field: 'line1', chinese: '地址', english: 'Address Line 1' },
@@ -66,8 +66,8 @@ export function AddressFields({
 }) {
     return (
         <dl className="tax-address-fields">
-            {billingFields.map(({ field, chinese, english }, index) => (
-                <div key={field} className={index < 2 ? 'tax-address-field-wide' : undefined}>
+            {billingFields.map(({ field, chinese, english }) => (
+                <div key={field} className={`tax-address-field-${field}`}>
                     <dt className="type-label">
                         {zh ? (
                             <>
@@ -145,6 +145,16 @@ export function TaxFreeAddressPage({
     const [confirmClear, setConfirmClear] = useState(false);
     const [clock, setClock] = useState(Date.now());
     const [historyPage, setHistoryPage] = useState(1);
+    const [expandedRecord, setExpandedRecord] = useState<string | null>(null);
+    const historyPages = Math.max(1, Math.ceil(history.records.length / historyPageSize));
+    const visiblePage = Math.min(historyPage, historyPages);
+    const visibleRecords = history.records.slice(
+        (visiblePage - 1) * historyPageSize,
+        visiblePage * historyPageSize,
+    );
+    useEffect(() => {
+        setHistoryPage(page => Math.min(page, historyPages));
+    }, [historyPages]);
     async function persistRequest(requestId: string): Promise<SavedClaim> {
         rememberAddressRequest(historyScope, requestId);
         try {
@@ -336,23 +346,11 @@ export function TaxFreeAddressPage({
                                 )}
                             </div>
                             <div className="tax-address-actions">
-                                <div className="tax-address-availability">
+                                <div className="tax-address-action-row">
                                     <p className="type-helper">
                                         <Clock3 aria-hidden="true" />
                                         {t('每 5 分钟可提取一次', 'One address every five minutes')}
                                     </p>
-                                    <button
-                                        type="button"
-                                        className="tax-address-quiet"
-                                        disabled={status.isFetching || busy || !active}
-                                        aria-busy={status.isFetching}
-                                        onClick={() => void status.refetch({ cancelRefetch: false })}
-                                    >
-                                        <RefreshCw aria-hidden="true" />
-                                        {t('刷新状态', 'Refresh status')}
-                                    </button>
-                                </div>
-                                <div className="tax-address-toolbar">
                                     <button
                                         type="button"
                                         className="primary-action tax-address-extract"
@@ -377,6 +375,16 @@ export function TaxFreeAddressPage({
                                         {!busy && remaining > 0 && !recovering && (
                                             <span className="tax-address-timer">{timer}</span>
                                         )}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="tax-address-quiet"
+                                        disabled={status.isFetching || busy || !active}
+                                        aria-busy={status.isFetching}
+                                        onClick={() => void status.refetch({ cancelRefetch: false })}
+                                    >
+                                        <RefreshCw aria-hidden="true" />
+                                        {t('刷新状态', 'Refresh status')}
                                     </button>
                                     {current && (
                                         <button
@@ -514,70 +522,182 @@ export function TaxFreeAddressPage({
                                 </p>
                             </div>
                         )}
-                        <div className="tax-address-history-list">
-                            {history.records.slice((historyPage - 1) * 20, historyPage * 20).map(row => (
-                                <details className="tax-address-history-row" key={row.requestId}>
-                                    <summary>
-                                        <span className="tax-address-record">
-                                            <span className="type-body" lang="en">
-                                                {formatTaxFreeAddressSummary(row.address)}
-                                            </span>
-                                            <time
-                                                className="type-meta"
-                                                dateTime={row.address.usedAt ?? undefined}
-                                            >
-                                                {new Date(row.address.usedAt ?? '').toLocaleString(
-                                                    zh ? 'zh-CN' : 'en-US',
-                                                )}
-                                            </time>
-                                        </span>
-                                        <ChevronDown aria-hidden="true" />
-                                    </summary>
-                                    <div className="tax-address-record-detail">
-                                        <AddressFields
-                                            address={row.address}
-                                            zh={zh}
-                                            copied={copied}
-                                            onCopy={field => void copy(row.address, field)}
-                                        />
-                                        <button
-                                            type="button"
-                                            className="secondary-action"
-                                            onClick={() => void copy(row.address)}
-                                        >
-                                            {copied === row.address.id ? (
-                                                <Check aria-hidden="true" />
-                                            ) : (
-                                                <Copy aria-hidden="true" />
-                                            )}
-                                            {t('复制地址', 'Copy address')}
-                                        </button>
-                                    </div>
-                                </details>
-                            ))}
-                        </div>
-                        {history.records.length > 20 && (
-                            <div className="tax-address-toolbar tax-address-pagination">
-                                <button
-                                    type="button"
-                                    className="secondary-action"
-                                    disabled={historyPage <= 1}
-                                    onClick={() => setHistoryPage(value => value - 1)}
-                                >
-                                    {t('上一页', 'Previous')}
-                                </button>
-                                <span className="type-meta">
-                                    {historyPage} / {Math.ceil(history.records.length / 20)}
+                        {visibleRecords.length > 0 && (
+                            <table className="tax-address-history-table" role="table">
+                                <caption className="sr-only">{t('提取记录', 'Local history')}</caption>
+                                <thead>
+                                    <tr>
+                                        <th scope="col">{t('提取时间', 'Retrieved')}</th>
+                                        <th scope="col">{t('街道地址', 'Street address')}</th>
+                                        <th scope="col">{t('城市 · 州', 'City · State')}</th>
+                                        <th scope="col">{t('邮编', 'ZIP Code')}</th>
+                                        <th scope="col">{t('操作', 'Actions')}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {visibleRecords.map(row => {
+                                        const expanded = expandedRecord === row.requestId;
+                                        const detailId = `address-record-${row.requestId}`;
+                                        return (
+                                            <Fragment key={row.requestId}>
+                                                <tr className="tax-address-history-row" role="row">
+                                                    <td className="tax-address-record-time" role="cell">
+                                                        <time dateTime={row.address.usedAt ?? undefined}>
+                                                            {new Date(
+                                                                row.address.usedAt ?? '',
+                                                            ).toLocaleString(zh ? 'zh-CN' : 'en-US', {
+                                                                month: '2-digit',
+                                                                day: '2-digit',
+                                                                hour: '2-digit',
+                                                                minute: '2-digit',
+                                                            })}
+                                                        </time>
+                                                    </td>
+                                                    <td
+                                                        className="tax-address-record-street"
+                                                        lang="en"
+                                                        role="cell"
+                                                    >
+                                                        {row.address.line1}
+                                                    </td>
+                                                    <td
+                                                        className="tax-address-record-city"
+                                                        lang="en"
+                                                        role="cell"
+                                                        data-business-reference
+                                                    >
+                                                        {/* Geographic state is address content, not a system status. */}
+                                                        {row.address.city}, {row.address.state}
+                                                    </td>
+                                                    <td
+                                                        className="tax-address-record-zip"
+                                                        lang="en"
+                                                        role="cell"
+                                                    >
+                                                        {row.address.postalCode}
+                                                    </td>
+                                                    <td className="tax-address-record-actions" role="cell">
+                                                        <button
+                                                            type="button"
+                                                            className="tax-address-quiet"
+                                                            aria-label={
+                                                                t('复制地址', 'Copy address') +
+                                                                ': ' +
+                                                                row.address.line1
+                                                            }
+                                                            onClick={() => void copy(row.address)}
+                                                        >
+                                                            {copied === row.address.id ? (
+                                                                <Check aria-hidden="true" />
+                                                            ) : (
+                                                                <Copy aria-hidden="true" />
+                                                            )}
+                                                            {copied === row.address.id
+                                                                ? t('已复制', 'Copied')
+                                                                : t('复制', 'Copy')}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="tax-address-quiet tax-address-record-toggle"
+                                                            aria-expanded={expanded}
+                                                            aria-controls={detailId}
+                                                            aria-label={
+                                                                t(
+                                                                    expanded ? '收起地址' : '展开地址',
+                                                                    expanded
+                                                                        ? 'Collapse address'
+                                                                        : 'Expand address',
+                                                                ) +
+                                                                ': ' +
+                                                                row.address.line1
+                                                            }
+                                                            onClick={() =>
+                                                                setExpandedRecord(
+                                                                    expanded ? null : row.requestId,
+                                                                )
+                                                            }
+                                                        >
+                                                            {expanded
+                                                                ? t('收起', 'Collapse')
+                                                                : t('展开', 'Expand')}
+                                                            <ChevronDown aria-hidden="true" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                                <tr className="tax-address-detail-row" hidden={!expanded}>
+                                                    <td colSpan={5}>
+                                                        <div
+                                                            className="tax-address-record-detail"
+                                                            id={detailId}
+                                                        >
+                                                            {expanded && (
+                                                                <AddressFields
+                                                                    address={row.address}
+                                                                    zh={zh}
+                                                                    copied={copied}
+                                                                    onCopy={field =>
+                                                                        void copy(row.address, field)
+                                                                    }
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </Fragment>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
+                        {history.records.length > 0 && (
+                            <nav
+                                className="tax-address-pagination"
+                                aria-label={t('提取记录分页', 'History pages')}
+                            >
+                                <span className="type-helper tax-address-pagination-total">
+                                    {t(
+                                        `共 ${history.records.length} 条`,
+                                        `${history.records.length} records`,
+                                    )}
                                 </span>
-                                <button
-                                    type="button"
-                                    className="secondary-action"
-                                    disabled={historyPage * 20 >= history.records.length}
-                                    onClick={() => setHistoryPage(value => value + 1)}
-                                >
-                                    {t('下一页', 'Next')}
-                                </button>
-                            </div>
+                                <div className="tax-address-pagination-controls">
+                                    <button
+                                        type="button"
+                                        className="secondary-action"
+                                        disabled={visiblePage <= 1}
+                                        onClick={() => setHistoryPage(visiblePage - 1)}
+                                    >
+                                        {t('上一页', 'Previous')}
+                                    </button>
+                                    <span className="tax-address-page-count type-helper">
+                                        {visiblePage} / {historyPages}
+                                    </span>
+                                    {Array.from(
+                                        { length: Math.min(5, historyPages) },
+                                        (_, index) =>
+                                            Math.max(1, Math.min(visiblePage - 2, historyPages - 4)) + index,
+                                    ).map(page => (
+                                        <button
+                                            key={page}
+                                            type="button"
+                                            className={`tax-address-page-number ${page === visiblePage ? 'primary-action' : 'secondary-action'}`}
+                                            aria-label={t(`第 ${page} 页`, `Page ${page}`)}
+                                            aria-current={page === visiblePage ? 'page' : undefined}
+                                            onClick={() => setHistoryPage(page)}
+                                        >
+                                            {page}
+                                        </button>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        className="secondary-action"
+                                        disabled={visiblePage >= historyPages}
+                                        onClick={() => setHistoryPage(visiblePage + 1)}
+                                    >
+                                        {t('下一页', 'Next')}
+                                    </button>
+                                </div>
+                            </nav>
                         )}
                         <p className="tax-address-history-note type-helper">
                             <ShieldCheck aria-hidden="true" />

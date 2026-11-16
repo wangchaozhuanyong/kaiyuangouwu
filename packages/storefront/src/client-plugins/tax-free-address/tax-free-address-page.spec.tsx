@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type TaxFreeAddressClaim } from '../../../../storefront-content-plugin/src/tax-free-address-contract';
 
-import { historyKey, readAddressHistory, saveAddressHistory } from './browser-history';
+import { clearAddressHistory, historyKey, readAddressHistory, saveAddressHistory } from './browser-history';
 import { TaxFreeAddressPage } from './tax-free-address-page';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -93,6 +93,51 @@ async function fixture(claim?: (id: string) => Promise<TaxFreeAddressClaim>) {
     return { node, client, api, writes, render, button };
 }
 describe('anonymous address tool with the real root QueryClient', () => {
+    it('pages history in groups of five and copies a collapsed record without claiming an address', async () => {
+        for (let index = 1; index <= 12; index++) {
+            const record = receipt(String(index));
+            record.requestId = String(index);
+            record.address.line1 = `${index} Example St`;
+            record.address.usedAt = new Date(now - (12 - index) * 300_000).toISOString();
+            saveAddressHistory('address-tool', record);
+        }
+        const f = await fixture();
+        const rows = () => [...f.node.querySelectorAll('.tax-address-history-row')];
+        expect(rows()).toHaveLength(5);
+        expect(rows()[0]?.textContent).toContain('12 Example St');
+        const copyRecord = rows()[0]?.querySelector<HTMLButtonElement>('button');
+        await actOnce(() => copyRecord?.click());
+        expect(writeText.mock.calls[0]?.[0]).toContain('地址（Address Line 1）：12 Example St');
+        expect(copyRecord?.textContent).toContain('已复制');
+        await actOnce(() => f.button('下一页').click());
+        expect(rows()).toHaveLength(5);
+        expect(rows()[0]?.textContent).toContain('7 Example St');
+        const expand = rows()[0]?.querySelector<HTMLButtonElement>('[aria-expanded]');
+        await actOnce(() => expand?.click());
+        expect(expand?.getAttribute('aria-expanded')).toBe('true');
+        expect(f.node.querySelector('.tax-address-detail-row:not([hidden])')?.textContent).toContain(
+            'Country / Region',
+        );
+        await actOnce(() => f.button('刷新状态').click());
+        await flush();
+        expect(expand?.getAttribute('aria-expanded')).toBe('true');
+        await actOnce(() => f.button('下一页').click());
+        expect(rows()).toHaveLength(2);
+        expect(f.button('下一页').disabled).toBe(true);
+        expect(f.writes).toHaveLength(0);
+        await actOnce(() => {
+            clearAddressHistory('address-tool');
+        });
+        await flush();
+        expect(rows()).toHaveLength(0);
+        expect(f.node.textContent).toContain('暂无提取记录');
+        await actOnce(() => {
+            saveAddressHistory('address-tool', receipt('after-clear'));
+        });
+        await flush();
+        expect(rows()).toHaveLength(1);
+        expect(f.button('上一页').disabled).toBe(true);
+    });
     it('extracts once, shows countdown, persists local history and copies the exact five-line format', async () => {
         const f = await fixture();
         await actOnce(() => f.button('提取地址').click());
