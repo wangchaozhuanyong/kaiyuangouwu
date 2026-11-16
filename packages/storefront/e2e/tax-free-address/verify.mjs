@@ -110,7 +110,7 @@ try {
             const copied = await page.evaluate(() => navigator.clipboard.readText());
             assert.equal(
                 copied,
-                '国家（英语）：United States\n地址（英语）：123 Example St\n城市（英语）：Manchester\n州（英语）：New Hampshire\n邮编（英语）：03101',
+                '国家（Country / Region）：United States\n地址（Address Line 1）：123 Example St\n城市（City）：Manchester\n州（State）：New Hampshire\n邮编（ZIP Code）：03101',
             );
             await expect(
                 page.getByRole('button', { name: lang === 'zh' ? /下次可提取/ : /Available in/ }),
