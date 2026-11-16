@@ -1,4 +1,13 @@
-import type { MouseEvent } from 'react';
+import type { MouseEvent, SyntheticEvent } from 'react';
+import { preconnect } from 'react-dom';
+
+import { shouldPrefetchMedia } from './hooks/useOnlineStatus';
+
+/** Prepare only the connection on intent; never open the tool or read customer data. */
+export function warmStandaloneTool(event: SyntheticEvent<HTMLAnchorElement>) {
+    if (document.hidden || navigator.onLine === false || !shouldPrefetchMedia()) return;
+    preconnect(event.currentTarget.origin);
+}
 
 /** Copied links/new tabs stay independent; only a same-tab click requests browser back. */
 export function openStandaloneTool(event: MouseEvent<HTMLAnchorElement>) {

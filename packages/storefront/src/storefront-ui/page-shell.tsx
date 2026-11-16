@@ -177,6 +177,7 @@ export function Subpage({
     ...header
 }: {
     title: string;
+    titleIcon?: ReactNode;
     language: StorefrontLanguage;
     onBack?: () => void;
     back?: ReactNode;
@@ -200,6 +201,7 @@ export function Subpage({
 
 export function SubHeader({
     title,
+    titleIcon,
     language,
     onBack,
     backLabel,
@@ -209,6 +211,7 @@ export function SubHeader({
     back,
 }: {
     title: string;
+    titleIcon?: ReactNode;
     language: StorefrontLanguage;
     onBack?: () => void;
     back?: ReactNode;
@@ -229,7 +232,14 @@ export function SubHeader({
                     {backLabel}
                 </PageBackButton>
             )}
-            <strong>{title}</strong>
+            <strong>
+                {titleIcon && (
+                    <span className="subpage-title-icon" aria-hidden="true">
+                        {titleIcon}
+                    </span>
+                )}
+                {title}
+            </strong>
             <span className="subpage-header-actions">{action}</span>
         </header>
     );

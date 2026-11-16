@@ -16,6 +16,7 @@ import {
     type RechargePlan,
     type RechargeStage,
     type RechargeStatus,
+    type RechargeProgress,
 } from '../../src/client-plugins/gpt-recharge/contracts';
 import { GptRechargePage } from '../../src/client-plugins/gpt-recharge/gpt-recharge-page';
 import {
@@ -69,8 +70,9 @@ function Fixture() {
         onToggleLanguage: () => setLanguage(value => (value === 'zh' ? 'en' : 'zh')),
         onCurrencyChange: (value: string) => setCurrency(value),
     };
-    const [status, setStatus] = useState<RechargeStatus>('queued');
+    const [status, setStatus] = useState<RechargeStatus>(params.has('detailed') ? 'running' : 'queued');
     const [stage, setStage] = useState<RechargeStage>('started');
+    const [progressVersion, setProgressVersion] = useState(6);
     const [key, setKey] = useState(0);
     const client = useMemo<GptRechargeClient>(() => {
         const availability = params.get('availability');
@@ -116,6 +118,26 @@ function Fixture() {
             status,
             stage: status === 'running' ? stage : status,
             updatedAt: '2026-10-16T10:30:00Z',
+            ...(params.has('detailed') && {
+                accountEmail: 'customer-with-a-long-email-address@example.test',
+                progress: {
+                    attempt: 'synthetic-attempt',
+                    execution: 1,
+                    version: progressVersion,
+                    changedAt: '2026-10-16T10:30:00Z',
+                    milestones: [
+                        { key: 'accepted', state: 'complete', at: '2026-10-16T10:25:00Z' },
+                        { key: 'account', state: 'complete', at: '2026-10-16T10:26:00Z' },
+                        { key: 'checkout', state: 'complete', at: '2026-10-16T10:27:00Z' },
+                        { key: 'card', state: 'complete', at: '2026-10-16T10:28:00Z' },
+                        { key: 'billing', state: 'complete', at: '2026-10-16T10:29:00Z' },
+                        { key: 'payment', state: 'waiting', at: '2026-10-16T10:30:00Z' },
+                        ...(status === 'succeeded'
+                            ? [{ key: 'complete', state: 'complete', at: '2026-10-16T10:31:00Z' }]
+                            : []),
+                    ],
+                } as RechargeProgress,
+            }),
         });
         return {
             config: async () => {
@@ -203,6 +225,22 @@ function Fixture() {
                     task: { ...task(), status: 'awaiting_authorization', stage: 'awaiting_authorization' },
                 });
             },
+            ...(params.has('detailed') && {
+                watch: async (
+                    _id: string,
+                    _credential: string,
+                    signal: AbortSignal,
+                    onTask: (value: ReturnType<typeof task>) => void,
+                    onConnection: (state: 'live') => void,
+                ) => {
+                    onConnection('live');
+                    onTask(task());
+                    await new Promise<void>(resolve => {
+                        if (signal.aborted) return resolve();
+                        signal.addEventListener('abort', () => resolve(), { once: true });
+                    });
+                },
+            }),
             task: () => {
                 setOperationCalls(value => ({ ...value, task: value.task + 1 }));
                 if (params.get('error') === 'progress')
@@ -212,7 +250,7 @@ function Fixture() {
                 return Promise.resolve(task());
             },
         };
-    }, [status, stage, key]);
+    }, [status, stage, key, progressVersion]);
     function fill() {
         const input = document.getElementById('gpt-code') as HTMLInputElement | null;
         const textarea = document.getElementById('gpt-session') as HTMLTextAreaElement | null;
@@ -256,7 +294,10 @@ function Fixture() {
                         结果演示
                         <select
                             value={status}
-                            onChange={event => setStatus(event.target.value as RechargeStatus)}
+                            onChange={event => {
+                                setStatus(event.target.value as RechargeStatus);
+                                setProgressVersion(value => value + 1);
+                            }}
                         >
                             <option value="queued">已受理</option>
                             <option value="running">处理中</option>
@@ -269,7 +310,10 @@ function Fixture() {
                         步骤演示
                         <select
                             value={stage}
-                            onChange={event => setStage(event.target.value as RechargeStage)}
+                            onChange={event => {
+                                setStage(event.target.value as RechargeStage);
+                                setProgressVersion(value => value + 1);
+                            }}
                         >
                             <option value="started">已开始执行</option>
                             <option value="payment_details">填写充值资料</option>

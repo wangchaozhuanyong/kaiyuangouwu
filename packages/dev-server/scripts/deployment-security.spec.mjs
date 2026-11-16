@@ -840,7 +840,7 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.doesNotMatch(unknownRoute, /error_page 404 =200/u);
     const realtimeLocations = [
         ...config.matchAll(
-            /location ~ \^\/storefront-realtime\/\(events\|mail-events\)\$ \{(?<body>[\s\S]*?)\n    \}/gu,
+            /location ~ \^\/storefront-realtime\/\(events\|mail-events\|recharge-events\)\$ \{(?<body>[\s\S]*?)\n    \}/gu,
         ),
     ];
     assert.equal(realtimeLocations.length, 1);

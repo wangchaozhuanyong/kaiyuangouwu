@@ -3,13 +3,14 @@ import { type ComponentType, useCallback, useContext, useEffect, useRef } from '
 
 import { addressToolOrigin } from '../../vite/address-tool-deployment';
 import { customerToolOrigins } from '../../vite/customer-tool-deployment';
+import { interceptContentNavigation } from '../content-target-href';
 import { shouldPrefetchMedia } from '../hooks/useOnlineStatus';
 import { useStorefrontPageActivity } from '../hooks/useStorefrontPageActivity';
 import { languageCodeFor } from '../i18n';
 import { prepareImageStudioData } from '../pages/ai-image-studio-preload';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
-import { openStandaloneTool } from '../standalone-tool-navigation';
-import { type RouteState } from '../storefront-router';
+import { openStandaloneTool, warmStandaloneTool } from '../standalone-tool-navigation';
+import { routeHref, type RouteState } from '../storefront-router';
 import { StorefrontContext } from '../StorefrontContext';
 import { type StorefrontContentBlock, type StorefrontContentItem, type StorefrontLanguage } from '../types';
 
@@ -151,6 +152,9 @@ function TaxFreeAddressEntry({ language }: Readonly<ClientPluginComponentProps>)
             href={url}
             referrerPolicy="no-referrer"
             onClick={openStandaloneTool}
+            onMouseEnter={warmStandaloneTool}
+            onFocus={warmStandaloneTool}
+            onTouchStart={warmStandaloneTool}
         >
             <span className={`${entryClass}-icon`} aria-hidden="true">
                 <MapPin />
@@ -186,6 +190,24 @@ function ToolEntryPlugin({
     }[name];
     const assistance = name === 'coupons' || name === 'support';
     const suffix = name === 'gpt-recharge' ? '' : ` ${entryClass}-${name === 'coupons' ? 'coupon' : name}`;
+    if (name === 'blog') {
+        return (
+            <a
+                className={`${entryClass}${suffix}`}
+                href={routeHref({ name })}
+                onClick={event => interceptContentNavigation(event, () => onNavigate({ name }))}
+            >
+                <span className={`${entryClass}-icon`} aria-hidden="true">
+                    <Icon />
+                </span>
+                <span className={`${entryClass}-copy`}>
+                    <strong>{title}</strong>
+                    <span>{description}</span>
+                </span>
+                <span className={`${entryClass}-action`}>{action}</span>
+            </a>
+        );
+    }
     if (name === 'two-factor' || name === 'mail-query') {
         return (
             <a
@@ -193,6 +215,9 @@ function ToolEntryPlugin({
                 href={`${customerToolOrigins[name]}/${language === 'en' ? '?lang=en' : ''}`}
                 referrerPolicy="no-referrer"
                 onClick={openStandaloneTool}
+                onMouseEnter={warmStandaloneTool}
+                onFocus={warmStandaloneTool}
+                onTouchStart={warmStandaloneTool}
             >
                 <span className={`${entryClass}-icon`} aria-hidden="true">
                     <Icon />

@@ -10,6 +10,7 @@ import {
 import { StorefrontClientPluginAccessService } from '../storefront-client-plugin-access.service';
 
 import { GptRechargeConfig, GptRechargeReceipt } from './entities';
+import { readRechargeProgressStream, type RechargeProgress } from './progress';
 import {
     allowedRechargeOrigin,
     GptRechargeNotAcceptedError,
@@ -40,6 +41,8 @@ type UpstreamTaskSnapshot = {
     id: string;
     taskToken: string;
     stage?: string;
+    progress?: RechargeProgress;
+    accountEmail?: string;
     updatedAt?: number;
     partner?: boolean;
 };
@@ -349,13 +352,26 @@ export class GptRechargeService {
             plan: row.plan,
             status,
             stage: safeRechargeStage(status, snapshot?.stage),
+            ...(snapshot?.accountEmail && { accountEmail: snapshot.accountEmail }),
+            ...(snapshot?.progress && {
+                progress: {
+                    ...snapshot.progress,
+                    attempt: rechargeFingerprint(snapshot.progress.attempt, `${this.context(ctx)}:attempt`),
+                },
+            }),
             updatedAt:
                 snapshot?.updatedAt === undefined
                     ? (row.upstreamUpdatedAt ?? row.updatedAt)
                     : new Date(snapshot.updatedAt),
         };
     }
-    private async capture(ctx: RequestContext, row: GptRechargeReceipt, raw: unknown, partner = false) {
+    private async capture(
+        ctx: RequestContext,
+        row: GptRechargeReceipt,
+        raw: unknown,
+        partner = false,
+        expectedId?: string,
+    ) {
         const value = safeRechargeTask(raw);
         const repository = this.receipts(ctx);
         for (let attempt = 0; attempt < 4; attempt++) {
@@ -363,8 +379,17 @@ export class GptRechargeService {
                 where: { id: row.id, channelId: ctx.channelId },
             });
             const previous = this.taskSnapshot(ctx, current);
+            if (expectedId && previous?.id !== expectedId) return this.view(ctx, current);
             // Reading the previous failure cannot settle a new submit whose response is missing.
             if (previous?.id === value.id && pendingSubmission.includes(current.status))
+                return this.view(ctx, current);
+            if (
+                previous?.id === value.id &&
+                previous.progress &&
+                value.progress &&
+                previous.progress.attempt === value.progress.attempt &&
+                value.progress.version <= previous.progress.version
+            )
                 return this.view(ctx, current);
             const previousTime = previous?.updatedAt ?? current.upstreamUpdatedAt?.getTime();
             const nextTime = value.updatedAt.getTime();
@@ -374,7 +399,11 @@ export class GptRechargeService {
                 if (nextTime < previousTime) return this.view(ctx, current);
                 if (
                     nextTime === previousTime &&
-                    (previous.stage !== undefined || current.status !== value.status)
+                    (previous.stage !== undefined || current.status !== value.status) &&
+                    !(
+                        value.progress &&
+                        (!previous.progress || value.progress.version > previous.progress.version)
+                    )
                 )
                     return this.view(ctx, current);
             }
@@ -394,6 +423,9 @@ export class GptRechargeService {
                     taskToken: snapshot.taskToken,
                     ...(snapshot.partner && { partner: true }),
                     stage: value.stage,
+                    progress: value.progress ?? (previous?.id === value.id ? previous.progress : undefined),
+                    accountEmail:
+                        value.accountEmail ?? (previous?.id === value.id ? previous.accountEmail : undefined),
                     updatedAt: nextTime,
                 }),
                 `${this.context(ctx)}:${row.publicId}`,
@@ -547,6 +579,75 @@ export class GptRechargeService {
         }
         return { authorizationUrl, task };
     }
+    async watchTask(
+        ctx: RequestContext,
+        publicId: string,
+        credential: string,
+        signal: AbortSignal,
+        onReady: () => void,
+        onTask: (task: ReturnType<GptRechargeService['view']>) => void,
+    ) {
+        const expected = rechargeFingerprint(publicId, `${this.context(ctx)}:task`);
+        if (!rechargeCredentialMatches(expected, credential)) throw new ForbiddenError();
+        const row = await this.receipts(ctx).findOne({ where: { publicId, channelId: ctx.channelId } });
+        if (!row) throw new ForbiddenError();
+        if (['succeeded', 'failed', 'expired'].includes(row.status)) {
+            onReady();
+            onTask(this.view(ctx, row));
+            return;
+        }
+        const input = this.taskSnapshot(ctx, row);
+        if (!input) throw new UserInputError('进度推送暂不可用，请查询原任务');
+        const config = await this.connectionConfig(ctx, false);
+        const origin = allowedRechargeOrigin(config.upstreamOrigin);
+        const keys = this.credentials(ctx, config.encryptedServiceKey);
+        const connect = new AbortController();
+        const timer = setTimeout(() => connect.abort(), 10000);
+        let response: Response;
+        try {
+            response = await fetch(
+                origin +
+                    (input.partner
+                        ? rechargePartnerApiPath + '/redemptions/' + input.id
+                        : '/api/id-business-v2/online-recharge/integrations/vendure/task'),
+                {
+                    method: input.partner ? 'GET' : 'POST',
+                    redirect: 'error',
+                    signal: AbortSignal.any([signal, connect.signal]),
+                    headers: {
+                        accept: 'text/event-stream',
+                        ...(input.partner
+                            ? { authorization: 'Bearer ' + (keys.partner ?? '') }
+                            : {
+                                  'content-type': 'application/json',
+                                  'x-vendure-recharge-key': keys.legacy ?? '',
+                                  'x-vendure-client-ip': ctx.req?.ip?.replace(/^::ffff:/, '') ?? '',
+                                  'x-vendure-recharge-channel': ctx.channel.code,
+                              }),
+                    },
+                    ...(!input.partner && {
+                        body: JSON.stringify({ id: input.id, taskToken: input.taskToken }),
+                    }),
+                },
+            );
+        } finally {
+            clearTimeout(timer);
+        }
+        if (
+            !response.ok ||
+            !response.body ||
+            !response.headers.get('content-type')?.startsWith('text/event-stream')
+        ) {
+            await response.body?.cancel().catch(() => undefined);
+            throw new UserInputError('进度推送暂不可用，请查询原任务');
+        }
+        onReady();
+        await readRechargeProgressStream(response.body, signal, async raw => {
+            if ((raw as { id?: unknown })?.id !== input.id) throw new ForbiddenError();
+            const task = await this.capture(ctx, row, raw, Boolean(input.partner), input.id);
+            if (!signal.aborted) onTask(task);
+        });
+    }
     async task(ctx: RequestContext, publicId: string, credential: string) {
         const expected = rechargeFingerprint(publicId, `${this.context(ctx)}:task`);
         if (!rechargeCredentialMatches(expected, credential)) throw new ForbiddenError();
@@ -563,6 +664,7 @@ export class GptRechargeService {
                 row,
                 await this.partnerUpstream(ctx, config, '/redemptions/' + input.id),
                 true,
+                input.id,
             );
         return this.capture(
             ctx,
@@ -571,6 +673,8 @@ export class GptRechargeService {
                 id: input.id,
                 taskToken: input.taskToken,
             }),
+            false,
+            input.id,
         );
     }
 }

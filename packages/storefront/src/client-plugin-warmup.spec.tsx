@@ -69,6 +69,43 @@ describe('configured image-studio warmup intent', () => {
         vi.restoreAllMocks();
     });
 
+    it('opens the blog through the router while preserving modified native link clicks', () => {
+        const onNavigate = vi.fn();
+        const blog = {
+            ...block,
+            items: [
+                {
+                    ...block.items[0],
+                    settings: { pluginCode: 'news-blog-entry', placement: 'BUSINESS_SERVICES_MAIN' },
+                },
+            ],
+        };
+        act(() => {
+            root?.render(
+                <ClientPluginSlot
+                    block={blog}
+                    placement="BUSINESS_SERVICES_MAIN"
+                    language="zh"
+                    onNavigate={onNavigate}
+                />,
+            );
+        });
+        const anchor = host.querySelector('a');
+        expect(anchor?.getAttribute('href')).toBe('/zh/blog');
+        const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+        act(() => {
+            anchor?.dispatchEvent(click);
+        });
+        expect(click.defaultPrevented).toBe(true);
+        expect(onNavigate).toHaveBeenCalledExactlyOnceWith({ name: 'blog' });
+        const modified = new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true });
+        act(() => {
+            anchor?.dispatchEvent(modified);
+        });
+        expect(modified.defaultPrevented).toBe(false);
+        expect(onNavigate).toHaveBeenCalledTimes(1);
+    });
+
     it('does not speculate while hidden or offline and resumes only when active', async () => {
         const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
         const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);

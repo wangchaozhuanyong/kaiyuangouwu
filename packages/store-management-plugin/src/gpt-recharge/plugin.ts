@@ -116,6 +116,7 @@ export class GptRechargeAdminResolver {
     providers: [GptRechargeService, StorefrontClientPluginAccessService],
     shopApiExtensions: { schema: shopSchema, resolvers: [GptRechargeShopResolver] },
     adminApiExtensions: { schema: adminSchema, resolvers: [GptRechargeAdminResolver] },
+    exports: [GptRechargeService],
     compatibility: '^3.7.0',
 })
 export class GptRechargePlugin {}

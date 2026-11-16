@@ -9,11 +9,15 @@ import {
 import { type ShopApiContext } from './client-context';
 import { requestShopAbuseChallenge } from './shop-abuse';
 
-const taskFields = 'id credential plan status stage updatedAt';
+const taskFields =
+    'id credential plan status stage updatedAt accountEmail progress { attempt execution version changedAt retryAt milestones { key state at } }';
 const codeFields = `plan status reason task { ${taskFields} }`;
 export class GptRechargeApi implements GptRechargeClient {
     createShopAbuseChallenge: ShopAbuseClient['createShopAbuseChallenge'];
-    constructor(private readonly ctx: Pick<ShopApiContext, 'request'>) {
+    constructor(
+        private readonly ctx: Pick<ShopApiContext, 'request'> &
+            Partial<Pick<ShopApiContext, 'market' | 'getAuthToken'>>,
+    ) {
         this.createShopAbuseChallenge = requestShopAbuseChallenge.bind(null, ctx);
     }
     async config(signal?: AbortSignal) {
@@ -82,6 +86,25 @@ export class GptRechargeApi implements GptRechargeClient {
                 proof,
             )
         ).queryGptRechargeCode;
+    }
+    async watch(
+        id: string,
+        credential: string,
+        signal: AbortSignal,
+        onTask: (task: RechargeTask) => void,
+        onConnection: (state: 'connecting' | 'live' | 'error' | 'denied') => void,
+    ) {
+        const { watchRechargeEvents } = await import('./recharge-events');
+        if (signal.aborted) return;
+        return watchRechargeEvents(
+            id,
+            credential,
+            this.ctx.market?.code ?? '',
+            this.ctx.getAuthToken ?? (() => null),
+            signal,
+            onTask,
+            onConnection,
+        );
     }
     async task(id: string, credential: string, signal?: AbortSignal): Promise<RechargeTask> {
         return (

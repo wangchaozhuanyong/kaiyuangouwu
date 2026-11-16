@@ -23,6 +23,7 @@ import {
     validateRechargeSession,
 } from './security';
 import { GptRechargeService } from './service';
+const nativeFetch = globalThis.fetch;
 const source = 'https://executor.example.test';
 describe('bounded recharge response bytes', () => {
     it('preserves Fetch UTF-8 decoding when a JSON response starts with a byte order mark', async () => {
@@ -256,6 +257,185 @@ describe('GPT recharge real SQL migration and service boundary', () => {
             for (const secretValue of ['fixture-code', session, upstream.taskToken, upstream.id])
                 expect(stored).not.toContain(secretValue);
         },
+    );
+    it('streams only the authorized task, persists detailed progress and rejects old business revisions', async () => {
+        const accepted = await service.submit(ctx(), 'stream-code', session);
+        const progress = {
+            attempt: upstream.id,
+            execution: 1,
+            version: 3,
+            retryAt: null,
+            changedAt: '2026-10-16T10:00:03.000Z',
+            milestones: [{ key: 'card', state: 'complete', at: '2026-10-16T10:00:03.000Z' }],
+        };
+        const snapshot = {
+            ...upstream,
+            status: 'running',
+            stage: 'processing',
+            progress,
+            accountEmail: 'customer@example.test',
+            updatedAt: progress.changedAt,
+        };
+        const received: any[] = [];
+        const ready = vi.fn();
+        vi.mocked(fetch).mockImplementation((_url, options) => {
+            expect(new Headers(options?.headers).get('accept')).toBe('text/event-stream');
+            expect(JSON.parse(typeof options?.body === 'string' ? options.body : '')).toEqual({
+                id: upstream.id,
+                taskToken: upstream.taskToken,
+            });
+            return Promise.resolve(
+                new Response(
+                    'event: ready\ndata: {}\n\nevent: task\ndata: ' + JSON.stringify(snapshot) + '\n\n',
+                    { headers: { 'content-type': 'text/event-stream' } },
+                ),
+            );
+        });
+        await expect(
+            service.watchTask(
+                ctx(2),
+                accepted.id,
+                accepted.credential,
+                new AbortController().signal,
+                ready,
+                value => received.push(value),
+            ),
+        ).rejects.toThrow();
+        await expect(
+            service.watchTask(ctx(), accepted.id, 'wrong', new AbortController().signal, ready, value =>
+                received.push(value),
+            ),
+        ).rejects.toThrow();
+        await service.watchTask(
+            ctx(),
+            accepted.id,
+            accepted.credential,
+            new AbortController().signal,
+            ready,
+            value => received.push(value),
+        );
+        expect(ready).toHaveBeenCalledOnce();
+        expect(received[0].accountEmail).toBe('customer@example.test');
+        expect(received[0].progress.milestones).toEqual(progress.milestones);
+        expect(received[0].progress.attempt).not.toBe(upstream.id);
+        expect(JSON.stringify(received[0])).not.toContain(upstream.taskToken);
+        const stored = JSON.stringify(await db.getRepository(GptRechargeReceipt).find());
+        expect(stored).not.toContain('customer@example.test');
+        vi.mocked(fetch).mockResolvedValue(
+            Response.json({
+                ...snapshot,
+                progress: { ...progress, version: 2, milestones: [] },
+                updatedAt: '2026-10-16T10:00:09.000Z',
+            }),
+        );
+        const retained = await service.task(ctx(), accepted.id, accepted.credential);
+        expect(retained.progress?.version).toBe(3);
+        expect(retained.progress?.milestones).toEqual(progress.milestones);
+    });
+    it.runIf(Boolean(process.env.GPT_RECHARGE_ID_PROJECT))(
+        'connects the actual ID task bridge to Vendure encrypted receipts and task streams',
+        async () => {
+            const { pathToFileURL } = await import('node:url');
+            const { createServer } = await import('node:http');
+            const peer = process.env.GPT_RECHARGE_ID_PROJECT;
+            if (!peer) throw new Error('Missing local integration source');
+            const moduleUrl = pathToFileURL(peer + '/modules/recharge/vendure/loopback-bridge.mjs').href;
+            const { createLoopbackVendureRechargeBridge, signRechargeWorkerRequest, rechargeWorkerPrefix } =
+                await import(/* @vite-ignore */ moduleUrl);
+            const workerSecret = 'synthetic-cross-project-worker-key-only';
+            const bridge = createLoopbackVendureRechargeBridge({
+                vendureKey: key,
+                workerSecret,
+                codes: [{ code: 'joint-test', plan: 'plus' }],
+            });
+            const server = createServer((req, res) => void bridge.handle(req, res));
+            await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+            const origin = 'http://127.0.0.1:' + (server.address() as { port: number }).port;
+            const abort = new AbortController();
+            let watching: Promise<void> | undefined;
+            try {
+                vi.mocked(fetch).mockImplementation((url, options) =>
+                    nativeFetch(
+                        (typeof url === 'string' ? url : url instanceof URL ? url.href : url.url).replace(
+                            source,
+                            origin,
+                        ),
+                        options,
+                    ),
+                );
+                const accepted = await service.submit(ctx(), 'joint-test', session);
+                expect(accepted.accountEmail).toBe('demo@example.test');
+                const values: any[] = [];
+                let first!: () => void;
+                const initial = new Promise<void>(resolve => {
+                    first = resolve;
+                });
+                watching = service.watchTask(
+                    ctx(),
+                    accepted.id,
+                    accepted.credential,
+                    abort.signal,
+                    () => undefined,
+                    value => {
+                        values.push(value);
+                        first();
+                    },
+                );
+                await initial;
+                const worker = async (action: string, value: object = {}) => {
+                    const path = rechargeWorkerPrefix + '/' + action;
+                    const body = JSON.stringify(value);
+                    const reply = await nativeFetch(origin + path, {
+                        method: 'POST',
+                        body,
+                        headers: {
+                            'content-type': 'application/json',
+                            ...signRechargeWorkerRequest(workerSecret, path, body),
+                        },
+                    });
+                    expect(reply.status).toBe(200);
+                    return reply.json();
+                };
+                const lease = (await worker('claim')).task;
+                await worker('progress', {
+                    id: lease.id,
+                    leaseToken: lease.leaseToken,
+                    upstreamJobId: 'joint-job',
+                    stage: 'processing',
+                    facts: [
+                        { key: 'card', state: 'complete', at: Date.now(), attempt: 1 },
+                        { key: 'billing', state: 'complete', at: Date.now(), attempt: 1 },
+                    ],
+                });
+                await worker('result', {
+                    id: lease.id,
+                    leaseToken: lease.leaseToken,
+                    upstreamJobId: 'joint-job',
+                    outcome: 'confirmed_success',
+                    evidenceId: 'synthetic-completion',
+                });
+                await watching;
+                expect(values.at(-1).status).toBe('succeeded');
+                expect(values.at(-1).progress.milestones).toEqual(
+                    expect.arrayContaining([
+                        expect.objectContaining({ key: 'card', state: 'complete' }),
+                        expect.objectContaining({ key: 'billing', state: 'complete' }),
+                    ]),
+                );
+                expect(JSON.stringify(values)).not.toContain(lease.leaseToken);
+                expect(JSON.stringify(values)).not.toContain(lease.id);
+                expect((await service.query(ctx(), 'joint-test')).task?.progress).toEqual(
+                    values.at(-1).progress,
+                );
+            } finally {
+                abort.abort();
+                await watching?.catch(() => undefined);
+                bridge.close();
+                server.closeAllConnections();
+                await new Promise<void>(resolve => server.close(() => resolve()));
+            }
+        },
+        10000,
     );
     it('concurrent submit claims only one dispatch', async () => {
         const results = await Promise.all([

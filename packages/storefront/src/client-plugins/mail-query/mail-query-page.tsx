@@ -1,5 +1,5 @@
 /* eslint-disable import/order, max-len -- Bilingual copy and clean relative types are intentional. */
-import { ChevronDown, Clipboard, Clock3, Mail, RefreshCw, Search, X } from 'lucide-react';
+import { ChevronDown, CircleHelp, Clipboard, Clock3, Mail, RefreshCw, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createDeferredContentReveal } from '../../content-reveal';
 import { SubHeader } from '../../storefront-ui/page-shell';
@@ -692,9 +692,10 @@ export function MailQueryPage({
         >
             <SubHeader
                 title={isZh ? '邮箱查询服务' : 'Email lookup'}
+                titleIcon={standalone ? <Mail /> : undefined}
                 language={language}
                 onBack={result ? handleBackToQueryForm : handleBackClick}
-                back={standalone && !result && !onBack ? <Mail aria-hidden="true" /> : undefined}
+                back={standalone && !result && !onBack ? false : undefined}
                 backLabel={standalone ? undefined : isZh ? '返回上一层' : 'Back'}
                 action={
                     standalone ? (
@@ -706,6 +707,7 @@ export function MailQueryPage({
                                     ?.scrollIntoView({ block: 'start' });
                             }}
                         >
+                            <CircleHelp aria-hidden="true" />
                             {isZh ? '使用帮助' : 'Help'}
                         </button>
                     ) : (

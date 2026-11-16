@@ -99,14 +99,14 @@
 }
 .gpt-recharge-layout {
     display: grid;
-    grid-template-columns: minmax(280px, 0.38fr) minmax(0, 0.62fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-32);
     padding: var(--space-32);
 }
 .gpt-recharge-code-section {
     min-width: 0;
-    padding-right: var(--space-32);
-    border-right: 1px solid var(--line-subtle);
+    padding-bottom: var(--space-24);
+    border-bottom: 1px solid var(--line-subtle);
 }
 .gpt-recharge-account-section {
     min-width: 0;
@@ -403,7 +403,7 @@
 }
 .gpt-recharge-query {
     display: grid;
-    grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
     gap: var(--space-32);
     padding: var(--space-32);
@@ -430,12 +430,6 @@
 }
 .gpt-recharge-query .primary-action {
     min-height: 48px;
-}
-.gpt-recharge-query-result {
-    min-width: 0;
-    padding: var(--space-24);
-    border-radius: var(--skin-control-radius);
-    background: var(--soft);
 }
 .gpt-recharge-query-note {
     display: flex;
@@ -473,131 +467,6 @@
     text-align: center;
     max-width: 760px;
     margin: auto;
-}
-.gpt-recharge-query-result .gpt-recharge-result {
-    padding: 0;
-}
-.gpt-recharge-task {
-    display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-    align-items: start;
-    gap: var(--space-32);
-    max-width: none;
-    text-align: left;
-}
-.gpt-recharge-task-main,
-.gpt-recharge-task-details {
-    min-width: 0;
-}
-.gpt-recharge-task-caption {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-12);
-    margin-bottom: var(--space-16);
-    color: var(--muted);
-    font-size: var(--type-helper-size);
-    line-height: var(--type-helper-leading);
-}
-.gpt-recharge-sync {
-    color: var(--selection);
-    text-align: right;
-}
-.gpt-recharge-sync[data-sync='error'],
-.gpt-recharge-sync[data-sync='paused'] {
-    color: var(--muted);
-}
-.gpt-recharge-status-heading {
-    display: flex;
-    align-items: center;
-    gap: var(--space-12);
-}
-.gpt-recharge-status-heading h2 {
-    font-size: var(--type-section-size);
-    line-height: var(--type-section-leading);
-}
-.gpt-recharge-status-icon {
-    display: grid;
-    place-items: center;
-    flex-shrink: 0;
-    width: 44px;
-    height: 44px;
-    border-radius: var(--skin-control-radius);
-    background: var(--selection-soft);
-    color: var(--selection);
-}
-.gpt-recharge-task[data-status='failed'] .gpt-recharge-status-icon {
-    color: var(--danger);
-    background: color-mix(in srgb, var(--danger) 10%, var(--surface));
-}
-.gpt-recharge-task[data-status='succeeded'] .gpt-recharge-status-icon {
-    color: var(--success);
-    background: color-mix(in srgb, var(--success) 10%, var(--surface));
-}
-.gpt-recharge-status-description {
-    margin: var(--space-16) 0 0;
-    color: var(--muted);
-    font-size: var(--type-body-size);
-    line-height: var(--type-body-leading);
-}
-.gpt-recharge-current-step {
-    display: flex;
-    align-items: center;
-    gap: var(--space-12);
-    margin-top: var(--space-16);
-    padding: var(--space-16);
-    border-radius: var(--skin-control-radius);
-    background: var(--soft);
-}
-.gpt-recharge-stage-dot {
-    width: 8px;
-    height: 8px;
-    flex-shrink: 0;
-    border-radius: 50%;
-    background: var(--selection);
-}
-.gpt-recharge-current-step div {
-    display: grid;
-    gap: var(--space-4);
-}
-.gpt-recharge-current-step div > span {
-    color: var(--muted);
-    font-size: var(--type-meta-size);
-    line-height: var(--type-meta-leading);
-}
-.gpt-recharge-current-step strong {
-    font-size: var(--type-body-size);
-    line-height: var(--type-body-leading);
-    font-weight: var(--font-weight-medium);
-}
-.gpt-recharge-task .gpt-recharge-summary {
-    margin: 0;
-    padding: var(--space-24);
-    gap: var(--space-16);
-}
-.gpt-recharge-summary .gpt-recharge-reference {
-    display: grid;
-    gap: var(--space-4);
-}
-.gpt-recharge-reference dd {
-    text-align: left;
-    font-family: var(--font-code);
-}
-.gpt-recharge-task .gpt-recharge-task-details > button {
-    min-height: 44px;
-    margin-top: var(--space-8);
-    padding-inline: 0;
-}
-.gpt-recharge-query-result .gpt-recharge-task {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-16);
-}
-.gpt-recharge-query-result .gpt-recharge-summary {
-    padding: 0;
-    background: transparent;
-}
-.gpt-recharge-query-result .gpt-recharge-current-step {
-    background: var(--surface);
 }
 .gpt-recharge-result > svg {
     color: var(--selection);
@@ -687,19 +556,222 @@
     .gpt-recharge-result {
         padding: var(--space-24) var(--space-16);
     }
-    .gpt-recharge-query,
-    .gpt-recharge-task {
+    .gpt-recharge-query {
         grid-template-columns: minmax(0, 1fr);
         gap: var(--space-24);
     }
-    .gpt-recharge-query-result,
-    .gpt-recharge-task .gpt-recharge-summary {
-        padding: var(--space-16);
-    }
-    .gpt-recharge-query-result .gpt-recharge-summary {
-        padding: 0;
-    }
     .gpt-recharge-query-empty {
         min-height: 160px;
+    }
+}
+
+.gpt-recharge-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    align-items: start;
+}
+.gpt-recharge-left {
+    min-width: 0;
+}
+.gpt-recharge-progress-rail {
+    min-width: 0;
+    align-self: stretch;
+    padding: var(--space-24);
+    border-left: 1px solid var(--line-subtle);
+}
+.gpt-recharge-progress-toolbar,
+.gpt-recharge-progress-tools {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+}
+.gpt-recharge-progress-toolbar {
+    margin-bottom: var(--space-24);
+}
+.gpt-recharge-progress-tools .gpt-recharge-text-button {
+    min-height: 44px;
+}
+.gpt-recharge-sync {
+    color: var(--muted);
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+}
+.gpt-recharge-sync[data-sync='live'] {
+    color: var(--success);
+}
+.gpt-recharge-status-heading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+}
+.gpt-recharge-status-icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--skin-control-radius);
+    background: var(--selection-soft);
+    color: var(--selection);
+}
+.gpt-recharge-progress[data-status='failed'] .gpt-recharge-status-icon {
+    color: var(--danger);
+}
+.gpt-recharge-progress[data-status='succeeded'] .gpt-recharge-status-icon {
+    color: var(--success);
+}
+.gpt-recharge-current-step {
+    display: grid;
+    gap: var(--space-4);
+}
+.gpt-recharge-current-step > span,
+.gpt-recharge-progress-updated {
+    color: var(--muted);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+.gpt-recharge-current-step strong {
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
+    font-weight: var(--font-weight-semibold);
+}
+.gpt-recharge-status-description {
+    margin: var(--space-16) 0;
+    color: var(--muted);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+}
+.gpt-recharge-timeline {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-24) 0;
+}
+.gpt-recharge-timeline li {
+    position: relative;
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--space-12);
+    padding-bottom: var(--space-24);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+}
+.gpt-recharge-timeline li:last-child {
+    padding-bottom: 0;
+}
+.gpt-recharge-timeline li:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 11px;
+    top: 24px;
+    bottom: 0;
+    border-left: 1px solid var(--line-subtle);
+}
+.gpt-recharge-timeline-marker {
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: var(--selection);
+    background: var(--selection-soft);
+}
+.gpt-recharge-timeline-marker > span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+.gpt-recharge-timeline li[data-state='complete'] .gpt-recharge-timeline-marker {
+    color: var(--success);
+}
+.gpt-recharge-timeline li[data-state='active'] {
+    font-weight: var(--font-weight-semibold);
+}
+.gpt-recharge-timeline li[data-state='pending'],
+.gpt-recharge-timeline li[data-state='missing'] {
+    color: var(--muted);
+}
+.gpt-recharge-timeline li[data-state='pending'] .gpt-recharge-timeline-marker,
+.gpt-recharge-timeline li[data-state='missing'] .gpt-recharge-timeline-marker {
+    color: var(--muted);
+    background: var(--soft);
+}
+.gpt-recharge-timeline-time {
+    color: var(--muted);
+    padding-top: var(--space-4);
+    font-weight: var(--font-weight-normal);
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+}
+.gpt-recharge-progress-empty {
+    display: grid;
+    align-content: start;
+    gap: var(--space-12);
+    padding-block: var(--space-24);
+    color: var(--muted);
+}
+.gpt-recharge-progress-empty h3 {
+    color: var(--text);
+}
+.gpt-recharge-progress-empty p {
+    margin: 0;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+}
+.gpt-recharge-task-details {
+    min-width: 0;
+    padding: var(--space-32);
+}
+.gpt-recharge-query .gpt-recharge-task-details {
+    padding: var(--space-24) 0 0;
+    border-top: 1px solid var(--line-subtle);
+}
+.gpt-recharge-task-details .gpt-recharge-summary {
+    padding: 0;
+    background: transparent;
+    gap: var(--space-16);
+}
+.gpt-recharge-task-details .gpt-recharge-text-button {
+    min-height: 44px;
+}
+.gpt-recharge-reference {
+    flex-wrap: wrap;
+}
+.gpt-recharge-reference dd {
+    text-align: left;
+}
+.gpt-recharge-submitted > .gpt-recharge-submit {
+    margin: 0 var(--space-32) var(--space-32);
+    width: auto;
+}
+@media (max-width: 959px) {
+    .gpt-recharge-workspace {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .gpt-recharge-left,
+    .gpt-recharge-query,
+    .gpt-recharge-submitted {
+        display: contents;
+    }
+    .gpt-recharge-tabs {
+        order: 0;
+    }
+    .gpt-recharge-query-input {
+        order: 1;
+        padding: var(--space-24) var(--space-16);
+    }
+    .gpt-recharge-progress-rail {
+        order: 2;
+        border-left: 0;
+        border-top: 1px solid var(--line-subtle);
+        padding: var(--space-24) var(--space-16);
+    }
+    .gpt-recharge-task-details,
+    .gpt-recharge-query .gpt-recharge-task-details {
+        order: 3;
+        padding: var(--space-24) var(--space-16);
     }
 }
