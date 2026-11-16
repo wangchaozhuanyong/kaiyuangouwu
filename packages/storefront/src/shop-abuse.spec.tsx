@@ -348,7 +348,7 @@ async function renderRecharge(client: GptRechargeClient, language: StorefrontLan
     );
     await vi.waitFor(async () => {
         await settle(() => Promise.resolve());
-        expect(host.querySelector('#gpt-code')).not.toBeNull();
+        expect(host.querySelector<HTMLButtonElement>('.gpt-recharge-verify')?.disabled).toBe(false);
     });
 }
 

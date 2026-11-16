@@ -217,7 +217,6 @@
 .tax-address-actions {
     margin-inline: var(--space-card);
     padding-top: var(--space-16);
-    border-top: 1px solid var(--line-subtle);
 }
 .tax-address-action-row {
     gap: var(--space-12);
@@ -351,7 +350,6 @@
     padding: var(--space-8);
     vertical-align: middle;
     overflow-wrap: anywhere;
-    border-bottom: 1px solid var(--line-subtle);
 }
 .tax-address-record-time {
     color: var(--muted);
@@ -375,7 +373,6 @@
 }
 .tax-address-record-detail {
     padding-block: var(--space-16);
-    border-bottom: 1px solid var(--line-subtle);
 }
 .tax-address-pagination,
 .tax-address-pagination-controls {
@@ -526,7 +523,6 @@
         grid-template-columns: minmax(0, 1fr) auto;
         column-gap: var(--space-8);
         padding-block: var(--space-12);
-        border-bottom: 1px solid var(--line-subtle);
     }
     .tax-address-history-row td {
         padding: var(--space-4) 0;
