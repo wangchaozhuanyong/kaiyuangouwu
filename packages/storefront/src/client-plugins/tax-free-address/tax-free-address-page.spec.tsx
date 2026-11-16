@@ -113,6 +113,34 @@ describe('anonymous address tool with the real root QueryClient', () => {
         expect(f.node.textContent).toContain('Available in');
         expect(f.writes).toHaveLength(1);
     });
+    it.each([
+        ['复制地址', '123 Example St', '地址已复制'],
+        ['复制城市', 'Manchester', '城市已复制'],
+        ['复制邮编', '03101', '邮编已复制'],
+    ])('copies only the selected field with feedback: %s', async (label, value, feedback) => {
+        const f = await fixture();
+        await actOnce(() => f.button('提取地址').click());
+        await flush();
+        const button = f.node.querySelector<HTMLButtonElement>(`.tax-address-result [aria-label="${label}"]`);
+        if (!button) throw new Error('Missing field copy button: ' + label);
+        await actOnce(() => button.click());
+        expect(writeText).toHaveBeenCalledExactlyOnceWith(value);
+        expect(f.node.querySelector('[role="status"]')?.textContent).toBe(feedback);
+        expect(button.parentElement?.textContent).toContain('已复制');
+        expect(f.writes).toHaveLength(1);
+    });
+    it('shows a failure rather than copied feedback when a field copy is denied', async () => {
+        const f = await fixture();
+        await actOnce(() => f.button('提取地址').click());
+        await flush();
+        writeText.mockRejectedValueOnce(new Error('clipboard denied'));
+        const button = f.node.querySelector<HTMLButtonElement>('.tax-address-result [aria-label="复制邮编"]');
+        if (!button) throw new Error('Missing ZIP code copy button');
+        await actOnce(() => button.click());
+        expect(f.node.querySelector('[role="status"]')?.textContent).toContain('复制失败');
+        expect(button.parentElement?.textContent).not.toContain('已复制');
+        expect(f.writes).toHaveLength(1);
+    });
     it('keeps an in-flight write locked through unmount/language switch and saves the late receipt', async () => {
         let resolve!: (result: TaxFreeAddressClaim) => void;
         const f = await fixture(
