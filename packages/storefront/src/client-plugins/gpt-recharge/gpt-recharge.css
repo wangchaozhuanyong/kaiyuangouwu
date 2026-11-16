@@ -577,7 +577,6 @@
     min-width: 0;
     align-self: stretch;
     padding: var(--space-24);
-    border-left: 1px solid var(--line-subtle);
 }
 .gpt-recharge-progress-toolbar,
 .gpt-recharge-progress-tools {
@@ -661,14 +660,6 @@
 .gpt-recharge-timeline li:last-child {
     padding-bottom: 0;
 }
-.gpt-recharge-timeline li:not(:last-child)::before {
-    content: '';
-    position: absolute;
-    left: 11px;
-    top: 24px;
-    bottom: 0;
-    border-left: 1px solid var(--line-subtle);
-}
 .gpt-recharge-timeline-marker {
     width: 24px;
     height: 24px;
@@ -727,7 +718,6 @@
 }
 .gpt-recharge-query .gpt-recharge-task-details {
     padding: var(--space-24) 0 0;
-    border-top: 1px solid var(--line-subtle);
 }
 .gpt-recharge-task-details .gpt-recharge-summary {
     padding: 0;
@@ -765,8 +755,6 @@
     }
     .gpt-recharge-progress-rail {
         order: 2;
-        border-left: 0;
-        border-top: 1px solid var(--line-subtle);
         padding: var(--space-24) var(--space-16);
     }
     .gpt-recharge-task-details,
