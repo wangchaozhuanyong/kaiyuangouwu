@@ -53,6 +53,7 @@ const routePreloaders = {
         () => import('./route-pages/environment-monitor-route-page'),
         'EnvironmentMonitor',
     ),
+    mdac: preload(() => import('./route-pages/mdac-route-page'), 'Mdac'),
     'mail-query': preload(contentRoutes, 'MailQuery'),
     reviews: preload(contentRoutes, 'Reviews'),
 } satisfies Partial<Record<RouteName, RoutePreloader>>;

@@ -26,6 +26,21 @@ test('environment monitor allows only the two fixed browser IP observation origi
     }
     assert.ok(!source.slice(source.indexOf('server_name console.moyaoai.com;')).includes('api.ipify.org'));
 });
+test('MDAC allows Wasm only in the OCR worker and serves only the shipped models through the archive guard', () => {
+    const policies = source.match(/add_header Content-Security-Policy "[^"]+" always;/g);
+    assert.equal(policies.filter(policy => policy.includes('wasm-unsafe-eval')).length, 1);
+    const worker = block('location = /mdac-ocr/worker.min.js');
+    assert.match(worker, /script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'/);
+    const models = block('location ~ ^/mdac-ocr/(?:eng|ocrb_int)[.]traineddata[.]gz$');
+    assert.match(models, /try_files \$uri =404;/);
+    const archiveDeny = block(
+        'location ~* \\.(env|pem|key|crt|pfx|p12|sql|sqlite|db|log|bak|zip|tar|gz|7z|rar)$',
+    );
+    assert.ok(source.indexOf(models) < source.indexOf(archiveDeny));
+    const page = block('location ~ ^/(?:(?:zh|en)/)?mdac/?$');
+    assert.match(page, /rewrite \^ \/index[.]html last;/);
+});
+
 function block(label, after = 0) {
     const start = source.indexOf(label + ' {', after);
     assert.ok(start >= 0, 'Missing production Nginx block: ' + label);
@@ -105,6 +120,10 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         '<main>Application shell with recovery navigation</main>',
     );
     writeFileSync(path.join(fixture, 'www/style.css'), 'body { color: black; }');
+    mkdirSync(path.join(fixture, 'www/mdac-ocr'));
+    writeFileSync(path.join(fixture, 'www/mdac-ocr/worker.min.js'), 'self.onmessage = () => undefined;');
+    writeFileSync(path.join(fixture, 'www/mdac-ocr/ocrb_int.traineddata.gz'), 'synthetic model');
+    writeFileSync(path.join(fixture, 'www/mdac-ocr/unknown.gz'), 'denied fixture');
     mkdirSync(path.join(fixture, 'prior/assets'), { recursive: true });
     mkdirSync(path.join(fixture, 'www/assets'), { recursive: true });
     writeFileSync(path.join(fixture, 'prior/assets/cold-12345678.js'), 'export const version = "old";');
@@ -162,6 +181,10 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         ),
         block('location ~* (^|/)\\.'),
         block('location = /index.html'),
+        block('location ~ ^/(?:(?:zh|en)/)?mdac/?$'),
+        block('location = /mdac-ocr/worker.min.js'),
+        block('location ~ ^/mdac-ocr/(?:eng|ocrb_int)[.]traineddata[.]gz$'),
+        block('location ~* \\.(env|pem|key|crt|pfx|p12|sql|sqlite|db|log|bak|zip|tar|gz|7z|rar)$'),
         block(
             'location ~ ^/(?:((?:zh|en)(?:/|$)))?(?:home|product|category|search|services|support|legal|blog(?:/[A-Za-z0-9_-]+)?|guides/[A-Za-z0-9_-]+)?/?$',
         ),
@@ -331,6 +354,20 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         }
         assert.equal((await fetch(origin + '/.mail-tool/index.html')).status, 404);
         assert.equal((await toolRequest('console.fixture', '/standalone-mail/query', 'POST')).status, 404);
+    });
+    await t.test('serves MDAC documents and keeps OCR permissions and archives scoped', async () => {
+        for (const pathname of ['/mdac', '/zh/mdac', '/en/mdac']) {
+            const document = await fetch(origin + pathname);
+            assert.equal(document.status, 200, pathname);
+            assert.ok(!document.headers.get('content-security-policy').includes('wasm-unsafe-eval'));
+            assert.match(await document.text(), /Application shell/);
+        }
+        const worker = await fetch(origin + '/mdac-ocr/worker.min.js');
+        assert.equal(worker.status, 200);
+        assert.match(worker.headers.get('content-security-policy'), /script-src 'self' 'wasm-unsafe-eval'/);
+        const model = await fetch(origin + '/mdac-ocr/ocrb_int.traineddata.gz');
+        assert.equal(await model.text(), 'synthetic model');
+        assert.equal((await fetch(origin + '/mdac-ocr/unknown.gz')).status, 404);
     });
     await t.test('marks only credential-free public preferences as anonymous presentation', async () => {
         for (const [headers, expected] of [

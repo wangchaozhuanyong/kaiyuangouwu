@@ -293,6 +293,7 @@ export const adminApiExtensions = gql`
     extend type Query {
         storefrontVisualPreset: StorefrontVisualPreset!
         storefrontContentBlocks: [StorefrontContentBlock!]!
+        availableStorefrontClientPluginCodes: [String!]!
         storefrontContentBlock(id: ID!): StorefrontContentBlock
         storefrontContentSettings: StorefrontContentSettings!
         storefrontAuthConfiguration: StorefrontAuthConfiguration!

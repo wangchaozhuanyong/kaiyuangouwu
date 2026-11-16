@@ -68,6 +68,12 @@ const STOREFRONT_BLOCK_FIELDS = gql`
     }
 `;
 
+export const AVAILABLE_CLIENT_PLUGIN_CODES_QUERY = gql`
+    query AvailableStorefrontClientPluginCodes {
+        availableStorefrontClientPluginCodes
+    }
+`;
+
 export const STOREFRONT_CONTENT_QUERY = gql`
     ${STOREFRONT_BLOCK_FIELDS}
     query NextAdminStorefrontContent {

@@ -1,6 +1,9 @@
 export function storefrontManualChunks(id: string): string | undefined {
     const normalizedId = id.replace(/\\/g, '/');
 
+    // A lazy OCR dependency must not be emitted as another index-* homepage entry.
+    if (normalizedId.includes('/node_modules/tesseract.js/')) return 'vendor-passport-ocr';
+
     // A shared routing module stays independently cacheable as optional tools grow.
     // Overall initial-resource budgets continue to include this dependency.
     if (normalizedId.endsWith('/packages/storefront/src/storefront-router.ts')) {

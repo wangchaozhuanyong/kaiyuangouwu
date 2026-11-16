@@ -30,6 +30,7 @@ import { Route as LegalRouteImport } from './routes/legal'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LogisticsRouteImport } from './routes/logistics'
 import { Route as MailQueryRouteImport } from './routes/mail-query'
+import { Route as MdacRouteImport } from './routes/mdac'
 import { Route as NotFoundRouteImport } from './routes/not-found'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as OrderConfirmationRouteImport } from './routes/order-confirmation'
@@ -155,6 +156,11 @@ const LogisticsRoute = LogisticsRouteImport.update({
 const MailQueryRoute = MailQueryRouteImport.update({
   id: '/mail-query',
   path: '/mail-query',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MdacRoute = MdacRouteImport.update({
+  id: '/mdac',
+  path: '/mdac',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NotFoundRoute = NotFoundRouteImport.update({
@@ -285,6 +291,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/logistics': typeof LogisticsRoute
   '/mail-query': typeof MailQueryRoute
+  '/mdac': typeof MdacRoute
   '/not-found': typeof NotFoundRoute
   '/notifications': typeof NotificationsRoute
   '/order-confirmation': typeof OrderConfirmationRoute
@@ -329,6 +336,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/logistics': typeof LogisticsRoute
   '/mail-query': typeof MailQueryRoute
+  '/mdac': typeof MdacRoute
   '/not-found': typeof NotFoundRoute
   '/notifications': typeof NotificationsRoute
   '/order-confirmation': typeof OrderConfirmationRoute
@@ -374,6 +382,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/logistics': typeof LogisticsRoute
   '/mail-query': typeof MailQueryRoute
+  '/mdac': typeof MdacRoute
   '/not-found': typeof NotFoundRoute
   '/notifications': typeof NotificationsRoute
   '/order-confirmation': typeof OrderConfirmationRoute
@@ -420,6 +429,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/logistics'
     | '/mail-query'
+    | '/mdac'
     | '/not-found'
     | '/notifications'
     | '/order-confirmation'
@@ -464,6 +474,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/logistics'
     | '/mail-query'
+    | '/mdac'
     | '/not-found'
     | '/notifications'
     | '/order-confirmation'
@@ -508,6 +519,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/logistics'
     | '/mail-query'
+    | '/mdac'
     | '/not-found'
     | '/notifications'
     | '/order-confirmation'
@@ -553,6 +565,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   LogisticsRoute: typeof LogisticsRoute
   MailQueryRoute: typeof MailQueryRoute
+  MdacRoute: typeof MdacRoute
   NotFoundRoute: typeof NotFoundRoute
   NotificationsRoute: typeof NotificationsRoute
   OrderConfirmationRoute: typeof OrderConfirmationRoute
@@ -723,6 +736,13 @@ declare module '@tanstack/react-router' {
       path: '/mail-query'
       fullPath: '/mail-query'
       preLoaderRoute: typeof MailQueryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mdac': {
+      id: '/mdac'
+      path: '/mdac'
+      fullPath: '/mdac'
+      preLoaderRoute: typeof MdacRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/not-found': {
@@ -897,6 +917,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   LogisticsRoute: LogisticsRoute,
   MailQueryRoute: MailQueryRoute,
+  MdacRoute: MdacRoute,
   NotFoundRoute: NotFoundRoute,
   NotificationsRoute: NotificationsRoute,
   OrderConfirmationRoute: OrderConfirmationRoute,

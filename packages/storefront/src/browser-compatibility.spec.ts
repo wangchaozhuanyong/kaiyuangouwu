@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { readStorefrontStylesheet } from './test-stylesheet';
 
 const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const stylesheet = readStorefrontStylesheet();
+const stylesheet = readStorefrontStylesheet(['./styles/sheet.css']);
 const viteConfig = readFileSync(new URL('../vite.config.ts', import.meta.url), 'utf8');
 const legacyGuard = readFileSync(new URL('../public/legacy-browser-guard.js', import.meta.url), 'utf8');
 const retiredWorker = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
@@ -99,10 +99,14 @@ describe('browser compatibility policy', () => {
 
     it('keeps page and sheet geometry inside the viewport', () => {
         expect(stylesheet).toMatch(/html\s*\{[\s\S]*?overflow-x:\s*clip;/u);
-        expect(stylesheet).toMatch(/\.sheet-layer\s*\{[^}]*width:\s*100vw;[^}]*position:\s*fixed;/u);
         expect(stylesheet).toMatch(
-            /@media \(min-width:\s*1024px\)[\s\S]*?\.sheet-layer\s*\{[^}]*left:\s*50%;[^}]*transform:\s*translateX\(-50%\);/u,
+            /\.sheet-layer\s*\{(?=[^}]*position:\s*fixed;)(?=[^}]*inset:\s*0;)[^}]*\}/u,
         );
+        const desktopLayout = readFileSync(new URL('./styles/desktop-layout.css', import.meta.url), 'utf8');
+        const desktopSheet = desktopLayout.match(/^    \.sheet-layer\s*\{([^}]*)\}/mu)?.[1];
+        expect(desktopSheet).toMatch(/width:\s*min\(100%,\s*var\(--app-width\)\);/u);
+        expect(desktopSheet).toMatch(/left:\s*50%;/u);
+        expect(desktopSheet).toMatch(/transform:\s*translateX\(-50%\);/u);
     });
 
     it('uses the tablet canvas before switching to the desktop shell', () => {

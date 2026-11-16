@@ -30,6 +30,7 @@ import { AdminField } from '../../components/AdminField';
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
+    AVAILABLE_CLIENT_PLUGIN_CODES_QUERY,
     CREATE_STOREFRONT_BLOCK_MUTATION,
     STOREFRONT_CONTENT_QUERY,
     STOREFRONT_PLUGIN_COLLECTIONS_QUERY,
@@ -78,6 +79,16 @@ export function ClientPluginsModule() {
     const [reviewedImageKey, setReviewedImageKey] = useState<string | null>(null);
     const [collectionSearch, setCollectionSearch] = useState('');
     const content = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, {});
+    const availability = useQuery<{ availableStorefrontClientPluginCodes: string[] }>(
+        AVAILABLE_CLIENT_PLUGIN_CODES_QUERY,
+        {},
+    );
+    const visibleCatalog = catalog.filter(
+        plugin =>
+            plugin.code !== 'mdac-entry' ||
+            (!availability.error &&
+                availability.data?.availableStorefrontClientPluginCodes?.includes(plugin.code)),
+    );
     const sourceBlock = content.data?.storefrontContentBlocks.find(
         block => block.type === 'CLIENT_PLUGINS' && block.code === 'storefront-client-plugins',
     );
@@ -271,6 +282,17 @@ export function ClientPluginsModule() {
                         我确认移除所选插件时会清除其中已设置的 {imageChanges.length} 处图片
                     </label>
                 )}
+                {availability.error && (
+                    <Message kind="error" onClose={() => void availability.refetch()}>
+                        插件开放范围读取失败，受限插件暂不展示；点击此提示重试
+                    </Message>
+                )}
+                {installedCodes.has('mdac-entry') && (
+                    <p className="rounded-lg bg-slate-100 p-3 text-xs text-slate-600">
+                        入境卡插件只管理启用状态、排序和展示位置。旅客资料保留在旅客自己的浏览器，
+                        不上传商城、不写入商城数据库，后台不提供旅客资料查询或导出。
+                    </p>
+                )}
                 {collections.error && (
                     <Message kind="error" onClose={() => void collections.refetch()}>
                         {toUserFacingError(
@@ -285,7 +307,7 @@ export function ClientPluginsModule() {
                         {content.data ? getChannelDisplayName(content.data.activeChannel) : '—'}
                     </strong>
                     <span className="rounded bg-slate-100 px-2 py-1 text-slate-600">
-                        {catalog.length} 个已发布官方插件
+                        {visibleCatalog.length} 个已发布官方插件
                     </span>
                     <span className="rounded bg-blue-50 px-2 py-1 font-bold text-blue-700">
                         {installedCodes.size} 个已装配
@@ -330,6 +352,7 @@ export function ClientPluginsModule() {
                                                     item={item}
                                                     index={index}
                                                     count={draft.items.length}
+                                                    locked={pending || !canSave}
                                                     collections={collectionOptions}
                                                     collectionTotal={
                                                         collections.data?.collections.totalItems ?? 0
@@ -386,7 +409,7 @@ export function ClientPluginsModule() {
                                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                             可用官方插件库
                                             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                                                {catalog.length} 个可用
+                                                {visibleCatalog.length} 个可用
                                             </span>
                                             <FeatureHelpButton
                                                 topic="plugins.platform"
@@ -397,7 +420,7 @@ export function ClientPluginsModule() {
                                     </div>
                                 </div>
                                 <div className="admin-plugin-library-grid">
-                                    {catalog.map(definition => (
+                                    {visibleCatalog.map(definition => (
                                         <PluginCard
                                             key={definition.code}
                                             definition={definition}
@@ -488,6 +511,7 @@ function InstalledEditor({
     item,
     index,
     count,
+    locked,
     collections,
     collectionTotal,
     collectionsLoading,
@@ -500,6 +524,7 @@ function InstalledEditor({
     item: StorefrontContentItem;
     index: number;
     count: number;
+    locked: boolean;
     collections: CollectionResult['collections']['items'];
     collectionTotal: number;
     collectionsLoading: boolean;
@@ -527,6 +552,15 @@ function InstalledEditor({
                     <p className="mt-1 text-[10px] text-slate-400">
                         {getClientPluginDisplay(pluginCode(item)).description}
                     </p>
+                    <label className="mt-1 flex min-h-11 cursor-pointer items-center gap-2 text-[10px] font-normal text-slate-500">
+                        <AdminInput
+                            type="checkbox"
+                            checked={item.enabled}
+                            disabled={locked}
+                            onChange={event => onChange({ ...item, enabled: event.target.checked })}
+                        />
+                        启用插件
+                    </label>
                 </div>
                 <div className="flex shrink-0 gap-1">
                     <IconButton
@@ -561,7 +595,7 @@ function InstalledEditor({
                     </AdminSelect>
                 </Field>
                 {placement !== 'BUSINESS_SERVICES_MAIN' && (
-                    <div className="relative">
+                    <div className="min-w-0">
                         <Field label="适用商品分类">
                             <AdminSelect
                                 value={scope}
@@ -577,7 +611,7 @@ function InstalledEditor({
                                 <option value="SELECTED">仅指定分类</option>
                             </AdminSelect>
                         </Field>
-                        <label className="mt-1 flex min-h-11 cursor-pointer items-center gap-2 text-[10px] font-normal text-slate-500 sm:absolute sm:right-0 sm:top-0 sm:mt-0 sm:min-h-6">
+                        <label className="mt-1 flex min-h-11 cursor-pointer items-center gap-2 text-[10px] font-normal text-slate-500">
                             <AdminInput
                                 type="checkbox"
                                 checked={pluginIncludeChildren(item)}

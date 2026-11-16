@@ -1269,6 +1269,9 @@ const data: Record<string, unknown> = {
           : [],
     apiKeys: empty,
     activeAdministrator: null,
+    availableStorefrontClientPluginCodes: storefrontClientPluginCatalog
+        .filter(plugin => plugin.code !== 'mdac-entry' || params.has('mdac'))
+        .map(plugin => plugin.code),
     storefrontContentBlocks:
         (view === 'plugins' || view === 'split') && !params.has('empty')
             ? [
@@ -1283,20 +1286,22 @@ const data: Record<string, unknown> = {
                       position: 10001,
                       settings: { version: 1 },
                       translations: [],
-                      items: storefrontClientPluginCatalog.map((plugin, i) => ({
-                          id: `plugin-${i}`,
-                          enabled: true,
-                          position: i,
-                          targetType: 'NONE',
-                          translations: [],
-                          settings: {
-                              pluginCode: plugin.code,
-                              placement: plugin.defaultPlacement,
-                              categoryScope: 'ALL',
-                              categoryIds: [],
-                              includeChildren: true,
-                          },
-                      })),
+                      items: storefrontClientPluginCatalog
+                          .filter(plugin => plugin.code !== 'mdac-entry' || params.has('mdac'))
+                          .map((plugin, i) => ({
+                              id: `plugin-${i}`,
+                              enabled: true,
+                              position: i,
+                              targetType: 'NONE',
+                              translations: [],
+                              settings: {
+                                  pluginCode: plugin.code,
+                                  placement: plugin.defaultPlacement,
+                                  categoryScope: 'ALL',
+                                  categoryIds: [],
+                                  includeChildren: true,
+                              },
+                          })),
                   },
               ]
             : [],
