@@ -103,6 +103,7 @@ export class AdminTwoFactorResolver {
                 authOptions: this.config.authOptions,
                 sessionToken: result.session.token,
                 rememberMe: result.rememberMe ?? false,
+                cookieMaxAge: Math.max(0, result.session.expires.getTime() - Date.now()),
             });
         }
         return result;

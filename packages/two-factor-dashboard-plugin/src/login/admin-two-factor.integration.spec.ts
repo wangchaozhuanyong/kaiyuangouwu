@@ -1,4 +1,5 @@
 import {
+    AuthenticatedSession,
     Channel,
     ConfigService,
     Customer,
@@ -36,8 +37,16 @@ import {
 } from './admin-two-factor.entity';
 import { AdminTwoFactorService } from './admin-two-factor.service';
 
-const begin =
-    'mutation($u:String!,$p:String!){adminBeginLogin(username:$u,password:$p,rememberMe:false){status challengeToken expiresAt message}}';
+const begin = `
+    mutation($u: String!, $p: String!, $rememberMe: Boolean! = false) {
+        adminBeginLogin(username: $u, password: $p, rememberMe: $rememberMe) {
+            status
+            challengeToken
+            expiresAt
+            message
+        }
+    }
+`;
 const complete =
     'mutation($t:String!,$c:String!){adminCompleteTwoFactorLogin(challengeToken:$t,code:$c){status message}}';
 const status = '{adminTwoFactorStatus{enabled available recoveryCodesRemaining}}';
@@ -135,6 +144,44 @@ describe.sequential('administrator login 2FA through real GraphQL and SQL', () =
     afterAll(async () => {
         await environment?.server.destroy();
         if (directory) await rm(directory, { recursive: true, force: true });
+    });
+
+    it('keeps only remembered login valid during idle time and expires it ten days after sign-in', async () => {
+        const day = 24 * 60 * 60 * 1000;
+        const remembered = await request(begin, { u: username, p: password, rememberMe: true });
+        const ordinary = await request(begin, { u: username, p: password });
+        expect(remembered.data.adminBeginLogin.status).toBe('SUCCESS');
+        expect(ordinary.data.adminBeginLogin.status).toBe('SUCCESS');
+        const sessions = connection.rawConnection.getRepository(AuthenticatedSession);
+        const session = await sessions.findOneByOrFail({ token: remembered.token });
+        const now = Date.now();
+        expect(session.expires.getTime() - now).toBeGreaterThan(10 * day - 10_000);
+        expect(session.expires.getTime() - now).toBeLessThanOrEqual(10 * day);
+
+        // Age the saved sessions without replacing Date in TypeORM.
+        const cache = environment.server.app.get(ConfigService).authOptions.sessionCacheStrategy;
+        const expiresAfterIdleTime = new Date(now + day);
+        await sessions.update(session.id, {
+            createdAt: new Date(now - 9 * day),
+            expires: expiresAfterIdleTime,
+        });
+        await sessions.update({ token: ordinary.token }, { expires: new Date(now - day) });
+        await cache.clear();
+        expect((await request('{me{id}}', {}, ordinary.token)).errors).toBeDefined();
+        expect((await request('{me{id}}', {}, remembered.token)).data).toMatchObject({
+            me: { id: expect.any(String) },
+        });
+        expect((await sessions.findOneByOrFail({ id: session.id })).expires).toEqual(expiresAfterIdleTime);
+
+        await sessions.update(session.id, {
+            createdAt: new Date(now - 10 * day - 1000),
+            expires: new Date(now - 1000),
+        });
+        expect((await request('{me{id}}', {}, remembered.token)).errors).toBeDefined();
+
+        const active = await request(begin, { u: username, p: password, rememberMe: true });
+        expect((await request('mutation{logout{success}}', {}, active.token)).data.logout.success).toBe(true);
+        expect((await request('{me{id}}', {}, active.token)).errors).toBeDefined();
     });
 
     it('keeps unenrolled login working and requires password plus a valid setup code to enable', async () => {

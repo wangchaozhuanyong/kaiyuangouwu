@@ -37,6 +37,10 @@ import { OrderService } from './order.service';
 
 const administratorSessionIdleMs = ms('30m');
 const administratorSessionMaxMs = ms('12h');
+const rememberedAdministratorSessionMs = ms('10d');
+// Identify the fixed-lifetime policy on subsequent requests without changing the database schema.
+// The token still contains the full 32 random bytes and must match a stored session.
+const rememberedAdministratorTokenPrefix = 'remembered-admin-';
 const administratorSessionRefreshIntervalMs = ms('1m');
 
 /**
@@ -124,8 +128,8 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
         user: User,
         authenticationStrategyName: string,
         sessionToken?: string,
+        { rememberAdministrator = false }: { rememberAdministrator?: boolean } = {},
     ): Promise<AuthenticatedSession> {
-        const token = sessionToken ?? (await this.generateSessionToken());
         const guestOrder = await this.orderService.getActiveOrderFromSession(ctx, user.id);
         const existingOrder = await this.orderService.getActiveOrderForUser(ctx, user.id);
         const activeOrder = await this.orderService.mergeOrders(ctx, user, guestOrder, existingOrder);
@@ -133,12 +137,16 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
         const isApiKey = authenticationStrategyName === API_KEY_AUTH_STRATEGY_NAME;
         const isAdministrator =
             !isApiKey && (ctx.apiType === 'admin' || (await this.isAdministratorUser(user.id)));
+        const remembered =
+            rememberAdministrator && ctx.apiType === 'admin' && isAdministrator && !sessionToken;
+        const tokenPrefix = remembered ? rememberedAdministratorTokenPrefix : '';
+        const token = sessionToken ?? tokenPrefix + (await this.generateSessionToken());
         const duration = isApiKey
             ? API_KEY_AUTH_STRATEGY_DEFAULT_DURATION_MS
             : isAdministrator
               ? Math.min(this.sessionDurationInMs, administratorSessionIdleMs)
               : this.sessionDurationInMs;
-        const expires = this.getExpiryDate(duration);
+        const expires = this.getExpiryDate(remembered ? rememberedAdministratorSessionMs : duration);
 
         const authenticatedSession = await this.connection.getRepository(ctx, AuthenticatedSession).save(
             new AuthenticatedSession({
@@ -150,9 +158,7 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
                 invalidated: false,
             }),
         );
-        const deadline = isAdministrator
-            ? authenticatedSession.createdAt.getTime() + administratorSessionMaxMs
-            : null;
+        const deadline = this.administratorDeadline(authenticatedSession, isAdministrator);
         await this.withTimeout(
             this.sessionCacheStrategy.set(this.serializeSession(authenticatedSession, deadline)),
         );
@@ -228,8 +234,9 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
             const isAdministrator =
                 this.isAuthenticatedSession(session) &&
                 session.authenticationStrategy !== API_KEY_AUTH_STRATEGY_NAME &&
-                (await this.isAdministratorUser(session.user.id));
-            const deadline = isAdministrator ? session.createdAt.getTime() + administratorSessionMaxMs : null;
+                (session.token.startsWith(rememberedAdministratorTokenPrefix) ||
+                    (await this.isAdministratorUser(session.user.id)));
+            const deadline = this.administratorDeadline(session, isAdministrator);
             if (deadline == null) {
                 await this.updateSessionExpiry(session);
             } else {
@@ -257,6 +264,13 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
         return this.connection.rawConnection.getRepository(Administrator).existsBy({ user: { id: userId } });
     }
 
+    private administratorDeadline(session: Session, isAdministrator: boolean): number | null {
+        if (!isAdministrator) return null;
+        return session.token.startsWith(rememberedAdministratorTokenPrefix)
+            ? session.expires.getTime()
+            : session.createdAt.getTime() + administratorSessionMaxMs;
+    }
+
     private async checkAdministratorExpiry(
         session: Pick<CachedSession, 'id' | 'token' | 'expires'>,
         deadline: number,
@@ -267,6 +281,7 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
         // Legacy administrator sessions were issued with the general (typically
         // one-year) duration. Require fresh authentication rather than renew them.
         if (currentExpiry <= now.getTime() || currentExpiry > deadline) return;
+        if (session.token.startsWith(rememberedAdministratorTokenPrefix)) return session.expires;
         const idleDuration = Math.min(this.sessionDurationInMs, administratorSessionIdleMs);
         const nextExpiry = new Date(Math.min(deadline, now.getTime() + idleDuration));
         const minimumExtension = Math.min(administratorSessionRefreshIntervalMs, idleDuration / 2);

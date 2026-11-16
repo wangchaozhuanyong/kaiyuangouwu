@@ -1,5 +1,5 @@
-import { expect as browserExpect, chromium } from '@playwright/test';
-import { mkdir } from 'node:fs/promises';
+import { type BrowserContext, expect as browserExpect, chromium, type Page } from '@playwright/test';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { createServer } from 'vite';
 
@@ -52,6 +52,7 @@ export async function runAdminTwoFactorBrowserQa(apiUrl: string, username: strin
     await vite.listen();
     const address = vite.httpServer?.address();
     if (!address || typeof address === 'string') throw new Error('Browser fixture did not start');
+    const origin = `http://127.0.0.1:${address.port}`;
     const browser = await chromium.launch({ headless: true });
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     const runtimeErrors: string[] = [];
@@ -63,10 +64,9 @@ export async function runAdminTwoFactorBrowserQa(apiUrl: string, username: strin
         await page.screenshot({ path: path.join(screenshotDir, name), fullPage: true });
     };
     try {
-        await page.goto(`http://127.0.0.1:${address.port}/login`);
-        await page.getByLabel('管理员账号', { exact: true }).fill(username);
-        await page.getByLabel('登录密码', { exact: true }).fill(password);
-        await page.getByRole('button', { name: '进入管理后台', exact: true }).click();
+        await verifyBrowserRestart(origin, username, password);
+        await page.goto(`${origin}/login`);
+        await submitPassword(page, username, password);
         await browserExpect(page.getByText('未开启', { exact: true })).toBeVisible();
         await page.getByRole('button', { name: '开启 2FA', exact: true }).click();
         await page.getByLabel('当前登录密码', { exact: true }).fill(password);
@@ -91,9 +91,7 @@ export async function runAdminTwoFactorBrowserQa(apiUrl: string, username: strin
         browserExpect((await download).suggestedFilename()).toBe('vendure-2fa-recovery-codes.txt');
         await page.getByRole('checkbox', { name: '我已妥善保存恢复码' }).check();
         await page.getByRole('button', { name: '返回登录', exact: true }).click();
-        await page.getByLabel('管理员账号', { exact: true }).fill(username);
-        await page.getByLabel('登录密码', { exact: true }).fill(password);
-        await page.getByRole('button', { name: '进入管理后台', exact: true }).click();
+        await submitPassword(page, username, password);
         await browserExpect(page.getByLabel('验证器 2FA 动态码', { exact: true })).toBeVisible();
         await page.setViewportSize({ width: 390, height: 844 });
         browserExpect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -105,6 +103,7 @@ export async function runAdminTwoFactorBrowserQa(apiUrl: string, username: strin
         await page.getByRole('button', { name: '验证并登录', exact: true }).click();
         await browserExpect(page.getByText('已开启', { exact: true })).toBeVisible();
         await browserExpect(page.getByText('剩余恢复码：9 个')).toBeVisible();
+        await expectAdminCookieDuration(page.context());
         await snapshot('account-security-mobile.png');
         await page.setViewportSize({ width: 1280, height: 900 });
         await snapshot('account-security-desktop.png');
@@ -118,4 +117,75 @@ export async function runAdminTwoFactorBrowserQa(apiUrl: string, username: strin
         await browser.close();
         await vite.close();
     }
+}
+
+async function verifyBrowserRestart(origin: string, username: string, password: string) {
+    const testRoot = path.resolve(__dirname, '../../../../.tmp');
+    await mkdir(testRoot, { recursive: true });
+    const profile = await mkdtemp(path.join(testRoot, 'admin-remember-login-'));
+    const launch = () =>
+        chromium.launchPersistentContext(profile, { headless: true, viewport: { width: 390, height: 844 } });
+    let context: BrowserContext | undefined;
+    try {
+        context = await launch();
+        const form = context.pages()[0];
+        await form.goto(`${origin}/login`);
+        const rememberLogin = form.getByRole('checkbox', { name: '在此设备上保持登录' });
+        await browserExpect(rememberLogin).toBeVisible();
+        await browserExpect(rememberLogin).toBeChecked();
+        browserExpect(await form.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+            true,
+        );
+        await submitPassword(form, username, password);
+        await browserExpect(form.getByText('未开启', { exact: true })).toBeVisible();
+        await expectAdminCookieDuration(context);
+
+        await context.close();
+        context = await launch();
+        const reopened = context.pages()[0];
+        await reopened.goto(`${origin}/dashboard`);
+        await browserExpect(reopened.getByText('未开启', { exact: true })).toBeVisible();
+
+        await reopened.goto(`${origin}/login`);
+        await reopened.getByRole('checkbox', { name: '在此设备上保持登录' }).uncheck();
+        await submitPassword(reopened, username, password);
+        await browserExpect(reopened.getByText('未开启', { exact: true })).toBeVisible();
+        const ordinaryCookies = (await context.cookies()).filter(cookie => cookie.httpOnly);
+        browserExpect(ordinaryCookies.length).toBeGreaterThan(0);
+        browserExpect(ordinaryCookies.every(cookie => cookie.expires === -1)).toBe(true);
+
+        await context.close();
+        context = await launch();
+        const afterOrdinaryLogin = context.pages()[0];
+        await afterOrdinaryLogin.goto(`${origin}/login`);
+        const authenticated = await afterOrdinaryLogin.evaluate(async () => {
+            const response = await fetch('/admin-api', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: '{me{id}}' }),
+            });
+            return Boolean((await response.json()).data?.me?.id);
+        });
+        browserExpect(authenticated).toBe(false);
+    } finally {
+        await context?.close();
+        await rm(profile, { recursive: true, force: true });
+    }
+}
+
+async function expectAdminCookieDuration(context: BrowserContext) {
+    const now = Date.now() / 1000;
+    const daySeconds = 24 * 60 * 60;
+    const authCookies = (await context.cookies()).filter(cookie => cookie.httpOnly);
+    browserExpect(authCookies.length).toBeGreaterThan(0);
+    for (const cookie of authCookies) {
+        browserExpect(cookie.expires - now).toBeGreaterThan(10 * daySeconds - 30);
+        browserExpect(cookie.expires - now).toBeLessThanOrEqual(10 * daySeconds + 1);
+    }
+}
+
+async function submitPassword(page: Page, username: string, password: string) {
+    await page.getByLabel('管理员账号', { exact: true }).fill(username);
+    await page.getByLabel('登录密码', { exact: true }).fill(password);
+    await page.getByRole('button', { name: '进入管理后台', exact: true }).click();
 }
