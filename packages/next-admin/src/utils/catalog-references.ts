@@ -52,7 +52,7 @@ export function catalogReferenceRequest(
                 : kind === 'productVariants'
                   ? 'id name sku enabled product { id name enabled } customFields { fulfillmentType digitalDeliveryMode }'
                   : 'id name enabled channels { id code displayName isDefault }';
-        const variables = Array.from({ length: count }, (_, index) => `$ids${index}: [ID!]!`).join(', ');
+        const variables = Array.from({ length: count }, (_, index) => `$ids${index}: [String!]!`).join(', ');
         const selections = Array.from(
             { length: count },
             (_, index) =>

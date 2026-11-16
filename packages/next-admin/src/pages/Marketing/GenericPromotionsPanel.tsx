@@ -8,7 +8,6 @@ import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useServerDraft } from '../../hooks/use-server-draft';
 import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
-import { getLocalizedEntityTranslation } from '../../utils/localized-entity-display';
 
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
@@ -57,6 +56,8 @@ interface PromotionDraft {
     conditions: OperationValue[];
     actions: OperationValue[];
 }
+const SOURCE_LANGUAGE_CODE = 'zh_Hans';
+
 const emptyDraft = (): PromotionDraft => ({
     name: '',
     description: '',
@@ -394,7 +395,6 @@ export function GenericPromotionsPanel() {
                     id={editingId}
                     conditions={query.data.promotionConditions}
                     actions={query.data.promotionActions}
-                    languageCode={query.data.activeChannel.defaultLanguageCode}
                     onClose={() => setEditingId(null)}
                     onSaved={async message => {
                         setEditingId(null);
@@ -428,7 +428,6 @@ export function PromotionEditor({
     id,
     conditions,
     actions,
-    languageCode,
     onClose,
     onSaved,
     onError,
@@ -436,7 +435,6 @@ export function PromotionEditor({
     id: string | 'new';
     conditions: OperationDefinition[];
     actions: OperationDefinition[];
-    languageCode: string;
     onClose: () => void;
     onSaved: (message: string) => Promise<void>;
     onError: (message: string) => void;
@@ -462,7 +460,7 @@ export function PromotionEditor({
     const save = async () => {
         if (draftOwner.sourceChanged) return;
         try {
-            const input = promotionInput(draft, languageCode, conditions, actions);
+            const input = promotionInput(draft, conditions, actions);
             const response =
                 id === 'new'
                     ? await createPromotion({ variables: { input } })
@@ -740,7 +738,6 @@ function OperationList({
 }
 function promotionInput(
     draft: PromotionDraft,
-    languageCode: string,
     conditionDefs: OperationDefinition[],
     actionDefs: OperationDefinition[],
 ) {
@@ -759,7 +756,7 @@ function promotionInput(
         perCustomerUsageLimit: integerOrNull(draft.perCustomerUsageLimit, '每客户次数'),
         conditions: validateOperations(draft.conditions, conditionDefs),
         actions: validateOperations(draft.actions, actionDefs),
-        translations: [{ languageCode, name, description: draft.description.trim() }],
+        translations: [{ languageCode: SOURCE_LANGUAGE_CODE, name, description: draft.description.trim() }],
     };
 }
 function validateOperations(values: OperationValue[], definitions: OperationDefinition[]) {
@@ -792,11 +789,13 @@ function validateOperations(values: OperationValue[], definitions: OperationDefi
     });
 }
 function detailToDraft(value: NonNullable<GenericPromotionDetailData['promotion']>): PromotionDraft {
-    const translation = getLocalizedEntityTranslation(value.translations);
+    const translation =
+        value.translations.find(item => item.languageCode === SOURCE_LANGUAGE_CODE) ??
+        value.translations.find(item => item.languageCode === 'en');
     return {
         id: value.id,
-        name: translation?.name ?? '',
-        description: translation?.description ?? '',
+        name: translation?.name ?? value.name,
+        description: translation?.description ?? value.description,
         enabled: value.enabled,
         couponCode: value.couponCode ?? '',
         startsAt: dateInput(value.startsAt),

@@ -1,8 +1,34 @@
-import { print } from 'graphql';
+import { Kind, parse, print } from 'graphql';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { catalogReferenceRequest, resolveCatalogReferences } from './catalog-references';
 
 describe('complete saved catalog identities', () => {
+    it('uses the Admin API ID filter type for every catalog lookup', () => {
+        const schema = parse(
+            readFileSync(
+                new URL('../../../core/src/api/schema/common/common-types.graphql', import.meta.url),
+                'utf8',
+            ),
+        );
+        const operators = schema.definitions.find(
+            definition =>
+                definition.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION &&
+                definition.name.value === 'IDOperators',
+        );
+        if (operators?.kind !== Kind.INPUT_OBJECT_TYPE_DEFINITION)
+            throw new Error('Admin API IDOperators is missing');
+        const inputType = operators?.fields?.find(field => field.name.value === 'in')?.type;
+        if (!inputType) throw new Error('Admin API IDOperators.in is missing');
+        for (const kind of ['products', 'productVariants', 'catalogProductChannelAssignments'] as const) {
+            const { document } = catalogReferenceRequest(['synthetic-id'], kind);
+            const operation = document.definitions.find(node => node.kind === Kind.OPERATION_DEFINITION);
+            expect(operation?.variableDefinitions?.map(variable => print(variable.type))).toEqual([
+                `${print(inputType)}!`,
+            ]);
+        }
+    });
+
     it('resolves every saved identity in independent batches of 100 and keeps original order', () => {
         const ids = Array.from({ length: 205 }, (_, index) => String(index + 1));
         const request = catalogReferenceRequest([...ids, '1'], 'products');

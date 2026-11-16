@@ -1,3 +1,4 @@
+import { useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
     AlertTriangle,
@@ -5,6 +6,7 @@ import {
     ChevronRight,
     Download,
     FileJson,
+    History,
     KeyRound,
     LoaderCircle,
     LogOut,
@@ -15,12 +17,22 @@ import {
     UserX,
     X,
 } from 'lucide-react';
-import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import {
+    ChangeEvent,
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+    useSyncExternalStore,
+    type ComponentProps,
+} from 'react';
 
 import { serviceMessageDisplay } from '../../common/src/display-localization';
 
 import './styles/account-security.css';
 
+import { AvatarHistorySheet, type AvatarHistoryActions } from './account-avatar-history';
+import { ShopApi } from './api';
 import { CustomerAvatar } from './components/common/customer-avatar';
 import { GoogleAuthButton } from './google-auth-button';
 import { isInputMethodKey } from './input-method';
@@ -59,6 +71,108 @@ export function customerAvatarValidationMessage(
     return null;
 }
 
+type AvatarChange = { upload: File } | { restore: string } | 'remove';
+type ManagedAccountSecurityProps = Omit<
+    ComponentProps<typeof AccountSecurityPage>,
+    'onAvatarChange' | 'onAvatarRemove' | 'avatarHistory' | 'avatarBusy'
+> & {
+    api: Pick<
+        ShopApi,
+        'uploadCustomerAvatar' | 'removeCustomerAvatar' | 'customerAvatarHistory' | 'restoreCustomerAvatar'
+    >;
+    marketCode: string;
+    customerScope: QueryKey;
+    setCustomer: (update: (current: ActiveCustomer | null) => ActiveCustomer | null) => void;
+    onNotify: (message: string) => void;
+};
+
+export function ManagedAccountSecurityPage({
+    api,
+    marketCode,
+    customerScope,
+    setCustomer,
+    onNotify,
+    ...props
+}: ManagedAccountSecurityProps) {
+    const client = useQueryClient();
+    const isZh = props.language === 'zh';
+    const customerId = props.customer?.id;
+    const historyKey = [...customerScope, 'avatar-history'];
+    const write = {
+        mutationKey: ['storefront-avatar-write', marketCode, customerId],
+        exact: true,
+    };
+    const mutations = client.getMutationCache();
+    const subscribe = useCallback((listener: () => void) => mutations.subscribe(listener), [mutations]);
+    const busy = useSyncExternalStore(
+        subscribe,
+        () => client.isMutating(write) > 0,
+        () => false,
+    );
+    const changeAvatar = async (change: AvatarChange) => {
+        if (client.isMutating(write))
+            throw new Error(isZh ? '头像操作进行中' : 'A profile photo change is in progress.');
+        // The shared client keeps the write pending across route unmounts.
+        const mutation = mutations.build(client, {
+            mutationKey: write.mutationKey,
+            networkMode: 'always',
+            retry: false,
+            // @ephemeral-sensitive: selected avatar files only belong to the current upload.
+            gcTime: 0,
+            mutationFn: async () => {
+                let avatar: ActiveCustomer['avatar'] = null;
+                if (change === 'remove') {
+                    await api.removeCustomerAvatar();
+                } else {
+                    avatar =
+                        'upload' in change
+                            ? await api.uploadCustomerAvatar(change.upload)
+                            : await api.restoreCustomerAvatar(change.restore);
+                }
+                setCustomer(current =>
+                    current && current.id === customerId ? { ...current, avatar } : current,
+                );
+                void client.invalidateQueries({ queryKey: historyKey, exact: true, refetchType: 'none' });
+                onNotify(
+                    change === 'remove'
+                        ? isZh
+                            ? '头像已移除'
+                            : 'Profile photo removed'
+                        : 'restore' in change
+                          ? isZh
+                              ? '头像已恢复'
+                              : 'Profile photo restored'
+                          : isZh
+                            ? '头像已更新'
+                            : 'Profile photo updated',
+                );
+            },
+        });
+        try {
+            await mutation.execute(undefined);
+        } finally {
+            mutations.remove(mutation);
+        }
+    };
+    return (
+        <AccountSecurityPage
+            {...props}
+            avatarBusy={busy}
+            onAvatarChange={file => changeAvatar({ upload: file })}
+            onAvatarRemove={() => changeAvatar('remove')}
+            avatarHistory={
+                customerId
+                    ? {
+                          queryKey: historyKey,
+                          load: signal => api.customerAvatarHistory(signal),
+                          restore: id => changeAvatar({ restore: id }),
+                      }
+                    : undefined
+            }
+        />
+    );
+}
+
 export function AccountSecurityPage({
     customer,
     language,
@@ -67,6 +181,8 @@ export function AccountSecurityPage({
     onBack,
     onAvatarChange,
     onAvatarRemove,
+    avatarHistory,
+    avatarBusy = false,
     dataSubjectRequests = [],
     dataSubjectLoading = false,
     fraudRiskCases = [],
@@ -88,6 +204,8 @@ export function AccountSecurityPage({
     onBack: () => void;
     onAvatarChange: (file: File) => Promise<void>;
     onAvatarRemove?: () => Promise<void>;
+    avatarHistory?: AvatarHistoryActions;
+    avatarBusy?: boolean;
     dataSubjectRequests?: DataSubjectRequest[];
     dataSubjectLoading?: boolean;
     fraudRiskCases?: FraudRiskCase[];
@@ -119,6 +237,8 @@ export function AccountSecurityPage({
     const [avatarUploading, setAvatarUploading] = useState(false);
     const [avatarAction, setAvatarAction] = useState<string | null>(null);
     const [avatarError, setAvatarError] = useState<string | null>(null);
+    const [avatarHistoryOpen, setAvatarHistoryOpen] = useState(false);
+    const avatarControlsBusy = avatarBusy || avatarUploading || avatarAction !== null;
     const [privacyAction, setPrivacyAction] = useState<'export' | 'closure' | 'cancel' | null>(null);
     const [privacyDialog, setPrivacyDialog] = useState<'export' | 'closure' | null>(null);
     const privacyActionRef = useRef<'export' | 'closure' | null>(null);
@@ -333,7 +453,7 @@ export function AccountSecurityPage({
                     <button
                         type="button"
                         className="security-user-avatar"
-                        disabled={avatarUploading || avatarAction !== null}
+                        disabled={avatarControlsBusy}
                         aria-label={isZh ? '更换头像' : 'Change profile photo'}
                         aria-busy={avatarUploading}
                         aria-describedby={avatarError ? 'avatar-upload-message' : undefined}
@@ -371,7 +491,7 @@ export function AccountSecurityPage({
                     >
                         <button
                             type="button"
-                            disabled={avatarUploading || avatarAction !== null}
+                            disabled={avatarControlsBusy}
                             onClick={() => avatarInputRef.current?.click()}
                         >
                             <Camera size={12} aria-hidden="true" />
@@ -381,7 +501,7 @@ export function AccountSecurityPage({
                             <button
                                 type="button"
                                 className="is-danger"
-                                disabled={avatarUploading || avatarAction !== null}
+                                disabled={avatarControlsBusy}
                                 onClick={() => void runAvatarAction('remove', onAvatarRemove)}
                             >
                                 {avatarAction === 'remove' ? (
@@ -390,6 +510,17 @@ export function AccountSecurityPage({
                                     <Trash2 size={12} aria-hidden="true" />
                                 )}
                                 {isZh ? '移除' : 'Remove'}
+                            </button>
+                        )}
+                        {avatarHistory && (
+                            <button
+                                type="button"
+                                disabled={avatarControlsBusy}
+                                aria-haspopup="dialog"
+                                onClick={() => setAvatarHistoryOpen(true)}
+                            >
+                                <History size={12} aria-hidden="true" />
+                                {isZh ? '历史头像' : 'Photo history'}
                             </button>
                         )}
                     </div>
@@ -740,6 +871,15 @@ export function AccountSecurityPage({
                     </button>
                 </div>
             </SubpageBody>
+            {avatarHistoryOpen && avatarHistory && (
+                <AvatarHistorySheet
+                    customer={customer}
+                    language={language}
+                    actions={avatarHistory}
+                    busy={avatarControlsBusy}
+                    onClose={() => setAvatarHistoryOpen(false)}
+                />
+            )}
             {privacyDialog && (
                 <Overlay
                     className="security-privacy-dialog-backdrop"

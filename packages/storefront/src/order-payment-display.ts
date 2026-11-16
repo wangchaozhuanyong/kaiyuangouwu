@@ -1,9 +1,29 @@
+import { isConfirmedControlledTestPayment } from '../../common/src/controlled-test-payment';
+
 import { Order } from './types';
 
 export interface UsdtPaymentReceipt {
     amount: number;
     network: string;
     transactionId: string | null;
+}
+
+export function isSettledTestOrder(order: Pick<Order, 'state' | 'payments'>): boolean {
+    if (order.state === 'TestPaymentSettled') return true;
+    return (
+        order.state === 'PaymentSettled' &&
+        Boolean(
+            order.payments?.some(
+                payment =>
+                    payment.state === 'Settled' &&
+                    isConfirmedControlledTestPayment({
+                        method: payment.method,
+                        metadata: payment.metadata as
+                            { public?: { testPayment?: unknown } } | null | undefined,
+                    }),
+            ),
+        )
+    );
 }
 
 export function usdtPaymentReceipt(order: Pick<Order, 'payments'>): UsdtPaymentReceipt | null {

@@ -47,7 +47,6 @@ describe('PromotionEditor', () => {
                 id={promotion.id}
                 conditions={[]}
                 actions={[]}
-                languageCode="zh_CN"
                 onClose={() => undefined}
                 onSaved={async () => undefined}
                 onError={() => undefined}
@@ -66,7 +65,6 @@ describe('PromotionEditor', () => {
                 id={promotion.id}
                 conditions={[]}
                 actions={[]}
-                languageCode="zh_CN"
                 onClose={() => undefined}
                 onSaved={async () => undefined}
                 onError={() => undefined}
@@ -75,6 +73,42 @@ describe('PromotionEditor', () => {
         expect(html).toContain('value="TEST"');
         expect(html).not.toContain('正在读取促销规则…');
     });
+    it.each([
+        {
+            translations: [
+                { id: 'en', languageCode: 'en', name: 'English offer', description: 'Reviewed copy' },
+                { id: 'zh-hant', languageCode: 'zh_Hant', name: '繁體活動', description: '繁體中文文案' },
+                { id: 'zh', languageCode: 'zh_Hans', name: '中文活动', description: '简体中文源文案' },
+            ],
+            expectedName: '中文活动',
+        },
+        {
+            translations: [
+                { id: 'en', languageCode: 'en', name: 'English offer', description: 'Reviewed copy' },
+            ],
+            expectedName: 'English offer',
+        },
+    ])(
+        'opens the Simplified Chinese draft or the legacy translation when needed',
+        ({ translations, expectedName }) => {
+            apolloMocks.useQuery.mockReturnValue({
+                data: { promotion: { ...promotion, name: 'Localized API name', translations } },
+                loading: false,
+                refetch: vi.fn(),
+            });
+            const html = renderToStaticMarkup(
+                <PromotionEditor
+                    id={promotion.id}
+                    conditions={[]}
+                    actions={[]}
+                    onClose={() => undefined}
+                    onSaved={async () => undefined}
+                    onError={() => undefined}
+                />,
+            );
+            expect(html).toContain(`value="${expectedName}"`);
+        },
+    );
 });
 
 // The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.

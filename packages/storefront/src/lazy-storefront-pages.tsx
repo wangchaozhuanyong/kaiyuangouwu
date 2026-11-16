@@ -11,7 +11,7 @@ export const LazyOrderConfirmationPage = lazyRouteComponent(
 export const LazyCheckoutPage = lazyRouteComponent(() => import('./checkout-page'), 'CheckoutPage');
 export const LazyAccountSecurityPage = lazyRouteComponent(
     () => import('./account-security-page'),
-    'AccountSecurityPage',
+    'ManagedAccountSecurityPage',
 );
 export const LazyAddressesPage = lazyRouteComponent(() => import('./addresses-page'), 'AddressesPage');
 export const LazySharePosterModal = lazyRouteComponent(

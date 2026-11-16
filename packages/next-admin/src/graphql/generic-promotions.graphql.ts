@@ -23,7 +23,6 @@ export const GENERIC_PROMOTIONS_QUERY = gql`
         activeChannel {
             id
             code
-            defaultLanguageCode
         }
         adminPromotionManagement(options: $options, storeChannelId: $storeChannelId) {
             items {
@@ -187,7 +186,7 @@ export interface GenericPromotionListRecord {
     perCustomerUsageLimit: number | null;
 }
 export interface GenericPromotionsData {
-    activeChannel: { id: string; code: string; defaultLanguageCode: string };
+    activeChannel: { id: string; code: string };
     adminPromotionManagement: {
         items: GenericPromotionManagementRecord[];
         totalItems: number;

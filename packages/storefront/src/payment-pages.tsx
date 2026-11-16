@@ -21,7 +21,7 @@ import { languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
 import { formatDisplayMoney } from './money-display';
 import { OrderAdditionalPaymentPanel } from './order-additional-payment-panel';
-import { formatUsdtPaymentAmount, usdtPaymentReceipt } from './order-payment-display';
+import { formatUsdtPaymentAmount, isSettledTestOrder, usdtPaymentReceipt } from './order-payment-display';
 import { orderStatusRefreshInterval } from './order-refresh';
 import { isPaymentCompletedOrderState, isTestPaymentMethod, paymentAvailability } from './payment-readiness';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
@@ -1376,7 +1376,7 @@ export function OrderConfirmationPage({
             ? orderQuery.data
             : null;
     const usdtReceipt = order ? usdtPaymentReceipt(order) : null;
-    const isTestOrder = order?.state === 'TestPaymentSettled';
+    const isTestOrder = order != null && isSettledTestOrder(order);
     const isAwaitingManual = order?.state === 'AwaitingManualPayment';
     const [copiedOrderCode, setCopiedOrderCode] = useState(false);
     const needsAdditionalPayment = order?.state === 'ArrangingAdditionalPayment';
@@ -1554,7 +1554,15 @@ export function OrderConfirmationPage({
                     </div>
                     <div>
                         <dt>{isZh ? '订单状态' : 'Status'}</dt>
-                        <dd>{customerOrderStateLabel(order, language)}</dd>
+                        <dd>
+                            {customerOrderStateLabel(
+                                {
+                                    state: isTestOrder ? 'TestPaymentSettled' : order.state,
+                                    lines: order.lines,
+                                },
+                                language,
+                            )}
+                        </dd>
                     </div>
                     <div>
                         <dt>

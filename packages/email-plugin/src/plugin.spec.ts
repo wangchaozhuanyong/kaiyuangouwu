@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import {
+    AccountRegistrationEvent,
     EntityHydrator,
     EventBus,
     Injector,
@@ -11,11 +12,13 @@ import {
     LanguageCode,
     Logger,
     ModuleRef,
+    NativeAuthenticationMethod,
     Order,
     OrderStateTransitionEvent,
     PluginCommonModule,
     ProcessContext,
     RequestContext,
+    User,
     VendureEvent,
 } from '@vendure/core';
 import { ensureConfigLoaded } from '@vendure/core/dist/config/config-helpers';
@@ -28,7 +31,7 @@ import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 import { EmailProcessor } from './email-processor';
 import { EmailSendEvent } from './email-send-event';
 import { EmailEventListener } from './event-listener';
-import { orderConfirmationHandler } from './handler/default-email-handlers';
+import { emailVerificationHandler, orderConfirmationHandler } from './handler/default-email-handlers';
 import { EmailEventHandler } from './handler/event-handler';
 import { EmailPlugin } from './plugin';
 import { EmailSender } from './sender/email-sender';
@@ -175,6 +178,44 @@ describe('EmailPlugin', () => {
             _channel: { code: DEFAULT_CHANNEL_CODE },
             _languageCode: LanguageCode.en,
         } as any);
+
+        it.each([
+            { verified: true, withToken: false, sends: false },
+            { verified: true, withToken: true, sends: false },
+            { verified: false, withToken: false, sends: false },
+            { verified: false, withToken: true, sends: true },
+        ])(
+            'sends verification only for pending accounts with a native token',
+            async ({ verified, withToken, sends }) => {
+                const identifier = 'pending@example.invalid';
+                const token = 'fixture-verification';
+                const event = new AccountRegistrationEvent(
+                    ctx,
+                    new User({
+                        verified,
+                        identifier,
+                        authenticationMethods: [
+                            new NativeAuthenticationMethod({
+                                identifier,
+                                verificationToken: withToken ? token : null,
+                            }),
+                        ],
+                    }),
+                );
+                const globals = vi.fn(() => ({}));
+                const message = await emailVerificationHandler.handle(event, globals, {} as Injector);
+                if (sends) {
+                    expect(globals).toHaveBeenCalledOnce();
+                    expect(message).toMatchObject({
+                        recipient: identifier,
+                        templateVars: { verificationToken: token },
+                    });
+                } else {
+                    expect(globals).not.toHaveBeenCalled();
+                    expect(message).toBeUndefined();
+                }
+            },
+        );
 
         it('single filter', async () => {
             const handler = new EmailEventListener('test')

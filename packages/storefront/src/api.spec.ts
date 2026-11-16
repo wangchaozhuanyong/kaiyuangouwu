@@ -1917,9 +1917,11 @@ describe('ShopApi storefront mutations', () => {
             new ShopApi(market).orderByConfirmationToken('signed-confirmation-token'),
         ).resolves.toMatchObject({ code: 'T0001' });
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+            query: string;
             variables: Record<string, unknown>;
         };
         expect(request.variables).toEqual({ token: 'signed-confirmation-token' });
+        expect(request.query).toMatch(/payments\s*\{\s*id method amount state transactionId metadata\s*\}/);
     });
 
     it('updates the customer note through active-order custom fields', async () => {
