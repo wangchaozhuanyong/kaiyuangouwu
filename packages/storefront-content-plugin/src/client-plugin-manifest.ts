@@ -24,15 +24,6 @@ export interface StorefrontClientPluginDefinition {
 /** 平台自研客户端插件目录。只有这里发布的插件才能写入店铺配置。 */
 export const storefrontClientPluginCatalog: readonly StorefrontClientPluginDefinition[] = [
     {
-        code: 'tax-free-address-entry',
-        name: '免税地址提取',
-        englishName: 'Tax-free address templates',
-        description: '无需登录，每 5 分钟提取一次美国地址模板，记录保存在当前浏览器。',
-        englishDescription: 'Get a US address template every five minutes, with local browser history.',
-        version: '1.0.0',
-        defaultPlacement: 'BUSINESS_SERVICES_MAIN',
-    },
-    {
         code: 'category-coupon-entry',
         name: '优惠券快捷入口',
         englishName: 'Coupon shortcut',
@@ -102,6 +93,15 @@ export const storefrontClientPluginCatalog: readonly StorefrontClientPluginDefin
         description: '检测浏览器语言、时区、字体、设备特征与当前网络环境。',
         englishDescription:
             'Check browser language, timezone, fonts, device signals and the current network.',
+        version: '1.0.0',
+        defaultPlacement: 'BUSINESS_SERVICES_MAIN',
+    },
+    {
+        code: 'tax-free-address-entry',
+        name: '免税地址提取',
+        englishName: 'Tax-free address templates',
+        description: '无需登录，每 5 分钟提取一次美国地址模板，记录保存在当前浏览器。',
+        englishDescription: 'Get a US address template every five minutes, with local browser history.',
         version: '1.0.0',
         defaultPlacement: 'BUSINESS_SERVICES_MAIN',
     },

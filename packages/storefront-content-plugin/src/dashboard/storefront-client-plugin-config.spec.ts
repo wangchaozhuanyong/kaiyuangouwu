@@ -40,6 +40,20 @@ describe('storefront client plugin configuration', () => {
         expect(clientPluginBlockInput(draft).items[0].settings?.pluginCode).toBe('news-blog-entry');
     });
 
+    it('appends the address tool without enabling it in another storefront draft', () => {
+        const tool = clientPluginCatalog.at(-1);
+        expect(tool?.code).toBe('tax-free-address-entry');
+        if (!tool) throw new Error('Address tool catalog entry is missing');
+        const enabled = clientPluginBlockInput(addClientPlugin(createClientPluginDraft(), tool));
+
+        expect(enabled.items[0]).toMatchObject({
+            enabled: true,
+            targetType: 'NONE',
+            settings: { pluginCode: 'tax-free-address-entry', placement: 'BUSINESS_SERVICES_MAIN' },
+        });
+        expect(clientPluginBlockInput(createClientPluginDraft()).items).toEqual([]);
+    });
+
     it('creates an empty valid category plugin layout', () => {
         const draft = createClientPluginDraft();
 
