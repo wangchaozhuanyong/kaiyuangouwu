@@ -46,6 +46,7 @@ export const desktopPageFamilyByRoute = {
     services: toolsFamily,
     'image-studio': toolsFamily,
     'two-factor': toolsFamily,
+    mdac: toolsFamily,
     'environment-monitor': toolsFamily,
     'mail-query': toolsFamily,
     'gpt-recharge': toolsFamily,

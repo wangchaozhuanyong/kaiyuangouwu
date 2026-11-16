@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { afterEach, expect, it, vi } from 'vitest';
 
-const html = readFileSync(join(__dirname, '../index.html'), 'utf8');
+const html = readFileSync(join(__dirname, '../index.html'), 'utf8').replace(/\r\n/gu, '\n');
 const source = html.match(/<script id="storefront-document-continuity">([\s\S]*?)<\/script>/)?.[1];
 const selector = '[data-scroll-restoration-id="category-results"]';
 const observers: MutationObserver[] = [];
@@ -84,9 +84,15 @@ it('recognizes an existing necessary-only preference before first paint without 
 
 it('pins the exact prepaint script in the production CSP without allowing arbitrary inline scripts', () => {
     if (!source) throw new Error('Missing continuity script');
-    const policy = readFileSync(join(__dirname, '../../../deploy/nginx/damatong.conf'), 'utf8');
+    const policy = readFileSync(join(__dirname, '../../../deploy/nginx/damatong.conf'), 'utf8').replace(
+        /\r\n/gu,
+        '\n',
+    );
+    const worker = policy.match(/^    location = \/mdac-ocr\/worker[.]min[.]js \{[\s\S]*?^    \}/mu)?.[0];
+    if (!worker) throw new Error('Missing MDAC OCR Worker policy');
+    expect(worker.match(/script-src[^;]+;/gu)).toEqual(["script-src 'self' 'wasm-unsafe-eval';"]);
     const hash = createHash('sha256').update(source).digest('base64');
-    const hosts = policy.split(/^server \{/mu);
+    const hosts = policy.replace(worker, '').split(/^server \{/mu);
     const toolHosts = ['2fa', 'mail', 'address'].map(name => {
         const matches = hosts.filter(host =>
             host.split('\n').includes(`    server_name ${name}.moyaoai.com;`),
@@ -103,5 +109,6 @@ it('pins the exact prepaint script in the production CSP without allowing arbitr
     for (const directive of directives) {
         expect(directive).toContain("'sha256-" + hash + "'");
         expect(directive).not.toContain("'unsafe-inline'");
+        expect(directive).not.toContain("'wasm-unsafe-eval'");
     }
 });

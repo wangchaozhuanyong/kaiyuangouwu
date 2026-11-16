@@ -104,6 +104,10 @@ function AiImageStudioEntryPlugin({ language, onNavigate }: Readonly<ClientPlugi
 }
 
 const toolCopy = {
+    mdac: [
+        ['马来西亚入境卡', '免登录填写，资料保存在本机浏览器', '立即使用'],
+        ['Malaysia arrival card', 'Guest access. Details stay in this browser.', 'Open'],
+    ],
     blog: [
         ['新闻博客', 'AI 资讯、实用指南与 Skill 推荐', '阅读'],
         ['News blog', 'AI news, practical guides, and recommended Skills', 'Read'],
@@ -170,6 +174,7 @@ function ToolEntryPlugin({
 }: Readonly<ClientPluginComponentProps & { name?: keyof typeof toolCopy; onWarmup?: () => void }>) {
     const [title, description, action] = toolCopy[name][language === 'zh' ? 0 : 1];
     const Icon = {
+        mdac: Mail,
         blog: WandSparkles,
         coupons: TicketPercent,
         support: Headphones,
@@ -242,6 +247,7 @@ const clientPluginRenderers: Readonly<Record<string, ComponentType<ClientPluginC
         'gpt-recharge-entry': ToolEntryPlugin,
         'environment-monitor-entry': toolEntry('environment-monitor'),
         'tax-free-address-entry': TaxFreeAddressEntry,
+        'mdac-entry': toolEntry('mdac'),
     };
 
 function itemPlacement(item: StorefrontContentItem): ClientPluginPlacement | null {
@@ -279,6 +285,12 @@ export function resolveClientPlugins(
         .sort((left, right) => left.position - right.position)
         .flatMap(item => {
             const code = item.settings?.pluginCode;
+            if (
+                code === 'mdac-entry' &&
+                typeof window !== 'undefined' &&
+                item.settings?.allowedHost !== window.location.hostname
+            )
+                return [];
             const Component = typeof code === 'string' ? clientPluginRenderers[code] : undefined;
             return item.enabled &&
                 Component &&

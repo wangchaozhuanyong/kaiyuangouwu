@@ -1,3 +1,4 @@
+// organize-imports-ignore -- Keep ESLint type import grouping.
 import type { AccountRecommendationSettings } from './shared/account-recommendation-settings';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, ForbiddenError, ID, Permission, RequestContext, Transaction } from '@vendure/core';
@@ -63,6 +64,12 @@ export class StorefrontContentAdminResolver {
     @Allow(storefrontContentPermission.Read)
     storefrontContentBlocks(@Ctx() ctx: RequestContext) {
         return this.storefrontContentService.findAllForAdmin(ctx);
+    }
+
+    @Query()
+    @Allow(storefrontContentPermission.Read)
+    availableStorefrontClientPluginCodes(@Ctx() ctx: RequestContext) {
+        return this.storefrontContentService.availableClientPluginCodes(ctx);
     }
 
     @Query()
