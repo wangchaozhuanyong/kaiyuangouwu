@@ -877,9 +877,16 @@ void test('inspection forwards only fixed query failure codes and never raw stde
         operations.storefrontInspectionFailure({ stderr: 'Storefront operational state is missing\n' }),
         'STOREFRONT_CONFIGURATION_CHECK_FAILED reason=OPERATIONAL_STATE_MISSING',
     );
+    assert.equal(
+        operations.storefrontInspectionFailure({
+            stderr: 'Production preflight cannot access required Channel my-malaysia\nPRIVATE_DETAIL',
+        }),
+        'STOREFRONT_CONFIGURATION_CHECK_FAILED reason=REQUIRED_CHANNEL_MISSING',
+    );
     for (const stderr of [
         'PRIVATE_ERROR',
         `${failure} PRIVATE_SECRET`,
+        'Production preflight cannot access required Channel value with PRIVATE_SECRET',
         'STOREFRONT_CONFIGURATION_QUERY_FAILED operation=PRIVATE_SECRET reason=TIMEOUT',
     ]) {
         assert.equal(
