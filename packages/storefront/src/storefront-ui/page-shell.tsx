@@ -32,6 +32,7 @@ import { routeFromLocation, RouteName } from '../storefront-router';
 import { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from '../types';
 
 import '../styles/right-drawer.css';
+import '../styles/sheet.css';
 
 export function asyncRouteTitle(routeName: RouteName, language: StorefrontLanguage): string {
     const isZh = language === 'zh';
@@ -180,6 +181,7 @@ export function Subpage({
     back?: ReactNode;
     backLabel?: string;
     surfaceColor?: string | null;
+    action?: ReactNode;
     className?: string;
     children: ReactNode;
 }) {

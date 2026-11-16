@@ -79,7 +79,15 @@
 .two-factor-secret-field {
     min-width: 0;
     display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px 76px;
     gap: 4px;
+}
+.two-factor-secret-field input {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    padding-right: 128px;
+    background: var(--surface);
+    border: 1px solid var(--control-border);
 }
 
 .two-factor-secret-field input {
@@ -87,9 +95,22 @@
 }
 
 .two-factor-secret-actions {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 4px;
+    display: contents;
+}
+.two-factor-secret-actions .two-factor-paste {
+    grid-column: 3;
+    grid-row: 1;
+}
+.two-factor-secret-actions .two-factor-reveal {
+    grid-column: 2;
+    grid-row: 1;
+}
+.two-factor-secret-actions button:not(.two-factor-paste):not(.two-factor-reveal) {
+    grid-row: 2;
+    justify-self: start;
+}
+.two-factor-secret-actions button:nth-child(3) {
+    grid-column: 2 / 4;
 }
 
 .two-factor-secret-actions button {
@@ -119,7 +140,34 @@
 }
 
 .two-factor-query-result {
-    padding-top: 4px;
+    padding: var(--space-24);
+    border-radius: var(--skin-control-radius);
+    background: var(--accent-soft);
+}
+.two-factor-code {
+    font-family: var(--font-code);
+    font-size: var(--type-otp-size);
+    line-height: var(--type-otp-leading);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: var(--tracking-numeric);
+    color: var(--text);
+}
+.two-factor-save {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-height: var(--experience-control-min);
+    margin-top: var(--space-8);
+    padding: 0;
+    border: 0;
+    color: var(--accent-ink);
+    background: transparent;
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+}
+.two-factor-save svg {
+    width: 18px;
+    height: 18px;
 }
 
 .two-factor-lock-notice {

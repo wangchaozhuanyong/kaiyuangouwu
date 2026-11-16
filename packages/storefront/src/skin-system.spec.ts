@@ -318,6 +318,24 @@ describe('storefront skin system', () => {
                             'styles/order-aftercare.css|.order-logistics-item + .order-logistics-item',
                         ];
                         const functionalKey = `${path.relative(__dirname, file)}|${selector.trim().replace(/\s+/g, ' ')}`;
+                        // Approved independent tools use separators for the mail list, reader controls and paired work areas.
+                        const toolSeparators: Record<string, string> = {
+                            'client-plugins/mail-query/mail-query.css|.mail-reader-list|right':
+                                '1px solid var(--line-subtle)',
+                            'client-plugins/mail-query/mail-query.css|.mail-reader-list > button|bottom':
+                                '1px solid var(--line-subtle)',
+                            'client-plugins/mail-query/mail-query.css|.mail-reader-list > button|left':
+                                '3px solid transparent',
+                            'client-plugins/mail-query/mail-query.css|.mail-reader-toolbar|bottom':
+                                '1px solid var(--line-subtle)',
+                            'styles/standalone-tool.css|.standalone-tool-page .subpage-header|bottom':
+                                '1px solid var(--line-subtle)',
+                            'styles/standalone-tool.css|.standalone-tool-page .two-factor-workspace > .two-factor-accounts|left':
+                                '1px solid var(--line-subtle)',
+                            'styles/standalone-tool.css|.mail-query-page.standalone-tool-page .recent-item|bottom':
+                                '1px solid var(--line-subtle)',
+                        };
+                        if (toolSeparators[`${functionalKey}|${border[1]}`] === border[2].trim()) continue;
                         // GPT_COMPACT_FORM_B_20261016: only navigation and the code/account boundary.
                         if (
                             file === path.join(__dirname, 'client-plugins/gpt-recharge/gpt-recharge.css') &&

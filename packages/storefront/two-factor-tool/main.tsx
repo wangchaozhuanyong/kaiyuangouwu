@@ -19,6 +19,7 @@ const allowedParents = new Set<string>(
 const standalone = window.parent === window;
 const navigation = standalone ? standaloneToolNavigation(() => window.history.back()) : undefined;
 if (navigation) {
+    document.documentElement.dataset.standaloneTool = 'customer';
     document.documentElement.lang = navigation.language === 'zh' ? 'zh-CN' : 'en';
     document.title = navigation.language === 'zh' ? '2FA 动态码' : '2FA codes';
 }
@@ -114,10 +115,11 @@ const root = document.getElementById('root');
 if (!root) throw new Error('Missing vault root');
 // The isolated document has no storefront shell. Give the shared controls their
 // semantic defaults without changing the cross-origin session protocol.
-for (const [property, value] of Object.entries({
-    ...semanticPaletteCssVariables(resolveStorefrontSemanticPalette('classic')),
-    ...storefrontSkinCssVariables('classic'),
-})) {
-    document.documentElement.style.setProperty(property, value);
-}
+if (!standalone)
+    for (const [property, value] of Object.entries({
+        ...semanticPaletteCssVariables(resolveStorefrontSemanticPalette('classic')),
+        ...storefrontSkinCssVariables('classic'),
+    })) {
+        document.documentElement.style.setProperty(property, value);
+    }
 createRoot(root).render(standalone ? <StandaloneVault /> : <IsolatedVault />);

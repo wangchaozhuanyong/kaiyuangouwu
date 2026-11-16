@@ -62,6 +62,8 @@
     --type-identity-leading: 30px;
     --type-brand-size: 18px;
     --type-brand-leading: 26px;
+    --type-otp-size: 36px;
+    --type-otp-leading: 44px;
     --type-code-size: 22px;
     --type-code-leading: 30px;
     /* Reviewed display roles: artwork/marketing, authentication, promotional amounts, empty-state glyphs. */
@@ -123,6 +125,8 @@
         --type-price-detail-leading: 40px;
         --type-identity-size: 28px;
         --type-identity-leading: 36px;
+        --type-otp-size: 44px;
+        --type-otp-leading: 52px;
         --type-code-size: 26px;
         --type-code-leading: 34px;
         --type-display-size: 30px;

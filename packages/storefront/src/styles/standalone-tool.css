@@ -1,0 +1,221 @@
+@import './experience-foundations.css';
+@import './subpage-content.css';
+
+:root[data-standalone-tool='customer'] {
+    color: var(--text);
+    background: var(--bg);
+}
+.standalone-tool-page {
+    min-height: 100dvh;
+    padding-bottom: var(--space-48);
+}
+.standalone-tool-page .subpage-header {
+    display: grid;
+    align-items: center;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    width: 100%;
+    max-width: var(--experience-content-max);
+    margin-inline: auto;
+    border-bottom: 1px solid var(--line-subtle);
+}
+.standalone-tool-page .subpage-header > strong {
+    grid-column: 2;
+    grid-row: 1;
+    text-align: left;
+}
+.standalone-tool-page .subpage-header > svg,
+.standalone-tool-page .subpage-header > .page-back-button {
+    grid-column: 1;
+    grid-row: 1;
+}
+.standalone-tool-page .subpage-header > svg {
+    width: 26px;
+    height: 26px;
+}
+.standalone-tool-page .subpage-header-actions:not(:empty) {
+    grid-column: 3;
+    grid-row: 1;
+    min-width: 0;
+}
+.standalone-tool-page .subpage-header-actions > button {
+    min-height: var(--experience-control-min);
+    padding: var(--space-8);
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    cursor: pointer;
+}
+.standalone-tool-heading {
+    margin: var(--space-48) auto var(--space-32);
+    padding: 0 var(--experience-page-gutter-mobile);
+    text-align: center;
+}
+.standalone-tool-heading h1 {
+    margin: 0;
+    font-size: var(--type-page-size);
+    line-height: var(--type-page-leading);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+}
+.standalone-tool-heading p {
+    margin: var(--space-12) 0 0;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+    color: var(--muted);
+}
+@media (max-width: 767px) {
+    .standalone-tool-heading {
+        margin: var(--space-24) auto;
+        text-align: left;
+    }
+}
+
+.standalone-tool-page .two-factor-workspace {
+    max-width: 1168px;
+    margin-inline: auto;
+}
+.standalone-tool-page .two-factor-query > .two-factor-intro {
+    display: none;
+}
+.standalone-tool-page .two-factor-quick-form > button[type='submit'] {
+    min-height: 48px;
+}
+.standalone-tool-page .two-factor-vault {
+    padding: var(--space-16);
+    border-radius: var(--skin-control-radius);
+    background: var(--accent-soft);
+}
+.standalone-tool-page .two-factor-vault > p {
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+.standalone-tool-page .two-factor-empty {
+    padding: var(--space-48) var(--space-16);
+}
+@media (min-width: 1024px) {
+    .standalone-tool-page .two-factor-workspace {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        align-items: stretch;
+        gap: 0;
+        padding-top: 0;
+    }
+    .standalone-tool-page .two-factor-workspace > .two-factor-query {
+        border-radius: var(--skin-card-radius) 0 0 var(--skin-card-radius);
+        padding: var(--space-32);
+    }
+    .standalone-tool-page .two-factor-workspace > .two-factor-accounts {
+        border-left: 1px solid var(--line-subtle);
+        border-radius: 0 var(--skin-card-radius) var(--skin-card-radius) 0;
+        padding: var(--space-32);
+    }
+    .standalone-tool-page .two-factor-privacy {
+        padding-top: var(--space-24);
+    }
+}
+@media (max-width: 767px) {
+    .standalone-tool-page .two-factor-query > h2 {
+        display: none;
+    }
+    .standalone-tool-page .two-factor-quick-form {
+        margin-top: 0;
+    }
+    .two-factor-query-result {
+        padding: var(--space-16);
+    }
+}
+
+/* The independent entry keeps the same query lifecycle and result owners. */
+.mail-query-page.standalone-tool-page {
+    max-width: none;
+    margin: 0;
+}
+.mail-query-page.standalone-tool-page .mail-query-layout {
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-24);
+    padding: 0 var(--space-16);
+}
+.mail-query-page.standalone-tool-page .mail-query-controls {
+    grid-template-columns: minmax(0, 1fr);
+}
+.mail-query-page.standalone-tool-page .query-card {
+    padding: var(--space-32);
+}
+.mail-query-page.standalone-tool-page .code-input {
+    background: var(--surface);
+    border: 1px solid var(--control-border);
+    font-family: var(--font-ui);
+    font-weight: var(--font-weight-normal);
+    letter-spacing: var(--tracking-normal);
+    height: 56px;
+}
+.mail-query-page.standalone-tool-page .query-btn {
+    min-height: 48px;
+}
+.mail-query-page.standalone-tool-page .faq-section {
+    padding: var(--space-16) var(--space-24);
+}
+.mail-query-page.standalone-tool-page .faq-section > h2 {
+    margin: 0 0 var(--space-8);
+}
+.mail-query-page.standalone-tool-page .recent-section {
+    padding: var(--space-24) var(--space-32);
+}
+.mail-query-page.standalone-tool-page .recent-item {
+    background: transparent;
+    border-bottom: 1px solid var(--line-subtle);
+}
+.mail-query-page.standalone-tool-page .recent-code {
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+.mail-query-page.standalone-tool-page .recent-alias {
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+    color: var(--text);
+}
+.standalone-tool-page[data-mail-view='results'] .mail-query-layout {
+    max-width: 1328px;
+    margin-top: var(--space-24);
+}
+.mail-query-page.standalone-tool-page .result-summary-card {
+    background: transparent;
+    padding: 0 0 var(--space-16);
+    box-shadow: none;
+}
+.mail-inbox-title {
+    margin: 0 0 var(--space-16);
+    font-size: var(--type-page-size);
+    line-height: var(--type-page-leading);
+    font-weight: var(--font-weight-bold);
+}
+.mail-query-page.standalone-tool-page .summary-email {
+    margin-right: auto;
+}
+.mail-query-page.standalone-tool-page .summary-stats {
+    margin-top: var(--space-12);
+}
+.mail-change-query {
+    min-height: var(--experience-control-min);
+    padding: var(--space-8) var(--space-16);
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    color: var(--accent-ink);
+    background: var(--accent-soft);
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+}
+.mail-inbox-live {
+    margin-bottom: var(--space-16);
+}
+.mail-inbox-live .mail-live-controls {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+}
+.mail-inbox-live .mail-stream-status {
+    max-width: none;
+}
