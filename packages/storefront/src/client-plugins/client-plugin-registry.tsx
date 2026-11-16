@@ -1,6 +1,7 @@
-import { Headphones, KeyRound, Mail, TicketPercent, WandSparkles } from 'lucide-react';
+import { Headphones, KeyRound, Mail, MapPin, TicketPercent, WandSparkles } from 'lucide-react';
 import { type ComponentType, useCallback, useContext, useEffect, useRef } from 'react';
 
+import { addressToolOrigin } from '../../vite/address-tool-deployment';
 import { shouldPrefetchMedia } from '../hooks/useOnlineStatus';
 import { useStorefrontPageActivity } from '../hooks/useStorefrontPageActivity';
 import { languageCodeFor } from '../i18n';
@@ -135,6 +136,36 @@ const toolCopy = {
     ],
 } as const;
 
+function TaxFreeAddressEntry({ language }: Readonly<ClientPluginComponentProps>) {
+    const zh = language === 'zh';
+    const url = `${addressToolOrigin}/${zh ? '' : '?lang=en'}`;
+    return (
+        <a
+            className={`${entryClass} ${entryClass}-tax-free-address`}
+            href={url}
+            referrerPolicy="no-referrer"
+            onClick={event => {
+                if (event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                // The normal href stays clean for new tabs and copied links.
+                const link = document.createElement('a');
+                link.href = url + '#back';
+                link.referrerPolicy = 'no-referrer';
+                link.click();
+            }}
+        >
+            <span className={`${entryClass}-icon`} aria-hidden="true">
+                <MapPin />
+            </span>
+            <span className={`${entryClass}-copy`}>
+                <strong>{zh ? '免税地址提取' : 'Tax-free address templates'}</strong>
+                <span>{zh ? '无需登录，每 5 分钟提取一次' : 'No login. One address every five minutes'}</span>
+            </span>
+            <span className={`${entryClass}-action`}>{zh ? '提取地址' : 'Get address'}</span>
+        </a>
+    );
+}
+
 /** Public entries share their original frame; only the actual tool pages load lazily. */
 function ToolEntryPlugin({
     onNavigate,
@@ -197,6 +228,7 @@ const clientPluginRenderers: Readonly<Record<string, ComponentType<ClientPluginC
         'news-blog-entry': NewsBlogEntryPlugin,
         'gpt-recharge-entry': ToolEntryPlugin,
         'environment-monitor-entry': toolEntry('environment-monitor'),
+        'tax-free-address-entry': TaxFreeAddressEntry,
     };
 
 function itemPlacement(item: StorefrontContentItem): ClientPluginPlacement | null {

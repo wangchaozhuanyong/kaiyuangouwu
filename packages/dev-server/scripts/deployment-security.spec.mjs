@@ -704,7 +704,11 @@ void test('every production ingress uses credential-safe access logs, including 
     assert.ok(config.includes('~*^/image-generation/private(?:/|$) /image-generation/private/[redacted];'));
 
     const servers = config.split(/^server \{/mu).slice(1);
-    assert.equal(servers.length, 6);
+    assert.equal(servers.length, 7);
+    assert.equal(
+        servers.filter(server => /^    server_name address\.moyaoai\.com;$/mu.test(server)).length,
+        1,
+    );
     for (const server of servers) {
         assert.match(server, /^    access_log \S+ vendure_access;$/mu);
     }
@@ -753,10 +757,22 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.ok(trustedOriginGeo?.groups?.body);
     assert.match(trustedOriginGeo.groups.body, /^\s+127\.0\.0\.0\/8 1;$/mu);
     assert.match(trustedOriginGeo.groups.body, /^\s+::1\/128 1;$/mu);
-    assert.equal(
-        [...config.matchAll(/if \(\$trusted_cloudflare_origin = 0\) \{ return 444; \}/gu)].length,
-        4,
+    const httpsServers = config.split(/^server \{/mu).filter(server => /^    listen 443 ssl /mu.test(server));
+    assert.equal(httpsServers.length, 5);
+    for (const server of httpsServers) {
+        assert.match(server, /^    if \(\$trusted_cloudflare_origin = 0\) \{ return 444; \}$/mu);
+    }
+    const addressServer = httpsServers.find(server =>
+        /^    server_name address\.moyaoai\.com;$/mu.test(server),
     );
+    assert.ok(addressServer);
+    assert.match(
+        addressServer,
+        /ssl_certificate \/etc\/letsencrypt\/live\/address\.moyaoai\.com\/fullchain\.pem;/u,
+    );
+    assert.match(addressServer, /root \/var\/www\/kaiyuangouwu-storefront-current\/\.address-tool;/u);
+    assert.match(addressServer, /add_header Referrer-Policy "no-referrer" always;/u);
+    assert.doesNotMatch(addressServer, /\/shop-api|\/admin-api|\/dashboard\//u);
     assert.match(config, /root \/var\/www\/kaiyuangouwu-storefront-current;/u);
     const httpDefaultServer = config.slice(
         config.indexOf('listen 80 default_server;'),
@@ -765,7 +781,7 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.match(httpDefaultServer, /return 301 https:\/\/\$host\$request_uri;/u);
     const storefrontServer = config.slice(
         config.indexOf('listen 443 ssl http2 default_server;'),
-        config.indexOf('server_name console.damatong.net;'),
+        config.indexOf('server_name address.moyaoai.com;'),
     );
     assert.match(storefrontServer, /listen 443 ssl http2 default_server;/u);
     assert.match(storefrontServer, /server_name moyaoai\.com damatong\.net _;/u);

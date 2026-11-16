@@ -47,6 +47,7 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
     { prefix: '/storefront', permissions: ['ReadStorefrontContent'] },
     { prefix: '/plugins/client-plugins', permissions: ['ReadStorefrontContent'] },
     { prefix: '/plugins/icloud-relay', permissions: ['SuperAdmin'] },
+    { prefix: '/plugins/tax-free-address', permissions: ['SuperAdmin'] },
     { prefix: '/plugins/gpt-recharge', permissions: ['SuperAdmin'] },
     { prefix: '/icloud-relay', permissions: ['SuperAdmin'] },
     { prefix: '/plugins/ai-settings', permissions: ['ReadSettings'] },

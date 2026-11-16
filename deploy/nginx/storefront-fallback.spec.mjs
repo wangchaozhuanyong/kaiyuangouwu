@@ -38,6 +38,18 @@ function block(label, after = 0) {
 }
 const fallbackMap = block('map $request_uri $storefront_legacy_fallback');
 const coopMap = block('map "$request_method|$sent_http_content_type|$http_user_agent" $storefront_html_coop');
+const addressHost = 'address.moyaoai.com';
+const addressVhost = block(
+    'server',
+    source.lastIndexOf('server {', source.indexOf(`server_name ${addressHost};`)),
+)
+    .replace(/^ +listen 443 ssl http2;$/mu, '    listen 8080;')
+    .replace(/^ +(?:listen \[::\]:443|ssl_certificate|access_log).*\n/gmu, '')
+    .replace(/^ +if \(\$trusted_cloudflare_origin.*\n/mu, '')
+    .replace(
+        'root /var/www/kaiyuangouwu-storefront-current/.address-tool;',
+        'root /fixtures/www/.address-tool;',
+    );
 const applicationRoutes = [
     ...readFileSync(path.join(repo, 'packages/storefront/src/routeTree.gen.ts'), 'utf8')
         .split('export interface FileRoutesByFullPath {')[1]
@@ -64,6 +76,15 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
     // worker needs traversal permission on this public, synthetic fixture root.
     chmodSync(fixture, 0o755);
     mkdirSync(path.join(fixture, 'www'));
+    mkdirSync(path.join(fixture, 'www/.address-tool/assets'), { recursive: true });
+    writeFileSync(
+        path.join(fixture, 'www/.address-tool/index.html'),
+        '<main>Independent address tool</main>',
+    );
+    writeFileSync(
+        path.join(fixture, 'www/.address-tool/assets/tool-A1234567.js'),
+        'export const tool = true;',
+    );
     writeFileSync(
         path.join(fixture, 'www/index.html'),
         '<main>Application shell with recovery navigation</main>',
@@ -91,6 +112,7 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         'map $host $customer_vault_frame_origin { default "\'self\'"; }',
         fallbackMap,
         coopMap,
+        block('map $http_cookie $address_tool_cookie'),
         block('map "$http_authorization|$http_cookie" $storefront_public_coupon_guest'),
         block('map "$status|$uri" $build_asset_cache_control'),
         'map "$host|$http_x_storefront_original_uri" $environment_fixture_shell {',
@@ -99,6 +121,7 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         '}',
         'upstream vendure_backend { server 127.0.0.1:8081; }',
         'server { listen 8081;',
+        'location ~ ^/api/address/(?:status|claim)$ { return 200 "cookie=$http_cookie; auth=$http_authorization; token=$http_vendure_token; host=$http_host"; }',
         'location = /storefront/redirect {',
         'if ($http_x_storefront_original_uri ~ "^/old-route(?:[?]|$)") { return 301 /en/category; }',
         'if ($http_x_storefront_original_uri ~ "^/backend-failure") { return 503; }',
@@ -132,7 +155,9 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         'server { listen 8080; server_name console.fixture;',
         block('location ^~ /mail-query'),
         'location / { return 404; }',
-        '} }',
+        '}',
+        addressVhost,
+        '}',
     ].join('\n');
     writeFileSync(path.join(fixture, 'nginx.conf'), config);
     docker(
@@ -179,6 +204,53 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
             }
         }
     });
+    await t.test(
+        'the standalone hostname serves only its own document, assets and two address endpoints',
+        async () => {
+            const getTool = (pathname, headers = {}) =>
+                new Promise((resolve, reject) => {
+                    get(origin + pathname, { headers: { host: addressHost, ...headers } }, response => {
+                        response.setEncoding('utf8');
+                        let text = '';
+                        response.on('data', value => {
+                            text += value;
+                        });
+                        response.on('end', () =>
+                            resolve({ status: response.statusCode, headers: response.headers, text }),
+                        );
+                        response.on('error', reject);
+                    }).on('error', reject);
+                });
+            const html = await getTool('/');
+            assert.equal(html.status, 200);
+            assert.equal(html.text, '<main>Independent address tool</main>');
+            assert.equal(html.headers['referrer-policy'], 'no-referrer');
+            assert.match(html.headers['content-security-policy'], /connect-src 'self';/u);
+            assert.equal((await getTool('/assets/tool-A1234567.js')).status, 200);
+            for (const pathname of [
+                '/shop-api',
+                '/admin-api',
+                '/dashboard/',
+                '/zh/',
+                '/login',
+                '/frontend-release.json',
+                '/assets/current-87654321.js',
+                '/api/address/list',
+            ]) {
+                const denied = await getTool(pathname);
+                assert.equal(denied.status, 404, pathname);
+                assert.ok(!denied.text.includes('Published public page'), pathname);
+            }
+            const cookie = '__Host-tax_address_browser=' + 'a'.repeat(115);
+            const status = await getTool('/api/address/status', {
+                cookie: `session=fixture; ${cookie}`,
+                authorization: 'Bearer fixture',
+                'vendure-token': 'fixture',
+            });
+            assert.equal(status.text, `cookie=${cookie}; auth=; token=; host=${addressHost}`);
+            assert.equal((await fetch(origin + '/.address-tool/index.html')).status, 404);
+        },
+    );
     await t.test('marks only credential-free public preferences as anonymous presentation', async () => {
         for (const [headers, expected] of [
             [{}, '1'],

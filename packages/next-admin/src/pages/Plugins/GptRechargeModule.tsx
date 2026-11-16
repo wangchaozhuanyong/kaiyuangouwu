@@ -188,9 +188,13 @@ export function GptRechargeModule() {
                             <div className="space-y-1">
                                 <h2
                                     id="recharge-service-title"
-                                    className="text-base font-semibold text-slate-900"
+                                    className="flex flex-wrap items-center gap-2 text-base font-semibold text-slate-900"
                                 >
                                     充值服务
+                                    <FeatureHelpButton
+                                        title="充值服务"
+                                        description="此区配置当前店铺的充值开关和上游服务连接。"
+                                    />
                                 </h2>
                                 <p className="text-sm text-slate-500">设置当前店铺的服务开关与上游连接。</p>
                             </div>
@@ -231,9 +235,13 @@ export function GptRechargeModule() {
                             <div className="space-y-1">
                                 <h2
                                     id="recharge-credentials-title"
-                                    className="text-base font-semibold text-slate-900"
+                                    className="flex flex-wrap items-center gap-2 text-base font-semibold text-slate-900"
                                 >
                                     连接凭证
+                                    <FeatureHelpButton
+                                        title="连接凭证"
+                                        description="按实际使用的通道填写。保存后不回显凭证，请在安全的位置保留原值。"
+                                    />
                                 </h2>
                                 <p className="text-sm text-slate-500">
                                     按使用的充值通道填写，已保存的凭证不会回显。
@@ -318,8 +326,15 @@ export function GptRechargeModule() {
                     </form>
                     <aside aria-label="配置状态与使用指引" className="min-w-0 space-y-6">
                         <section aria-labelledby="recharge-status-title" className="space-y-4 p-1">
-                            <h2 id="recharge-status-title" className="text-sm font-semibold text-slate-900">
+                            <h2
+                                id="recharge-status-title"
+                                className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900"
+                            >
                                 已保存的状态
+                                <FeatureHelpButton
+                                    title="已保存的状态"
+                                    description="这里显示服务端已保存的配置状态；表单中未保存的修改不会出现在此处。"
+                                />
                             </h2>
                             <dl className="space-y-3 text-sm">
                                 {[
@@ -338,8 +353,15 @@ export function GptRechargeModule() {
                             aria-labelledby="recharge-entry-title"
                             className="space-y-3 rounded-xl bg-slate-100 p-5"
                         >
-                            <h2 id="recharge-entry-title" className="text-sm font-semibold text-slate-900">
+                            <h2
+                                id="recharge-entry-title"
+                                className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900"
+                            >
                                 前台入口
+                                <FeatureHelpButton
+                                    title="前台入口"
+                                    description="在客户端插件中心为当前店铺启用充值入口。服务配置和入口分别管理。"
+                                />
                             </h2>
                             <p className="text-sm leading-6 text-slate-500">
                                 保存连接后，还需在客户端插件中心启用并发布前台入口。
@@ -353,8 +375,15 @@ export function GptRechargeModule() {
                             </Link>
                         </section>
                         <section aria-labelledby="recharge-rules-title" className="space-y-2 p-1">
-                            <h2 id="recharge-rules-title" className="text-sm font-semibold text-slate-900">
+                            <h2
+                                id="recharge-rules-title"
+                                className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900"
+                            >
                                 充值规则
+                                <FeatureHelpButton
+                                    title="充值规则"
+                                    description="兑换码事先绑定套餐。此页只配置店铺连接，不设置套餐规则。"
+                                />
                             </h2>
                             <p className="text-sm leading-6 text-slate-500">
                                 套餐由兑换码绑定。这里不设置价格、银行卡或执行策略。

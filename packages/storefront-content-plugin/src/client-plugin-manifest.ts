@@ -96,6 +96,15 @@ export const storefrontClientPluginCatalog: readonly StorefrontClientPluginDefin
         version: '1.0.0',
         defaultPlacement: 'BUSINESS_SERVICES_MAIN',
     },
+    {
+        code: 'tax-free-address-entry',
+        name: '免税地址提取',
+        englishName: 'Tax-free address templates',
+        description: '无需登录，每 5 分钟提取一次美国地址模板，记录保存在当前浏览器。',
+        englishDescription: 'Get a US address template every five minutes, with local browser history.',
+        version: '1.0.0',
+        defaultPlacement: 'BUSINESS_SERVICES_MAIN',
+    },
 ] as const;
 
 export const storefrontClientPluginCodes = storefrontClientPluginCatalog.map(plugin => plugin.code);

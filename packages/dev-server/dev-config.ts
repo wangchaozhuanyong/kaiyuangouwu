@@ -56,6 +56,7 @@ import {
     ShopAbuseProtectionPlugin,
     StoreDefaultCurrencyPriceSelectionStrategy,
     StoreManagementPlugin,
+    TaxFreeAddressPlugin,
 } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontCatalogPlugin } from '@vendure/storefront-catalog-plugin';
@@ -937,6 +938,7 @@ export const devConfig: VendureConfig = {
         OperationsDashboardPlugin,
         TwoFactorDashboardPlugin,
         GptRechargePlugin,
+        TaxFreeAddressPlugin.init('https://address.moyaoai.com'),
         ShopAbuseProtectionPlugin,
         IcloudRelayPlugin.init({
             realtimeEnabled: true,
