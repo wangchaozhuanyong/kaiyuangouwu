@@ -10,6 +10,7 @@ import {
     exportConfig,
     malaysiaToday,
     OFFICIAL_URL,
+    PassportReadError,
     persistDraft,
     personalFields,
     readDraft,
@@ -125,12 +126,12 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
         } catch (error) {
             if (current === generation.current && !controller.signal.aborted)
                 setMessage(
-                    error instanceof Error && error.message === 'image'
+                    error instanceof PassportReadError && error.code === 'image'
                         ? t(
                               '请选择不超过 10 MB 的 JPG、PNG 或 WebP 照片。',
                               'Choose a JPG, PNG or WebP image up to 10 MB.',
                           )
-                        : error instanceof Error && error.message === 'recognition'
+                        : error instanceof PassportReadError && error.code === 'recognition'
                           ? t(
                                 '未能完整识别护照底部两行机读码。请拍清资料页、避免反光，或手动填写。',
                                 'Could not verify both MRZ lines. Retake a clear data-page photo without glare, or enter details manually.',

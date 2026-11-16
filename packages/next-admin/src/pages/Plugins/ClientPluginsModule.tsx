@@ -87,7 +87,7 @@ export function ClientPluginsModule() {
         plugin =>
             plugin.code !== 'mdac-entry' ||
             (!availability.error &&
-                availability.data?.availableStorefrontClientPluginCodes.includes(plugin.code)),
+                availability.data?.availableStorefrontClientPluginCodes?.includes(plugin.code)),
     );
     const sourceBlock = content.data?.storefrontContentBlocks.find(
         block => block.type === 'CLIENT_PLUGINS' && block.code === 'storefront-client-plugins',

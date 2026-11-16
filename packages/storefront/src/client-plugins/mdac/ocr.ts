@@ -1,5 +1,5 @@
 import { birthCountry, birthRectangle } from './birthplace';
-import { isIsoDate, malaysiaToday, type Fields } from './model';
+import { isIsoDate, malaysiaToday, PassportReadError, type Fields } from './model';
 import { extractMrzLines, normalizeOcrText, parseMRZ } from './mrz-parser.js';
 import { drawMrzCandidate, imageContentBounds } from './ocr-image';
 
@@ -36,7 +36,7 @@ function verifiedPassport(text: string) {
             break;
         }
     }
-    if (!result) throw new Error('recognition');
+    if (!result) throw new PassportReadError('recognition');
     return result;
 }
 
@@ -59,7 +59,7 @@ export function passportFields(text: string, today = malaysiaToday()): Fields {
 /** Image pixels remain in this browser. All OCR resources are served from our origin. */
 export async function readPassport(file: File, signal: AbortSignal): Promise<Fields> {
     if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 10 * 1024 * 1024) {
-        throw new Error('image');
+        throw new PassportReadError('image');
     }
     const { createWorker, PSM } = await import('tesseract.js');
     signal.throwIfAborted();
@@ -130,7 +130,7 @@ export async function readPassport(file: File, signal: AbortSignal): Promise<Fie
                 // Re-read a different crop; never repair numbers to force a checksum match.
             }
         }
-        if (!fields) throw new Error('recognition');
+        if (!fields) throw new PassportReadError('recognition');
         // The visual birth field is optional OCR. A failed label/model read must
         // not discard the independently verified MRZ fields or infer nationality.
         try {

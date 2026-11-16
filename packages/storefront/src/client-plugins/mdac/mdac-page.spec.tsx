@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { MdacPage } from './mdac-page';
-import { emptyDraft, STORAGE_KEY } from './model';
+import { emptyDraft, PassportReadError, STORAGE_KEY } from './model';
 import { readPassport } from './ocr';
 
 vi.mock('./ocr', () => ({ readPassport: vi.fn() }));
@@ -112,7 +112,7 @@ it('fills verified fields without saving them and preserves them when a later sc
             sex: '1',
             passExpDte: '2030-01-01',
         })
-        .mockRejectedValueOnce(new Error('recognition'));
+        .mockRejectedValueOnce(new PassportReadError('recognition'));
     render();
     const input = inputOfType('file');
     Object.defineProperty(input, 'files', {

@@ -1,6 +1,13 @@
 import options from './official-options.json';
 
 export type Fields = Record<string, string>;
+
+export class PassportReadError extends Error {
+    constructor(readonly code: 'image' | 'recognition') {
+        super(code);
+    }
+}
+
 export interface Draft {
     version: 1;
     travelers: Fields[];
