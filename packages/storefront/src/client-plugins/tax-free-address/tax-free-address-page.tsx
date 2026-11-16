@@ -531,7 +531,7 @@ export function TaxFreeAddressPage({
                                         <th scope="col">{t('街道地址', 'Street address')}</th>
                                         <th scope="col">{t('城市 · 州', 'City · State')}</th>
                                         <th scope="col">{t('邮编', 'ZIP Code')}</th>
-                                        <th scope="col">{t('操作', 'Actions')}</th>
+                                        <th scope="col">{t('复制 / 详情', 'Copy / Details')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -540,7 +540,11 @@ export function TaxFreeAddressPage({
                                         const detailId = `address-record-${row.requestId}`;
                                         return (
                                             <Fragment key={row.requestId}>
-                                                <tr className="tax-address-history-row" role="row">
+                                                <tr
+                                                    className="tax-address-history-row"
+                                                    role="row"
+                                                    data-expanded={expanded || undefined}
+                                                >
                                                     <td className="tax-address-record-time" role="cell">
                                                         <time dateTime={row.address.usedAt ?? undefined}>
                                                             {new Date(
@@ -577,51 +581,55 @@ export function TaxFreeAddressPage({
                                                         {row.address.postalCode}
                                                     </td>
                                                     <td className="tax-address-record-actions" role="cell">
-                                                        <button
-                                                            type="button"
-                                                            className="tax-address-quiet"
-                                                            aria-label={
-                                                                t('复制地址', 'Copy address') +
-                                                                ': ' +
-                                                                row.address.line1
-                                                            }
-                                                            onClick={() => void copy(row.address)}
-                                                        >
-                                                            {copied === row.address.id ? (
-                                                                <Check aria-hidden="true" />
-                                                            ) : (
-                                                                <Copy aria-hidden="true" />
-                                                            )}
-                                                            {copied === row.address.id
-                                                                ? t('已复制', 'Copied')
-                                                                : t('复制', 'Copy')}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className="tax-address-quiet tax-address-record-toggle"
-                                                            aria-expanded={expanded}
-                                                            aria-controls={detailId}
-                                                            aria-label={
-                                                                t(
-                                                                    expanded ? '收起地址' : '展开地址',
-                                                                    expanded
-                                                                        ? 'Collapse address'
-                                                                        : 'Expand address',
-                                                                ) +
-                                                                ': ' +
-                                                                row.address.line1
-                                                            }
-                                                            onClick={() =>
-                                                                setExpandedRecord(
-                                                                    expanded ? null : row.requestId,
-                                                                )
-                                                            }
-                                                        >
-                                                            {expanded
-                                                                ? t('收起', 'Collapse')
-                                                                : t('展开', 'Expand')}
-                                                            <ChevronDown aria-hidden="true" />
-                                                        </button>
+                                                        <div className="tax-address-record-buttons">
+                                                            <button
+                                                                type="button"
+                                                                className="tax-address-quiet"
+                                                                aria-label={
+                                                                    t('复制地址', 'Copy address') +
+                                                                    ': ' +
+                                                                    row.address.line1
+                                                                }
+                                                                onClick={() => void copy(row.address)}
+                                                            >
+                                                                {copied === row.address.id ? (
+                                                                    <Check aria-hidden="true" />
+                                                                ) : (
+                                                                    <Copy aria-hidden="true" />
+                                                                )}
+                                                                {copied === row.address.id
+                                                                    ? t('已复制', 'Copied')
+                                                                    : t('复制', 'Copy')}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="tax-address-quiet tax-address-record-toggle"
+                                                                aria-expanded={expanded}
+                                                                aria-controls={detailId}
+                                                                aria-label={
+                                                                    t(
+                                                                        expanded
+                                                                            ? '收起地址详情'
+                                                                            : '查看地址详情',
+                                                                        expanded
+                                                                            ? 'Hide address details'
+                                                                            : 'Show address details',
+                                                                    ) +
+                                                                    ': ' +
+                                                                    row.address.line1
+                                                                }
+                                                                onClick={() =>
+                                                                    setExpandedRecord(
+                                                                        expanded ? null : row.requestId,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <ChevronDown aria-hidden="true" />
+                                                                {expanded
+                                                                    ? t('收起', 'Hide')
+                                                                    : t('详情', 'Details')}
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                                 <tr className="tax-address-detail-row" hidden={!expanded}>
@@ -631,14 +639,28 @@ export function TaxFreeAddressPage({
                                                             id={detailId}
                                                         >
                                                             {expanded && (
-                                                                <AddressFields
-                                                                    address={row.address}
-                                                                    zh={zh}
-                                                                    copied={copied}
-                                                                    onCopy={field =>
-                                                                        void copy(row.address, field)
-                                                                    }
-                                                                />
+                                                                <>
+                                                                    <p className="tax-address-record-detail-heading type-label">
+                                                                        {t(
+                                                                            '本条记录详情',
+                                                                            'Details for this record',
+                                                                        )}
+                                                                        <span
+                                                                            lang="en"
+                                                                            className="type-helper"
+                                                                        >
+                                                                            {row.address.line1}
+                                                                        </span>
+                                                                    </p>
+                                                                    <AddressFields
+                                                                        address={row.address}
+                                                                        zh={zh}
+                                                                        copied={copied}
+                                                                        onCopy={field =>
+                                                                            void copy(row.address, field)
+                                                                        }
+                                                                    />
+                                                                </>
                                                             )}
                                                         </div>
                                                     </td>
