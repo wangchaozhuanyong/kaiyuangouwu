@@ -25,6 +25,7 @@ import {
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreDomain, StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import {
+    ShopAbuseProtectionPlugin,
     StorefrontActivationService,
     StorefrontPublicCacheService,
     StoreManagementPlugin,
@@ -41,6 +42,7 @@ import {
 } from '@vendure/testing';
 import { TwoFactorDashboardPlugin } from '@vendure/two-factor-dashboard-plugin';
 import gql from 'graphql-tag';
+import { randomBytes } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -63,7 +65,11 @@ const translate = vi.fn((request: any) =>
     }),
 );
 const config = mergeConfig(testConfig, {
-    authOptions: { requireVerification: false },
+    authOptions: {
+        requireVerification: false,
+        // The real Shop API registration guard requires a valid fixture signing key.
+        cookieOptions: { secret: randomBytes(32).toString('hex') },
+    },
     apiOptions: { port: 3298, cors: { origin: 'http://127.0.0.1:5198', credentials: true } },
     defaultLanguageCode: LanguageCode.zh_Hans,
     plugins: [
@@ -76,6 +82,7 @@ const config = mergeConfig(testConfig, {
         TwoFactorDashboardPlugin,
         StorefrontCartPlugin,
         StoreManagementPlugin,
+        ShopAbuseProtectionPlugin,
         DefaultSearchPlugin.init({ bufferUpdates: false }),
     ],
 });
