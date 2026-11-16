@@ -41,6 +41,10 @@ export const standaloneAddressApi: TaxFreeAddressApi = {
             body: JSON.stringify({ requestId }),
         }),
 };
+export const isFinalTaxAddressError = (error: unknown) =>
+    error instanceof Error &&
+    /TAX_ADDRESS_(COOLDOWN|RESULT_EXPIRED|BROWSER_REQUIRED|EXHAUSTED|CAPACITY)/.test(error.message);
+
 export function taxAddressError(error: unknown, zh = true): string {
     const message = error instanceof Error ? error.message : '';
     const descriptions: Record<string, [string, string]> = {

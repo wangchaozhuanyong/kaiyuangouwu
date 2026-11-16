@@ -55,12 +55,12 @@
 }
 .tax-address-notice {
     padding: var(--space-16);
-    background: var(--surface);
-    border-inline-start: 3px solid var(--warning);
+    color: var(--warning-text);
+    background: var(--warning-bg);
+    border-radius: var(--skin-control-radius);
 }
 .tax-address-history-row {
     padding-block: var(--space-16);
-    border-bottom: 1px solid var(--line-subtle);
 }
 .tax-address-history-row summary {
     cursor: pointer;

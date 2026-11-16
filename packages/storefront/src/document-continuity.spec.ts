@@ -86,7 +86,14 @@ it('pins the exact prepaint script in the production CSP without allowing arbitr
     if (!source) throw new Error('Missing continuity script');
     const policy = readFileSync(join(__dirname, '../../../deploy/nginx/damatong.conf'), 'utf8');
     const hash = createHash('sha256').update(source).digest('base64');
-    const directives = policy.match(/script-src 'self'[^;]*;/gu) ?? [];
+    const hosts = policy.split(/^server \{/mu);
+    const addressHosts = hosts.filter(host => /^    server_name address\.moyaoai\.com;$/mu.test(host));
+    expect(addressHosts).toHaveLength(1);
+    // The standalone document never loads the storefront or its prepaint script.
+    expect(addressHosts[0].match(/script-src[^;]+;/gu)).toEqual(["script-src 'self';"]);
+    const directives = hosts
+        .filter(host => !addressHosts.includes(host))
+        .flatMap(host => host.match(/script-src 'self'[^;]*;/gu) ?? []);
     expect(directives.length).toBeGreaterThan(0);
     for (const directive of directives) {
         expect(directive).toContain("'sha256-" + hash + "'");

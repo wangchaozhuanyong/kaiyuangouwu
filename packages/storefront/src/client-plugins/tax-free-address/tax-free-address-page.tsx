@@ -8,7 +8,7 @@ import {
     type TaxFreeAddress,
     type TaxFreeAddressClaim,
 } from '../../../../storefront-content-plugin/src/tax-free-address-contract';
-import { taxAddressError, type TaxFreeAddressApi } from '../../api/tax-free-address';
+import { isFinalTaxAddressError, taxAddressError, type TaxFreeAddressApi } from '../../api/tax-free-address';
 import { useStorefrontPageActivity } from '../../hooks/useStorefrontPageActivity';
 import { storefrontQueryPresentation } from '../../loading-state';
 
@@ -27,9 +27,6 @@ import './tax-free-address.css';
 type SavedClaim = TaxFreeAddressClaim & { savedLocally: boolean };
 const statusKey = ['address-tool', 'availability'];
 const historyScope = 'address-tool';
-const isFinalClaimError = (error: unknown) =>
-    error instanceof Error &&
-    /TAX_ADDRESS_(COOLDOWN|RESULT_EXPIRED|BROWSER_REQUIRED|EXHAUSTED|CAPACITY)/.test(error.message);
 export function AddressFields({ address, zh }: { address: TaxFreeAddress; zh: boolean }) {
     const fields = [
         [zh ? '国家（英语）' : 'Country', address.country],
@@ -93,7 +90,7 @@ export function TaxFreeAddressPage({
             });
             return { ...result, savedLocally };
         } catch (error) {
-            if (isFinalClaimError(error)) finishAddressRequest(historyScope, requestId);
+            if (isFinalTaxAddressError(error)) finishAddressRequest(historyScope, requestId);
             void client.invalidateQueries({
                 queryKey: statusKey,
             });
@@ -119,7 +116,9 @@ export function TaxFreeAddressPage({
             : storedAddress;
     // Recover in memory if browser persistence is blocked or another tab changed it.
     const retryRequestId =
-        latest?.status === 'error' && typeof latest.variables === 'string' && !isFinalClaimError(latest.error)
+        latest?.status === 'error' &&
+        typeof latest.variables === 'string' &&
+        !isFinalTaxAddressError(latest.error)
             ? latest.variables
             : pendingAddressRequest(historyScope);
     const recovering = Boolean(retryRequestId);

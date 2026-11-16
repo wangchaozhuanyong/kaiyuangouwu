@@ -19,6 +19,7 @@ describe('installed next-admin extensions', () => {
         ['/plugins/icloud-relay', 'SuperAdmin'],
         ['/plugins/gpt-recharge', 'SuperAdmin'],
         ['/plugins/news-blog', 'ManageNewsBlog'],
+        ['/plugins/tax-free-address', 'SuperAdmin'],
     ])('aligns %s with the backend module permission and fallback route', (path, permission) => {
         const route = getNextAdminExtensionRoutes().find(item => item.path === path)!;
         expect(route.permissions).toEqual([permission]);
@@ -45,6 +46,7 @@ describe('installed next-admin extensions', () => {
             'admin-standalone-business-pages',
             'gpt-recharge-dashboard-plugin',
             'news-blog-dashboard-plugin',
+            'tax-free-address-dashboard-plugin',
         ]);
     });
 
@@ -66,7 +68,7 @@ describe('installed next-admin extensions', () => {
 
     it('provides unique routes plus the plugin navigation entries', () => {
         const routes = getNextAdminExtensionRoutes();
-        expect(routes).toHaveLength(35 + STANDALONE_ADMIN_PAGES.length);
+        expect(routes).toHaveLength(36 + STANDALONE_ADMIN_PAGES.length);
         expect(new Set(routes.map(route => route.id)).size).toBe(routes.length);
         expect(new Set(routes.map(route => route.path)).size).toBe(routes.length);
         expect(routes).toContainEqual(
@@ -106,6 +108,7 @@ describe('installed next-admin extensions', () => {
             '/plugins/icloud-relay',
             '/plugins/gpt-recharge',
             '/plugins/news-blog',
+            '/plugins/tax-free-address',
             ...STANDALONE_ADMIN_PAGES.filter(page => page.section === 'plugins').map(page => page.path),
         ]);
         expect(getNextAdminExtensionNavItems('plugins')).toContainEqual(
