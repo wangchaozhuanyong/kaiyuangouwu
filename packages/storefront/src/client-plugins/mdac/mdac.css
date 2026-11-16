@@ -1,0 +1,137 @@
+.mdac-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(190px, 260px);
+    gap: var(--space-card);
+    align-items: start;
+}
+.mdac-panel {
+    min-width: 0;
+    padding: var(--space-card);
+    background: var(--surface);
+    border-radius: var(--skin-card-radius);
+    display: grid;
+    gap: var(--space-12);
+}
+.mdac-panel h2,
+.mdac-panel p {
+    margin: 0;
+}
+.mdac-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-12);
+    margin-block: var(--space-16);
+}
+.mdac-fields label,
+.mdac-scan {
+    display: grid;
+    gap: var(--space-8);
+    min-width: 0;
+}
+.mdac-page input:not([type='checkbox']),
+.mdac-page select {
+    min-width: 0;
+    width: 100%;
+    min-height: 44px;
+    padding: var(--space-8);
+    border: 1px solid var(--control-border, var(--line));
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
+}
+.mdac-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8);
+    margin-block: var(--space-12);
+}
+.mdac-travelers {
+    align-items: flex-end;
+}
+.mdac-travelers > label {
+    display: grid;
+    gap: var(--space-8);
+    min-width: 0;
+    max-width: 100%;
+    flex: 0 1 14rem;
+}
+.mdac-navigation {
+    align-self: end;
+    margin-block: 0;
+}
+.mdac-navigation > [type='submit'] {
+    margin-inline-start: auto;
+}
+.mdac-check {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    min-height: 44px;
+}
+.mdac-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-12);
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    color: var(--muted);
+}
+.mdac-steps [aria-current] {
+    color: var(--text);
+    font-weight: var(--font-weight-bold);
+}
+.mdac-message {
+    padding: var(--space-12);
+    background: var(--bg);
+    border-radius: var(--skin-card-radius);
+}
+.mdac-review {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-12);
+    margin-block: var(--space-12);
+}
+.mdac-review div {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.mdac-review dt {
+    color: var(--muted);
+}
+.mdac-review dd {
+    margin: 0;
+}
+.mdac-panel summary {
+    min-height: 44px;
+    padding-block: var(--space-8);
+    cursor: pointer;
+}
+@media (max-width: 767px) {
+    .mdac-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+@media (max-width: 420px) {
+    .mdac-fields,
+    .mdac-review {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.mdac-page .primary-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: var(--space-8) var(--space-16);
+}
+.mdac-page a.secondary-action {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+}

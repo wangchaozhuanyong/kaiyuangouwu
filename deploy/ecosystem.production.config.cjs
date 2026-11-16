@@ -22,6 +22,8 @@ const sharedEnvironment = {
     STORE_DOMAIN_CNAME_TARGET: 'stores.moyaoai.com',
     STORE_DOMAIN_ROUTING_MODE: 'require-domain',
     STORE_DOMAIN_BYPASS_HOSTS: '',
+    // Eligibility also requires this domain to be an active binding for the current channel.
+    STOREFRONT_MDAC_ALLOWED_DOMAIN: process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN ?? 'damatong.net',
     STORE_DOMAIN_AUTOMATION_MODE: process.env.STORE_DOMAIN_AUTOMATION_MODE ?? 'manual',
     CLOUDFLARE_SAAS_API_TOKEN: process.env.CLOUDFLARE_SAAS_API_TOKEN,
     CLOUDFLARE_SAAS_ZONE_ID: process.env.CLOUDFLARE_SAAS_ZONE_ID,

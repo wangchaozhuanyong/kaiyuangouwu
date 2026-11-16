@@ -1768,7 +1768,10 @@ function storefrontInspectionFailure(result) {
         ['Configuration summary exceeds the SSM evidence limit', 'SUMMARY_TOO_LARGE'],
     ]);
     const firstLine = result.stderr?.trimStart().split('\n', 1)[0];
-    const code = assertionCodes.get(firstLine);
+    const missingChannel = /^Production preflight cannot access required Channel (?:[a-z0-9_-]+|美宜佳)$/u;
+    const code =
+        assertionCodes.get(firstLine) ??
+        (missingChannel.test(firstLine ?? '') ? 'REQUIRED_CHANNEL_MISSING' : undefined);
     return code
         ? `STOREFRONT_CONFIGURATION_CHECK_FAILED reason=${code}`
         : 'Read-only storefront configuration inspection failed';

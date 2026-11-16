@@ -18,6 +18,115 @@ import { STOREFRONT_VISUAL_PRESET_CODE } from './visual-presets';
 
 const contentPublicationStatus = createContentPublicationChecker(isUsableEnglishTranslation);
 
+describe('MDAC channel publication policy', () => {
+    it('permits only the active domain owner and fails closed without deployment policy', async () => {
+        const previous = process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN;
+        const db = await new DataSource({
+            type: 'sqljs',
+            synchronize: true,
+            entities: [
+                new EntitySchema({
+                    name: 'StoreDomain',
+                    columns: {
+                        domain: { type: String, primary: true },
+                        channelId: { type: String },
+                        status: { type: String },
+                    },
+                }),
+            ],
+        }).initialize();
+        try {
+            process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN = 'damatong.net';
+            await db
+                .getRepository('StoreDomain')
+                .save({ domain: 'damatong.net', channelId: 'owner', status: 'ACTIVE' });
+            const service = new StorefrontContentService(
+                {
+                    rawConnection: db,
+                    getRepository: (_ctx: unknown, entity: string) => db.getRepository(entity),
+                } as never,
+                {} as never,
+                {} as never,
+                {} as never,
+            );
+            expect(await service.availableClientPluginCodes({ channelId: 'owner' } as never)).toContain(
+                'mdac-entry',
+            );
+            expect(await service.availableClientPluginCodes({ channelId: 'other' } as never)).not.toContain(
+                'mdac-entry',
+            );
+            await expect(
+                (service as any).assertMdacChannel({ channelId: 'other' }, [
+                    { settings: { pluginCode: 'mdac-entry' } },
+                ]),
+            ).rejects.toThrow('当前店铺未获准');
+            await expect(
+                (service as any).assertMdacChannel({ channelId: 'other' }, [
+                    { enabled: false, settings: { pluginCode: 'mdac-entry' } },
+                ]),
+            ).resolves.toBeUndefined();
+            await db.getRepository('StoreDomain').update({ domain: 'damatong.net' }, { status: 'PENDING' });
+            expect(await service.availableClientPluginCodes({ channelId: 'owner' } as never)).not.toContain(
+                'mdac-entry',
+            );
+            delete process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN;
+            expect(await service.availableClientPluginCodes({ channelId: 'owner' } as never)).not.toContain(
+                'mdac-entry',
+            );
+        } finally {
+            if (previous === undefined) delete process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN;
+            else process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN = previous;
+            await db.destroy();
+        }
+    });
+
+    it('strips a previously published entry after permission is removed and overwrites untrusted host settings', async () => {
+        const previous = process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN;
+        process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN = 'damatong.net';
+        const block = () =>
+            new StorefrontContentBlock({
+                enabled: true,
+                type: 'CLIENT_PLUGINS',
+                translations: [{ languageCode: LanguageCode.zh_Hans, title: '插件' }],
+                items: [
+                    {
+                        enabled: true,
+                        settings: { pluginCode: 'mdac-entry', allowedHost: 'other.example' },
+                        translations: [{ languageCode: LanguageCode.zh_Hans, label: '入境卡' }],
+                    },
+                ] as never,
+            });
+        const findOne = vi.fn().mockResolvedValue({ domain: 'damatong.net' });
+        const service = new StorefrontContentService(
+            {
+                rawConnection: { hasMetadata: () => true },
+                getRepository: (_ctx: unknown, entity: unknown) =>
+                    entity === 'StoreDomain' ? { findOne } : { find: () => Promise.resolve([block()]) },
+            } as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+        vi.spyOn(service as any, 'translateBlock').mockImplementation((value: unknown) => value);
+        try {
+            const allowed = await service.findPublished({
+                channelId: 'owner',
+                languageCode: LanguageCode.zh_Hans,
+            } as never);
+            expect(allowed[0].items[0].settings.allowedHost).toBe('damatong.net');
+            findOne.mockResolvedValue(null);
+            const denied = await service.findPublished({
+                channelId: 'owner',
+                languageCode: LanguageCode.zh_Hans,
+            } as never);
+            expect(denied.flatMap(item => item.items)).toHaveLength(0);
+        } finally {
+            if (previous === undefined) delete process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN;
+            else process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN = previous;
+        }
+    });
+});
+
 describe('new product association qualification', () => {
     it('checks enabled, non-deleted current-channel products with a real SQL relation filter', async () => {
         const db = await new DataSource({

@@ -36,6 +36,7 @@ export type RouteName =
     | 'reviews'
     | 'image-studio'
     | 'two-factor'
+    | 'mdac'
     | 'environment-monitor'
     | 'mail-query'
     | 'gpt-recharge'
@@ -145,6 +146,7 @@ export const storefrontRouteNames = [
     'reviews',
     'image-studio',
     'two-factor',
+    'mdac',
     'environment-monitor',
     'mail-query',
     'gpt-recharge',

@@ -125,6 +125,20 @@ export class StorefrontContentService {
             },
             order: { position: 'ASC', createdAt: 'ASC', items: { position: 'ASC', createdAt: 'ASC' } },
         });
+        if (blocks.some(block => block.items.some(item => item.settings?.pluginCode === 'mdac-entry'))) {
+            const allowed = await this.isMdacChannel(ctx);
+            for (const block of blocks) {
+                block.items = block.items.filter(
+                    item => item.settings?.pluginCode !== 'mdac-entry' || allowed,
+                );
+                for (const item of block.items) {
+                    if (item.settings?.pluginCode === 'mdac-entry') {
+                        // Operational restriction comes from deployment policy, never merchant UI defaults.
+                        item.settings = { ...item.settings, allowedHost: this.mdacDomain() ?? '' };
+                    }
+                }
+            }
+        }
         return blocks
             .filter(block => !accountOnly || isAccountContentBlockType(block.type))
             .filter(
@@ -190,6 +204,7 @@ export class StorefrontContentService {
             this.validateNavigationItems(input.items ?? []);
         }
         if (normalized.type === 'CLIENT_PLUGINS') {
+            await this.assertMdacChannel(ctx, input.items ?? []);
             this.validateClientPluginItems(input.items ?? []);
         }
         this.validateAuthVisual(normalized, input.items ?? []);
@@ -276,6 +291,7 @@ export class StorefrontContentService {
             );
         }
         if (next.type === 'CLIENT_PLUGINS') {
+            await this.assertMdacChannel(ctx, input.items ?? block.items);
             this.validateClientPluginItems(
                 input.items ??
                     block.items.map(item => ({
@@ -499,6 +515,7 @@ export class StorefrontContentService {
             this.validateNavigationItems(inputs);
         }
         if (block.type === 'CLIENT_PLUGINS') {
+            await this.assertMdacChannel(ctx, inputs);
             this.validateClientPluginItems(inputs);
         }
         const existing = await this.connection.getRepository(ctx, StorefrontContentItem).find({
@@ -1141,6 +1158,37 @@ export class StorefrontContentService {
             ) {
                 throw new UserInputError('客户端导航包含不支持的站内页面');
             }
+        }
+    }
+
+    private mdacDomain(): string | undefined {
+        const domain = process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN?.trim().toLowerCase();
+        return domain && /^[a-z0-9]+(?:[.-][a-z0-9]+)+$/.test(domain) ? domain : undefined;
+    }
+
+    async availableClientPluginCodes(ctx: RequestContext): Promise<string[]> {
+        const allowed = await this.isMdacChannel(ctx);
+        return storefrontClientPluginCodes.filter(code => code !== 'mdac-entry' || allowed);
+    }
+
+    private async isMdacChannel(ctx: RequestContext): Promise<boolean> {
+        const allowedDomain = this.mdacDomain();
+        if (!allowedDomain || !this.connection.rawConnection.hasMetadata('StoreDomain')) return false;
+        const domain = await this.connection
+            .getRepository<{ channelId: ID; domain: string; status: string }>(ctx, 'StoreDomain')
+            .findOne({ where: { domain: allowedDomain, channelId: ctx.channelId, status: 'ACTIVE' } });
+        return Boolean(domain);
+    }
+
+    private async assertMdacChannel(
+        ctx: RequestContext,
+        items: Array<{ enabled?: boolean | null; settings?: Record<string, any> | null }>,
+    ): Promise<void> {
+        if (
+            items.some(item => item.enabled !== false && item.settings?.pluginCode === 'mdac-entry') &&
+            !(await this.isMdacChannel(ctx))
+        ) {
+            throw new UserInputError('当前店铺未获准启用马来西亚入境卡插件');
         }
     }
 
