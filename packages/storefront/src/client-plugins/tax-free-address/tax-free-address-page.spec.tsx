@@ -4,10 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-    formatTaxFreeAddress,
-    type TaxFreeAddressClaim,
-} from '../../../../storefront-content-plugin/src/tax-free-address-contract';
+import { type TaxFreeAddressClaim } from '../../../../storefront-content-plugin/src/tax-free-address-contract';
 
 import { historyKey, readAddressHistory, saveAddressHistory } from './browser-history';
 import { TaxFreeAddressPage } from './tax-free-address-page';
@@ -104,12 +101,22 @@ describe('anonymous address tool with the real root QueryClient', () => {
         expect(f.node.textContent).toContain('下次可提取');
         expect(readAddressHistory('address-tool').records).toHaveLength(1);
         expect(readAddressHistory('other-store').records).toHaveLength(0);
+        const billingLabels = () =>
+            [...f.node.querySelectorAll('.tax-address-result dt')].map(field => field.textContent);
+        expect(billingLabels()).toEqual([
+            '国家（Country / Region）',
+            '地址（Address Line 1）',
+            '城市（City）',
+            '州（State）',
+            '邮编（ZIP Code）',
+        ]);
         await actOnce(() => f.button('一键复制').click());
         expect(writeText).toHaveBeenCalledWith(
-            '国家（英语）：United States\n地址（英语）：123 Example St\n城市（英语）：Manchester\n州（英语）：New Hampshire\n邮编（英语）：03101',
+            '国家（Country / Region）：United States\n地址（Address Line 1）：123 Example St\n城市（City）：Manchester\n州（State）：New Hampshire\n邮编（ZIP Code）：03101',
         );
         expect(f.writes).toHaveLength(1);
         await f.render('en');
+        expect(billingLabels()).toEqual(['Country / Region', 'Address Line 1', 'City', 'State', 'ZIP Code']);
         expect(f.node.textContent).toContain('Available in');
         expect(f.writes).toHaveLength(1);
     });
@@ -231,7 +238,7 @@ describe('anonymous address tool with the real root QueryClient', () => {
             saveAddressHistory('bounded', row);
         }
         expect(readAddressHistory('bounded').records).toHaveLength(1000);
-        expect(formatTaxFreeAddress(receipt().address)).toContain('邮编（英语）：03101');
+        expect(readAddressHistory('bounded').records[0]?.address.postalCode).toBe('03101');
         saveAddressHistory('bounded', { ...receipt('last'), requestId: '1001' });
         expect(readAddressHistory('bounded').records).toHaveLength(1000);
     });

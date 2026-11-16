@@ -15,7 +15,6 @@ import {
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
 import {
-    formatTaxFreeAddress,
     formatTaxFreeAddressSummary,
     type TaxFreeAddress,
     type TaxFreeAddressClaim,
@@ -39,6 +38,14 @@ import './tax-free-address.css';
 type SavedClaim = TaxFreeAddressClaim & { savedLocally: boolean };
 const statusKey = ['address-tool', 'availability'];
 const historyScope = 'address-tool';
+const billingFields = [
+    { field: 'country', chinese: '国家', english: 'Country / Region' },
+    { field: 'line1', chinese: '地址', english: 'Address Line 1' },
+    { field: 'city', chinese: '城市', english: 'City' },
+    { field: 'state', chinese: '州', english: 'State' },
+    { field: 'postalCode', chinese: '邮编', english: 'ZIP Code' },
+] as const;
+
 type CopyField = 'line1' | 'city' | 'postalCode';
 const copyFieldNames = {
     line1: ['地址', 'Street address'],
@@ -57,20 +64,21 @@ export function AddressFields({
     copied?: string;
     onCopy?: (field: CopyField) => void;
 }) {
-    const fields = [
-        [zh ? '国家（英语）' : 'Country', address.country, 'country'],
-        [zh ? '地址（英语）' : 'Address', address.line1, 'line1'],
-        [zh ? '城市（英语）' : 'City', address.city, 'city'],
-        [zh ? '州（英语）' : 'State', address.state, 'state'],
-        [zh ? '邮编（英语）' : 'ZIP code', address.postalCode, 'postalCode'],
-    ] as const;
     return (
         <dl className="tax-address-fields">
-            {fields.map(([label, value, field], index) => (
-                <div key={label} className={index < 2 ? 'tax-address-field-wide' : undefined}>
-                    <dt className="type-label">{label}</dt>
+            {billingFields.map(({ field, chinese, english }, index) => (
+                <div key={field} className={index < 2 ? 'tax-address-field-wide' : undefined}>
+                    <dt className="type-label">
+                        {zh ? (
+                            <>
+                                {chinese}（<span lang="en">{english}</span>）
+                            </>
+                        ) : (
+                            english
+                        )}
+                    </dt>
                     <dd className="tax-address-field-value type-body">
-                        <span lang="en">{value}</span>
+                        <span lang="en">{address[field]}</span>
                         {onCopy && (field === 'line1' || field === 'city' || field === 'postalCode') && (
                             <span className="tax-address-field-copy-wrap">
                                 <button
@@ -222,15 +230,23 @@ export function TaxFreeAddressPage({
         const timeout = setTimeout(() => setCopied(''), 2500);
         return () => clearTimeout(timeout);
     }, [copied]);
-    async function copy(address: TaxFreeAddress, field?: CopyField) {
+    async function copy(address: TaxFreeAddress, selectedField?: CopyField) {
         setCopied('');
         setMessage('');
         try {
-            await navigator.clipboard.writeText(field ? address[field] : formatTaxFreeAddress(address));
-            setCopied(field ? `${address.id}:${field}` : address.id);
+            const text = selectedField
+                ? address[selectedField]
+                : billingFields
+                      .map(({ field, chinese, english }) => `${chinese}（${english}）：${address[field]}`)
+                      .join('\n');
+            await navigator.clipboard.writeText(text);
+            setCopied(selectedField ? `${address.id}:${selectedField}` : address.id);
             setMessage(
-                field
-                    ? t(`${copyFieldNames[field][0]}已复制`, `${copyFieldNames[field][1]} copied`)
+                selectedField
+                    ? t(
+                          `${copyFieldNames[selectedField][0]}已复制`,
+                          `${copyFieldNames[selectedField][1]} copied`,
+                      )
                     : t('地址已复制', 'Address copied'),
             );
         } catch {
