@@ -1,6 +1,7 @@
 /* eslint-disable import/order, max-len -- Bilingual copy and clean relative types are intentional. */
 import { ChevronDown, CircleHelp, Clipboard, Clock3, Mail, RefreshCw, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { PageBackButton } from '../../components/common/page-back-button';
 import { createDeferredContentReveal } from '../../content-reveal';
 import { SubHeader } from '../../storefront-ui/page-shell';
 
@@ -694,9 +695,16 @@ export function MailQueryPage({
                 title={isZh ? '邮箱查询服务' : 'Email lookup'}
                 titleIcon={standalone ? <Mail /> : undefined}
                 language={language}
-                onBack={result ? handleBackToQueryForm : handleBackClick}
-                back={standalone && !result && !onBack ? false : undefined}
-                backLabel={standalone ? undefined : isZh ? '返回上一层' : 'Back'}
+                back={
+                    standalone && !result && !onBack ? (
+                        false
+                    ) : (
+                        <PageBackButton
+                            onClick={result ? handleBackToQueryForm : handleBackClick}
+                            label={isZh ? '返回上一层' : 'Back'}
+                        />
+                    )
+                }
                 action={
                     standalone ? (
                         <button
@@ -736,8 +744,8 @@ export function MailQueryPage({
                                 </label>
                                 <p className="query-description" id="queryDescription">
                                     {isZh
-                                        ? '输入查询码，查看邮件和验证码。'
-                                        : 'Enter your query code to view emails and verification codes.'}
+                                        ? '查询码可在订单详情或发货信息中找到。'
+                                        : 'Find your query code in the order details or delivery message.'}
                                 </p>
                                 <div className="mail-query-controls">
                                     <div

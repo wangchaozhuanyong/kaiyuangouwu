@@ -1016,6 +1016,27 @@
 }
 
 @media (max-width: 1023px) {
+    .mail-query-page.standalone-tool-page .subpage-header {
+        grid-template-columns: var(--experience-control-min) minmax(0, 1fr) var(--experience-control-min);
+    }
+
+    .mail-query-page.standalone-tool-page .subpage-header > strong {
+        grid-column: 2;
+        justify-content: center;
+        text-align: center;
+    }
+
+    .mail-query-page.standalone-tool-page .subpage-title-icon,
+    .mail-query-page.standalone-tool-page .subpage-header-actions,
+    .mail-query-page > .standalone-tool-heading {
+        display: none;
+    }
+
+    .mail-query-page .card-label {
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-leading);
+    }
+
     .mail-query-page .subpage-header-actions:not(:empty) {
         grid-column: 1 / -1;
         justify-self: end;

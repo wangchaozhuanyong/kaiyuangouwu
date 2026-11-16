@@ -124,38 +124,23 @@
     gap: var(--space-8);
     margin-bottom: var(--space-24);
 }
-.gpt-recharge-step {
-    display: grid;
-    place-items: center;
-    flex-shrink: 0;
-    width: 28px;
-    height: 28px;
-    border-radius: var(--skin-control-radius);
-    background: var(--selection-soft);
-    color: var(--selection);
-    font-size: var(--type-meta-size);
-    line-height: var(--type-meta-leading);
-}
-.gpt-recharge-label,
 .gpt-recharge-field {
     font-size: var(--type-label-size);
     line-height: var(--type-label-leading);
     font-weight: var(--font-weight-medium);
 }
-.gpt-recharge-label {
-    display: block;
-    margin-bottom: var(--space-8);
-}
 .gpt-recharge-field {
     display: grid;
     gap: var(--space-8);
 }
-.gpt-recharge-field-heading {
-    display: flex;
+.gpt-recharge-account-heading {
     flex-wrap: wrap;
-    align-items: center;
     justify-content: space-between;
-    gap: var(--space-8);
+    gap: var(--space-12);
+    margin-bottom: var(--space-12);
+}
+.gpt-recharge-account-heading h2 {
+    flex: 1 0 auto;
 }
 .gpt-recharge-session-link {
     display: inline-flex;
@@ -168,9 +153,12 @@
     line-height: var(--type-action-leading);
     white-space: nowrap;
 }
+.gpt-recharge-session-link svg {
+    flex-shrink: 0;
+}
 .gpt-recharge-field-actions {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-8);
     max-width: 100%;
 }
@@ -546,8 +534,18 @@
     .gpt-recharge-field textarea {
         height: 104px;
     }
+    .gpt-recharge-account-heading {
+        margin-bottom: var(--space-12);
+    }
+    .gpt-recharge-field-actions {
+        flex: 1 0 auto;
+    }
     .gpt-recharge-page .gpt-recharge-field-actions .gpt-recharge-session-link {
+        min-width: 0;
+        gap: var(--space-4);
         padding-inline: var(--space-8);
+        white-space: normal;
+        text-align: center;
     }
     .gpt-recharge-help-links {
         display: none;
