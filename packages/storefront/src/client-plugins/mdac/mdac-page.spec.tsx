@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import assert from 'node:assert/strict';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -39,8 +40,15 @@ function inputOfType(type: 'checkbox' | 'file') {
     return input;
 }
 
+const queryClient = new QueryClient();
 const render = (language: 'zh' | 'en' = 'zh') =>
-    act(() => root.render(<MdacPage language={language} onBack={() => undefined} />));
+    act(() =>
+        root.render(
+            <QueryClientProvider client={queryClient}>
+                <MdacPage language={language} onBack={() => undefined} />
+            </QueryClientProvider>,
+        ),
+    );
 
 it('keeps guest edits in memory until opt-in, and clear does not delete other tools', () => {
     localStorage.setItem('other', 'retained');

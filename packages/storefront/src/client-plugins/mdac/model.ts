@@ -34,9 +34,17 @@ export const personalFields: Field[] = [
     { key: 'sex', zh: '性别', en: 'Sex', options: options.sex },
     { key: 'passExpDte', zh: '护照到期日', en: 'Passport expiry', type: 'date' },
 ];
+const priorityCallingCodes = ['60', '86'];
+const callingCodes = [
+    ...options.region.filter(([code]) => priorityCallingCodes.includes(code)),
+    ...options.region.filter(([code]) => !priorityCallingCodes.includes(code)),
+];
+export const AIR_TRAVEL = '1';
+export const HOTEL_STAY = '01';
+
 export const tripFields: Field[] = [
     { key: 'email', zh: '回执邮箱', en: 'Email', type: 'email', maxLength: 100 },
-    { key: 'region', zh: '电话区号', en: 'Calling code', options: options.region },
+    { key: 'region', zh: '电话区号', en: 'Calling code', options: callingCodes },
     { key: 'mobile', zh: '电话号码', en: 'Phone number', type: 'tel', maxLength: 12, pattern: '[0-9]+' },
     { key: 'arrDt', zh: '抵达日期', en: 'Arrival date', type: 'date' },
     { key: 'depDt', zh: '离境日期', en: 'Departure date', type: 'date' },
@@ -67,7 +75,11 @@ export function validPersonalFields(person: Fields): boolean {
     });
 }
 export function emptyDraft(): Draft {
-    return { version: 1, travelers: [{}], shared: {} };
+    return {
+        version: 1,
+        travelers: [{}],
+        shared: { region: '86', trvlMode: AIR_TRAVEL, embark: 'CHN', accommodationStay: HOTEL_STAY },
+    };
 }
 export function validDraft(value: unknown): value is Draft {
     if (!value || typeof value !== 'object') return false;
@@ -159,6 +171,18 @@ export function isIsoDate(value: string | undefined): boolean {
     if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
     const date = new Date(`${value}T00:00:00Z`);
     return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+export function suggestedDepartureDate(arrival: string): string {
+    if (!isIsoDate(arrival)) return '';
+    const date = new Date(`${arrival}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + 29);
+    const result = date.toISOString().split('T')[0];
+    return isIsoDate(result) ? result : '';
+}
+
+export function normalizeFlightNumber(value: string): string {
+    return value.toUpperCase().replace(/\s+/gu, '');
 }
 
 export function malaysiaToday(now = new Date()): string {
