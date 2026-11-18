@@ -6,9 +6,11 @@ import {
     exportConfig,
     isIsoDate,
     malaysiaToday,
+    normalizeFlightNumber,
     persistDraft,
     readDraft,
     STORAGE_KEY,
+    suggestedDepartureDate,
     validateDates,
 } from './model';
 import { passportFields } from './ocr';
@@ -82,6 +84,19 @@ describe('MDAC local data and export', () => {
         const person = { dob: '1990-01-01', passExpDte: '2030-01-01' };
         expect(validateDates(person, { arrDt: '2026-11-17', depDt: '2026-11-20' }, '2026-11-16')).toBe(true);
         expect(validateDates(person, { arrDt: '2026-11-17', depDt: '2026-11-16' }, '2026-11-16')).toBe(false);
+    });
+    it('defaults a fresh trip and counts arrival as the first of 30 calendar days', () => {
+        expect(emptyDraft().shared).toEqual({
+            region: '86',
+            trvlMode: '1',
+            embark: 'CHN',
+            accommodationStay: '01',
+        });
+        expect(suggestedDepartureDate('2026-11-01')).toBe('2026-11-30');
+        expect(suggestedDepartureDate('2026-12-20')).toBe('2027-01-18');
+        expect(suggestedDepartureDate('2028-02-01')).toBe('2028-03-01');
+        expect(suggestedDepartureDate('2026-02-29')).toBe('');
+        expect(normalizeFlightNumber(' mh 123 ')).toBe('MH123');
     });
     it('uses verified MRZ fields and refuses a damaged passport checksum', () => {
         const sample =

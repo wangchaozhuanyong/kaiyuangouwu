@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MDAC Autofill (Storefront adapter)
 // @namespace    https://github.com/nilbloom/mdac
-// @version      1.0.1
+// @version      1.0.2
 // @description  Auto-fill the Malaysia Digital Arrival Card (MDAC) form with your own pre-saved traveler info. Config is stored locally via Tampermonkey storage.
 // @author       nilbloom
 // @homepageURL  https://github.com/nilbloom/mdac
@@ -174,9 +174,58 @@
   // ============================================================
   // Fill form for one traveler
   // ============================================================
+  let fillRevision = 0;
+
+  function fillAccommodationCity(d, revision, previousCityOption) {
+    let attempts = 0;
+    const poll = () => {
+      if (revision !== fillRevision) return;
+      if (attempts++ >= 40) {
+        msg('warn', 'Check the accommodation city and postcode on the official form.');
+        return;
+      }
+      const state = document.getElementById('accommodationState');
+      const city = document.getElementById('accommodationCity');
+      const expected = String(d.accommodationCity).trim().toUpperCase();
+      const options = Array.from(city?.options ?? []).filter(option => option.value);
+      const exact = options.find(option => option.value === expected || option.text.trim().toUpperCase() === expected);
+      const partial = options.filter(option => option.text.toUpperCase().includes(expected));
+      const match = exact || (partial.length === 1 ? partial[0] : undefined);
+      if (state?.value !== d.accommodationState || (previousCityOption && previousCityOption === city?.options[0]) || !match) {
+        setTimeout(poll, 150);
+        return;
+      }
+      setSelect('accommodationCity', match.value);
+      setHidden('sCity', match.value);
+      if (d.accommodationPostcode) setInput('accommodationPostcode', d.accommodationPostcode);
+    };
+    if (d.accommodationCity && d.accommodationState) setTimeout(poll, 150);
+    else if (d.accommodationPostcode) setInput('accommodationPostcode', d.accommodationPostcode);
+  }
+
+  function preservePhoneRegion(value, revision) {
+    const region = document.getElementById('region');
+    if (!region || !value) return 0;
+    const restore = () => {
+      if (revision !== fillRevision || !setSelect('region', value)) return 0;
+      setHidden('sRegion', value);
+      return 1;
+    };
+    const observer = new MutationObserver(restore);
+    observer.observe(region, { childList: true, subtree: true });
+    const stop = event => { if (event.isTrusted) observer.disconnect(); };
+    region.addEventListener('change', stop);
+    setTimeout(() => {
+      observer.disconnect();
+      region.removeEventListener('change', stop);
+    }, 6000);
+    return restore();
+  }
+
   function fillForm(traveler) {
     if (!config) { msg('warn', '⚠️ No config — click ⚙️ Edit Config first'); return 0; }
     const d = { ...normalizeShared(config.shared), ...traveler };
+    const revision = ++fillRevision;
     let count = 0;
 
     if (setInput('name', d.name)) count++;
@@ -190,7 +239,7 @@
     if (setSelect('nationality', d.nationality)) count++;
     if (setSelect('pob', d.pob)) count++;
     if (setSelect('sex', d.sex)) count++;
-    if (setSelect('region', d.region)) count++;
+    count += preservePhoneRegion(d.region, revision);
 
     if (setDatepicker('arrDt', d.arrDt)) count++;
     if (setDatepicker('depDt', d.depDt)) count++;
@@ -201,23 +250,14 @@
     if (setSelect('accommodationStay', d.accommodationStay)) count++;
     if (d.accommodationAddress1 && setInput('accommodationAddress1', d.accommodationAddress1)) count++;
     if (d.accommodationAddress2 && setInput('accommodationAddress2', d.accommodationAddress2)) count++;
-    if (d.accommodationState && setSelect('accommodationState', d.accommodationState)) count++;
-    if (d.accommodationPostcode && setInput('accommodationPostcode', d.accommodationPostcode)) count++;
-
-    // City depends on State (loaded async). Retry up to ~5s.
-    if (d.accommodationCity && d.accommodationState) {
-      const trySetCity = (attempts) => {
-        if (attempts <= 0) return;
-        const cityEl = document.getElementById('accommodationCity');
-        if (cityEl && cityEl.options.length > 1 && setSelect('accommodationCity', d.accommodationCity)) {
-          // Adapter accepts the reviewed city label, but the official hidden field needs its code.
-          setHidden('sCity', cityEl.value);
-        } else {
-          setTimeout(() => trySetCity(attempts - 1), 500);
-        }
-      };
-      setTimeout(() => trySetCity(10), 500);
-    }
+    const state = document.getElementById('accommodationState');
+    const city = document.getElementById('accommodationCity');
+    const stateChanged = state?.value !== d.accommodationState;
+    const previousCityOption = stateChanged ? city?.options[0] : undefined;
+    if (d.accommodationState && (stateChanged
+      ? setSelect('accommodationState', d.accommodationState)
+      : state)) count++;
+    fillAccommodationCity(d, revision, previousCityOption);
 
     setHidden('sNation', d.nationality);
     setHidden('sMode', d.trvlMode);
@@ -397,6 +437,7 @@
     };
 
     document.getElementById('mdac-clear').onclick = () => {
+      fillRevision++;
       document.querySelectorAll('input[type="text"], textarea').forEach(el => {
         const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
         const desc = Object.getOwnPropertyDescriptor(proto, 'value');

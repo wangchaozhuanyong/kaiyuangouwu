@@ -16,11 +16,23 @@ it('renders imported names as text and clears textarea fields without invoking a
             <input type="text" value="sample">
             <textarea>sample</textarea>
             <select id="accommodationState"><option></option><option value="14">KL</option></select>
-            <select id="accommodationCity"><option></option><option value="CITY14">KUALA LUMPUR</option></select>
+            <select id="accommodationCity"><option></option><option value="OLD">KUALA LUMPUR</option></select>
+            <input type="text" id="accommodationPostcode">
             <input type="hidden" id="sCity">
             <button type="submit">submit</button>
         </form>`;
     const submit = vi.fn();
+    const city = document.querySelector<HTMLSelectElement>('#accommodationCity');
+    const postcode = document.querySelector<HTMLInputElement>('#accommodationPostcode');
+    assert.ok(city && postcode);
+    document.querySelector('#accommodationState')?.addEventListener('change', () => {
+        setTimeout(() => {
+            city.replaceChildren(new Option('Select', ''), new Option('KUALA LUMPUR', 'CITY14'));
+        }, 300);
+    });
+    city.addEventListener('change', () => {
+        postcode.value = '';
+    });
     const form = document.querySelector('form');
     assert.ok(form);
     form.addEventListener('submit', submit);
@@ -40,7 +52,7 @@ it('renders imported names as text and clears textarea fields without invoking a
         clearTimeout,
         GM_getValue: () => ({
             travelers: [{ name, label: 'test' }],
-            shared: { accommodation: { state: '14', city: 'KUALA LUMPUR' } },
+            shared: { accommodation: { state: '14', city: 'KUALA LUMPUR', postcode: '50450' } },
         }),
         GM_setValue: vi.fn(),
         GM_deleteValue: vi.fn(),
@@ -54,8 +66,12 @@ it('renders imported names as text and clears textarea fields without invoking a
     const clear = document.querySelector<HTMLButtonElement>('#mdac-clear');
     assert.ok(fill && clear);
     fill.click();
-    vi.advanceTimersByTime(500);
+    vi.advanceTimersByTime(200);
+    expect(city.value).toBe('');
+    expect(postcode.value).toBe('');
+    vi.advanceTimersByTime(300);
     expect(document.querySelector<HTMLInputElement>('#sCity')?.value).toBe('CITY14');
+    expect(postcode.value).toBe('50450');
     clear.click();
     expect(document.querySelector('textarea')?.value).toBe('');
     expect(submit).not.toHaveBeenCalled();

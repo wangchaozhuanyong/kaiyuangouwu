@@ -1,20 +1,26 @@
 // organize-imports-ignore -- Keep ESLint type import grouping.
 import type { StorefrontLanguage } from '../../types';
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 import { Subpage, SubpageBody } from '../../storefront-ui/page-shell';
 
 import './mdac.css';
+import { MdacFieldHelp } from './field-help';
+import { MdacHotelPicker, type MdacHotel } from './hotel-picker';
 import {
+    AIR_TRAVEL,
     emptyDraft,
     exportConfig,
+    HOTEL_STAY,
     malaysiaToday,
+    normalizeFlightNumber,
     OFFICIAL_URL,
     PassportReadError,
     persistDraft,
     personalFields,
     readDraft,
     STORAGE_KEY,
+    suggestedDepartureDate,
     tripFields,
     validateDates,
     validPersonalFields,
@@ -31,6 +37,15 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
     const [step, setStep] = useState(0);
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState('');
+    const [departureIsSuggested, setDepartureIsSuggested] = useState(false);
+    const [checkDeparture, setCheckDeparture] = useState(false);
+    const [flightReviewed, setFlightReviewed] = useState(false);
+    const [confirmedTrip, setConfirmedTrip] = useState(false);
+    const fieldId = useId();
+    const byAir = draft.shared.trvlMode === AIR_TRAVEL;
+    const flight = normalizeFlightNumber(draft.shared.vesselNm ?? '');
+    const showFlightHint =
+        byAir && flightReviewed && flight && !/^[A-Z0-9]{2,3}[0-9]{1,4}[A-Z]?$/u.test(flight);
     const generation = useRef(0);
     const imageInput = useRef<HTMLInputElement>(null);
     const scanController = useRef<AbortController | null>(null);
@@ -81,7 +96,40 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
                   ),
               }
             : { ...draft, shared: { ...draft.shared, [field.key]: value } };
+        if (!personal && field.key === 'arrDt' && value !== draft.shared.arrDt) {
+            if (departureIsSuggested || !draft.shared.depDt) {
+                next.shared.depDt = suggestedDepartureDate(value);
+                setDepartureIsSuggested(Boolean(next.shared.depDt));
+                setCheckDeparture(false);
+            } else {
+                setCheckDeparture(true);
+            }
+        }
+        if (!personal && field.key === 'depDt') {
+            setDepartureIsSuggested(false);
+            setCheckDeparture(false);
+        }
+        if (!personal && field.key === 'vesselNm') setFlightReviewed(false);
         save(next);
+    }
+    function selectHotel(hotel: MdacHotel) {
+        save({
+            ...draft,
+            shared: {
+                ...draft.shared,
+                accommodationAddress1: hotel.address,
+                accommodationAddress2: hotel.address2 ?? '',
+                accommodationState: hotel.state,
+                accommodationCity: hotel.city,
+                accommodationPostcode: hotel.postcode,
+            },
+        });
+    }
+    function normalizeFlight() {
+        if (byAir && flight !== (draft.shared.vesselNm ?? '')) {
+            save({ ...draft, shared: { ...draft.shared, vesselNm: flight } });
+        }
+        setFlightReviewed(true);
     }
     async function scan(file: File) {
         const current = ++generation.current;
@@ -151,6 +199,15 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
         event.preventDefault();
         setMessage('');
         if (step === 1) {
+            if (byAir && !flight) {
+                setMessage(
+                    t(
+                        '请填写抵达马来西亚的航班号。',
+                        'Enter the flight number for your arrival in Malaysia.',
+                    ),
+                );
+                return;
+            }
             const today = malaysiaToday();
             const missing = draft.travelers.findIndex(
                 person => !validPersonalFields(person) || !validateDates(person, draft.shared, today),
@@ -166,6 +223,8 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
                 setStep(0);
                 return;
             }
+            normalizeFlight();
+            setConfirmedTrip(false);
             const delta = (Date.parse(draft.shared.arrDt) - Date.parse(today)) / 86400000;
             if (delta > 2) {
                 setMessage(
@@ -179,6 +238,7 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
         setStep(step + 1);
     }
     function download() {
+        if (!confirmedTrip) return;
         const blob = new Blob([JSON.stringify(exportConfig(draft), null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -200,6 +260,10 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
         setRemember(false);
         setTraveler(0);
         setStep(0);
+        setDepartureIsSuggested(false);
+        setCheckDeparture(false);
+        setFlightReviewed(false);
+        setConfirmedTrip(false);
         if (imageInput.current) imageInput.current.value = '';
         save(emptyDraft(), false);
         setMessage(
@@ -232,51 +296,143 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
             )}
         </div>
     );
+    const fieldHelp: Record<string, string> = {
+        email: t(
+            '填写能收到入境卡回执的邮箱，例如 name@example.com。',
+            'Use an email address that can receive your confirmation, such as name@example.com.',
+        ),
+        arrDt: t(
+            '按马来西亚当地落地日期填写。例如 1 日 22:00 起飞、2 日凌晨 03:00 落地，填写 2 日。',
+            'Enter the local date you land in Malaysia. If you take off at 22:00 on the 1st and land at 03:00 on the 2nd, enter the 2nd.',
+        ),
+        depDt: t(
+            '以抵达当天为第 1 天，自动建议第 30 天。请按实际票据填写，获准停留期限以入境许可为准。',
+            'The suggested date is day 30, counting arrival as day 1. Use the date on your ticket and follow the stay permitted at entry.',
+        ),
+        vesselNm: byAir
+            ? t(
+                  '在订票软件的订单详情中，查找实际飞抵马来西亚那一段的航班号，例如 MH123。',
+                  'Find the flight number for the leg into Malaysia in your booking app, for example MH123.',
+              )
+            : t(
+                  '请在票据或行程单上查找抵马段的交通工具编号。',
+                  'Find the transport number for the leg into Malaysia on your ticket or itinerary.',
+              ),
+        embark: t(
+            '如有转机，请填写飞往马来西亚的最后一段航程从哪里出发。',
+            'For a connection, enter the departure point of the last leg into Malaysia.',
+        ),
+    };
+    function optionLabel(field: string, value: string, label: string) {
+        if (field === 'region' && value === '60') return t('马来西亚 +60', 'Malaysia +60');
+        if (field === 'region' && value === '86') return t('中国 +86', 'China +86');
+        if (field === 'trvlMode' && value === AIR_TRAVEL) return t('飞机', 'Air');
+        if (field === 'embark' && value === 'CHN') return t('中国', 'China');
+        if (field === 'accommodationStay' && value === HOTEL_STAY) return t('酒店', 'Hotel');
+        return label;
+    }
+    function reviewField(field: Field) {
+        const value = draft.shared[field.key];
+        const option = field.options?.find(([code]) => code === value);
+        return option ? optionLabel(field.key, value, option[1]) : value || '—';
+    }
     function fields(items: Field[], values: Fields, personal: boolean, actions?: ReactNode) {
         return (
             <div className="mdac-fields">
-                {items.map(field => (
-                    <label key={field.key} className="type-label">
-                        {language === 'zh' ? field.zh : field.en}
-                        {field.optional ? t('（选填）', ' (optional)') : ''}
-                        {field.options ? (
-                            <select
-                                value={values[field.key] ?? ''}
-                                required={!field.optional}
-                                disabled={busy}
-                                onChange={event => update(field, event.target.value, personal)}
-                            >
-                                <option value="">{t('请选择', 'Select')}</option>
-                                {field.options.map(([value, label], index) => (
-                                    <option key={value + index} value={value}>
-                                        {label}
-                                    </option>
-                                ))}
-                            </select>
-                        ) : (
-                            <input
-                                value={values[field.key] ?? ''}
-                                required={!field.optional}
-                                disabled={busy}
-                                className="type-input"
-                                type={field.type ?? 'text'}
-                                maxLength={field.maxLength ?? 250}
-                                autoComplete="off"
-                                pattern={field.pattern}
-                                onInput={
-                                    field.type === 'date'
-                                        ? event => update(field, event.currentTarget.value, personal)
-                                        : undefined
-                                }
-                                onChange={
-                                    field.type !== 'date'
-                                        ? event => update(field, event.target.value, personal)
-                                        : undefined
-                                }
-                            />
-                        )}
-                    </label>
-                ))}
+                {items.map(field => {
+                    const id = `${fieldId}-${field.key}`;
+                    const label = t(field.zh, field.en);
+                    const help = fieldHelp[field.key];
+                    const advisory =
+                        field.key === 'depDt' && checkDeparture
+                            ? t(
+                                  '抵达日期已更改，请重新核对实际离境日期。',
+                                  'Arrival has changed. Review your actual departure date.',
+                              )
+                            : field.key === 'vesselNm' && showFlightHint
+                              ? t(
+                                    '请核对航班号是否与订单一致，例如 MH123。',
+                                    'Check the flight number against your booking, for example MH123.',
+                                )
+                              : '';
+                    const description =
+                        [help && id + '-help', advisory && id + '-advisory'].filter(Boolean).join(' ') ||
+                        undefined;
+                    return (
+                        <div className="mdac-field" key={field.key}>
+                            <div className="mdac-field-heading">
+                                <label htmlFor={id} className="type-label">
+                                    {label}
+                                    {field.optional ? t('（选填）', ' (optional)') : ''}
+                                </label>
+                                {help && (
+                                    <MdacFieldHelp
+                                        id={id + '-help'}
+                                        label={t(label + '说明', label + ' help')}
+                                        text={help}
+                                    />
+                                )}
+                            </div>
+                            {field.options ? (
+                                <select
+                                    id={id}
+                                    aria-describedby={description}
+                                    value={values[field.key] ?? ''}
+                                    required={!field.optional}
+                                    disabled={busy}
+                                    onChange={event => update(field, event.target.value, personal)}
+                                >
+                                    <option value="">{t('请选择', 'Select')}</option>
+                                    {field.options.map(([value, option], index) => (
+                                        <option key={value + index} value={value}>
+                                            {optionLabel(field.key, value, option)}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <input
+                                    id={id}
+                                    aria-describedby={description}
+                                    value={values[field.key] ?? ''}
+                                    required={!field.optional}
+                                    disabled={busy}
+                                    className="type-input"
+                                    type={field.type ?? 'text'}
+                                    maxLength={field.maxLength ?? 250}
+                                    autoComplete="off"
+                                    pattern={field.pattern}
+                                    placeholder={
+                                        field.key === 'email'
+                                            ? 'name@example.com'
+                                            : field.key === 'vesselNm' && byAir
+                                              ? 'MH123'
+                                              : undefined
+                                    }
+                                    onInput={
+                                        field.type === 'date'
+                                            ? event => update(field, event.currentTarget.value, personal)
+                                            : undefined
+                                    }
+                                    onChange={
+                                        field.type !== 'date'
+                                            ? event => update(field, event.target.value, personal)
+                                            : undefined
+                                    }
+                                    onBlur={field.key === 'vesselNm' ? normalizeFlight : undefined}
+                                />
+                            )}
+                            {advisory && (
+                                <p id={id + '-advisory'} className="type-helper" role="status">
+                                    {advisory}
+                                </p>
+                            )}
+                            {field.key === 'accommodationAddress1' &&
+                                draft.shared.accommodationStay === HOTEL_STAY && (
+                                    <MdacHotelPicker language={language} onSelect={selectHotel} />
+                                )}
+                        </div>
+                    );
+                })}
                 {actions}
             </div>
         );
@@ -299,8 +455,8 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
                         </p>
                         <p className="type-helper">
                             {t(
-                                '请准备邮箱、电话、入离境日期、航班及住宿资料。航班号不能推断住宿、离境日期或联系方式。',
-                                'Have your email, phone, travel dates, flight and accommodation ready. These cannot all be inferred from a flight number.',
+                                '请准备邮箱、电话、抵达航班、实际离境日期和住宿资料。',
+                                'Have your email, phone, arrival flight, actual departure date and accommodation ready.',
                             )}
                         </p>
                         <ol className="mdac-steps type-meta">
@@ -419,13 +575,7 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
                                         {tripFields.map(field => (
                                             <div key={field.key}>
                                                 <dt>{language === 'zh' ? field.zh : field.en}</dt>
-                                                <dd>
-                                                    {field.options?.find(
-                                                        ([code]) => code === draft.shared[field.key],
-                                                    )?.[1] ??
-                                                        draft.shared[field.key] ??
-                                                        '—'}
-                                                </dd>
+                                                <dd>{reviewField(field)}</dd>
                                             </div>
                                         ))}
                                     </dl>
@@ -437,6 +587,17 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
                                                 'and select a traveler to fill the form. Review, verify and submit each traveler on the official site.',
                                         )}
                                     </p>
+                                    <label className="mdac-check type-label">
+                                        <input
+                                            type="checkbox"
+                                            checked={confirmedTrip}
+                                            onChange={event => setConfirmedTrip(event.target.checked)}
+                                        />
+                                        {t(
+                                            '我已核对实际离境日期和住宿地址。',
+                                            'I have checked my actual departure date and accommodation address.',
+                                        )}
+                                    </label>
                                     <div className="mdac-actions">
                                         <a
                                             href="/mdac/mdac-autofill.user.js"
@@ -447,6 +608,7 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
                                         <button
                                             type="button"
                                             className="secondary-action type-action"
+                                            disabled={!confirmedTrip}
                                             onClick={download}
                                         >
                                             {t('导出填表资料', 'Export details')}
@@ -466,7 +628,7 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
                         </form>
                     </section>
                     <aside className="mdac-panel">
-                        <h2 className="type-section">{t('资料保存在此浏览器', 'Details on this browser')}</h2>
+                        <h2 className="type-section">{t('隐私安全', 'Privacy and security')}</h2>
                         <p className="type-helper">
                             {t(
                                 '护照照片在本机识别。旅客资料不上传商城、不存入商城数据库。提交官网时由马来西亚移民局接收。',
