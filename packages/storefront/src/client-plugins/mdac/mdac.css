@@ -93,33 +93,28 @@
 }
 .mdac-steps {
     display: flex;
-    max-width: 640px;
+    align-items: center;
+    gap: 8px;
     list-style: none;
     padding: 0;
 }
 .mdac-steps li {
-    position: relative;
-    flex: 1;
     min-width: 0;
-    display: grid;
-    justify-items: center;
-    align-content: start;
-    gap: 5px;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     color: var(--mdac-muted);
 }
 .mdac-steps li:not(:last-child)::after {
     content: '';
-    position: absolute;
-    top: 11px;
-    inset-inline-start: calc(50% + 17px);
-    width: calc(100% - 34px);
+    flex: 0 0 clamp(12px, 2vw, 28px);
     height: 1px;
     background: var(--line);
 }
 .mdac-steps li span {
     display: grid;
     place-items: center;
+    flex: none;
     width: 24px;
     height: 24px;
     border: 1px solid #b0bea9;
@@ -135,7 +130,14 @@
     border-color: var(--mdac-green);
 }
 .mdac-heading {
-    margin: 20px 0 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px 32px;
+    padding: 8px 0 20px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--mdac-line);
 }
 .mdac-page .mdac-heading h1 {
     --skin-display-font: 'Songti SC', 'STSong', 'Noto Serif CJK SC', Georgia, serif;
@@ -146,15 +148,8 @@
     outline: 0;
     scroll-margin-top: 16px;
 }
-.mdac-heading h1::after {
-    content: '';
-    display: block;
-    width: 46px;
-    height: 4px;
-    background: #e3b430;
-    border-radius: 60%;
-    transform: rotate(-3deg);
-    margin: 4px 0 9px;
+.mdac-heading h1 + p {
+    margin-top: 5px;
 }
 .mdac-heading p,
 .mdac-page .type-helper,
@@ -187,25 +182,69 @@
     flex-wrap: wrap;
 }
 .mdac-travelers {
-    margin: 10px 0;
-    justify-content: flex-start;
+    display: grid;
+    gap: 6px;
+    margin: 0 0 18px;
 }
-.mdac-travelers label {
-    min-width: 0;
-    max-width: min(55%, 18rem);
-    margin-inline-end: auto;
+.mdac-traveler-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 16px;
 }
-.mdac-page .mdac-travelers select {
-    padding: 8px;
+.mdac-traveler-toolbar .mdac-actions {
+    gap: 16px;
+}
+.mdac-traveler-toolbar .mdac-actions button:nth-child(2) {
+    color: var(--mdac-muted);
+}
+.mdac-traveler-list {
+    display: flex;
+    flex-wrap: wrap;
+    max-width: 100%;
+    gap: 8px;
+}
+.mdac-traveler-choice {
+    position: relative;
+    max-width: 100%;
+    cursor: pointer;
+}
+.mdac-traveler-choice > span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     min-height: 44px;
-    width: 100%;
-    color: var(--text);
-    border: 1px solid var(--line);
-    background: #fffdf7;
-    border-radius: 7px;
+    max-width: 26rem;
+    padding: 8px 14px;
+    overflow-wrap: anywhere;
+    border: 1px solid var(--mdac-line);
+    border-radius: var(--radius-sm, 8px);
+    color: var(--mdac-ink);
+    background: var(--surface);
+}
+.mdac-traveler-choice svg {
+    flex: none;
+}
+.mdac-traveler-choice input:not(:checked) + span svg {
+    visibility: hidden;
+}
+.mdac-traveler-choice input:checked + span {
+    border-color: var(--mdac-green);
+    background: var(--mdac-green);
+    color: white;
+}
+.mdac-traveler-choice input:focus-visible + span {
+    outline: 2px solid var(--mdac-green);
+    outline-offset: 2px;
+}
+.mdac-traveler-choice input:disabled + span {
+    opacity: 0.5;
+    cursor: default;
+}
+.mdac-traveler-mobile {
+    display: none;
 }
 .mdac-page .mdac-link,
-.mdac-page .mdac-travelers button,
 .mdac-clear {
     min-height: 44px;
     display: inline-flex;
@@ -237,6 +276,84 @@
 }
 .mdac-upload-title p {
     margin-top: 4px;
+}
+.mdac-photo-guide {
+    display: none;
+}
+@media (min-width: 801px) {
+    .mdac-upload {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+        align-items: center;
+        gap: 24px;
+    }
+    .mdac-page .mdac-upload-title > svg {
+        display: none;
+    }
+    .mdac-photo-guide {
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+        margin: 0;
+        padding: 10px 0;
+        color: var(--mdac-green);
+    }
+    .mdac-passport-sheet {
+        flex: 0 1 164px;
+        min-width: 0;
+        padding: 12px 10px 8px;
+        border: 1px solid var(--mdac-green);
+        border-radius: 4px 9px 9px 4px;
+        background: var(--mdac-paper);
+        box-shadow: -3px 3px 0 var(--mdac-green);
+        transform: rotate(-4deg);
+    }
+    .mdac-passport-data {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+    .mdac-passport-data svg {
+        width: 35px;
+        height: 39px;
+        padding: 4px;
+        border-radius: 3px;
+        background: #e3e8d7;
+    }
+    .mdac-passport-data span {
+        flex: 1;
+        height: 24px;
+        background: linear-gradient(var(--mdac-green) 0 0) left top / 58% 3px no-repeat,
+            linear-gradient(var(--mdac-line) 0 0) left center / 90% 2px no-repeat,
+            linear-gradient(var(--mdac-line) 0 0) left bottom / 72% 2px no-repeat;
+    }
+    .mdac-passport-code {
+        display: grid;
+        padding: 2px 5px;
+        border-radius: 3px;
+        background: #f6dc85;
+    }
+    .mdac-passport-code span {
+        overflow: hidden;
+        white-space: nowrap;
+    }
+    .mdac-photo-guide figcaption {
+        position: relative;
+        margin: 0 0 7px 19px;
+        padding-inline-start: 13px;
+    }
+    .mdac-photo-guide figcaption::before {
+        content: '';
+        position: absolute;
+        inset: 9px auto auto -27px;
+        width: 34px;
+        border-top: 1px solid var(--mdac-green);
+    }
+    .mdac-photo-guide figcaption small {
+        display: block;
+        color: var(--mdac-muted);
+    }
 }
 .mdac-page .mdac-primary {
     display: inline-flex;
@@ -397,6 +514,15 @@
     width: 100%;
     overflow-wrap: anywhere;
 }
+.mdac-export-options {
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+}
+.mdac-export-options summary {
+    min-height: 44px;
+    padding-block: 12px;
+    cursor: pointer;
+}
 .mdac-person-review,
 .mdac-summary {
     padding: 12px 0;
@@ -511,6 +637,36 @@
     }
 }
 @media (max-width: 600px) {
+    .mdac-traveler-list {
+        display: none;
+    }
+    .mdac-traveler-mobile {
+        display: block;
+        position: relative;
+        flex: 0 0 100%;
+        min-width: 0;
+    }
+    .page.subpage.mdac-page .mdac-traveler-mobile select {
+        appearance: none;
+        display: block;
+        width: 100%;
+        min-width: 0;
+        min-height: 52px;
+        padding: 10px 44px 10px 14px;
+        border: 1px solid var(--mdac-line);
+        border-radius: var(--radius-sm, 8px);
+        background: var(--surface);
+        color: var(--mdac-ink);
+        text-overflow: ellipsis;
+    }
+    .mdac-traveler-mobile svg {
+        position: absolute;
+        inset-inline-end: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--mdac-green);
+        pointer-events: none;
+    }
     .page.subpage.mdac-page > .topbar.subpage-header {
         padding: 8px 16px;
         gap: 5px;
@@ -523,10 +679,19 @@
         padding: 15px 16px 28px;
     }
     .mdac-steps {
-        max-width: none;
+        width: 100%;
+        gap: 6px;
+    }
+    .mdac-steps li:not(:last-child) {
+        flex: 1;
+    }
+    .mdac-steps li:not(:last-child)::after {
+        flex: 1 0 6px;
     }
     .mdac-heading {
-        margin: 16px 0 10px;
+        gap: 14px;
+        padding: 4px 0 16px;
+        margin-bottom: 14px;
     }
     .mdac-photo {
         width: 100%;

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MDAC Autofill (Storefront adapter)
 // @namespace    https://github.com/nilbloom/mdac
-// @version      1.0.2
+// @version      1.0.3
 // @description  Auto-fill the Malaysia Digital Arrival Card (MDAC) form with your own pre-saved traveler info. Config is stored locally via Tampermonkey storage.
 // @author       nilbloom
 // @homepageURL  https://github.com/nilbloom/mdac
@@ -93,9 +93,9 @@
   // ============================================================
   // Form-fill primitives
   // ============================================================
-  function setInput(id, value) {
+  function setInput(id, value, allowEmpty = false) {
     const el = document.getElementById(id) || document.querySelector(`[name="${id}"]`);
-    if (!el || value == null || value === '') return false;
+    if (!el || value == null || (!allowEmpty && value === '')) return false;
     const proto = el instanceof HTMLTextAreaElement
       ? HTMLTextAreaElement.prototype
       : HTMLInputElement.prototype;
@@ -249,7 +249,7 @@
 
     if (setSelect('accommodationStay', d.accommodationStay)) count++;
     if (d.accommodationAddress1 && setInput('accommodationAddress1', d.accommodationAddress1)) count++;
-    if (d.accommodationAddress2 && setInput('accommodationAddress2', d.accommodationAddress2)) count++;
+    if (setInput('accommodationAddress2', d.accommodationAddress2 ?? '', true)) count++;
     const state = document.getElementById('accommodationState');
     const city = document.getElementById('accommodationCity');
     const stateChanged = state?.value !== d.accommodationState;
