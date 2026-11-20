@@ -139,7 +139,7 @@ function SnapshotPage({ page, components }: { page: PublicPageData; components: 
     let body;
     if (request?.kind === 'blog' && page.blog) {
         const BlogContent = requiredComponent(components.BlogContent);
-        body = <BlogContent page={page.blog} input={request.input} />;
+        body = <BlogContent language={language} page={page.blog} input={request.input} />;
     } else if (request?.kind === 'article' && page.publicContent) {
         const GuideContent = requiredComponent(components.GuideContent);
         body = <GuideContent content={page.publicContent} language={language} />;

@@ -191,11 +191,12 @@ function ToolEntryPlugin({
     const assistance = name === 'coupons' || name === 'support';
     const suffix = name === 'gpt-recharge' ? '' : ` ${entryClass}-${name === 'coupons' ? 'coupon' : name}`;
     if (name === 'blog') {
+        const route = { name, publicLanguage: language } as const;
         return (
             <a
                 className={`${entryClass}${suffix}`}
-                href={routeHref({ name })}
-                onClick={event => interceptContentNavigation(event, () => onNavigate({ name }))}
+                href={routeHref(route)}
+                onClick={event => interceptContentNavigation(event, () => onNavigate(route))}
             >
                 <span className={`${entryClass}-icon`} aria-hidden="true">
                     <Icon />
@@ -258,9 +259,6 @@ function toolEntry(name: keyof typeof toolCopy): ComponentType<ClientPluginCompo
     return props => <ToolEntryPlugin {...props} name={name} />;
 }
 
-function NewsBlogEntryPlugin(props: Readonly<ClientPluginComponentProps>) {
-    return props.language === 'zh' ? <ToolEntryPlugin {...props} name="blog" /> : null;
-}
 const clientPluginRenderers: Readonly<Record<string, ComponentType<ClientPluginComponentProps> | undefined>> =
     {
         'category-coupon-entry': toolEntry('coupons'),
@@ -268,7 +266,7 @@ const clientPluginRenderers: Readonly<Record<string, ComponentType<ClientPluginC
         'ai-image-studio-entry': AiImageStudioEntryPlugin,
         'two-factor-code-tool': toolEntry('two-factor'),
         'icloud-mail-query-entry': toolEntry('mail-query'),
-        'news-blog-entry': NewsBlogEntryPlugin,
+        'news-blog-entry': toolEntry('blog'),
         'gpt-recharge-entry': ToolEntryPlugin,
         'environment-monitor-entry': toolEntry('environment-monitor'),
         'tax-free-address-entry': TaxFreeAddressEntry,

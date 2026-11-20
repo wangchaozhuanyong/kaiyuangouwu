@@ -12,6 +12,21 @@ export function isUnpaidFreeRun(run: BlogRun) {
         runTelemetry(run).providerAttempted !== true
     );
 }
+export const collectionOnlyMessage = '当前仅采集来源资料，已保留资料供人工编辑；未生成或发布文章';
+export const editorialWaitingMessage =
+    '官方来源已采集，等待双语编辑；可在资讯来源查看原文，再到文章管理撰写中英文稿件';
+export const waitingForNewsEditorialState = 'WAITING_EDITORIAL';
+
+export function awaitsNewsEditorial(run: BlogRun) {
+    return (
+        run.kind === 'GENERATE' &&
+        (run.state === waitingForNewsEditorialState ||
+            // Previous releases reported these no-op runs as successful.
+            (run.state === 'SUCCEEDED' &&
+                (run.message === collectionOnlyMessage || run.message === editorialWaitingMessage) &&
+                isUnpaidFreeRun(run)))
+    );
+}
 export function freeRecoveryCount(run: Pick<BlogRun, 'telemetryJson'>) {
     const count = runTelemetry(run).freeRecoveryCount;
     return typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 ? count : 0;

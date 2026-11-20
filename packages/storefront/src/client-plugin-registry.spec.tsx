@@ -52,18 +52,18 @@ function pluginBlock(items: StorefrontContentItem[]): StorefrontContentBlock {
 }
 
 describe('category client plugin registry', () => {
-    it('renders the blog entry as its real Chinese destination before hydration', () => {
+    it.each(['zh', 'en'] as const)('renders the blog entry in %s before hydration', language => {
         const block = pluginBlock([pluginItem('news-blog-entry', 'BUSINESS_SERVICES_MAIN', 0)]);
         const html = renderToString(
             <ClientPluginSlot
                 block={block}
                 placement="BUSINESS_SERVICES_MAIN"
-                language="zh"
+                language={language}
                 onNavigate={() => undefined}
             />,
         );
-        expect(html).toContain('href="/zh/blog"');
-        expect(html).toContain('新闻博客');
+        expect(html).toContain(`href="/${language}/blog"`);
+        expect(html).toContain(language === 'zh' ? '新闻博客' : 'News blog');
         expect(html).not.toContain('<button');
     });
     it.each([

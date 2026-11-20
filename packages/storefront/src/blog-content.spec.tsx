@@ -70,7 +70,7 @@ describe('news blog server-renderable content', () => {
     });
 
     it.each([
-        [null, '/zh/', '返回首页'],
+        [null, '/zh/services', '返回智能服务'],
         [article, '/zh/blog?category=chatgpt', '返回新闻博客'],
         [{ ...article, category: 'skills' as const }, '/zh/blog?category=skills', '返回新闻博客'],
     ] as const)('uses a single native return above the shared content body', (entry, backHref, label) => {
@@ -88,6 +88,80 @@ describe('news blog server-renderable content', () => {
         expect(html).toContain('method="get"');
         expect(html).toContain('name="term"');
         expect(html).toContain('aria-label="文章分类"');
+    });
+    it('renders English article navigation, dates and reader labels in the server response', () => {
+        const translated = {
+            ...article,
+            title: 'A new partnership',
+            summary: 'Eligible agencies can use the agreement.',
+            body: '## What changed\nEligible agencies can use the agreement.\n## Why it matters\nAccess is expanding.',
+            reviewerName: 'Editor',
+            sources: [{ ...article.sources[0], label: 'Official announcement' }],
+            category: 'industry' as const,
+        };
+        const data = {
+            ...page,
+            title: 'AI news',
+            items: [translated],
+            featured: translated,
+            relatedArticles: [],
+        };
+        const listing = renderToStaticMarkup(<BlogContent language="en" page={data} />);
+        expect(listing).toContain('href="/en/services"');
+        expect(listing).toContain('href="/en/blog/official-update?fromBlogList=en"');
+        expect(listing).toContain('action="/en/blog"');
+        expect(listing).toContain('aria-label="Article categories"');
+        expect(listing).not.toContain('category=skills');
+        expect(listing).toContain('November 1, 2026');
+        expect(listing).not.toMatch(/[\p{Script=Han}]/u);
+        const detail = renderToStaticMarkup(
+            <BlogContent language="en" page={{ ...data, article: translated }} />,
+        );
+        expect(detail).toContain('href="/en/blog?category=industry"');
+        expect(detail).toContain('Access is expanding.');
+        expect(detail.split(translated.summary)).toHaveLength(2);
+        expect(detail).not.toContain('blog-article-summary');
+        expect(detail).not.toMatch(/[\p{Script=Han}]/u);
+    });
+    it('preserves the origin list through article links, native return and switching editions', () => {
+        const input = { term: '合作', category: 'chatgpt', skip: 12 };
+        const search = 'page=2&amp;term=%E5%90%88%E4%BD%9C&amp;category=chatgpt';
+        const listing = renderToStaticMarkup(<BlogContent page={page} input={input} />);
+        expect(listing).toContain(`href="/zh/blog/official-update?${search}&amp;fromBlogList=zh"`);
+        const ChineseDetail = renderToStaticMarkup(
+            <BlogContent
+                input={{ ...input, fromBlogList: 'zh' }}
+                page={{ ...page, article, availableLanguages: ['zh_Hans', 'en'] }}
+            />,
+        );
+        expect(ChineseDetail).toContain(`href="/zh/blog?${search}"`);
+        expect(ChineseDetail).toContain(`href="/en/blog/official-update?${search}&amp;fromBlogList=zh"`);
+        const EnglishDetail = renderToStaticMarkup(
+            <BlogContent
+                language="en"
+                input={{ ...input, fromBlogList: 'zh' }}
+                page={{ ...page, article, availableLanguages: ['en', 'zh_Hans'] }}
+            />,
+        );
+        expect(EnglishDetail).toContain(`href="/zh/blog?${search}"`);
+        expect(EnglishDetail).toContain('aria-label="Read in Simplified Chinese"');
+        const untranslated = renderToStaticMarkup(
+            <BlogContent page={{ ...page, article, availableLanguages: ['zh_Hans'] }} />,
+        );
+        expect(untranslated).toContain('href="/zh/blog?category=chatgpt"');
+        expect(untranslated).not.toContain('aria-label="阅读英文版"');
+    });
+    it('renders registered source links once and keeps unsafe article references inert', () => {
+        const url = article.sources[0].url;
+        const body = '## 发生了什么\n参考下文。\n## 参考来源\n[官方来源](' + url + ')';
+        const sources = [...article.sources, { ...article.sources[0], url: 'javascript:alert(1)' }];
+        const detail = renderToStaticMarkup(
+            <BlogContent page={{ ...page, article: { ...article, body, sources } }} />,
+        );
+        expect(detail.match(/参考来源/gu)).toHaveLength(1);
+        expect(detail.match(/href="https:\/\/openai.com\/news\/"/gu)).toHaveLength(1);
+        expect(detail).not.toContain('[官方来源]');
+        expect(detail).not.toContain('javascript:');
     });
     it('shares one local vector library across repeated covers and resolves each category in the initial HTML', () => {
         const items = [...blogCategories, 'chatgpt' as const].map((category, index) => ({

@@ -93,6 +93,7 @@ export interface RouteState {
     token?: string;
     term?: string;
     category?: string;
+    fromBlogList?: 'zh' | 'en';
     collectionId?: string;
     childId?: string;
     sort?: SortMode;
@@ -240,9 +241,7 @@ export function createStorefrontScrollRestorationKey(
 export function routeSearch(route: RouteState): StorefrontRouteSearch {
     const { name: _name, publicLanguage, ...search } = route;
     const code = typeof window === 'undefined' ? undefined : publicLanguageFromUrl(window.location.pathname);
-    const language = route.name.startsWith('blog')
-        ? 'zh'
-        : (publicLanguage ?? (code === 'zh_Hans' ? 'zh' : code === 'en' ? 'en' : undefined));
+    const language = publicLanguage ?? (code === 'zh_Hans' ? 'zh' : code === 'en' ? 'en' : undefined);
     return {
         ...search,
         ...(isArticleRoute(route.name) ? { id: undefined } : {}),
@@ -315,6 +314,8 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
         token: stringValue('token'),
         term: stringValue('term'),
         category: stringValue('category'),
+        fromBlogList:
+            search.fromBlogList === 'zh' || search.fromBlogList === 'en' ? search.fromBlogList : undefined,
         collectionId: stringValue('collectionId') ?? stringValue('collection'),
         childId: stringValue('childId') ?? stringValue('child'),
         sort: ['recommended', 'sales', 'newest', 'name', 'price-asc', 'price-desc'].includes(sort ?? '')
@@ -394,6 +395,7 @@ export function routeHref(route: RouteState): string {
         'token',
         'term',
         'category',
+        'fromBlogList',
         'collectionId',
         'childId',
         'sort',
@@ -422,7 +424,7 @@ export function routeHref(route: RouteState): string {
     const code = route.publicLanguage === 'zh' ? 'zh_Hans' : route.publicLanguage;
     const locationCode =
         typeof window === 'undefined' ? undefined : publicLanguageFromUrl(window.location.pathname);
-    const languageCode = route.name.startsWith('blog') ? 'zh_Hans' : (code ?? locationCode);
+    const languageCode = code ?? locationCode;
     const plainPath = isArticleRoute(route.name)
         ? `${route.name === 'guide' ? '/guides' : '/blog'}/${encodeURIComponent(route.id ?? '')}`
         : routePath(route.name);

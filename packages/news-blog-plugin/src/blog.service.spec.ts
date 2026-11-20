@@ -6,12 +6,14 @@ import { DataSource, EntitySchema } from 'typeorm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SafeProviderUrlService } from '../../image-generation-plugin/src/security/safe-provider-url.service';
+import { fixtureNewsReview } from '../test/news-review-fixture';
 
 import { BlogService } from './blog.service';
-import { budgetDate, defaultSettings } from './content';
+import { budgetDate, defaultSettings, englishEditionReviewIssue, newsSourceReviewIssue } from './content';
 import { BlogRun } from './entities';
 import { previousMonth } from './history';
 import { BlogQueueService } from './queue.service';
+import * as reviewedNews from './reviewed-news';
 import { SkillDeferred, SourceTransientError } from './skill-deferral';
 import { BlogSkillEditorialService, type SkillEditorialInput } from './skill-editorial.service';
 import { BlogSkillsCatalog } from './skills-catalog';
@@ -233,6 +235,7 @@ schemas.push(
 let db: DataSource;
 let service: BlogService;
 let connection: any;
+let enabledBlogLanguages: Set<string>;
 const contextFor = (channelId = 1) =>
     ({
         channelId,
@@ -249,6 +252,16 @@ const draft = (): BlogDraft => ({
     title: '官方更新解读',
     summary: '来源清楚的新闻摘要',
     body: '## 官方变化\n' + '只根据官方公告整理的已核对资讯。'.repeat(20),
+    seoDescription: '来源清楚的新闻摘要',
+    translations: {
+        en: {
+            title: 'Summary of an official update',
+            summary: 'The update is based on the original announcement.',
+            body: 'The announcement is the source of this news report.',
+            seoDescription: 'Read the source for the update.',
+            tags: [],
+        },
+    },
     category: 'chatgpt',
     sources: [
         { label: '官方公告', url: 'https://openai.com/news/official', accessedAt: new Date().toISOString() },
@@ -256,6 +269,7 @@ const draft = (): BlogDraft => ({
     cover: { assetId: '1', url: '/assets/preview/cover.webp', alt: '示意图', generated: true },
 });
 beforeEach(async () => {
+    enabledBlogLanguages = new Set(['zh_Hans']);
     db = await new DataSource({ type: 'sqljs', entities: schemas, synchronize: true }).initialize();
     await db.getRepository('Channel').save([
         { id: 1, code: 'a' },
@@ -279,7 +293,7 @@ beforeEach(async () => {
         { publish: vi.fn() } as never,
         {
             isEnabled: (context: { languageCode: string }) =>
-                Promise.resolve(context.languageCode === 'zh_Hans'),
+                Promise.resolve(enabledBlogLanguages.has(context.languageCode)),
         } as never,
         { getAccessMode: () => Promise.resolve('LIVE') } as never,
     );
@@ -333,6 +347,223 @@ async function saveLegacySettings(ctx: any, raw: Record<string, unknown>, versio
     return saved;
 }
 describe('channel publication and budget boundaries', () => {
+    it('serves only published copies in the requested language before search and pagination', async () => {
+        enabledBlogLanguages.add('en');
+        const en = { ...(contextFor() as object), languageCode: 'en' } as never;
+        const source = draft();
+        source.seoDescription = '已核对的消息说明';
+        source.translations = {
+            en: {
+                title: 'First reader release',
+                summary: 'Readers can export their notes.',
+                body: '## What changed\nReaders can now export their notes in the app.',
+                seoDescription: 'The reader has gained note export.',
+                tags: ['Reading'],
+            },
+        };
+        const publish = async (slug: string, item: BlogDraft) => {
+            const row = await service.save(contextFor(), { slug, expectedVersion: 0, draft: item });
+            return service.publish(contextFor(), row.id, row.version, false, true);
+        };
+        const first = await publish('reader-update', source);
+        enabledBlogLanguages.delete('zh_Hans');
+        expect(await service.isAssetPublic(en, 'preview/cover.webp')).toBe(true);
+        enabledBlogLanguages.add('zh_Hans');
+        const old = await service.save(contextFor(), {
+            slug: 'untranslated',
+            expectedVersion: 0,
+            draft: { ...draft(), translations: undefined },
+        });
+        await expect(service.publish(contextFor(), old.id, old.version, false, true)).rejects.toThrow(
+            '请补齐英文稿',
+        );
+        // Exercise an existing publication from before bilingual publishing.
+        await db.getRepository('BlogArticle').update(old.id, { publishedAt: new Date() });
+        await service.publish(contextFor(), old.id, old.version, false, true);
+        await publish('second-reader', {
+            ...source,
+            translations: { en: { ...source.translations.en, title: 'Second reader release' } },
+        });
+        const page = await service.read(en, { term: 'reader', skip: 1, take: 1 });
+        expect(page.totalItems).toBe(2);
+        expect(page.items).toHaveLength(1);
+        expect(page.items[0]).toMatchObject({
+            title: 'First reader release',
+            body: '',
+            sources: [],
+            facts: [],
+        });
+        expect(page.items[0]).not.toHaveProperty('translations');
+        expect((await service.read(en, { term: '官方更新' })).totalItems).toBe(0);
+        expect((await service.read(contextFor(), { term: 'note export' })).totalItems).toBe(0);
+        const read = await service.read(en, {}, first.slug);
+        expect(read.article).toMatchObject({
+            ...source.translations.en,
+            sources: [expect.objectContaining({ label: 'openai.com' })],
+        });
+        expect(read.availableLanguages).toEqual(['en', 'zh_Hans']);
+        expect(read.relatedArticles.map(x => x.slug)).toEqual(['second-reader']);
+        await expect(service.read(en, {}, 'untranslated')).rejects.toThrow();
+        expect((await service.sitemap(en)).map(x => x.slug).sort()).toEqual([
+            'reader-update',
+            'second-reader',
+        ]);
+        expect((await service.read(contextFor(), {}, 'untranslated')).availableLanguages).toEqual([
+            'zh_Hans',
+        ]);
+        const changed = await service.save(contextFor(), {
+            id: first.id,
+            slug: first.slug,
+            expectedVersion: first.version,
+            draft: { ...source, title: '编辑部改写的消息' },
+        });
+        expect(changed.draft.translations).toEqual(source.translations);
+        expect(changed.issues).toContain(englishEditionReviewIssue);
+        expect((await service.read(en, {}, first.slug)).article?.title).toBe(source.translations.en.title);
+        await expect(service.publish(contextFor(), first.id, changed.version)).rejects.toThrow(
+            '请核对并确认',
+        );
+        const afterReview = await service.publish(contextFor(), first.id, changed.version, false, true);
+        expect(afterReview.issues).toEqual([]);
+        expect((await service.read(en, {}, first.slug)).article?.title).toBe(source.translations.en.title);
+        expect((await service.read(contextFor(), {}, first.slug)).article?.title).toBe('编辑部改写的消息');
+    });
+
+    it('preserves source checks after saving when the original evidence cannot be recomputed', async () => {
+        const initial = await service.save(contextFor(), {
+            slug: 'keep-review',
+            expectedVersion: 0,
+            draft: draft(),
+        });
+        const alerts = [newsSourceReviewIssue, '需核对正文数值：0%'];
+        await db.getRepository('BlogArticle').update(initial.id, { issuesJson: JSON.stringify(alerts) });
+        const edited = await service.save(contextFor(), {
+            id: initial.id,
+            slug: initial.slug,
+            expectedVersion: initial.version,
+            draft: { ...initial.draft, pinned: true },
+        });
+        expect(edited.issues).toEqual(expect.arrayContaining(alerts));
+        await expect(service.publish(contextFor(), initial.id, edited.version)).rejects.toThrow(
+            '请核对并确认',
+        );
+    });
+
+    it('projects a verified historical automatic brief without replacing a manual story with the same source', async () => {
+        enabledBlogLanguages.add('en');
+        const en = { ...(contextFor() as object), languageCode: 'en' } as never;
+        const source = {
+            ...draft(),
+            title: 'Anthropic 官方动态：We are expanding our partnership with the（2026-10-27）',
+            summary: '本条快讯保留可核对的原文要点与来源入口',
+            body: '本文根据官方来源整理，原文入口见文末。',
+            tags: ['来源快讯', '历史补录'],
+            category: 'claude',
+            format: 'NEWS',
+            translations: undefined,
+            sources: [
+                {
+                    label: 'Anthropic 原文入口',
+                    url: 'https://www.anthropic.com/news/expanding-partnership-gsa',
+                    accessedAt: '2026-11-03T08:00:00.000Z',
+                },
+            ],
+            publishedAt: '2026-11-03T08:00:00.000Z',
+            version: 1,
+            reviewedAt: null,
+            reviewerName: null,
+            readingMinutes: 2,
+        };
+        const repo = db.getRepository('BlogArticle');
+        for (const [id, mode] of [
+            [51, 'AUTOMATIC'],
+            [52, 'MANUAL'],
+        ] as const) {
+            const slug = 'legacy-' + id;
+            const published = { ...source, id: String(id), slug, publicationMode: mode };
+            await repo.save({
+                id,
+                channelId: 1,
+                slug,
+                state: 'PUBLISHED',
+                version: 1,
+                draftJson: JSON.stringify(source),
+                issuesJson: '[]',
+                publishedAt: new Date(source.publishedAt),
+                publishedTitle: source.title,
+                publishedCategory: source.category,
+                publishedJson: JSON.stringify(published),
+                publishedSearchText: source.title,
+                publishedPinned: false,
+            });
+        }
+        const english = (await service.read(en, {}, 'legacy-51')).article;
+        if (!english) throw new Error('Missing published English article');
+        expect(english.title).toMatch(/GSA|agenc|government/i);
+        expect(english.body).not.toMatch(/原文入口/);
+        expect((await service.read(en, { term: english.title })).totalItems).toBe(1);
+        const zh = (await service.read(contextFor(), {}, 'legacy-51')).article;
+        if (!zh) throw new Error('Missing published Chinese article');
+        expect(zh.title).not.toContain('官方动态：');
+        expect((await service.read(contextFor(), { term: zh.title })).totalItems).toBe(1);
+        expect(
+            (await service.read(contextFor(), { term: 'We are expanding' })).items.map(x => x.slug),
+        ).toEqual(['legacy-52']);
+        expect((await service.read(contextFor(), {}, 'legacy-52')).article?.title).toBe(source.title);
+        await expect(service.read(en, {}, 'legacy-52')).rejects.toThrow();
+        const original = await repo.findOneByOrFail({ id: 51 });
+        expect(JSON.parse(original.publishedJson).title).toBe(source.title);
+        const ctx = contextFor();
+        const edit = service.view(await service.get(ctx, '51'));
+        expect(edit.draft).toMatchObject({
+            title: zh.title,
+            body: zh.body,
+            translations: { en: { title: english.title, body: english.body } },
+            sources: source.sources,
+            facts: source.facts,
+            category: 'claude',
+        });
+        expect(edit.published).toMatchObject({
+            id: '51',
+            title: zh.title,
+            publicationMode: 'AUTOMATIC',
+            version: 1,
+        });
+        expect((await repo.findOneByOrFail({ id: 51 })).draftJson).toBe(original.draftJson);
+        const list = await service.articleList(ctx, { term: zh.title });
+        expect(list.totalItems).toBe(1);
+        expect(list.items[0].draft).toMatchObject({ title: zh.title, body: '' });
+        expect(list.items[0].draft).not.toHaveProperty('translations');
+        expect(list.items[0].published).toEqual({ version: 1 });
+        expect(
+            (await service.articles(ctx)).every(
+                row => !('translations' in row.draft) && !('translations' in (row.published ?? {})),
+            ),
+        ).toBe(true);
+        for (const override of [
+            { title: '待审独立标题' },
+            { category: 'industry' },
+            { sources: [] },
+            { translations: { en: { ...edit.draft.translations?.en, title: 'My own draft' } } },
+        ]) {
+            await repo.update(51, { draftJson: JSON.stringify({ ...source, ...override }) });
+            const separate = service.view(await service.get(ctx, '51'));
+            expect(separate.draft).toMatchObject(JSON.parse(JSON.stringify({ ...source, ...override })));
+            expect(separate.published?.title).toBe(zh.title);
+        }
+        await repo.update(51, { draftJson: original.draftJson });
+        const saved = await service.publish(ctx, '51', 1, false, true);
+        expect(saved.draft.title).toBe(zh.title);
+        expect(saved.published?.translations?.en.title).toBe(english.title);
+        const updated = await service.save(ctx, {
+            id: '51',
+            slug: saved.slug,
+            expectedVersion: saved.version,
+            draft: { ...saved.draft, title: '编辑更新后的合作内容' },
+        });
+        expect(updated.draft.translations?.en).toMatchObject({ title: english.title, body: english.body });
+        expect(updated.issues).toContain(englishEditionReviewIssue);
+    });
     it('sorts collected news before pagination by source date, with editorial fallback and channel isolation', async () => {
         const sources = db.getRepository('BlogSourceItem');
         await sources.update(1, { sourcePublishedAt: new Date('2026-09-30T00:00:00Z') });
@@ -457,7 +688,7 @@ describe('channel publication and budget boundaries', () => {
         const saved = await service.save(contextFor(), {
             slug: 'channel-isolation',
             expectedVersion: 0,
-            draft: draft(),
+            draft: { ...draft(), format: 'GUIDE', translations: undefined },
         });
         expect(await service.isAssetPublic(contextFor(), 'preview/cover.webp')).toBe(false);
         await expect(service.get(contextFor(2), saved.id)).rejects.toThrow();
@@ -473,6 +704,10 @@ describe('channel publication and budget boundaries', () => {
             ),
         ).toBe(true);
         expect(await service.isAssetPublic(contextFor(2), 'preview/cover.webp')).toBe(false);
+        enabledBlogLanguages.clear();
+        enabledBlogLanguages.add('en');
+        expect(await service.isAssetPublic(contextFor(), 'preview/cover.webp')).toBe(false);
+        enabledBlogLanguages.add('zh_Hans');
         const page = await service.read(contextFor(), {}, saved.slug);
         await service.publish(contextFor(), saved.id, published.version, true);
         expect(await service.isAssetPublic(contextFor(), 'preview/cover.webp')).toBe(false);
@@ -1228,7 +1463,56 @@ describe('source tracking and admin pagination regressions', () => {
     });
 });
 
+it('generates both news editions in one configured provider call and keeps the draft for review', async () => {
+    const source = await db.getRepository('BlogSourceItem').findOneByOrFail({ id: 1 });
+    const edition = fixtureNewsReview(source.url);
+    if (!edition) throw new Error('Missing reviewed test fixture');
+    const response = {
+        ...edition.zh,
+        translations: { en: edition.en },
+        facts: edition.facts,
+        category: 'chatgpt',
+        format: 'NEWS',
+        candidateTitles: ['测试资料的适用范围', '测试材料说明', '编辑流程样本说明'],
+    };
+    const provider = {
+        text: vi.fn().mockResolvedValue({ text: JSON.stringify(response) }),
+    };
+    const worker = new BlogQueueService(
+        {} as never,
+        { create: () => Promise.resolve(contextFor()) } as never,
+        connection,
+        service,
+        {} as never,
+        provider as never,
+        {} as never,
+    );
+    const run = await service.request(contextFor(), 'GENERATE', 'paid-bilingual-report', {
+        sourceIds: ['1'],
+    });
+    await worker.process('1', String(run.id));
+    expect(provider.text).toHaveBeenCalledTimes(1);
+    const [, , , prompt, request] = provider.text.mock.calls[0];
+    expect(prompt).toContain('translations.en');
+    expect(JSON.parse(request).evidence[0].body).toBe(source.body);
+    const article = await db.getRepository('BlogArticle').findOneByOrFail({ eventKey: source.eventKey });
+    expect(article).toMatchObject({
+        state: 'PENDING_REVIEW',
+        publishedJson: null,
+        issuesJson: JSON.stringify([newsSourceReviewIssue]),
+    });
+    expect(JSON.parse(article.draftJson)).toMatchObject({
+        title: edition.zh.title,
+        translations: { en: edition.en },
+    });
+});
+
 describe('legacy free source queue recovery', () => {
+    beforeEach(() => {
+        vi.spyOn(reviewedNews, 'reviewedNewsForSource').mockImplementation(fixtureNewsReview);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
     async function enableFree() {
         const settings = await service.settings(contextFor());
         return saveLegacySettings(
@@ -1362,7 +1646,7 @@ describe('legacy free source queue recovery', () => {
         });
         await worker.process('1', String(run.id));
         expect(await db.getRepository('BlogRun').findOneByOrFail({ id: run.id })).toMatchObject({
-            state: 'SUCCEEDED',
+            state: 'WAITING_EDITORIAL',
             reservedMicros: 0,
             chargedMicros: 0,
             message: '当前仅采集来源资料，已保留资料供人工编辑；未生成或发布文章',
@@ -1372,6 +1656,23 @@ describe('legacy free source queue recovery', () => {
         expect((await service.sourceItems(contextFor())).length).toBeGreaterThan(0);
         expect(provider.text).not.toHaveBeenCalled();
         expect(provider.image).not.toHaveBeenCalled();
+        expect(media.createCover).not.toHaveBeenCalled();
+    });
+    it('keeps a previously unseen official story available for editing without generating template news or spending budget', async () => {
+        await enableFree();
+        await db.getRepository('BlogSourceItem').update(1, { url: 'https://openai.com/news/new-report' });
+        const { worker, provider, media } = freeWorker();
+        const run = await service.request(contextFor(), 'GENERATE', 'new-unreviewed', { sourceIds: ['1'] });
+        await worker.process('1', String(run.id));
+        expect(await db.getRepository('BlogSourceItem').findOneByOrFail({ id: 1 })).toMatchObject({
+            status: 'READY',
+        });
+        expect(await db.getRepository('BlogRun').findOneByOrFail({ id: run.id })).toMatchObject({
+            state: 'WAITING_EDITORIAL',
+            message: expect.stringContaining('等待双语编辑'),
+        });
+        expect(await db.getRepository('BlogArticle').count()).toBe(0);
+        expect(provider.text).not.toHaveBeenCalled();
         expect(media.createCover).not.toHaveBeenCalled();
     });
     it('blocks a previously cached category page before generating or publishing it', async () => {

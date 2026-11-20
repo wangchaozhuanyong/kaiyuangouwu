@@ -9,6 +9,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 
 import { adminSchema } from '../../../../news-blog-plugin/src/schema';
+import { emptyBlogDraft } from '../../../../storefront-content-plugin/src/shared/news-blog';
 import { ConfirmDialogProvider } from '../../components/ConfirmDialog';
 import { FeatureHelpProvider } from '../../components/FeatureHelp';
 import { AdminPermissionsContext } from '../../hooks/use-admin-permissions';
@@ -35,6 +36,26 @@ it('shows retained source evidence and manual editing in zero-cost mode without 
         ],
     });
     const writes = vi.fn();
+    const linkedArticle = {
+        id: '91',
+        slug: 'linked-source',
+        version: 1,
+        state: 'DRAFT',
+        publishedAt: null,
+        published: null,
+        draft: {
+            ...emptyBlogDraft(),
+            sources: [
+                {
+                    label: '原始官方来源',
+                    url: 'https://openai.com/news/fixture-0',
+                    accessedAt: '2026-11-03',
+                },
+            ],
+        },
+        issues: [],
+    };
+    const openDraft = vi.fn((_input: { sourceId: string }) => linkedArticle);
     const rootValue = {
         newsBlogSettings: () => ({
             version: 1,
@@ -45,6 +66,9 @@ it('shows retained source evidence and manual editing in zero-cost mode without 
         }),
         newsBlogArticleList: () => ({ items: [], totalItems: 0 }),
         newsBlogSources: () => [],
+        openNewsBlogSourceDraft: openDraft,
+        newsBlogArticle: () => linkedArticle,
+        newsBlogHistory: () => [],
         newsBlogSourceItems: () =>
             ['PAGE_TEXT', 'OFFICIAL_RSS'].map((evidenceMode, index) => ({
                 id: String(index + 1),
@@ -107,11 +131,18 @@ it('shows retained source evidence and manual editing in zero-cost mode without 
     expect(host.textContent).toContain('网页正文（自动提取）');
     expect(host.textContent).toContain('保留资料 0');
     expect(host.textContent).toContain('保留资料 1');
-    expect(host.textContent).toContain('资料已保留');
+    expect(host.textContent).toContain('用此来源建稿');
     expect(host.textContent).not.toContain('生成待审图文');
-    const articles = [...host.querySelectorAll('button')].find(x => x.textContent === '文章管理');
-    if (!articles) throw new Error('Missing article navigation');
-    await act(() => Promise.resolve(articles.click()));
-    expect([...host.querySelectorAll('button')].some(x => x.textContent === '新建文章')).toBe(true);
+    expect(openDraft).not.toHaveBeenCalled();
+    const create = [...host.querySelectorAll('button')].find(x => x.textContent === '用此来源建稿');
+    if (!create) throw new Error('Missing source draft action');
+    await act(async () => create.click());
+    await vi.waitFor(async () => {
+        await act(() => Promise.resolve());
+        expect(host.textContent).toContain('文章编辑与审核');
+    });
+    expect(openDraft).toHaveBeenCalledTimes(1);
+    expect(openDraft.mock.calls[0]?.[0]).toMatchObject({ sourceId: '1' });
+    expect(host.textContent).toContain('原始官方来源');
     expect(writes).not.toHaveBeenCalled();
 });

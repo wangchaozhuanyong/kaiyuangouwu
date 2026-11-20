@@ -48,7 +48,7 @@ export function NewsBlogSettings({
             {draft.freeMode && (
                 <AdminField
                     label="免费快讯通过检查后自动发布"
-                    description="关闭时仅保存采集资料、等待人工编辑；开启后将生成并发布免费模板快讯，不提供自动翻译。"
+                    description="开启后，来源与已核对的双语稿一致时可自动发布；其余资讯保留原文，等待编辑。"
                 >
                     <AdminInput
                         type="checkbox"

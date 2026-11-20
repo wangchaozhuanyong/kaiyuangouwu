@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/client';
+import { ApolloClient, ApolloLink, Observable } from '@apollo/client';
 import { ApolloProvider } from '@apollo/client/react';
 import { buildASTSchema, graphql, Kind, parse, print } from 'graphql';
 import { act } from 'react';
@@ -11,6 +11,15 @@ import { emptyBlogDraft } from '../../../../storefront-content-plugin/src/shared
 import { ConfirmDialogProvider } from '../../components/ConfirmDialog';
 import { FeatureHelpProvider } from '../../components/FeatureHelp';
 import { AdminPermissionsContext } from '../../hooks/use-admin-permissions';
+import { createAdminCache } from '../../runtime/admin-cache';
+import type { BlogAdminArticle } from './news-blog-types';
+import {
+    NEWS_BLOG_ARTICLE,
+    NEWS_BLOG_WORKSPACE,
+    OPEN_NEWS_BLOG_SOURCE_DRAFT,
+    PUBLISH_NEWS_BLOG_ARTICLE,
+    SAVE_NEWS_BLOG_ARTICLE,
+} from './news-blog.graphql';
 import { NewsBlogArticleEditor } from './NewsBlogArticleEditor';
 const schema = buildASTSchema({
     kind: Kind.DOCUMENT,
@@ -65,7 +74,7 @@ async function fixture(withImages = false, withProfile = false) {
                   ]
                 : [],
         },
-        published: null,
+        published: null as (BlogAdminArticle['draft'] & { version: number }) | null,
         issues: [],
     };
     if (withImages) article.draft.cover = article.draft.sourceImages[0]?.asset ?? null;
@@ -103,6 +112,23 @@ async function fixture(withImages = false, withProfile = false) {
     const rootValue = {
         newsBlogArticle: () => article,
         newsBlogHistory: () => [],
+        newsBlogSettings: () => ({}),
+        openNewsBlogSourceDraft: () => article,
+        newsBlogArticleList: () => ({
+            totalItems: 1,
+            items: [
+                {
+                    ...article,
+                    draft: {
+                        title: article.draft.title,
+                        category: article.draft.category,
+                        body: '',
+                        sources: [],
+                    },
+                    published: article.published ? { version: article.published.version } : null,
+                },
+            ],
+        }),
         saveNewsBlogArticle: ({ input }: any) => {
             writes.push('save');
             article = { ...article, ...input, version: article.version + 1 };
@@ -110,11 +136,13 @@ async function fixture(withImages = false, withProfile = false) {
         },
         publishNewsBlogArticle: () => {
             writes.push('publish');
+            const version = article.version + 1;
+            article = { ...article, version, state: 'PUBLISHED', published: { ...article.draft, version } };
             return article;
         },
     };
     client = new ApolloClient({
-        cache: new InMemoryCache(),
+        cache: createAdminCache(),
         link: new ApolloLink(
             operation =>
                 new Observable(observer => {
@@ -185,6 +213,64 @@ async function fixture(withImages = false, withProfile = false) {
     };
 }
 describe('news blog review editor with actual Apollo and server schema', () => {
+    it('opens an existing source draft without pairing its new version with stale cached text', async () => {
+        const f = await fixture();
+        const { id } = f.current();
+        // Another editor has saved this draft after the current editor read it.
+        f.updateServer();
+        await act(async () => {
+            await client.mutate({ mutation: OPEN_NEWS_BLOG_SOURCE_DRAFT, variables: { sourceId: '5' } });
+        });
+        const cached = client.readQuery<{ newsBlogArticle: BlogAdminArticle }>({
+            query: NEWS_BLOG_ARTICLE,
+            variables: { id },
+        });
+        expect(cached?.newsBlogArticle).toMatchObject(f.current());
+        expect(document.querySelector('input[value="后台更新标题"]')).not.toBeNull();
+    });
+    it('keeps the full bilingual draft and published text after refreshing the article list', async () => {
+        const f = await fixture();
+        const { id, slug, version, draft } = f.current();
+        const article = {
+            ...draft,
+            sources: [
+                { label: 'OpenAI', url: 'https://openai.com/news/', accessedAt: '2026-11-03T00:00:00Z' },
+            ],
+            translations: {
+                en: {
+                    title: 'Sample update',
+                    summary: 'A reviewed update.',
+                    body: 'Full English article.',
+                    seoDescription: 'Read the update.',
+                    tags: [],
+                },
+            },
+        };
+        await act(async () => {
+            await client.mutate({
+                mutation: SAVE_NEWS_BLOG_ARTICLE,
+                variables: { input: { id, slug, expectedVersion: version, draft: article } },
+            });
+            await client.query({ query: NEWS_BLOG_WORKSPACE, fetchPolicy: 'network-only' });
+        });
+
+        // Reopening the editor reads this same detail from the production cache first.
+        const cached = () =>
+            client.readQuery<{ newsBlogArticle: BlogAdminArticle }>({
+                query: NEWS_BLOG_ARTICLE,
+                variables: { id },
+            })?.newsBlogArticle;
+        expect(cached()).toMatchObject({ version: version + 1, draft: article });
+
+        await act(async () => {
+            await client.mutate({
+                mutation: PUBLISH_NEWS_BLOG_ARTICLE,
+                variables: { id, expectedVersion: version + 1, acceptIssues: true },
+            });
+            await client.query({ query: NEWS_BLOG_WORKSPACE, fetchPolicy: 'network-only' });
+        });
+        expect(cached()).toMatchObject({ version: version + 2, draft: article, published: article });
+    });
     it('preserves dirty text when a newer server version arrives and blocks conflicting saves', async () => {
         const f = await fixture();
         await f.edit();
@@ -221,7 +307,7 @@ describe('news blog review editor with actual Apollo and server schema', () => {
     it('edits structured Skill fields through the existing protected draft and save operation', async () => {
         const f = await fixture(false, true);
         const select = document.querySelector('section[aria-label="Skill 用途资料"] select');
-        expect(select).toBeInstanceOf(HTMLSelectElement);
+        if (!(select instanceof HTMLSelectElement)) throw new Error('Missing edition selector');
         await act(async () => {
             if (select instanceof HTMLSelectElement) {
                 select.value = 'research';
@@ -234,6 +320,30 @@ describe('news blog review editor with actual Apollo and server schema', () => {
         expect(f.current().draft.body).toContain('预期输出：得到保留来源的整理结果');
         expect(document.body.textContent).not.toContain('重做封面');
         expect(document.body.textContent).not.toContain('上传替换封面');
+    });
+    it('saves English edits without replacing the Chinese draft title', async () => {
+        const f = await fixture();
+        const byLabel = (label: string) =>
+            [...document.querySelectorAll('label')].find(field => field.textContent?.startsWith(label));
+        const select = byLabel('编辑与预览语言')?.querySelector('select');
+        if (!(select instanceof HTMLSelectElement)) throw new Error('Missing edition selector');
+        await act(async () => {
+            select.value = 'en';
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        const title = byLabel('标题')?.querySelector('input');
+        expect(title?.value).toBe('');
+        await act(async () => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+                title,
+                'GSA expands access',
+            );
+            title?.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        await act(async () => button('保存草稿').click());
+        await vi.waitFor(() => expect(f.writes).toEqual(['save']));
+        expect(f.current().draft.title).toBe('原有待审标题');
+        expect(f.current().draft.translations?.en.title).toBe('GSA expands access');
     });
     it('saves the draft without triggering publication', async () => {
         const f = await fixture();

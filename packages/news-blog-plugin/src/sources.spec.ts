@@ -1,7 +1,7 @@
 import { emptyBlogDraft } from '@vendure/storefront-content-plugin';
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 
-import { citationUrl, normalizeDraft, verifyGeneratedDraft } from './content';
+import { citationUrl, contentIssues, normalizeDraft, verifyGeneratedDraft } from './content';
 import { coverSvg } from './media';
 import { extractArticle, parseSource, sourceAllows } from './sources';
 describe('official news extraction', () => {
@@ -142,10 +142,88 @@ describe('official news extraction', () => {
             extractArticle(
                 '<nav>menu</nav><article><h1>Official update</h1><p>Useful facts.</p><script>send secrets</script></article><footer>footer</footer>',
             ),
-        ).toBe('Official updateUseful facts.');
+        ).toBe('Official update Useful facts.');
         expect(citationUrl('https://openai.com/news/a?utm_source=x&b=2#a')).toBe(
             'https://openai.com/news/a?b=2#a',
         );
+    });
+    it('checks evidence and language in both editions and never exports the source fragment as a translation', () => {
+        const url = 'https://openai.com/news/fixture';
+        const source = {
+            url,
+            title: 'A fixture',
+            body: 'This complete sentence is synthetic source evidence.',
+        };
+        const draft = normalizeDraft({
+            ...emptyBlogDraft(),
+            title: '一条核对后的资讯',
+            summary: '中文摘要解释实际事件。',
+            body: '## 变更内容\n' + '这是一条专用于测试的完整消息，中文正文说明资料的含义。'.repeat(5),
+            seoDescription: '中文资讯搜索描述',
+            candidateTitles: ['标题甲', '标题乙', '标题丙'],
+            sources: [{ url, label: '官方原文', accessedAt: '2026-10-01' }],
+            facts: [{ sourceUrl: url, quote: source.body, text: '已核对测试来源' }],
+            translations: {
+                en: {
+                    title: 'Reviewed report',
+                    summary: 'A summary in English.',
+                    body: '## What changed\nThe source describes synthetic test evidence.',
+                    tags: ['News'],
+                    seoDescription: 'Description in English.',
+                },
+            },
+        });
+        expect(contentIssues(draft)).toEqual([]);
+        expect(verifyGeneratedDraft(draft, [source])).toEqual([]);
+        expect(
+            contentIssues({
+                ...draft,
+                body:
+                    draft.body +
+                    '\n官方指出：「The discount now applies across every product surface for eligible customers.」',
+            }),
+        ).toContain('中文资讯中有未翻译的英文语句，请翻译成完整中文');
+        const en = draft.translations?.en;
+        assert(en);
+        expect(
+            verifyGeneratedDraft(
+                { ...draft, translations: { en: { ...en, body: 'The report claims 9999 customers.' } } },
+                [source],
+            ),
+        ).toContain('需核对正文数值：9999');
+        expect(contentIssues({ ...draft, translations: { en: { ...en, title: '错误中文标题' } } })).toContain(
+            '英文资讯的标题、摘要、正文、标签和搜索描述均需使用英文',
+        );
+        expect(verifyGeneratedDraft({ ...draft, translations: undefined }, [source])).toContain(
+            '缺少英文资讯稿',
+        );
+        const discount = { ...source, body: 'Government agencies get a 40% discount and pay 10 dollars.' };
+        expect(
+            verifyGeneratedDraft(
+                { ...draft, translations: { en: { ...en, body: 'Customers get 0% off or pay $1.' } } },
+                [discount],
+            ),
+        ).toEqual(expect.arrayContaining(['需核对正文数值：0%', '需核对正文数值：$1']));
+        expect(
+            verifyGeneratedDraft(
+                {
+                    ...draft,
+                    translations: {
+                        en: { ...en, body: 'Eligible governments get 40 percent off and pay $10.' },
+                    },
+                },
+                [discount],
+            ).filter(issue => issue.startsWith('需核对正文数值')),
+        ).toEqual([]);
+        expect(
+            contentIssues({
+                ...draft,
+                translations: { en: { title: 'A', summary: 'A', body: 'A', seoDescription: 'A', tags: [] } },
+            }),
+        ).toContain('英文资讯需有完整标题、摘要、正文和搜索描述');
+        expect(
+            contentIssues({ ...draft, title: 'Just one English title', translations: undefined }),
+        ).toContain('中文资讯的标题、摘要、正文和搜索描述均需使用中文');
     });
     it('treats untrusted article markup as literal text and detects unsupported numbers', () => {
         const draft = normalizeDraft({
