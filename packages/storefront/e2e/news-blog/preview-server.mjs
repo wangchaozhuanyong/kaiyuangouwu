@@ -282,6 +282,7 @@ export function newsBlogFixture(url, host) {
     };
     page.requestKey = JSON.stringify(page.request);
     page.route = slug ? `/blog/${slug}` : '/blog';
+    const currentArticle = slug ? (rows.find(item => item.slug === slug) ?? null) : null;
     page.blog = {
         title: en ? 'AI news and practical guides' : 'AI 最新资讯与实用指南',
         description: en
@@ -290,8 +291,10 @@ export function newsBlogFixture(url, host) {
         items: filtered.slice(input.skip ?? 0, (input.skip ?? 0) + 12),
         totalItems: filtered.length,
         featured: filtered.find(article => article.skillProfile?.domain === 'design') ?? filtered[0] ?? null,
-        article: slug ? (rows.find(x => x.slug === slug) ?? null) : null,
-        relatedArticles: slug ? rows.filter(x => x.slug !== slug).slice(0, 3) : [],
+        article: currentArticle,
+        relatedArticles: currentArticle
+            ? rows.filter(item => item.slug !== slug && item.category === currentArticle.category).slice(0, 3)
+            : [],
     };
     page.blog.availableLanguages = ['zh_Hans', 'en'].filter(
         code => code === language || (editions?.[code] ?? []).some(item => !slug || item.slug === slug),
