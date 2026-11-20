@@ -16,6 +16,7 @@ import type { BlogAdminArticle } from './news-blog-types';
 import {
     NEWS_BLOG_ARTICLE,
     NEWS_BLOG_WORKSPACE,
+    OPEN_NEWS_BLOG_SOURCE_DRAFT,
     PUBLISH_NEWS_BLOG_ARTICLE,
     SAVE_NEWS_BLOG_ARTICLE,
 } from './news-blog.graphql';
@@ -112,6 +113,7 @@ async function fixture(withImages = false, withProfile = false) {
         newsBlogArticle: () => article,
         newsBlogHistory: () => [],
         newsBlogSettings: () => ({}),
+        openNewsBlogSourceDraft: () => article,
         newsBlogArticleList: () => ({
             totalItems: 1,
             items: [
@@ -211,6 +213,21 @@ async function fixture(withImages = false, withProfile = false) {
     };
 }
 describe('news blog review editor with actual Apollo and server schema', () => {
+    it('opens an existing source draft without pairing its new version with stale cached text', async () => {
+        const f = await fixture();
+        const { id } = f.current();
+        // Another editor has saved this draft after the current editor read it.
+        f.updateServer();
+        await act(async () => {
+            await client.mutate({ mutation: OPEN_NEWS_BLOG_SOURCE_DRAFT, variables: { sourceId: '5' } });
+        });
+        const cached = client.readQuery<{ newsBlogArticle: BlogAdminArticle }>({
+            query: NEWS_BLOG_ARTICLE,
+            variables: { id },
+        });
+        expect(cached?.newsBlogArticle).toMatchObject(f.current());
+        expect(document.querySelector('input[value="后台更新标题"]')).not.toBeNull();
+    });
     it('keeps the full bilingual draft and published text after refreshing the article list', async () => {
         const f = await fixture();
         const { id, slug, version, draft } = f.current();

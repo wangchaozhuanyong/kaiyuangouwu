@@ -74,12 +74,10 @@ export const NEWS_BLOG_SOURCES = gql`
 export const OPEN_NEWS_BLOG_SOURCE_DRAFT = gql`
     mutation OpenNewsBlogSourceDraft($sourceId: ID!) {
         openNewsBlogSourceDraft(sourceId: $sourceId) {
-            id
-            slug
-            version
-            state
+            ...NewsBlogEditorFields
         }
     }
+    ${NEWS_BLOG_EDITOR_FIELDS}
 `;
 export const NEWS_BLOG_RUNS = gql`
     query NewsBlogRuns {

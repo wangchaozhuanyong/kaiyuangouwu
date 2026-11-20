@@ -36,12 +36,26 @@ it('shows retained source evidence and manual editing in zero-cost mode without 
         ],
     });
     const writes = vi.fn();
-    const openDraft = vi.fn((_input: { sourceId: string }) => ({
+    const linkedArticle = {
         id: '91',
         slug: 'linked-source',
         version: 1,
         state: 'DRAFT',
-    }));
+        publishedAt: null,
+        published: null,
+        draft: {
+            ...emptyBlogDraft(),
+            sources: [
+                {
+                    label: '原始官方来源',
+                    url: 'https://openai.com/news/fixture-0',
+                    accessedAt: '2026-11-03',
+                },
+            ],
+        },
+        issues: [],
+    };
+    const openDraft = vi.fn((_input: { sourceId: string }) => linkedArticle);
     const rootValue = {
         newsBlogSettings: () => ({
             version: 1,
@@ -53,23 +67,7 @@ it('shows retained source evidence and manual editing in zero-cost mode without 
         newsBlogArticleList: () => ({ items: [], totalItems: 0 }),
         newsBlogSources: () => [],
         openNewsBlogSourceDraft: openDraft,
-        newsBlogArticle: () => ({
-            id: '91',
-            slug: 'linked-source',
-            version: 1,
-            state: 'DRAFT',
-            draft: {
-                ...emptyBlogDraft(),
-                sources: [
-                    {
-                        label: '原始官方来源',
-                        url: 'https://openai.com/news/fixture-0',
-                        accessedAt: '2026-11-03',
-                    },
-                ],
-            },
-            issues: [],
-        }),
+        newsBlogArticle: () => linkedArticle,
         newsBlogHistory: () => [],
         newsBlogSourceItems: () =>
             ['PAGE_TEXT', 'OFFICIAL_RSS'].map((evidenceMode, index) => ({
