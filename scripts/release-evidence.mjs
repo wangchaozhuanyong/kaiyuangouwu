@@ -215,7 +215,10 @@ export function readNativeJobLog(repository, jobId, request = execFileSync, paus
     const capture = { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] };
     if (!nativeLogCapabilities.has(request)) {
         const help = request('gh', ['api', '--help'], capture);
-        nativeLogCapabilities.set(request, /^\s*--allow-escape-sequences(?:\s|$)/mu.test(help));
+        nativeLogCapabilities.set(
+            request,
+            /^\s*--allow-escape-sequences(?:\[=true\|false\])?(?:\s|$)/mu.test(help),
+        );
     }
     const args = ['api', `repos/${repository}/actions/jobs/${jobId}/logs`];
     // Actions shell annotations contain ANSI. Permit raw bytes only into this

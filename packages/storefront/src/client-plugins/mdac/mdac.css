@@ -1,200 +1,554 @@
-.mdac-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(190px, 260px);
-    gap: var(--space-card);
-    align-items: start;
+/* The arrival card has its own route palette, including its portaled privacy sheet. */
+.mdac-page,
+.mdac-privacy {
+    --mdac-paper: #fffaf0;
+    --mdac-ink: #193c2d;
+    --mdac-green: #134f39;
+    --mdac-muted: #506456;
+    --mdac-line: #d5d4be;
+    --surface: var(--mdac-paper);
+    --text: var(--mdac-ink);
+    --muted: var(--mdac-muted);
+    --line: var(--mdac-line);
+    color: var(--mdac-ink);
 }
-.mdac-panel {
+.storefront-app[data-route='mdac'],
+.page.subpage.mdac-page {
+    background: var(--mdac-paper, #fffaf0);
+}
+.page.subpage.mdac-page {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    min-height: 100dvh;
+}
+.page.subpage.mdac-page > .topbar.subpage-header {
+    isolation: isolate;
+    position: relative;
+    top: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 64px;
+    height: auto;
+    padding: 8px max(18px, calc((100% - 1080px) / 2));
+    background: #faf1d6;
+    border: 0;
+    border-bottom: 1px solid var(--mdac-line);
+    color: var(--text);
+}
+.page.subpage.mdac-page > .topbar.subpage-header::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: min(33%, 440px);
+    z-index: -1;
+    background: url('./skyline.webp') right bottom / auto 100% no-repeat;
+    mask-image: linear-gradient(90deg, transparent, #000 25%);
+    pointer-events: none;
+}
+.page.subpage.mdac-page > .topbar.subpage-header > strong,
+.mdac-page .subpage-title-icon {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     min-width: 0;
-    padding: var(--space-card);
-    background: var(--surface);
-    border-radius: var(--skin-card-radius);
-    display: grid;
-    gap: var(--space-12);
+    overflow-wrap: anywhere;
 }
-.mdac-panel h2,
-.mdac-panel p {
+.page.subpage.mdac-page > .topbar.subpage-header > strong {
+    flex: 1;
+    white-space: normal;
+    text-align: start;
+}
+.mdac-page .subpage-title-icon {
+    color: #ad7e10;
+}
+.mdac-brand {
+    color: var(--mdac-ink);
+    border-inline-end: 1px solid #bfbda3;
+    padding-inline-end: 9px;
+}
+.page.subpage.mdac-page > .topbar.subpage-header .subpage-header-actions {
+    margin-inline-start: auto;
+    display: flex;
+}
+.page.mdac-page .subpage-header-actions .mdac-language {
+    border: 1px solid var(--mdac-line);
+    border-radius: 30px;
+    background: #fffaf0ef;
+    min-height: 44px;
+    min-width: 44px;
+    color: var(--mdac-green);
+    cursor: pointer;
+}
+.mdac-page .subpage-body.mdac-body {
+    display: block;
+    max-width: 1120px;
+    margin: auto;
+    padding: 20px clamp(16px, 3vw, 40px) 40px;
+}
+.mdac-page :is(h1, h2, h3, p, ol, dl, dd) {
     margin: 0;
 }
-.mdac-fields {
+.mdac-steps {
+    display: flex;
+    max-width: 640px;
+    list-style: none;
+    padding: 0;
+}
+.mdac-steps li {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    justify-items: center;
+    align-content: start;
+    gap: 5px;
+    text-align: center;
+    color: var(--mdac-muted);
+}
+.mdac-steps li:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 11px;
+    inset-inline-start: calc(50% + 17px);
+    width: calc(100% - 34px);
+    height: 1px;
+    background: var(--line);
+}
+.mdac-steps li span {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border: 1px solid #b0bea9;
+    border-radius: 50%;
+}
+.mdac-steps [aria-current] {
+    color: var(--mdac-green);
+    font-weight: var(--font-weight-bold);
+}
+.mdac-steps [aria-current] span {
+    color: white;
+    background: var(--mdac-green);
+    border-color: var(--mdac-green);
+}
+.mdac-heading {
+    margin: 20px 0 14px;
+}
+.mdac-page .mdac-heading h1 {
+    --skin-display-font: 'Songti SC', 'STSong', 'Noto Serif CJK SC', Georgia, serif;
+    font-family: var(--skin-display-font);
+    font-size: var(--type-display-size);
+    line-height: var(--type-display-leading);
+    font-weight: var(--font-weight-bold);
+    outline: 0;
+    scroll-margin-top: 16px;
+}
+.mdac-heading h1::after {
+    content: '';
+    display: block;
+    width: 46px;
+    height: 4px;
+    background: #e3b430;
+    border-radius: 60%;
+    transform: rotate(-3deg);
+    margin: 4px 0 9px;
+}
+.mdac-heading p,
+.mdac-page .type-helper,
+.mdac-privacy .type-helper {
+    color: var(--mdac-muted);
+}
+.mdac-page button,
+.mdac-privacy button {
+    cursor: pointer;
+}
+.mdac-page button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.mdac-page :is(a, button, select, input, summary):focus-visible,
+.mdac-privacy :focus-visible {
+    outline: 3px solid #35725a;
+    outline-offset: 3px;
+}
+.mdac-actions,
+.mdac-summary-heading,
+.mdac-upload-title,
+.mdac-draft-bar,
+.mdac-setting {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.mdac-actions {
+    flex-wrap: wrap;
+}
+.mdac-travelers {
+    margin: 10px 0;
+    justify-content: flex-start;
+}
+.mdac-travelers label {
+    min-width: 0;
+    max-width: min(55%, 18rem);
+    margin-inline-end: auto;
+}
+.mdac-page .mdac-travelers select {
+    padding: 8px;
+    min-height: 44px;
+    width: 100%;
+    color: var(--text);
+    border: 1px solid var(--line);
+    background: #fffdf7;
+    border-radius: 7px;
+}
+.mdac-page .mdac-link,
+.mdac-page .mdac-travelers button,
+.mdac-clear {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 4px 2px;
+    color: var(--mdac-green);
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+.mdac-upload,
+.mdac-hotel-box {
+    background: #fbefc8;
+    border: 1px solid #e2cd90;
+    border-radius: 13px;
+    padding: clamp(16px, 2.5vw, 28px);
+}
+.mdac-upload-title {
+    justify-content: space-between;
+}
+.mdac-page .mdac-upload-title > svg {
+    width: 42px;
+    height: 42px;
+    color: #496446;
+    transform: rotate(-7deg);
+    flex-shrink: 0;
+}
+.mdac-upload-title p {
+    margin-top: 4px;
+}
+.mdac-page .mdac-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 46px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    padding: 10px 17px;
+    color: white;
+    background: var(--mdac-green);
+    text-decoration: none;
+    box-shadow: none;
+}
+.mdac-photo {
+    margin-top: 15px;
+}
+.mdac-upload-options {
+    display: inline-flex;
+    margin-inline-start: 16px;
+}
+.mdac-upload .mdac-album,
+.mdac-touch {
+    display: none;
+}
+@media (pointer: coarse) {
+    .mdac-fine {
+        display: none;
+    }
+    .mdac-touch,
+    .mdac-upload .mdac-album {
+        display: inline-flex;
+    }
+}
+.mdac-draft-bar {
+    justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+    padding: 10px 0;
+}
+.mdac-draft-bar button {
+    white-space: nowrap;
+}
+.mdac-block {
+    margin-top: 23px;
+    padding: 15px 0 4px;
+    border-top: 1px solid var(--line);
+}
+.mdac-draft-bar + .mdac-block {
+    border-top: 0;
+    padding-top: 0;
+}
+.mdac-fields,
+.mdac-review {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-12);
-    margin-block: var(--space-16);
+    gap: 12px 18px;
+    margin-block: 12px;
 }
-.mdac-fields label,
-.mdac-scan {
+.mdac-field,
+.mdac-hotel-picker {
     display: grid;
-    gap: var(--space-8);
+    align-content: start;
     min-width: 0;
+    gap: 4px;
 }
-.mdac-page input:not([type='checkbox']),
-.mdac-page select {
-    min-width: 0;
+.mdac-field-heading {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 28px;
+}
+.mdac-page .mdac-field :is(input, select),
+.mdac-hotel-picker input {
     width: 100%;
-    min-height: 44px;
-    padding: var(--space-8);
-    border: 1px solid var(--control-border, var(--line));
-    border-radius: var(--skin-control-radius);
-    background: var(--control-surface);
+    min-width: 0;
+    height: 44px;
+    border: 1px solid #a3b4a5;
+    padding: 7px 10px;
+    border-radius: 6px;
+    background: #fffef9;
     color: var(--text);
     font-family: var(--font-ui);
     font-size: var(--type-input-size);
     line-height: var(--type-input-leading);
+    scroll-margin-block: 20px;
 }
-.mdac-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-8);
-    margin-block: var(--space-12);
-}
-.mdac-travelers {
-    align-items: flex-end;
-}
-.mdac-travelers > label {
+.mdac-help-button {
     display: grid;
-    gap: var(--space-8);
-    min-width: 0;
-    max-width: 100%;
-    flex: 0 1 14rem;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    color: var(--mdac-muted);
 }
-.mdac-navigation {
-    align-self: end;
-    margin-block: 0;
+.mdac-field-help {
+    position: absolute;
+    z-index: 2;
+    inset: 100% auto auto 0;
+    width: min(100%, 21rem);
+    padding: 12px;
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 4px 18px #18382725;
 }
-.mdac-navigation > [type='submit'] {
-    margin-inline-start: auto;
+.mdac-message {
+    padding: 12px;
+    border-left: 3px solid #ac851d;
+    background: #fff0cc;
+    margin-block: 10px !important;
 }
-.mdac-check {
-    display: flex;
-    gap: var(--space-8);
-    align-items: center;
-    min-height: 44px;
+.mdac-trip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: clamp(20px, 3vw, 48px);
 }
-.mdac-steps {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-12);
+.mdac-trip .mdac-fields:has([data-field='email']) {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+}
+.mdac-trip [data-field='email'],
+.mdac-trip [data-field^='accommodationAddress'] {
+    grid-column: 1/-1;
+}
+.mdac-hotel-box {
+    padding: 15px;
+    margin: 14px 0;
+}
+.mdac-map {
+    height: 76px;
+    margin: -15px -15px 12px;
+    border-radius: 12px 12px 0 0;
+    background: url('./street-map.webp') center 42% / cover no-repeat;
+}
+.mdac-hotel-results {
     list-style: none;
     padding: 0;
     margin: 0;
-    color: var(--muted);
-}
-.mdac-steps [aria-current] {
-    color: var(--text);
-    font-weight: var(--font-weight-bold);
-}
-.mdac-message {
-    padding: var(--space-12);
-    background: var(--bg);
-    border-radius: var(--skin-card-radius);
-}
-.mdac-review {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-12);
-    margin-block: var(--space-12);
+    gap: 4px;
+}
+.mdac-hotel-results button,
+.mdac-hotel-status button {
+    min-height: 44px;
+    background: #fffdf6;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px 12px;
+}
+.mdac-hotel-results button {
+    display: grid;
+    text-align: start;
+    width: 100%;
+    overflow-wrap: anywhere;
+}
+.mdac-person-review,
+.mdac-summary {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+}
+.mdac-person-review summary {
+    cursor: pointer;
+    min-height: 44px;
+    padding: 9px 0;
+    overflow-wrap: anywhere;
+}
+.mdac-summary-heading {
+    justify-content: space-between;
 }
 .mdac-review div {
     min-width: 0;
     overflow-wrap: anywhere;
 }
 .mdac-review dt {
-    color: var(--muted);
+    color: var(--mdac-muted);
 }
-.mdac-review dd {
-    margin: 0;
+.mdac-handoff {
+    margin-block: 20px;
 }
-.mdac-panel summary {
-    min-height: 44px;
-    padding-block: var(--space-8);
-    cursor: pointer;
-}
-@media (max-width: 767px) {
-    .mdac-layout {
-        grid-template-columns: minmax(0, 1fr);
-    }
-}
-@media (max-width: 420px) {
-    .mdac-fields,
-    .mdac-review {
-        grid-template-columns: minmax(0, 1fr);
-    }
-}
-
-.mdac-page .primary-action {
-    display: inline-flex;
+.mdac-check,
+.mdac-setting {
+    display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 8px;
     min-height: 44px;
-    padding: var(--space-8) var(--space-16);
 }
-.mdac-page a.secondary-action {
+.mdac-check input,
+.mdac-setting input {
+    accent-color: var(--mdac-green);
+    width: 20px;
+    height: 20px;
+}
+.mdac-page .mdac-navigation {
+    margin-top: 20px;
+    justify-content: space-between;
+}
+.mdac-navigation [type='submit'] {
+    margin-inline-start: auto;
+}
+.mdac-page :is(.mdac-handoff, .mdac-navigation) .secondary-action {
+    min-height: 44px;
+    padding: 10px 14px;
+    border: 1px solid var(--mdac-line);
+    border-radius: 7px;
+    background: #fffdf7;
+    color: var(--mdac-green);
     display: inline-flex;
     align-items: center;
     text-decoration: none;
 }
-
-.mdac-field,
-.mdac-hotel-picker {
-    display: grid;
-    align-content: start;
-    gap: var(--space-8);
-    min-width: 0;
+.mdac-page .mdac-handoff .mdac-primary {
+    margin-inline-start: auto;
 }
-.mdac-field-heading,
-.mdac-hotel-status {
-    position: relative;
+.mdac-privacy {
+    max-width: 480px;
+}
+.mdac-privacy header strong {
     display: flex;
     align-items: center;
-    gap: var(--space-8);
+    gap: 8px;
 }
-.mdac-field-heading {
-    min-height: 32px;
+.mdac-sheet-body {
+    padding: 0 18px 10px;
 }
-.mdac-help-button {
-    display: grid;
-    place-items: center;
-    min-width: 32px;
-    min-height: 32px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--skin-control-radius);
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
+.mdac-sheet-body :is(h3, p) {
+    margin: 4px 0 10px;
 }
-.mdac-help-button:focus-visible {
-    outline: 2px solid var(--focus);
-    outline-offset: 2px;
-}
-.mdac-field-help {
-    position: absolute;
-    z-index: 2;
-    inset-block-start: 100%;
-    inset-inline-end: 0;
-    width: min(100%, 22rem);
-    padding: var(--space-12);
-    border-radius: var(--skin-control-radius);
-    background: var(--surface);
-    box-shadow: var(--skin-card-shadow);
-    color: var(--text);
-}
-.mdac-hotel-results {
-    display: grid;
-    gap: var(--space-4);
-    padding: 0;
-    margin: 0;
-    list-style: none;
-}
-.mdac-hotel-results button {
-    display: flex;
-    flex-wrap: wrap;
+.mdac-setting {
     justify-content: space-between;
-    gap: var(--space-8);
-    width: 100%;
-    min-height: 44px;
-    text-align: start;
-    overflow-wrap: anywhere;
+}
+.mdac-setting input {
+    appearance: none;
+    width: 42px;
+    height: 26px;
+    border: 1px solid #829382;
+    border-radius: 30px;
+    background: #c8d0c4;
+    cursor: pointer;
+    display: grid;
+    align-items: center;
+    padding: 2px;
+}
+.mdac-setting input::after {
+    content: '';
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+}
+.mdac-setting input:checked {
+    background: var(--mdac-green);
+}
+.mdac-setting input:checked::after {
+    justify-self: end;
+}
+.mdac-sheet-body h3 {
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+    margin-top: 14px;
+}
+.mdac-clear {
+    color: #90452c;
+}
+@media (max-width: 800px) {
+    .mdac-trip {
+        display: block;
+    }
+}
+@media (max-width: 600px) {
+    .page.subpage.mdac-page > .topbar.subpage-header {
+        padding: 8px 16px;
+        gap: 5px;
+    }
+    .page.subpage.mdac-page > .topbar.subpage-header > strong,
+    .mdac-page .subpage-title-icon {
+        gap: 5px;
+    }
+    .mdac-page .subpage-body.mdac-body {
+        padding: 15px 16px 28px;
+    }
+    .mdac-steps {
+        max-width: none;
+    }
+    .mdac-heading {
+        margin: 16px 0 10px;
+    }
+    .mdac-photo {
+        width: 100%;
+    }
+    .mdac-upload-options {
+        display: flex;
+        align-items: center;
+        margin: 3px 0 0;
+    }
+    .mdac-upload-options > button {
+        flex: 1;
+    }
+    .mdac-fields {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .mdac-handoff .mdac-actions .mdac-primary {
+        width: 100%;
+    }
+    .mdac-review {
+        gap: 10px;
+    }
+    .mdac-navigation > .mdac-primary:only-child {
+        width: 100%;
+    }
 }

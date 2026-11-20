@@ -138,6 +138,11 @@
     }
 }
 
+/* Independent arrival-card masthead, sized for the three-step form. */
+.mdac-page {
+    --type-display-size: clamp(32px, 4vw, 40px);
+}
+
 /* CSS consumers use the same pairs as these utilities. Modifiers may change emphasis, never density. */
 @utility type-body {
     font-size: var(--type-body-size);

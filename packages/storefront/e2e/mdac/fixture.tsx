@@ -34,8 +34,8 @@ function Fixture() {
                     data-route="mdac"
                     style={{ maxWidth: 1344, margin: 'auto' }}
                 >
+                    <MdacPage language={language} storeName={language === 'zh' ? '大马通' : 'Damatong'} />
                     <p className="type-helper">本地实际组件预览 · 请使用虚构资料 · 未发布</p>
-                    <MdacPage language={language} onBack={() => history.back()} />
                 </div>
             </DesktopLayoutContext.Provider>
         </QueryClientProvider>
