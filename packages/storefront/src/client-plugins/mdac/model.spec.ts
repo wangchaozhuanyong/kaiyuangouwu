@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+    disableDraftSaving,
     emptyDraft,
     exportConfig,
     isIsoDate,
@@ -21,7 +22,7 @@ afterEach(() => {
 });
 
 describe('MDAC local data and export', () => {
-    it('persists only by opt-in and removes just its own key', () => {
+    it('writes and removes only the requested tool draft', () => {
         localStorage.setItem('another-tool', 'keep');
         const draft = emptyDraft();
         draft.travelers[0].name = 'SYNTHETIC TEST';
@@ -30,6 +31,16 @@ describe('MDAC local data and export', () => {
         expect(persistDraft(draft, false)).toBe(true);
         expect(readDraft()).toBeNull();
         expect(localStorage.getItem('another-tool')).toBe('keep');
+    });
+    it('removes personal data even if saving the off preference fails at quota', () => {
+        const draft = emptyDraft();
+        draft.travelers[0].name = 'TEST TRAVELER';
+        persistDraft(draft, true);
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            throw Error('quota');
+        });
+        expect(disableDraftSaving()).toBe(false);
+        expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
     });
     it('rejects corrupt, oversized and incompatible saved data', () => {
         for (const raw of [

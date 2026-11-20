@@ -6,13 +6,21 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { MdacPage } from './mdac-page';
-import { emptyDraft, PassportReadError, STORAGE_KEY } from './model';
+import {
+    disableDraftSaving,
+    draftSavingPreference,
+    emptyDraft,
+    PassportReadError,
+    readDraft,
+    STORAGE_KEY,
+} from './model';
 import { readPassport } from './ocr';
 
 vi.mock('./ocr', () => ({ readPassport: vi.fn() }));
 vi.mock('../../storefront-ui/page-shell', () => ({
     Subpage: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     SubpageBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    Sheet: ({ children }: { children: React.ReactNode }) => <div role="dialog">{children}</div>,
 }));
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let host: HTMLDivElement;
@@ -50,18 +58,28 @@ const render = (language: 'zh' | 'en' = 'zh') =>
         ),
     );
 
-it('keeps guest edits in memory until opt-in, and clear does not delete other tools', () => {
+it('saves on first edit, drops only the stored copy on opt-out, and remembers the choice after remount', () => {
     localStorage.setItem('other', 'retained');
     render();
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
     act(() => button('添加旅客').click());
-    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
-    const checkbox = inputOfType('checkbox');
-    act(() => checkbox.click());
-    const saved = localStorage.getItem(STORAGE_KEY);
-    assert.ok(saved);
-    expect(JSON.parse(saved).travelers).toHaveLength(2);
+    expect(readDraft()?.travelers).toHaveLength(2);
+    act(() => button('草稿设置').click());
+    expect(inputOfType('checkbox').checked).toBe(true);
+    act(() => inputOfType('checkbox').click());
+    expect(readDraft()).toBeNull();
+    expect(host.querySelectorAll('.mdac-travelers option')).toHaveLength(2);
+    act(() => root.unmount());
+    root = createRoot(host);
+    render();
+    act(() => button('草稿设置').click());
+    expect(inputOfType('checkbox').checked).toBe(false);
+    expect(host.querySelectorAll('.mdac-travelers option')).toHaveLength(1);
+    act(() => inputOfType('checkbox').click());
+    expect(readDraft()?.travelers).toHaveLength(1);
     act(() => button('清除本机资料').click());
-    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(readDraft()).toBeNull();
+    expect(draftSavingPreference()).toBe(false);
     expect(localStorage.getItem('other')).toBe('retained');
 });
 
@@ -99,6 +117,7 @@ it('cancels recognition on clear and does not restore a late result or store the
     expect(button('识别中…').disabled).toBe(true);
     render('en');
     expect(button('Reading…').disabled).toBe(true);
+    act(() => button('Draft settings').click());
     act(() => button('Clear local details').click());
     expect(vi.mocked(readPassport).mock.calls[0][1].aborted).toBe(true);
     await act(() => {
@@ -106,10 +125,11 @@ it('cancels recognition on clear and does not restore a late result or store the
         return Promise.resolve();
     });
     expect(host.textContent).not.toContain('LATE RESULT');
-    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(readDraft()).toBeNull();
 });
 
 it('fills verified fields without saving them and preserves them when a later scan fails', async () => {
+    disableDraftSaving();
     vi.mocked(readPassport)
         .mockReset()
         .mockResolvedValueOnce({
@@ -142,14 +162,15 @@ it('fills verified fields without saving them and preserves them when a later sc
     expect(values.filter(Boolean)).toHaveLength(6);
     expect(values).toContain('SYNTHETIC TRAVELER');
     expect(host.querySelector('[role=status]')?.textContent).toContain('识别完成');
-    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(readDraft()).toBeNull();
     await upload();
     expect(filled()).toEqual(values);
     expect(host.querySelector('[role=status]')?.textContent).toContain('未能完整识别');
-    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(readDraft()).toBeNull();
 });
 
 it('selects the detected birth country while leaving guest data out of storage', async () => {
+    disableDraftSaving();
     vi.mocked(readPassport).mockReset().mockResolvedValueOnce({
         name: 'SYNTHETIC TRAVELER',
         passNo: 'E12345678',
@@ -172,5 +193,5 @@ it('selects the detected birth country while leaving guest data out of storage',
     expect(selects[0].value).toBe('CHN');
     expect(selects[1].value).toBe('USA');
     expect(host.querySelector('[role=status]')?.textContent).toContain('已根据护照出生地点匹配');
-    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(readDraft()).toBeNull();
 });

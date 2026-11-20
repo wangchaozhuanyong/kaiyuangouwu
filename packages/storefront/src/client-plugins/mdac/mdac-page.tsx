@@ -1,17 +1,32 @@
 // organize-imports-ignore -- Keep ESLint type import grouping.
 import type { StorefrontLanguage } from '../../types';
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import {
+    BookUser,
+    Camera,
+    Check,
+    ChevronRight,
+    Flower2,
+    Image,
+    PenLine,
+    Plus,
+    ShieldCheck,
+} from 'lucide-react';
+import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 
-import { Subpage, SubpageBody } from '../../storefront-ui/page-shell';
+import { Sheet, Subpage, SubpageBody } from '../../storefront-ui/page-shell';
 
 import './mdac.css';
 import { MdacFieldHelp } from './field-help';
 import { MdacHotelPicker, type MdacHotel } from './hotel-picker';
 import {
     AIR_TRAVEL,
+    contactFields,
+    disableDraftSaving,
+    draftSavingPreference,
     emptyDraft,
     exportConfig,
     HOTEL_STAY,
+    lodgingFields,
     malaysiaToday,
     normalizeFlightNumber,
     OFFICIAL_URL,
@@ -21,7 +36,7 @@ import {
     readDraft,
     STORAGE_KEY,
     suggestedDepartureDate,
-    tripFields,
+    travelFields,
     validateDates,
     validPersonalFields,
     type Draft,
@@ -29,10 +44,24 @@ import {
     type Fields,
 } from './model';
 
-export function MdacPage({ language, onBack }: { language: StorefrontLanguage; onBack: () => void }) {
+export function MdacPage({
+    language: initialLanguage,
+    onBack,
+    storeName,
+}: {
+    language: StorefrontLanguage;
+    onBack?: () => void;
+    storeName?: string;
+}) {
+    const [chosenLanguage, setChosenLanguage] = useState<StorefrontLanguage>();
+    const language = chosenLanguage ?? initialLanguage;
     const t = (zh: string, en: string) => (language === 'zh' ? zh : en);
     const [draft, setDraft] = useState<Draft>(() => readDraft() ?? emptyDraft());
-    const [remember, setRemember] = useState(() => Boolean(readDraft()));
+    const [preference] = useState(draftSavingPreference);
+    const [remember, setRemember] = useState(preference === true);
+    const [saved, setSaved] = useState(() => Boolean(readDraft()));
+    const [storageFailed, setStorageFailed] = useState(preference === null);
+    const [privacyOpen, setPrivacyOpen] = useState(false);
     const [traveler, setTraveler] = useState(0);
     const [step, setStep] = useState(0);
     const [busy, setBusy] = useState(false);
@@ -42,12 +71,27 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
     const [flightReviewed, setFlightReviewed] = useState(false);
     const [confirmedTrip, setConfirmedTrip] = useState(false);
     const fieldId = useId();
+    const heading = useRef<HTMLHeadingElement>(null);
+    const editField = useRef<string | null>(null);
+    const previousStep = useRef(step);
+    useEffect(() => {
+        if (step !== previousStep.current) {
+            previousStep.current = step;
+            const target = editField.current
+                ? document.getElementById(fieldId + '-' + editField.current)
+                : heading.current;
+            editField.current = null;
+            target?.focus({ preventScroll: true });
+            target?.scrollIntoView?.({ block: 'start' });
+        }
+    }, [step, fieldId]);
     const byAir = draft.shared.trvlMode === AIR_TRAVEL;
     const flight = normalizeFlightNumber(draft.shared.vesselNm ?? '');
     const showFlightHint =
         byAir && flightReviewed && flight && !/^[A-Z0-9]{2,3}[0-9]{1,4}[A-Z]?$/u.test(flight);
     const generation = useRef(0);
     const imageInput = useRef<HTMLInputElement>(null);
+    const albumInput = useRef<HTMLInputElement>(null);
     const scanController = useRef<AbortController | null>(null);
     const rememberRef = useRef(remember);
     rememberRef.current = remember;
@@ -63,6 +107,8 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
             if (event.key === STORAGE_KEY || event.key === null) {
                 // Another tab's deletion or edit must never be silently overwritten.
                 setRemember(false);
+                rememberRef.current = false;
+                setSaved(false);
                 setMessage(
                     t(
                         '其他页面已更改本机草稿，当前输入已保留，请核对后重新选择保存。',
@@ -76,7 +122,15 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
     }, [language]);
     function save(next: Draft, keep = remember) {
         setDraft(next);
+        if (keep && draftSavingPreference() === false) {
+            setRemember(false);
+            rememberRef.current = false;
+            setSaved(false);
+            return true;
+        }
         if (keep && !persistDraft(next, true)) {
+            setStorageFailed(true);
+            setSaved(false);
             setMessage(
                 t(
                     '浏览器无法保存资料，请保持此页打开。',
@@ -84,6 +138,10 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
                 ),
             );
             return false;
+        }
+        if (keep) {
+            setStorageFailed(false);
+            setSaved(true);
         }
         return true;
     }
@@ -149,7 +207,7 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
             const { readPassport } = await import('./ocr');
             const recognized = await readPassport(file, controller.signal);
             if (current !== generation.current || controller.signal.aborted) return;
-            const saved = save(
+            const updated = save(
                 {
                     ...draft,
                     travelers: draft.travelers.map((item, index) =>
@@ -158,7 +216,7 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
                 },
                 rememberRef.current,
             );
-            if (saved)
+            if (updated)
                 setMessage(
                     recognized.pob
                         ? t(
@@ -258,6 +316,9 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
         scanController.current?.abort();
         setBusy(false);
         setRemember(false);
+        rememberRef.current = false;
+        setSaved(false);
+        setPrivacyOpen(false);
         setTraveler(0);
         setStep(0);
         setDepartureIsSuggested(false);
@@ -266,17 +327,39 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
         setConfirmedTrip(false);
         if (imageInput.current) imageInput.current.value = '';
         save(emptyDraft(), false);
+        const cleared = disableDraftSaving();
+        setStorageFailed(!cleared);
         setMessage(
-            persistDraft(emptyDraft(), false)
+            cleared
                 ? t(
                       '本站本机草稿已清除。已下载文件与脚本中的资料需分别删除。',
                       'Local site draft cleared. Delete downloaded files and userscript data separately.',
                   )
                 : t(
-                      '浏览器拒绝清除存储，请在浏览器设置中清除本站数据。',
-                      'Clear this site’s data in your browser settings.',
+                      '当前输入已清空，浏览器未能确认本机设置。请在浏览器设置中检查本站数据。',
+                      'Page inputs cleared. The browser could not confirm local storage settings. Check this site’s data in your browser.',
                   ),
         );
+    }
+    function changeRetention(keep: boolean) {
+        const ok = keep ? persistDraft(draft, true) : disableDraftSaving();
+        rememberRef.current = keep && ok;
+        setRemember(keep && ok);
+        setSaved(keep && ok);
+        setStorageFailed(!ok);
+        setMessage(
+            ok
+                ? ''
+                : t(
+                      '浏览器无法更新本机草稿设置，请查看浏览器的站点存储设置。',
+                      'Could not update the draft. Check the browser’s site storage settings.',
+                  ),
+        );
+    }
+    function chooseImage(event: ChangeEvent<HTMLInputElement>) {
+        const file = event.currentTarget.files?.[0];
+        event.currentTarget.value = '';
+        if (file) void scan(file);
     }
     const stepActions = (
         <div className="mdac-actions mdac-navigation">
@@ -290,7 +373,7 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
                 </button>
             )}
             {step < 2 && (
-                <button className="primary-action type-action" type="submit" disabled={busy}>
+                <button className="mdac-primary type-action" type="submit" disabled={busy}>
                     {busy ? t('识别中…', 'Reading…') : t('下一步', 'Next')}
                 </button>
             )}
@@ -336,7 +419,7 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
         const option = field.options?.find(([code]) => code === value);
         return option ? optionLabel(field.key, value, option[1]) : value || '—';
     }
-    function fields(items: Field[], values: Fields, personal: boolean, actions?: ReactNode) {
+    function fields(items: Field[], values: Fields, personal: boolean) {
         return (
             <div className="mdac-fields">
                 {items.map(field => {
@@ -359,7 +442,7 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
                         [help && id + '-help', advisory && id + '-advisory'].filter(Boolean).join(' ') ||
                         undefined;
                     return (
-                        <div className="mdac-field" key={field.key}>
+                        <div className="mdac-field" key={field.key} data-field={field.key}>
                             <div className="mdac-field-heading">
                                 <label htmlFor={id} className="type-label">
                                     {label}
@@ -426,243 +509,443 @@ export function MdacPage({ language, onBack }: { language: StorefrontLanguage; o
                                     {advisory}
                                 </p>
                             )}
-                            {field.key === 'accommodationAddress1' &&
-                                draft.shared.accommodationStay === HOTEL_STAY && (
-                                    <MdacHotelPicker language={language} onSelect={selectHotel} />
-                                )}
                         </div>
                     );
                 })}
-                {actions}
             </div>
         );
     }
+    const steps = [
+        t('护照资料', 'Passport details'),
+        t('行程与联系', 'Travel and contact'),
+        t('核对资料', 'Review details'),
+    ];
+    const storageStatus = storageFailed
+        ? t('本机存储不可用', 'Local storage unavailable')
+        : remember
+          ? saved
+              ? t('本机草稿已保存', 'Draft saved on this device')
+              : t('本机草稿已开启', 'Local draft saving is on')
+          : t('本机草稿已关闭', 'Local draft saving is off');
+    const draftSettings = (
+        <div className="mdac-draft-bar">
+            <div>
+                <strong className="type-label">
+                    {t('护照照片仅在本机识别', 'Passport photos are processed on this device')}
+                </strong>
+                <p className="type-helper">{storageStatus}</p>
+            </div>
+            <button type="button" className="mdac-link type-action" onClick={() => setPrivacyOpen(true)}>
+                {t('草稿设置', 'Draft settings')}
+                <ChevronRight size={16} />
+            </button>
+        </div>
+    );
+    const groups = [
+        { title: t('联系方式', 'Contact details'), items: contactFields },
+        { title: t('航班与出入境日期', 'Transport and travel dates'), items: travelFields },
+        { title: t('在马来西亚的住宿', 'Accommodation in Malaysia'), items: lodgingFields },
+    ];
+    function editStep(index: number, key: string) {
+        setMessage('');
+        setConfirmedTrip(false);
+        editField.current = key;
+        setStep(index);
+    }
+    const feedback = message && (
+        <p className="mdac-message type-helper" role="status">
+            {message}
+        </p>
+    );
     return (
         <Subpage
+            className="mdac-page"
             title={t('马来西亚入境卡', 'Malaysia arrival card')}
             language={language}
             onBack={onBack}
-            className="mdac-page"
+            back={onBack ? undefined : <></>}
+            titleIcon={
+                <>
+                    <Flower2 size={22} />
+                    {storeName && <b className="mdac-brand">{storeName}</b>}
+                </>
+            }
+            action={
+                <button
+                    className="mdac-language type-action"
+                    type="button"
+                    aria-label={t('切换为英文', 'Switch to Chinese')}
+                    onClick={() => setChosenLanguage(language === 'zh' ? 'en' : 'zh')}
+                >
+                    {t('EN', '中文')}
+                </button>
+            }
         >
-            <SubpageBody>
-                <div className="mdac-layout">
-                    <section className="mdac-panel">
-                        <p className="type-helper">
-                            {t(
-                                '免登录使用 · 护照自动识别后核对 · 官网最终提交',
-                                'No sign-in · Review passport recognition · Submit on the official site',
-                            )}
-                        </p>
-                        <p className="type-helper">
-                            {t(
-                                '请准备邮箱、电话、抵达航班、实际离境日期和住宿资料。',
-                                'Have your email, phone, arrival flight, actual departure date and accommodation ready.',
-                            )}
-                        </p>
-                        <ol className="mdac-steps type-meta">
-                            {[
-                                t('护照资料', 'Passport'),
-                                t('行程与联系', 'Travel and contact'),
-                                t('核对资料', 'Review'),
-                            ].map((label, index) => (
-                                <li key={label} aria-current={step === index ? 'step' : undefined}>
-                                    {index + 1} · {label}
-                                </li>
-                            ))}
-                        </ol>
-                        {message && (
-                            <p className="mdac-message type-helper" role="status">
-                                {message}
-                            </p>
-                        )}
-                        <form aria-busy={busy} onSubmit={advance} autoComplete="off">
-                            {step === 0 && (
-                                <>
-                                    <div className="mdac-actions mdac-travelers">
-                                        <label className="type-label">
-                                            {t('当前旅客', 'Traveler')}
-                                            <select
-                                                value={traveler}
-                                                disabled={busy}
-                                                onChange={event => setTraveler(Number(event.target.value))}
-                                            >
-                                                {draft.travelers.map((person, index) => (
-                                                    <option key={index} value={index}>
-                                                        {person.name ||
-                                                            t('旅客', 'Traveler') + ' ' + (index + 1)}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </label>
-                                        <button
-                                            className="secondary-action type-action"
-                                            type="button"
-                                            disabled={busy || draft.travelers.length >= 20}
-                                            onClick={() => {
-                                                save({ ...draft, travelers: [...draft.travelers, {}] });
-                                                setTraveler(draft.travelers.length);
-                                            }}
-                                        >
-                                            {t('添加旅客', 'Add traveler')}
-                                        </button>
-                                        {draft.travelers.length > 1 && (
-                                            <button
-                                                className="secondary-action type-action"
-                                                type="button"
-                                                disabled={busy}
-                                                onClick={() => {
-                                                    save({
-                                                        ...draft,
-                                                        travelers: draft.travelers.filter(
-                                                            (_, index) => index !== traveler,
-                                                        ),
-                                                    });
-                                                    setTraveler(0);
-                                                }}
-                                            >
-                                                {t('移除此旅客', 'Remove traveler')}
-                                            </button>
-                                        )}
-                                    </div>
-                                    <label className="mdac-scan type-label">
-                                        {t('拍摄或上传护照资料页', 'Capture or upload the passport page')}
-                                        <input
-                                            ref={imageInput}
-                                            type="file"
-                                            accept="image/jpeg,image/png,image/webp"
-                                            capture="environment"
-                                            disabled={busy}
-                                            onChange={event => {
-                                                const file = event.target.files?.[0];
-                                                if (file) void scan(file);
-                                            }}
-                                        />
-                                    </label>
-                                    <p className="type-helper">
-                                        {t(
-                                            '请拍清底部两行机读码，避免反光；识别结果必须与护照原件核对。',
-                                            'Include both machine-readable lines at the bottom, avoid glare, and check the result against the passport.',
-                                        )}
-                                    </p>
-                                    {fields(personalFields, draft.travelers[traveler], true, stepActions)}
-                                </>
-                            )}
-                            {step === 1 && fields(tripFields, draft.shared, false)}
-                            {step === 2 && (
-                                <>
-                                    <h2 className="type-section">
-                                        {t('逐位核对旅客', 'Review each traveler')}
-                                    </h2>
-                                    {draft.travelers.map((person, index) => (
-                                        <details key={index} open={index === 0}>
-                                            <summary>{person.name}</summary>
-                                            <dl className="mdac-review">
-                                                {personalFields.map(field => (
-                                                    <div key={field.key}>
-                                                        <dt>{language === 'zh' ? field.zh : field.en}</dt>
-                                                        <dd>
-                                                            {field.options?.find(
-                                                                ([code]) => code === person[field.key],
-                                                            )?.[1] ?? person[field.key]}
-                                                        </dd>
-                                                    </div>
-                                                ))}
-                                            </dl>
-                                        </details>
-                                    ))}
-                                    <h2 className="type-section">{t('本次行程', 'This trip')}</h2>
-                                    <dl className="mdac-review">
-                                        {tripFields.map(field => (
-                                            <div key={field.key}>
-                                                <dt>{language === 'zh' ? field.zh : field.en}</dt>
-                                                <dd>{reviewField(field)}</dd>
-                                            </div>
+            <SubpageBody className="mdac-body" lang={language}>
+                <ol className="mdac-steps" aria-label={t('填写进度', 'Progress')}>
+                    {steps.map((label, index) => (
+                        <li
+                            key={index}
+                            className="type-meta"
+                            aria-current={index === step ? 'step' : undefined}
+                        >
+                            <span aria-hidden="true">{index < step ? <Check size={14} /> : index + 1}</span>
+                            {label}
+                        </li>
+                    ))}
+                </ol>
+                <header className="mdac-heading">
+                    <h1 tabIndex={-1} ref={heading}>
+                        {steps[step]}
+                    </h1>
+                    <p className="type-body">
+                        {
+                            [
+                                t(
+                                    '同行旅客分别填护照，共用一份行程。',
+                                    'Each traveler needs a passport. Everyone shares this trip.',
+                                ),
+                                t(
+                                    '请按实际票据和住宿预订填写。',
+                                    'Use your actual tickets and accommodation booking.',
+                                ),
+                                t(
+                                    '逐位核对旅客资料，再到移民局官网完成登记。',
+                                    'Review each traveler before registering on the official site.',
+                                ),
+                            ][step]
+                        }
+                    </p>
+                </header>
+                <form onSubmit={advance} aria-busy={busy} autoComplete="off">
+                    {step === 0 && (
+                        <>
+                            <div className="mdac-actions mdac-travelers">
+                                <label className="type-label">
+                                    <select
+                                        aria-label={t('当前旅客', 'Traveler')}
+                                        value={traveler}
+                                        disabled={busy}
+                                        onChange={event => setTraveler(Number(event.target.value))}
+                                    >
+                                        {draft.travelers.map((person, index) => (
+                                            <option key={index} value={index}>
+                                                {person.name || t('旅客', 'Traveler') + ' ' + (index + 1)}
+                                            </option>
                                         ))}
-                                    </dl>
+                                    </select>
+                                </label>
+                                <button
+                                    className="secondary-action type-action"
+                                    type="button"
+                                    disabled={busy || draft.travelers.length >= 20}
+                                    onClick={() => {
+                                        save({ ...draft, travelers: [...draft.travelers, {}] });
+                                        setTraveler(draft.travelers.length);
+                                    }}
+                                >
+                                    <Plus size={15} aria-hidden="true" />
+                                    {t('添加旅客', 'Add traveler')}
+                                </button>
+                                {draft.travelers.length > 1 && (
+                                    <button
+                                        className="secondary-action type-action"
+                                        type="button"
+                                        disabled={busy}
+                                        onClick={() => {
+                                            save({
+                                                ...draft,
+                                                travelers: draft.travelers.filter(
+                                                    (_, index) => index !== traveler,
+                                                ),
+                                            });
+                                            setTraveler(0);
+                                        }}
+                                    >
+                                        {t('移除此旅客', 'Remove traveler')}
+                                    </button>
+                                )}
+                            </div>
+                            <section className="mdac-upload">
+                                <div className="mdac-upload-title">
+                                    <div>
+                                        <h2 className="type-section">
+                                            {t('拍摄或上传护照资料页', 'Capture or upload your passport')}
+                                        </h2>
+                                        <p className="type-helper">
+                                            {t(
+                                                '平放护照，拍清底部两行机读码。',
+                                                'Lay the passport flat and include both machine-readable lines.',
+                                            )}
+                                        </p>
+                                    </div>
+                                    <BookUser aria-hidden="true" size={42} />
+                                </div>
+                                <input
+                                    hidden
+                                    ref={imageInput}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp"
+                                    capture="environment"
+                                    aria-label={t('拍摄护照资料页', 'Capture passport photo')}
+                                    onChange={chooseImage}
+                                    disabled={busy}
+                                />
+                                <input
+                                    hidden
+                                    ref={albumInput}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp"
+                                    aria-label={t('选择护照图片文件', 'Choose a passport image file')}
+                                    onChange={chooseImage}
+                                    disabled={busy}
+                                />
+                                <button
+                                    type="button"
+                                    className="mdac-primary mdac-photo type-action"
+                                    disabled={busy}
+                                    onClick={() => {
+                                        const target = window.matchMedia('(pointer: coarse)').matches
+                                            ? imageInput
+                                            : albumInput;
+                                        target.current?.click();
+                                    }}
+                                >
+                                    <Camera size={19} />
+                                    <span className="mdac-fine">
+                                        {t('选择护照照片', 'Choose passport photo')}
+                                    </span>
+                                    <span className="mdac-touch">
+                                        {t('拍摄护照', 'Take a passport photo')}
+                                    </span>
+                                </button>
+                                <div className="mdac-upload-options">
+                                    <button
+                                        type="button"
+                                        className="mdac-album mdac-link type-label"
+                                        disabled={busy}
+                                        onClick={() => albumInput.current?.click()}
+                                    >
+                                        <Image size={16} />
+                                        {t('从相册选择', 'Choose from photos')}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="mdac-link type-label"
+                                        disabled={busy}
+                                        onClick={() => document.getElementById(fieldId + '-name')?.focus()}
+                                    >
+                                        <PenLine size={16} />
+                                        {t('手动填写', 'Enter manually')}
+                                    </button>
+                                </div>
+                            </section>
+                            {feedback}
+                            {draftSettings}
+                            <section className="mdac-block">
+                                <h2 className="type-section">
+                                    {t('护照上的个人资料', 'Personal details on the passport')}
+                                </h2>
+                                <p className="type-helper">
+                                    {t(
+                                        '识别后逐项核对，也可直接填写。',
+                                        'Check each recognized field, or enter the details yourself.',
+                                    )}
+                                </p>
+                                {fields(personalFields, draft.travelers[traveler], true)}
+                            </section>
+                        </>
+                    )}
+                    {step === 1 && (
+                        <>
+                            {feedback}
+                            <div className="mdac-trip">
+                                <div>
+                                    {groups.slice(0, 2).map(group => (
+                                        <section className="mdac-block" key={group.items[0].key}>
+                                            <h2 className="type-section">{group.title}</h2>
+                                            {fields(group.items, draft.shared, false)}
+                                        </section>
+                                    ))}
+                                </div>
+                                <section className="mdac-block mdac-lodging">
+                                    <h2 className="type-section">{groups[2].title}</h2>
+                                    {fields(lodgingFields.slice(0, 1), draft.shared, false)}
+                                    {draft.shared.accommodationStay === HOTEL_STAY && (
+                                        <div className="mdac-hotel-box">
+                                            <div className="mdac-map" aria-hidden="true" />
+                                            <MdacHotelPicker language={language} onSelect={selectHotel} />
+                                        </div>
+                                    )}
                                     <p className="type-helper">
                                         {t(
-                                            '普通手机浏览器若不支持扩展，可保留此页，对照填写官网。桌面端可在支持油猴扩展的浏览器中安装 MDAC 脚本，将导出的 JSON 内容导入，再选择旅客自动填表。每位旅客需在官网核对、完成验证并提交。',
-                                            'On mobile without extension support, copy the reviewed details into the official form. ' +
-                                                'On desktop, install the MDAC userscript in a compatible browser, import the exported JSON ' +
-                                                'and select a traveler to fill the form. Review, verify and submit each traveler on the official site.',
+                                            '可直接手填实际住宿地址。',
+                                            'You can also enter your actual address below.',
                                         )}
                                     </p>
-                                    <label className="mdac-check type-label">
-                                        <input
-                                            type="checkbox"
-                                            checked={confirmedTrip}
-                                            onChange={event => setConfirmedTrip(event.target.checked)}
-                                        />
-                                        {t(
-                                            '我已核对实际离境日期和住宿地址。',
-                                            'I have checked my actual departure date and accommodation address.',
-                                        )}
-                                    </label>
-                                    <div className="mdac-actions">
-                                        <a
-                                            href="/mdac/mdac-autofill.user.js"
-                                            className="secondary-action type-action"
-                                        >
-                                            {t('安装填表脚本', 'Install userscript')}
-                                        </a>
+                                    {fields(lodgingFields.slice(1), draft.shared, false)}
+                                </section>
+                            </div>
+                            {draftSettings}
+                        </>
+                    )}
+                    {step === 2 && (
+                        <>
+                            {feedback}
+                            <section className="mdac-block">
+                                <h2 className="type-section">{t('逐位核对旅客', 'Review each traveler')}</h2>
+                                {draft.travelers.map((person, index) => (
+                                    <details key={index} open={index === 0} className="mdac-person-review">
+                                        <summary className="type-card">{person.name}</summary>
+                                        <dl className="mdac-review">
+                                            {personalFields.map(field => (
+                                                <div key={field.key}>
+                                                    <dt className="type-helper">{t(field.zh, field.en)}</dt>
+                                                    <dd>
+                                                        {field.options?.find(
+                                                            ([code]) => code === person[field.key],
+                                                        )?.[1] ?? person[field.key]}
+                                                    </dd>
+                                                </div>
+                                            ))}
+                                        </dl>
                                         <button
                                             type="button"
-                                            className="secondary-action type-action"
-                                            disabled={!confirmedTrip}
-                                            onClick={download}
+                                            className="mdac-link type-action"
+                                            onClick={() => {
+                                                setTraveler(index);
+                                                editStep(0, 'name');
+                                            }}
                                         >
-                                            {t('导出填表资料', 'Export details')}
+                                            {t('修改旅客资料', 'Edit traveler')}
                                         </button>
-                                        <a
-                                            className="primary-action type-action"
-                                            href={OFFICIAL_URL}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                        >
-                                            {t('打开官方登记页', 'Open official registration')}
-                                        </a>
-                                    </div>
-                                </>
+                                    </details>
+                                ))}
+                            </section>
+                            <section className="mdac-block">
+                                <h2 className="type-section">{t('本次行程', 'This trip')}</h2>
+                                {groups.map(group => (
+                                    <section className="mdac-summary" key={group.items[0].key}>
+                                        <div className="mdac-summary-heading">
+                                            <h3 className="type-card">{group.title}</h3>
+                                            <button
+                                                type="button"
+                                                className="mdac-link type-action"
+                                                aria-label={t('修改', 'Edit ') + group.title}
+                                                onClick={() => editStep(1, group.items[0].key)}
+                                            >
+                                                {t('修改', 'Edit')}
+                                            </button>
+                                        </div>
+                                        <dl className="mdac-review">
+                                            {group.items.map(field => (
+                                                <div key={field.key}>
+                                                    <dt className="type-helper">{t(field.zh, field.en)}</dt>
+                                                    <dd>{reviewField(field)}</dd>
+                                                </div>
+                                            ))}
+                                        </dl>
+                                    </section>
+                                ))}
+                            </section>
+                            <section className="mdac-handoff">
+                                <p className="type-helper">
+                                    {t(
+                                        '普通手机浏览器若不支持扩展，可保留此页，对照填写官网。桌面端可在支持油猴扩展的浏览器中安装 MDAC 脚本，将导出的 JSON 内容导入，再选择旅客自动填表。每位旅客需在官网核对、完成验证并提交。',
+                                        'On mobile without extension support, copy the reviewed details into the official form. ' +
+                                            'On desktop, install the MDAC userscript in a compatible browser, import the exported JSON ' +
+                                            'and select a traveler to fill the form. Review, verify and submit each traveler on the official site.',
+                                    )}
+                                </p>
+                                <label className="mdac-check type-label">
+                                    <input
+                                        type="checkbox"
+                                        checked={confirmedTrip}
+                                        onChange={event => setConfirmedTrip(event.target.checked)}
+                                    />
+                                    {t(
+                                        '我已核对实际离境日期和住宿地址。',
+                                        'I have checked my actual departure date and accommodation address.',
+                                    )}
+                                </label>
+                                <div className="mdac-actions">
+                                    <a
+                                        href="/mdac/mdac-autofill.user.js"
+                                        className="secondary-action type-action"
+                                    >
+                                        {t('安装填表脚本', 'Install userscript')}
+                                    </a>
+                                    <button
+                                        type="button"
+                                        className="secondary-action type-action"
+                                        disabled={!confirmedTrip}
+                                        onClick={download}
+                                    >
+                                        {t('导出填表资料', 'Export details')}
+                                    </button>
+                                    <a
+                                        className="mdac-primary type-action"
+                                        href={OFFICIAL_URL}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        {t('打开官方登记页', 'Open official registration')}
+                                    </a>
+                                </div>
+                            </section>
+                            {draftSettings}
+                        </>
+                    )}
+                    {stepActions}
+                </form>
+                {privacyOpen && (
+                    <Sheet
+                        title={t('隐私安全', 'Privacy and security')}
+                        titleIcon={<ShieldCheck size={19} aria-hidden="true" />}
+                        language={language}
+                        showHandle
+                        initialFocus="dialog"
+                        className="mdac-privacy"
+                        onClose={() => setPrivacyOpen(false)}
+                    >
+                        <div className="mdac-sheet-body">
+                            <label className="mdac-setting type-label">
+                                <span>{t('保留本机草稿', 'Keep a local draft')}</span>
+                                <input
+                                    type="checkbox"
+                                    checked={remember}
+                                    onChange={e => changeRetention(e.target.checked)}
+                                />
+                            </label>
+                            <p className="type-helper">
+                                {t(
+                                    '在同一浏览器可接着填写。若使用共用设备，可在这里关闭。',
+                                    'Continue in this browser next time. Turn this off on a shared device.',
+                                )}
+                            </p>
+                            {storageFailed && (
+                                <p className="mdac-message type-helper" role="status">
+                                    {t(
+                                        '浏览器无法更新存储，请检查本站存储权限。',
+                                        'Could not update storage. Check this site’s storage permissions.',
+                                    )}
+                                </p>
                             )}
-                            {step > 0 && stepActions}
-                        </form>
-                    </section>
-                    <aside className="mdac-panel">
-                        <h2 className="type-section">{t('隐私安全', 'Privacy and security')}</h2>
-                        <p className="type-helper">
-                            {t(
-                                '护照照片在本机识别。旅客资料不上传商城、不存入商城数据库。提交官网时由马来西亚移民局接收。',
-                                'Passport images are processed locally. Traveler details are not uploaded to the store or its database. ' +
-                                    'Official submissions go to Malaysian Immigration.',
-                            )}
-                        </p>
-                        <label className="mdac-check">
-                            <input
-                                type="checkbox"
-                                checked={remember}
-                                disabled={busy}
-                                onChange={event => {
-                                    const keep = event.target.checked;
-                                    if (persistDraft(draft, keep)) setRemember(keep);
-                                    else
-                                        setMessage(
-                                            t('浏览器存储不可用。', 'Browser storage is unavailable.'),
-                                        );
-                                }}
-                            />
-                            {t('保留本机草稿', 'Keep a local draft')}
-                        </label>
-                        <p className="type-helper">
-                            {t(
-                                '保留后，下次可在同一浏览器继续。清除站点数据将删除草稿。',
-                                'A saved draft is available in this browser. Clearing site data removes it.',
-                            )}
-                        </p>
-                        <button className="secondary-action type-action" type="button" onClick={clear}>
-                            {t('清除本机资料', 'Clear local details')}
-                        </button>
-                    </aside>
-                </div>
+                            <h3 className="type-card">
+                                {t('资料存放在哪里？', 'Where are my details kept?')}
+                            </h3>
+                            <p className="type-helper">
+                                {t(
+                                    '护照照片在本机识别。草稿仅保存在此浏览器；在官网提交时，资料由马来西亚移民局接收。',
+                                    'Passport photos are read on this device. Drafts stay in this browser. Official submissions go to Malaysian Immigration.',
+                                )}
+                            </p>
+                            <button className="mdac-clear type-action" type="button" onClick={clear}>
+                                {t('清除本机资料', 'Clear local details')}
+                            </button>
+                        </div>
+                    </Sheet>
+                )}
             </SubpageBody>
         </Subpage>
     );

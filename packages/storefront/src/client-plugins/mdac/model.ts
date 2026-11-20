@@ -14,6 +14,29 @@ export interface Draft {
     shared: Fields;
 }
 export const STORAGE_KEY = 'storefront-mdac:v1';
+// A single non-personal value replaces the entire draft atomically on opt-out.
+const SAVING_DISABLED = 'off';
+export function draftSavingPreference(): boolean | null {
+    try {
+        return localStorage.getItem(STORAGE_KEY) !== SAVING_DISABLED;
+    } catch {
+        return null;
+    }
+}
+export function disableDraftSaving(): boolean {
+    try {
+        localStorage.setItem(STORAGE_KEY, SAVING_DISABLED);
+        return true;
+    } catch {
+        // Some browsers reject writes at quota but still allow removal of the personal data.
+        try {
+            localStorage.removeItem(STORAGE_KEY);
+        } catch {
+            // The caller reports a storage failure and keeps automatic saving off.
+        }
+        return false;
+    }
+}
 export const OFFICIAL_URL = 'https://imigresen-online.imi.gov.my/mdac/register';
 export interface Field {
     key: string;
@@ -42,15 +65,19 @@ const callingCodes = [
 export const AIR_TRAVEL = '1';
 export const HOTEL_STAY = '01';
 
-export const tripFields: Field[] = [
+export const contactFields: Field[] = [
     { key: 'email', zh: '回执邮箱', en: 'Email', type: 'email', maxLength: 100 },
     { key: 'region', zh: '电话区号', en: 'Calling code', options: callingCodes },
     { key: 'mobile', zh: '电话号码', en: 'Phone number', type: 'tel', maxLength: 12, pattern: '[0-9]+' },
+];
+export const travelFields: Field[] = [
     { key: 'arrDt', zh: '抵达日期', en: 'Arrival date', type: 'date' },
     { key: 'depDt', zh: '离境日期', en: 'Departure date', type: 'date' },
     { key: 'vesselNm', zh: '航班／交通工具编号', en: 'Flight / transportation number', maxLength: 30 },
     { key: 'trvlMode', zh: '入境方式', en: 'Travel mode', options: options.trvlMode },
     { key: 'embark', zh: '抵马前最后出发地', en: 'Last port of embarkation', options: options.embark },
+];
+export const lodgingFields: Field[] = [
     {
         key: 'accommodationStay',
         zh: '住宿类型',
@@ -63,6 +90,7 @@ export const tripFields: Field[] = [
     { key: 'accommodationCity', zh: '城市英文名称', en: 'City (English)' },
     { key: 'accommodationPostcode', zh: '邮编', en: 'Postcode', maxLength: 5, pattern: '[0-9]{5}' },
 ];
+export const tripFields = [...contactFields, ...travelFields, ...lodgingFields];
 export function validPersonalFields(person: Fields): boolean {
     return personalFields.every(field => {
         const value = person[field.key]?.trim();
@@ -109,7 +137,7 @@ export function validDraft(value: unknown): value is Draft {
 export function readDraft(): Draft | null {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw || raw.length > 100000) return null;
+        if (!raw || raw === SAVING_DISABLED || raw.length > 100000) return null;
         const value: unknown = JSON.parse(raw);
         return validDraft(value) ? value : null;
     } catch {

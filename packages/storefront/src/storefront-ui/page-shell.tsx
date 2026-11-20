@@ -669,6 +669,7 @@ export function ListSkeleton({
 
 export function Sheet({
     title,
+    titleIcon,
     language,
     onClose,
     children,
@@ -678,6 +679,7 @@ export function Sheet({
     side,
 }: {
     title: string;
+    titleIcon?: ReactNode;
     language: StorefrontLanguage;
     onClose: () => void;
     children: ReactNode;
@@ -713,7 +715,10 @@ export function Sheet({
                     <Minus className="sheet-drag-handle" aria-hidden="true" preserveAspectRatio="none" />
                 )}
                 <header>
-                    <strong id={titleId}>{title}</strong>
+                    <strong id={titleId}>
+                        {titleIcon}
+                        {title}
+                    </strong>
                     <button type="button" onClick={onClose} aria-label={language === 'zh' ? '关闭' : 'Close'}>
                         {side && <ArrowLeft className="sheet-back-icon" aria-hidden="true" />}
                         <X aria-hidden="true" />

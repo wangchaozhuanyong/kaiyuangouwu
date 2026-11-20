@@ -147,7 +147,9 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     const authRoute = ['login', 'register', 'forgot-password', 'verify-account'].includes(
         displayedRoute.name,
     );
-    const showNavigation = isBrowsingStorefrontRoute(displayedRoute.name) || (!!customer && !authRoute);
+    const showNavigation =
+        displayedRoute.name !== 'mdac' &&
+        (isBrowsingStorefrontRoute(displayedRoute.name) || (!!customer && !authRoute));
     const readinessIdentity = JSON.stringify([
         storefrontContextValue.storefrontCode,
         storefrontContextValue.market.code,

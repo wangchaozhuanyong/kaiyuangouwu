@@ -1,4 +1,4 @@
-import { lazyRouteComponent } from '@tanstack/react-router';
+import { lazyRouteComponent, useRouter } from '@tanstack/react-router';
 
 import { usePageRouteCommit } from '../page-readiness';
 import { storefrontErrorMessage } from '../storefront-errors';
@@ -11,6 +11,7 @@ const MdacPage = lazyRouteComponent(() => import('../client-plugins/mdac/mdac-pa
 export function MdacRoutePage() {
     usePageRouteCommit();
     const runtime = useRuntime();
+    const router = useRouter({ warn: false });
     const enabled = runtime.contentBlocks.some(
         block =>
             block.enabled &&
@@ -54,7 +55,13 @@ export function MdacRoutePage() {
                 onRetry={() => void runtime.contentQuery.refetch({ cancelRefetch: false })}
             />
         );
-    return <MdacPage language={runtime.language} onBack={runtime.goBack} />;
+    return (
+        <MdacPage
+            language={runtime.language}
+            storeName={runtime.storefrontName}
+            onBack={router?.history.canGoBack() ? runtime.goBack : undefined}
+        />
+    );
 }
 
 export const preloadMdacRoutePage = registerRoutePreload(MdacRoutePage, MdacPage);
