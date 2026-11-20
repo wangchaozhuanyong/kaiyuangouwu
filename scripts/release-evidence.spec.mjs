@@ -425,6 +425,7 @@ test('native log capability detection is cached per request and captures unchang
     for (const help of [
         legacyApiHelp,
         'Flags:\n      --allow-escape-sequences   Allow printing terminal escape sequences\n',
+        'Flags:\n      --allow-escape-sequences[=true|false]   Allow printing terminal escape sequences\n',
     ]) {
         const supportsFlag = help !== legacyApiHelp;
         let helpReads = 0;
