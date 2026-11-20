@@ -15,6 +15,7 @@ it('renders imported names as text and clears textarea fields without invoking a
         <form>
             <input type="text" value="sample">
             <textarea>sample</textarea>
+            <textarea id="accommodationAddress2">Address from the previous traveler</textarea>
             <select id="accommodationState"><option></option><option value="14">KL</option></select>
             <select id="accommodationCity"><option></option><option value="OLD">KUALA LUMPUR</option></select>
             <input type="text" id="accommodationPostcode">
@@ -66,6 +67,7 @@ it('renders imported names as text and clears textarea fields without invoking a
     const clear = document.querySelector<HTMLButtonElement>('#mdac-clear');
     assert.ok(fill && clear);
     fill.click();
+    expect(document.querySelector<HTMLTextAreaElement>('#accommodationAddress2')?.value).toBe('');
     vi.advanceTimersByTime(200);
     expect(city.value).toBe('');
     expect(postcode.value).toBe('');
