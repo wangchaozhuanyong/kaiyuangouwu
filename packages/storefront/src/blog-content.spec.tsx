@@ -108,9 +108,10 @@ describe('news blog server-renderable content', () => {
         };
         const listing = renderToStaticMarkup(<BlogContent language="en" page={data} />);
         expect(listing).toContain('href="/en/services"');
-        expect(listing).toContain('href="/en/blog/official-update"');
+        expect(listing).toContain('href="/en/blog/official-update?fromBlogList=en"');
         expect(listing).toContain('action="/en/blog"');
         expect(listing).toContain('aria-label="Article categories"');
+        expect(listing).not.toContain('category=skills');
         expect(listing).toContain('November 1, 2026');
         expect(listing).not.toMatch(/[\p{Script=Han}]/u);
         const detail = renderToStaticMarkup(
@@ -121,6 +122,34 @@ describe('news blog server-renderable content', () => {
         expect(detail.split(translated.summary)).toHaveLength(2);
         expect(detail).not.toContain('blog-article-summary');
         expect(detail).not.toMatch(/[\p{Script=Han}]/u);
+    });
+    it('preserves the origin list through article links, native return and switching editions', () => {
+        const input = { term: '合作', category: 'chatgpt', skip: 12 };
+        const search = 'page=2&amp;term=%E5%90%88%E4%BD%9C&amp;category=chatgpt';
+        const listing = renderToStaticMarkup(<BlogContent page={page} input={input} />);
+        expect(listing).toContain(`href="/zh/blog/official-update?${search}&amp;fromBlogList=zh"`);
+        const ChineseDetail = renderToStaticMarkup(
+            <BlogContent
+                input={{ ...input, fromBlogList: 'zh' }}
+                page={{ ...page, article, availableLanguages: ['zh_Hans', 'en'] }}
+            />,
+        );
+        expect(ChineseDetail).toContain(`href="/zh/blog?${search}"`);
+        expect(ChineseDetail).toContain(`href="/en/blog/official-update?${search}&amp;fromBlogList=zh"`);
+        const EnglishDetail = renderToStaticMarkup(
+            <BlogContent
+                language="en"
+                input={{ ...input, fromBlogList: 'zh' }}
+                page={{ ...page, article, availableLanguages: ['en', 'zh_Hans'] }}
+            />,
+        );
+        expect(EnglishDetail).toContain(`href="/zh/blog?${search}"`);
+        expect(EnglishDetail).toContain('aria-label="Read in Simplified Chinese"');
+        const untranslated = renderToStaticMarkup(
+            <BlogContent page={{ ...page, article, availableLanguages: ['zh_Hans'] }} />,
+        );
+        expect(untranslated).toContain('href="/zh/blog?category=chatgpt"');
+        expect(untranslated).not.toContain('aria-label="阅读英文版"');
     });
     it('renders registered source links once and keeps unsafe article references inert', () => {
         const url = article.sources[0].url;

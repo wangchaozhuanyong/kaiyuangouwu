@@ -93,6 +93,7 @@ export interface RouteState {
     token?: string;
     term?: string;
     category?: string;
+    fromBlogList?: 'zh' | 'en';
     collectionId?: string;
     childId?: string;
     sort?: SortMode;
@@ -313,6 +314,8 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
         token: stringValue('token'),
         term: stringValue('term'),
         category: stringValue('category'),
+        fromBlogList:
+            search.fromBlogList === 'zh' || search.fromBlogList === 'en' ? search.fromBlogList : undefined,
         collectionId: stringValue('collectionId') ?? stringValue('collection'),
         childId: stringValue('childId') ?? stringValue('child'),
         sort: ['recommended', 'sales', 'newest', 'name', 'price-asc', 'price-desc'].includes(sort ?? '')
@@ -392,6 +395,7 @@ export function routeHref(route: RouteState): string {
         'token',
         'term',
         'category',
+        'fromBlogList',
         'collectionId',
         'childId',
         'sort',

@@ -417,7 +417,11 @@ describe('request-local public SEO preparation', () => {
     it('uses the English article for canonical metadata and advertises only available translations', async () => {
         const test = fixture(LanguageCode.en);
         test.configuration.payload.enabledLanguages = ['en', 'zh_Hans'];
-        test.page.request = { kind: 'blog', id: 'release-notes', input: {} };
+        test.page.request = {
+            kind: 'blog',
+            id: 'release-notes',
+            input: { term: 'release', category: 'chatgpt', skip: 12, fromBlogList: 'en' },
+        };
         test.page.blog = {
             title: 'AI news',
             description: 'Official news and analysis.',
@@ -457,6 +461,24 @@ describe('request-local public SEO preparation', () => {
                 link => link.language,
             ),
         ).toEqual(['en']);
+    });
+
+    it('does not index an English Skill list without a published edition', async () => {
+        const test = fixture(LanguageCode.en);
+        test.configuration.payload.enabledLanguages = ['en', 'zh_Hans'];
+        test.page.request = { kind: 'blog', input: { category: 'skills' } };
+        test.page.blog = {
+            title: 'AI news',
+            description: 'Official news and analysis.',
+            totalItems: 0,
+            availableLanguages: [],
+            items: [],
+            featured: null,
+            relatedArticles: [],
+            article: null,
+        };
+        const { seo } = await test.service.enrich(test.ctx, test.host, test.page);
+        expect(seo).toMatchObject({ indexable: false, alternates: [] });
     });
     it('keeps preparation automatic for callers that only supply the page', async () => {
         const test = fixture();

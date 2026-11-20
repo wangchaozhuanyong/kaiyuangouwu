@@ -480,7 +480,7 @@ export class StorefrontPublicSeoService {
                     { '@type': 'ListItem', position: 2, name: title, item: seo.canonical },
                 ],
             });
-        if (request.kind === 'blog' && request.input.term) {
+        if (request.kind === 'blog' && !request.id && request.input.term) {
             seo.indexable = false;
             seo.robots = 'noindex, follow';
             seo.alternates = [];

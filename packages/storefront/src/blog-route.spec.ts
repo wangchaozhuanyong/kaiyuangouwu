@@ -58,4 +58,23 @@ describe('news blog route identity', () => {
             id: 'existing-guide',
         });
     });
+    it('keeps return context in a shared article URL while canonicalizing to the bare article', () => {
+        const route = routeFromRouterLocation('/en/blog/official-update', {
+            fromBlogList: 'zh',
+            page: 2,
+            term: '合作',
+            category: 'claude',
+        });
+        const request = publicPageRequestFromUrl(routeHref(route));
+        expect(request).toEqual({
+            kind: 'blog',
+            id: 'official-update',
+            input: { term: '合作', category: 'claude', skip: 12, take: 12, fromBlogList: 'zh' },
+        });
+        if (!request) throw new Error('Expected article request');
+        expect(publicPageRouteHref(request)).toBe('/blog/official-update');
+        expect(
+            publicPageRequestFromUrl('/en/blog/official-update?fromBlogList=invalid&category=skills'),
+        ).toEqual(publicPageRequestFromUrl('/en/blog/official-update'));
+    });
 });

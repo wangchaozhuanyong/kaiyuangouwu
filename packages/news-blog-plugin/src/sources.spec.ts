@@ -197,6 +197,33 @@ describe('official news extraction', () => {
         expect(verifyGeneratedDraft({ ...draft, translations: undefined }, [source])).toContain(
             '缺少英文资讯稿',
         );
+        const discount = { ...source, body: 'Government agencies get a 40% discount and pay 10 dollars.' };
+        expect(
+            verifyGeneratedDraft(
+                { ...draft, translations: { en: { ...en, body: 'Customers get 0% off or pay $1.' } } },
+                [discount],
+            ),
+        ).toEqual(expect.arrayContaining(['需核对正文数值：0%', '需核对正文数值：$1']));
+        expect(
+            verifyGeneratedDraft(
+                {
+                    ...draft,
+                    translations: {
+                        en: { ...en, body: 'Eligible governments get 40 percent off and pay $10.' },
+                    },
+                },
+                [discount],
+            ).filter(issue => issue.startsWith('需核对正文数值')),
+        ).toEqual([]);
+        expect(
+            contentIssues({
+                ...draft,
+                translations: { en: { title: 'A', summary: 'A', body: 'A', seoDescription: 'A', tags: [] } },
+            }),
+        ).toContain('英文资讯需有完整标题、摘要、正文和搜索描述');
+        expect(
+            contentIssues({ ...draft, title: 'Just one English title', translations: undefined }),
+        ).toContain('中文资讯的标题、摘要、正文和搜索描述均需使用中文');
     });
     it('treats untrusted article markup as literal text and detects unsupported numbers', () => {
         const draft = normalizeDraft({

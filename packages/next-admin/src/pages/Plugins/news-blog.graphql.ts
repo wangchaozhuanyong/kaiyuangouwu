@@ -6,28 +6,30 @@ export const NEWS_BLOG_WORKSPACE = gql`
             totalItems
             items {
                 id
-                slug
                 version
                 state
-                publishedAt
                 draft
                 published
-                issues
             }
         }
+    }
+`;
+const NEWS_BLOG_EDITOR_FIELDS = gql`
+    fragment NewsBlogEditorFields on NewsBlogArticleAdmin {
+        id
+        slug
+        version
+        state
+        publishedAt
+        draft
+        published
+        issues
     }
 `;
 export const NEWS_BLOG_ARTICLE = gql`
     query NewsBlogArticle($id: ID!) {
         newsBlogArticle(id: $id) {
-            id
-            slug
-            version
-            state
-            publishedAt
-            draft
-            published
-            issues
+            ...NewsBlogEditorFields
         }
         newsBlogHistory(id: $id) {
             id
@@ -38,6 +40,7 @@ export const NEWS_BLOG_ARTICLE = gql`
             snapshotJson
         }
     }
+    ${NEWS_BLOG_EDITOR_FIELDS}
 `;
 export const NEWS_BLOG_SOURCES = gql`
     query NewsBlogSources {
@@ -63,6 +66,18 @@ export const NEWS_BLOG_SOURCES = gql`
             sourcePublishedAt
             fetchedAt
             evidenceMode
+            articleId
+            articleState
+        }
+    }
+`;
+export const OPEN_NEWS_BLOG_SOURCE_DRAFT = gql`
+    mutation OpenNewsBlogSourceDraft($sourceId: ID!) {
+        openNewsBlogSourceDraft(sourceId: $sourceId) {
+            id
+            slug
+            version
+            state
         }
     }
 `;
@@ -108,15 +123,10 @@ export const SAVE_NEWS_BLOG_SOURCE = gql`
 export const SAVE_NEWS_BLOG_ARTICLE = gql`
     mutation SaveNewsBlogArticle($input: SaveNewsBlogArticleInput!) {
         saveNewsBlogArticle(input: $input) {
-            id
-            slug
-            version
-            state
-            draft
-            published
-            issues
+            ...NewsBlogEditorFields
         }
     }
+    ${NEWS_BLOG_EDITOR_FIELDS}
 `;
 export const REQUEST_NEWS_BLOG_TASK = gql`
     mutation RequestNewsBlogTask($input: RequestNewsBlogTaskInput!) {
@@ -131,28 +141,18 @@ export const REQUEST_NEWS_BLOG_TASK = gql`
 export const PUBLISH_NEWS_BLOG_ARTICLE = gql`
     mutation PublishNewsBlogArticle($id: ID!, $expectedVersion: Int!, $acceptIssues: Boolean!) {
         publishNewsBlogArticle(id: $id, expectedVersion: $expectedVersion, acceptIssues: $acceptIssues) {
-            id
-            slug
-            version
-            state
-            draft
-            published
-            issues
+            ...NewsBlogEditorFields
         }
     }
+    ${NEWS_BLOG_EDITOR_FIELDS}
 `;
 export const WITHDRAW_NEWS_BLOG_ARTICLE = gql`
     mutation WithdrawNewsBlogArticle($id: ID!, $expectedVersion: Int!) {
         withdrawNewsBlogArticle(id: $id, expectedVersion: $expectedVersion) {
-            id
-            slug
-            version
-            state
-            draft
-            published
-            issues
+            ...NewsBlogEditorFields
         }
     }
+    ${NEWS_BLOG_EDITOR_FIELDS}
 `;
 
 export const RETRY_NEWS_BLOG_TASK = gql`

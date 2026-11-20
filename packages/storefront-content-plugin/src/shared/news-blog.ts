@@ -126,7 +126,13 @@ export interface BlogPublishedArticle extends BlogDraft {
     updatedAt?: string;
     readingMinutes: number;
 }
-export type BlogListInput = { term?: string; category?: string; skip?: number; take?: number };
+export type BlogListInput = {
+    term?: string;
+    category?: string;
+    skip?: number;
+    take?: number;
+    fromBlogList?: 'zh' | 'en';
+};
 export interface BlogPublicPage {
     availableLanguages?: Array<'zh_Hans' | 'en'>;
     title: string;

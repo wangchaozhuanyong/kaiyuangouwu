@@ -11,6 +11,8 @@ import { createHash } from 'node:crypto';
 export const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 export const budgetDate = (date = new Date()) =>
     new Date(date.getTime() + 8 * 3600_000).toISOString().slice(0, 10);
+export const newsSourceReviewIssue = '请逐项对照原文核对中英文的数字、适用对象和生效时间';
+export const englishEditionReviewIssue = '中文稿已修改，请核对英文稿并更新或确认仍适用';
 export interface EditorialSettings {
     /** LEGACY only permits restoration/testing of historical queue snapshots; settings writes select the current flow. */
     skillEditorialMode: 'CODEX' | 'LEGACY';
@@ -187,12 +189,11 @@ export function contentIssues(draft: BlogDraft): string[] {
             draft.body.includes('未有可靠中文版本的原文要点保留原语言'))
     )
         issues.push('请根据原文写明具体事件、变化和影响，替换旧快讯模板');
-    const english = draft.translations?.en;
-    if (english) {
+    if (draft.category !== 'skills') {
         if (
-            [draft.title, draft.summary, draft.body, draft.seoDescription].some(
-                value => !/\p{Script=Han}/u.test(value),
-            )
+            [draft.title, draft.summary, draft.body, draft.seoDescription]
+                .filter(Boolean)
+                .some(value => !/\p{Script=Han}/u.test(value))
         )
             issues.push('中文资讯的标题、摘要、正文和搜索描述均需使用中文');
         const untranslatedPassage = [draft.title, draft.summary, draft.body, draft.seoDescription].some(
@@ -207,6 +208,9 @@ export function contentIssues(draft: BlogDraft): string[] {
                     ),
         );
         if (untranslatedPassage) issues.push('中文资讯中有未翻译的英文语句，请翻译成完整中文');
+    }
+    const english = draft.translations?.en;
+    if (english) {
         if (
             [english.title, english.summary, english.body, english.seoDescription].some(
                 value => !/[a-z]/iu.test(value),
@@ -216,6 +220,15 @@ export function contentIssues(draft: BlogDraft): string[] {
             )
         )
             issues.push('英文资讯的标题、摘要、正文、标签和搜索描述均需使用英文');
+        const englishWords = (value: string) => value.match(/\b[a-z]+(?:['’-][a-z]+)*\b/giu)?.length ?? 0;
+        if (
+            englishWords(english.title) < 2 ||
+            englishWords(english.summary) < 3 ||
+            englishWords(english.body.replace(/^#{1,3}\s.*$/gmu, '')) < 6 ||
+            englishWords(english.seoDescription) < 3
+        ) {
+            issues.push('英文资讯需有完整标题、摘要、正文和搜索描述');
+        }
     }
 
     const urls = new Set(draft.sources.map(x => x.url));
@@ -224,20 +237,47 @@ export function contentIssues(draft: BlogDraft): string[] {
         issues.push('请确认来源图片的使用依据');
     return issues;
 }
-export function verifyGeneratedDraft(
-    draft: BlogDraft,
-    evidence: Array<{ url: string; body: string; title: string }>,
-): string[] {
+type NewsEvidence = { url: string; body: string; title: string };
+
+function numberClaims(value: string) {
+    const matches = value
+        .normalize('NFKC')
+        .replace(/https?:\/\/[^\s)]+/gu, '')
+        .replace(/^\s*\d+[.)、]\s+/gmu, '')
+        .matchAll(
+            /([$¥€£]|\bUSD\b|\bCNY\b)?\s*(\d+(?:,\d{3})*(?:\.\d+)?)(?:\s*(%|percent\b|per cent\b|美元|dollars?\b|人民币|欧元|euros?\b|英镑|pounds?\b|[万亿倍]|times\b|×|x\b))?/giu,
+        );
+    return Array.from(matches, ([label, prefix, digits, suffix]) => {
+        const amount = digits.replaceAll(',', '').replace(/(\.\d*?[1-9])0+$|\.0+$/u, '$1');
+        const unit = (prefix ?? suffix ?? '')
+            .toLowerCase()
+            .replace(/^percent$|^per cent$/u, '%')
+            .replace(/^usd$|^dollars?$|^美元$/u, '$')
+            .replace(/^cny$|^人民币$/u, '¥')
+            .replace(/^euros?$|^欧元$/u, '€')
+            .replace(/^pounds?$|^英镑$/u, '£')
+            .replace(/^times$|^[倍×]$/u, 'x');
+        return { label: label.trim(), amount, unit };
+    });
+}
+
+export function isNewsEvidenceIssue(issue: string): boolean {
+    return (
+        issue.startsWith('需核对正文数值：') ||
+        issue === '事实依据缺少可核对的原文引句' ||
+        issue === '模型添加了未提供的来源'
+    );
+}
+
+export function verifyNewsEvidence(draft: BlogDraft, evidence: NewsEvidence[]): string[] {
     const issues: string[] = [];
     const urls = new Set(evidence.map(x => x.url));
     if (draft.sources.some(x => !urls.has(x.url))) issues.push('模型添加了未提供的来源');
-    const joined = evidence
-        .map(x => x.title + ' ' + x.body)
-        .join(' ')
-        .toLowerCase();
+    const sourceNumbers = evidence.flatMap(item => numberClaims(item.title + '\n' + item.body));
+    const exactClaims = new Set(sourceNumbers.map(({ amount, unit }) => amount + ':' + unit));
+    const exactNumbers = new Set(sourceNumbers.map(({ amount }) => amount));
     const english = draft.translations?.en;
-    if (draft.category !== 'skills' && !english) issues.push('缺少英文资讯稿');
-    const numbers =
+    const numbers = numberClaims(
         [
             draft.title,
             draft.summary,
@@ -248,15 +288,12 @@ export function verifyGeneratedDraft(
                 ? [english.title, english.summary, english.body, english.seoDescription, ...english.tags]
                 : []),
             ...draft.facts.map(x => x.text),
-        ]
-            .join(' ')
-            .match(/(?:[$¥€]\s*)?\d+(?:[.,]\d+)*(?:\s*%|\s*美元|\s*万|\s*倍)?/gu) ?? [];
-    for (const number of numbers) {
-        if (number.trim().length > 1 && !joined.includes(number.trim().toLowerCase()))
-            issues.push(`需核对正文数值：${number}`);
+        ].join('\n'),
+    );
+    for (const { label, amount, unit } of numbers) {
+        if (unit ? !exactClaims.has(amount + ':' + unit) : !exactNumbers.has(amount))
+            issues.push(`需核对正文数值：${label}`);
     }
-    if (draft.candidateTitles.length !== 3) issues.push('候选标题不足三个');
-    if (!draft.facts.length) issues.push('缺少事实依据');
     for (const fact of draft.facts) {
         const source = evidence.find(x => x.url === fact.sourceUrl);
         if (
@@ -268,6 +305,14 @@ export function verifyGeneratedDraft(
             issues.push('事实依据缺少可核对的原文引句');
     }
     return [...new Set(issues)];
+}
+
+export function verifyGeneratedDraft(draft: BlogDraft, evidence: NewsEvidence[]): string[] {
+    const issues = verifyNewsEvidence(draft, evidence);
+    if (draft.category !== 'skills' && !draft.translations?.en) issues.push('缺少英文资讯稿');
+    if (draft.candidateTitles.length !== 3) issues.push('候选标题不足三个');
+    if (!draft.facts.length) issues.push('缺少事实依据');
+    return issues;
 }
 
 /** MySQL TEXT limit also applies after attaching provenance and private candidates. */

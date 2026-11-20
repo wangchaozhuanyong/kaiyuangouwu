@@ -9,7 +9,7 @@ import { SafeProviderUrlService } from '../../image-generation-plugin/src/securi
 import { fixtureNewsReview } from '../test/news-review-fixture';
 
 import { BlogService } from './blog.service';
-import { budgetDate, defaultSettings } from './content';
+import { budgetDate, defaultSettings, englishEditionReviewIssue, newsSourceReviewIssue } from './content';
 import { BlogRun } from './entities';
 import { previousMonth } from './history';
 import { BlogQueueService } from './queue.service';
@@ -252,6 +252,16 @@ const draft = (): BlogDraft => ({
     title: '官方更新解读',
     summary: '来源清楚的新闻摘要',
     body: '## 官方变化\n' + '只根据官方公告整理的已核对资讯。'.repeat(20),
+    seoDescription: '来源清楚的新闻摘要',
+    translations: {
+        en: {
+            title: 'Summary of an official update',
+            summary: 'The update is based on the original announcement.',
+            body: 'The announcement is the source of this news report.',
+            seoDescription: 'Read the source for the update.',
+            tags: [],
+        },
+    },
     category: 'chatgpt',
     sources: [
         { label: '官方公告', url: 'https://openai.com/news/official', accessedAt: new Date().toISOString() },
@@ -359,7 +369,17 @@ describe('channel publication and budget boundaries', () => {
         enabledBlogLanguages.delete('zh_Hans');
         expect(await service.isAssetPublic(en, 'preview/cover.webp')).toBe(true);
         enabledBlogLanguages.add('zh_Hans');
-        await publish('untranslated', draft());
+        const old = await service.save(contextFor(), {
+            slug: 'untranslated',
+            expectedVersion: 0,
+            draft: { ...draft(), translations: undefined },
+        });
+        await expect(service.publish(contextFor(), old.id, old.version, false, true)).rejects.toThrow(
+            '请补齐英文稿',
+        );
+        // Exercise an existing publication from before bilingual publishing.
+        await db.getRepository('BlogArticle').update(old.id, { publishedAt: new Date() });
+        await service.publish(contextFor(), old.id, old.version, false, true);
         await publish('second-reader', {
             ...source,
             translations: { en: { ...source.translations.en, title: 'Second reader release' } },
@@ -397,10 +417,36 @@ describe('channel publication and budget boundaries', () => {
             expectedVersion: first.version,
             draft: { ...source, title: '编辑部改写的消息' },
         });
-        expect(changed.draft.translations).toBeUndefined();
+        expect(changed.draft.translations).toEqual(source.translations);
+        expect(changed.issues).toContain(englishEditionReviewIssue);
         expect((await service.read(en, {}, first.slug)).article?.title).toBe(source.translations.en.title);
-        await service.publish(contextFor(), first.id, changed.version, false, true);
-        await expect(service.read(en, {}, first.slug)).rejects.toThrow();
+        await expect(service.publish(contextFor(), first.id, changed.version)).rejects.toThrow(
+            '请核对并确认',
+        );
+        const afterReview = await service.publish(contextFor(), first.id, changed.version, false, true);
+        expect(afterReview.issues).toEqual([]);
+        expect((await service.read(en, {}, first.slug)).article?.title).toBe(source.translations.en.title);
+        expect((await service.read(contextFor(), {}, first.slug)).article?.title).toBe('编辑部改写的消息');
+    });
+
+    it('preserves source checks after saving when the original evidence cannot be recomputed', async () => {
+        const initial = await service.save(contextFor(), {
+            slug: 'keep-review',
+            expectedVersion: 0,
+            draft: draft(),
+        });
+        const alerts = [newsSourceReviewIssue, '需核对正文数值：0%'];
+        await db.getRepository('BlogArticle').update(initial.id, { issuesJson: JSON.stringify(alerts) });
+        const edited = await service.save(contextFor(), {
+            id: initial.id,
+            slug: initial.slug,
+            expectedVersion: initial.version,
+            draft: { ...initial.draft, pinned: true },
+        });
+        expect(edited.issues).toEqual(expect.arrayContaining(alerts));
+        await expect(service.publish(contextFor(), initial.id, edited.version)).rejects.toThrow(
+            '请核对并确认',
+        );
     });
 
     it('projects a verified historical automatic brief without replacing a manual story with the same source', async () => {
@@ -414,6 +460,7 @@ describe('channel publication and budget boundaries', () => {
             tags: ['来源快讯', '历史补录'],
             category: 'claude',
             format: 'NEWS',
+            translations: undefined,
             sources: [
                 {
                     label: 'Anthropic 原文入口',
@@ -501,7 +548,7 @@ describe('channel publication and budget boundaries', () => {
         ]) {
             await repo.update(51, { draftJson: JSON.stringify({ ...source, ...override }) });
             const separate = service.view(await service.get(ctx, '51'));
-            expect(separate.draft).toMatchObject({ ...source, ...override });
+            expect(separate.draft).toMatchObject(JSON.parse(JSON.stringify({ ...source, ...override })));
             expect(separate.published?.title).toBe(zh.title);
         }
         await repo.update(51, { draftJson: original.draftJson });
@@ -514,7 +561,8 @@ describe('channel publication and budget boundaries', () => {
             expectedVersion: saved.version,
             draft: { ...saved.draft, title: '编辑更新后的合作内容' },
         });
-        expect(updated.draft.translations).toBeUndefined();
+        expect(updated.draft.translations?.en).toMatchObject({ title: english.title, body: english.body });
+        expect(updated.issues).toContain(englishEditionReviewIssue);
     });
     it('sorts collected news before pagination by source date, with editorial fallback and channel isolation', async () => {
         const sources = db.getRepository('BlogSourceItem');
@@ -640,7 +688,7 @@ describe('channel publication and budget boundaries', () => {
         const saved = await service.save(contextFor(), {
             slug: 'channel-isolation',
             expectedVersion: 0,
-            draft: draft(),
+            draft: { ...draft(), format: 'GUIDE', translations: undefined },
         });
         expect(await service.isAssetPublic(contextFor(), 'preview/cover.webp')).toBe(false);
         await expect(service.get(contextFor(2), saved.id)).rejects.toThrow();
@@ -1448,7 +1496,11 @@ it('generates both news editions in one configured provider call and keeps the d
     expect(prompt).toContain('translations.en');
     expect(JSON.parse(request).evidence[0].body).toBe(source.body);
     const article = await db.getRepository('BlogArticle').findOneByOrFail({ eventKey: source.eventKey });
-    expect(article).toMatchObject({ state: 'PENDING_REVIEW', publishedJson: null, issuesJson: '[]' });
+    expect(article).toMatchObject({
+        state: 'PENDING_REVIEW',
+        publishedJson: null,
+        issuesJson: JSON.stringify([newsSourceReviewIssue]),
+    });
     expect(JSON.parse(article.draftJson)).toMatchObject({
         title: edition.zh.title,
         translations: { en: edition.en },
@@ -1594,7 +1646,7 @@ describe('legacy free source queue recovery', () => {
         });
         await worker.process('1', String(run.id));
         expect(await db.getRepository('BlogRun').findOneByOrFail({ id: run.id })).toMatchObject({
-            state: 'SUCCEEDED',
+            state: 'WAITING_EDITORIAL',
             reservedMicros: 0,
             chargedMicros: 0,
             message: '当前仅采集来源资料，已保留资料供人工编辑；未生成或发布文章',
@@ -1616,7 +1668,7 @@ describe('legacy free source queue recovery', () => {
             status: 'READY',
         });
         expect(await db.getRepository('BlogRun').findOneByOrFail({ id: run.id })).toMatchObject({
-            state: 'SUCCEEDED',
+            state: 'WAITING_EDITORIAL',
             message: expect.stringContaining('等待双语编辑'),
         });
         expect(await db.getRepository('BlogArticle').count()).toBe(0);

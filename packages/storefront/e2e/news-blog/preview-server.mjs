@@ -5,7 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { syntheticPage } from '../seo-public/fixtures.mjs';
 import { startSeoFixtureServer } from '../seo-public/preview-server.mjs';
 const visualPreset = process.argv[3] === 'neo-minimalist' ? 'neo-minimalist' : 'classic';
-const dist = fileURLToPath(new URL('../../dist/', import.meta.url));
+const dist = path.resolve(
+    process.env.STOREFRONT_QA_DIST ?? fileURLToPath(new URL('../../dist/', import.meta.url)),
+);
 const titles = [
     'ChatGPT 更新解读：如何核对官方资讯',
     'Claude 新功能：从公告到实际使用',
@@ -250,6 +252,7 @@ export function newsBlogFixture(url, host) {
     const slug =
         url.pathname.match(/\/blog\/([^/]+)/u)?.[1] ||
         (url.searchParams.get('kind') === 'blog' ? url.searchParams.get('id') : undefined);
+    const fromBlogList = url.searchParams.get('fromBlogList');
     const input = url.searchParams.get('input')
         ? JSON.parse(url.searchParams.get('input'))
         : {
@@ -257,6 +260,7 @@ export function newsBlogFixture(url, host) {
               category: url.searchParams.get('category') || undefined,
               skip: (Number(url.searchParams.get('page') || 1) - 1) * 12,
               take: 12,
+              ...(slug && (fromBlogList === 'zh' || fromBlogList === 'en') ? { fromBlogList } : {}),
           };
     const filtered = rows
         .filter(
@@ -278,7 +282,16 @@ export function newsBlogFixture(url, host) {
     page.request = {
         kind: 'blog',
         ...(slug ? { id: slug } : {}),
-        input: slug ? { skip: 0, take: 12 } : { ...input, skip: input.skip ?? 0, take: 12 },
+        input:
+            slug && !input.fromBlogList
+                ? { skip: 0, take: 12 }
+                : {
+                      term: input.term,
+                      category: input.category,
+                      skip: input.skip ?? 0,
+                      take: 12,
+                      ...(slug && input.fromBlogList ? { fromBlogList: input.fromBlogList } : {}),
+                  },
     };
     page.requestKey = JSON.stringify(page.request);
     page.route = slug ? `/blog/${slug}` : '/blog';
@@ -296,9 +309,14 @@ export function newsBlogFixture(url, host) {
             ? rows.filter(item => item.slug !== slug && item.category === currentArticle.category).slice(0, 3)
             : [],
     };
-    page.blog.availableLanguages = ['zh_Hans', 'en'].filter(
-        code => code === language || (editions?.[code] ?? []).some(item => !slug || item.slug === slug),
-    );
+    const skillsList = !slug && input.category === 'skills';
+    page.blog.availableLanguages = skillsList
+        ? en
+            ? []
+            : ['zh_Hans']
+        : ['zh_Hans', 'en'].filter(
+              code => code === language || (editions?.[code] ?? []).some(item => !slug || item.slug === slug),
+          );
     page.seo = {
         ...page.seo,
         title: page.blog.article?.title ?? page.blog.title,

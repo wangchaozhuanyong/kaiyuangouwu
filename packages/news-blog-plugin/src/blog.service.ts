@@ -19,6 +19,7 @@ import {
     BlogListInput,
     BlogPublicPage,
     BlogPublishedArticle,
+    emptyBlogDraft,
     storefrontAssetUrl,
 } from '@vendure/storefront-content-plugin';
 import { In, IsNull, Not } from 'typeorm';
@@ -28,13 +29,18 @@ import {
     contentIssues,
     defaultSettings,
     EditorialSettings,
+    englishEditionReviewIssue,
     hash,
+    isNewsEvidenceIssue,
+    newsSourceReviewIssue,
     normalizeDraft,
     serializeDraft,
+    verifyNewsEvidence,
 } from './content';
 import { BlogArticle, BlogRevision, BlogRun, BlogSettings, BlogSource, BlogSourceItem } from './entities';
 import { freeDraftDigest, freeSourceSufficient } from './free-content';
 import {
+    awaitsNewsEditorial,
     freeRecoveryCount,
     freeRecoveryDue,
     freeRecoveryLimit,
@@ -424,16 +430,7 @@ export class BlogService {
         const provenance = (value: BlogCover | null) =>
             trustedMedia.find(x => x?.assetId === value?.assetId) ?? undefined;
         const draft = normalizeDraft(input.draft);
-        if (originalDraft?.translations?.en) {
-            if (!changedNewsCopy(originalDraft, draft)) {
-                draft.translations ??= originalDraft.translations;
-            } else if (
-                JSON.stringify(draft.translations?.en) === JSON.stringify(originalDraft.translations.en)
-            ) {
-                // An editor can change the Chinese draft while posting a previously loaded English version.
-                delete draft.translations;
-            }
-        }
+        if (originalDraft?.translations?.en) draft.translations ??= originalDraft.translations;
         draft.sourceImages = originalDraft?.sourceImages;
         draft.cover = await this.media(ctx, input.draft.cover, provenance(input.draft.cover));
         draft.illustrations = [];
@@ -454,9 +451,46 @@ export class BlogService {
         }
         const issues = contentIssues(draft);
         let row: BlogArticle;
-        if (originalRow) {
+        if (originalRow && originalDraft) {
             row = originalRow;
             const original = JSON.parse(row.draftJson) as BlogDraft;
+            const previousContentIssues = contentIssues(originalDraft);
+            const warnings = (JSON.parse(row.issuesJson) as string[]).filter(
+                issue => !previousContentIssues.includes(issue),
+            );
+            if (draft.category !== 'skills') {
+                const originalEnglish = originalDraft.translations?.en;
+                const english = draft.translations?.en;
+                const englishRevised =
+                    originalEnglish &&
+                    english &&
+                    (originalEnglish.title !== english.title ||
+                        originalEnglish.summary !== english.summary ||
+                        originalEnglish.body !== english.body);
+                if (
+                    english &&
+                    !englishRevised &&
+                    (warnings.includes(englishEditionReviewIssue) || changedNewsCopy(originalDraft, draft))
+                ) {
+                    issues.push(englishEditionReviewIssue);
+                }
+                const evidence = row.eventKey
+                    ? await this.connection.getRepository(ctx, BlogSourceItem).find({
+                          where: { channelId: ctx.channelId, eventKey: row.eventKey, status: 'READY' },
+                          select: { title: true, body: true, url: true },
+                      })
+                    : [];
+                if (evidence.length) {
+                    issues.push(newsSourceReviewIssue, ...verifyNewsEvidence(draft, evidence));
+                    issues.push(
+                        ...warnings.filter(
+                            issue => !isNewsEvidenceIssue(issue) && issue !== englishEditionReviewIssue,
+                        ),
+                    );
+                } else {
+                    issues.push(...warnings.filter(issue => issue !== englishEditionReviewIssue));
+                }
+            } else issues.push(...warnings);
             if (original.skill) {
                 draft.skill = original.skill;
                 draft.category = 'skills';
@@ -471,7 +505,7 @@ export class BlogService {
                     draftJson: serializeDraft(draft),
                     version: input.expectedVersion + 1,
                     state: 'DRAFT',
-                    issuesJson: JSON.stringify(issues),
+                    issuesJson: JSON.stringify([...new Set(issues)]),
                 },
             );
             if (result.affected !== 1) throw new Error('文章版本已变化，请保留草稿并重新读取');
@@ -516,11 +550,10 @@ export class BlogService {
             const row = await this.get(tx, id);
             if (row.version !== expectedVersion) throw new Error('文章版本已变化');
             const stored = JSON.parse(row.draftJson) as BlogDraft;
-            const { draft: raw } = editableBlogSnapshots(
-                stored,
-                row.publishedJson ? JSON.parse(row.publishedJson) : null,
-                row.state,
-            );
+            const previous = row.publishedJson
+                ? (JSON.parse(row.publishedJson) as BlogPublishedArticle)
+                : null;
+            const { draft: raw } = editableBlogSnapshots(stored, previous, row.state);
             const draft = normalizeDraft(raw);
             draft.skill = raw.skill;
             draft.cover = await this.media(tx, raw.cover, raw.cover ?? undefined);
@@ -529,7 +562,14 @@ export class BlogService {
                 const checked = await this.media(tx, image, image);
                 if (checked) draft.illustrations.push({ ...checked, caption: image.caption });
             }
-            if (!withdraw && contentIssues(draft).length) throw new Error(contentIssues(draft).join('；'));
+            const blockingIssues = contentIssues(draft);
+            if (
+                draft.category !== 'skills' &&
+                !draft.translations?.en &&
+                ((!row.publishedAt && draft.format === 'NEWS') || (previous && englishNewsEdition(previous)))
+            )
+                blockingIssues.push('请补齐英文稿后再发布资讯');
+            if (!withdraw && blockingIssues.length) throw new Error(blockingIssues.join('；'));
             if (
                 !withdraw &&
                 draft.sources.some(
@@ -547,14 +587,11 @@ export class BlogService {
                 throw new Error('发布文章需提供已配置的官方来源');
             if (
                 !withdraw &&
-                (JSON.parse(row.issuesJson) as string[]).some(x => !contentIssues(draft).includes(x)) &&
+                (JSON.parse(row.issuesJson) as string[]).some(x => !blockingIssues.includes(x)) &&
                 !acceptIssues
             )
                 throw new Error('请核对并确认自动检查提示后再发布');
             const now = new Date().toISOString();
-            const previous = row.publishedJson
-                ? (JSON.parse(row.publishedJson) as BlogPublishedArticle)
-                : null;
             const published: BlogPublishedArticle = {
                 ...draft,
                 id: String(row.id),
@@ -581,6 +618,7 @@ export class BlogService {
                         ? null
                         : `${draft.title} ${draft.summary} ${draft.tags.join(' ')}`,
                     publishedPinned: !withdraw && draft.pinned,
+                    ...(!withdraw ? { issuesJson: '[]' } : {}),
                 },
             );
             if (changed.affected !== 1) throw new Error('发布版本冲突');
@@ -676,12 +714,6 @@ export class BlogService {
                 const eventKey = evidence[0].eventKey;
                 if (evidence.some(x => x.eventKey !== eventKey))
                     throw new Error('一次生成只整理同一事件的来源');
-                requestKey = `generate:${hash(
-                    evidence
-                        .map(x => x.eventKey + ':' + x.contentHash)
-                        .sort()
-                        .join('|'),
-                )}`;
                 evidence = await this.connection.getRepository(tx, BlogSourceItem).find({
                     where: { channelId: tx.channelId, eventKey, status: 'READY' },
                     order: { id: 'ASC' },
@@ -708,7 +740,18 @@ export class BlogService {
                     .getRepository(tx, BlogArticle)
                     .findOne({ where: { channelId: tx.channelId, eventKey } });
                 const prior = await repo.findOne({ where: { channelId: tx.channelId, requestKey } });
-                if (prior) return this.recoverFreeRun(tx, prior, settings);
+                if (prior && !config.freeMode && isUnpaidFreeRun(prior)) {
+                    // A collection-only result must not stand in for the first AI generation.
+                    const aiRequestKey = requestKey + ':ai';
+                    const aiRun = await repo.findOne({
+                        where: { channelId: tx.channelId, requestKey: aiRequestKey },
+                    });
+                    if (aiRun) return aiRun;
+                    if (!article) requestKey = aiRequestKey;
+                }
+                if (prior?.requestKey === requestKey) {
+                    return this.recoverFreeRun(tx, prior, settings);
+                }
                 if (article && !input.articleId) {
                     if (article.state !== 'PUBLISHED')
                         throw new Error('该事件已有待处理草稿，请从文章管理继续审核');
@@ -820,7 +863,7 @@ export class BlogService {
         return run;
     }
     private async quotaEvents(ctx: RequestContext, runs: BlogRun[]) {
-        const news = runs.filter(run => run.kind === 'GENERATE');
+        const news = runs.filter(run => run.kind === 'GENERATE' && !awaitsNewsEditorial(run));
         const keys = news.map(run => JSON.parse(run.inputJson).eventKey).filter(Boolean) as string[];
         const articles = keys.length
             ? await this.connection.getRepository(ctx, BlogArticle).find({
@@ -1091,13 +1134,69 @@ export class BlogService {
         const items = await this.connection
             .getRepository(ctx, BlogSourceItem)
             .find({ where: { channelId: ctx.channelId }, order: { sourcePublishedAt: 'DESC' }, take: 100 });
-        return items.map(item => ({
-            ...item,
-            evidenceMode:
-                JSON.parse(item.metadataJson || '{}').evidenceMode === 'OFFICIAL_RSS'
-                    ? 'OFFICIAL_RSS'
-                    : 'PAGE_TEXT',
-        }));
+        const articles = items.length
+            ? await this.connection.getRepository(ctx, BlogArticle).find({
+                  where: { channelId: ctx.channelId, eventKey: In(items.map(item => item.eventKey)) },
+                  select: ['eventKey', 'id', 'state'],
+              })
+            : [];
+        const byEvent = new Map(articles.map(article => [article.eventKey, article]));
+        return items.map(item => {
+            const article = byEvent.get(item.eventKey);
+            return {
+                ...item,
+                articleId: article ? String(article.id) : null,
+                articleState: article?.state ?? null,
+                evidenceMode:
+                    JSON.parse(item.metadataJson || '{}').evidenceMode === 'OFFICIAL_RSS'
+                        ? 'OFFICIAL_RSS'
+                        : 'PAGE_TEXT',
+            };
+        });
+    }
+
+    async openSourceDraft(ctx: RequestContext, sourceId: string) {
+        const source = await this.connection
+            .getRepository(ctx, BlogSourceItem)
+            .findOne({ where: { channelId: ctx.channelId, id: sourceId } });
+        if (!source) throw new NotFoundException('未找到当前店铺的采集来源');
+        const articles = this.connection.getRepository(ctx, BlogArticle);
+        const where = { channelId: ctx.channelId, eventKey: source.eventKey };
+        const current = await articles.findOne({ where });
+        if (current) return this.view(current);
+        const definition = sourceCatalog.find(item => item.code === source.sourceCode);
+        if (!definition || !sourceAllows(definition.code, source.url) || !source.body.trim())
+            throw new Error('该来源暂无可供编辑的官方资料');
+        const draft = normalizeDraft({
+            ...emptyBlogDraft(),
+            category: source.category,
+            sources: [
+                {
+                    label: definition.name,
+                    url: source.url,
+                    accessedAt: JSON.parse(source.metadataJson || '{}').lastSuccessAt ?? source.fetchedAt,
+                },
+            ],
+        });
+        // The channel/event unique key covers repeated clicks and races with queue generation.
+        await articles
+            .createQueryBuilder()
+            .insert()
+            .values({
+                ...where,
+                slug: `${source.category}-${source.sourcePublishedAt.toISOString().slice(0, 10)}-${source.eventKey.slice(0, 10)}`,
+                version: 1,
+                state: 'DRAFT',
+                draftJson: serializeDraft(draft),
+                issuesJson: JSON.stringify(contentIssues(draft)),
+                publishedJson: null,
+                publishedAt: null,
+            })
+            .orIgnore()
+            .execute();
+        const saved = await articles.findOne({ where });
+        if (!saved) throw new Error('未能创建来源草稿，请检查文章网址标识后重试');
+        return this.view(saved);
     }
     private async publicEnabled(ctx: RequestContext, asset = false) {
         if (ctx.apiType === 'shop' && (await this.activation.getAccessMode(ctx)) === 'CLOSED')
@@ -1267,11 +1366,12 @@ export class BlogService {
                     : null;
             return article;
         };
-        const availableLanguages: NonNullable<BlogPublicPage['availableLanguages']> = [
-            english ? 'en' : 'zh_Hans',
-        ];
+        const skillsList = !slug && input.category === 'skills';
+        const availableLanguages: NonNullable<BlogPublicPage['availableLanguages']> =
+            english && skillsList ? [] : [english ? 'en' : 'zh_Hans'];
         const other = english ? LanguageCode.zh_Hans : LanguageCode.en;
         if (
+            !skillsList &&
             (!articleRow ||
                 english ||
                 (articleRow.publishedJson && englishNewsEdition(JSON.parse(articleRow.publishedJson)))) &&

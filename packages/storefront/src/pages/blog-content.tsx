@@ -4,6 +4,7 @@ import { type FormEvent, type MouseEvent, type ReactNode } from 'react';
 import {
     blogBodySections,
     blogCategories,
+    type BlogCategory,
     type BlogCitation,
     type BlogCover,
     type BlogListInput,
@@ -15,7 +16,7 @@ import { PageBackLink } from '../components/common/page-back-link';
 import { interceptContentNavigation } from '../content-target-href';
 import { languageCodeFor } from '../i18n';
 import { SafeImage } from '../safe-image';
-import { routeHref } from '../storefront-router';
+import { routeHref, type RouteState } from '../storefront-router';
 import { SubHeader, SubpageBody } from '../storefront-ui/page-shell';
 import '../styles/blog.css';
 import { type StorefrontLanguage } from '../types';
@@ -26,6 +27,22 @@ import { BlogTheme, BlogThemeLibrary } from './blog-theme';
 
 export const blogListBackRoute = (language: StorefrontLanguage) =>
     ({ name: 'services', publicLanguage: language }) as const;
+
+export function blogArticleBackRoute(
+    input: BlogListInput,
+    language: StorefrontLanguage,
+    category?: BlogCategory,
+): RouteState {
+    return input.fromBlogList
+        ? {
+              name: 'blog',
+              publicLanguage: input.fromBlogList,
+              term: input.term,
+              category: input.category,
+              page: input.skip ? Math.floor(input.skip / 12) + 1 : undefined,
+          }
+        : { name: 'blog', publicLanguage: language, category };
+}
 
 function dateLabel(value: string, language: StorefrontLanguage) {
     return new Date(value).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
@@ -162,18 +179,31 @@ export function BlogContent({
     input = {},
     language = 'zh',
     onNavigate,
-    onBackToServices,
+    onReturn,
 }: {
     page: BlogPublicPage;
     input?: BlogListInput;
     language?: StorefrontLanguage;
     onNavigate?: (url: string) => void;
-    onBackToServices?: () => void;
+    onReturn?: (target: RouteState) => void;
 }) {
     const t = blogLabels[language];
     const locale = language === 'zh' ? 'zh-CN' : 'en-US';
-    const href = (slug?: string) =>
-        publicLocalizedHref(slug ? `/blog/${encodeURIComponent(slug)}` : '/blog', languageCodeFor(language));
+    const href = () => publicLocalizedHref('/blog', languageCodeFor(language));
+    const fromBlogList = input.fromBlogList ?? (page.article ? undefined : language);
+    const articleRoute = (slug: string, publicLanguage = language): RouteState => ({
+        name: 'blog-article',
+        id: slug,
+        publicLanguage,
+        ...(fromBlogList
+            ? {
+                  fromBlogList,
+                  term: input.term,
+                  category: input.category,
+                  page: input.skip ? Math.floor(input.skip / 12) + 1 : undefined,
+              }
+            : {}),
+    });
     const link = (url: string, action = onNavigate && (() => onNavigate(url))) => ({
         href: url,
         onClick: action
@@ -182,9 +212,9 @@ export function BlogContent({
     });
     function renderPage(content: ReactNode) {
         const article = page.article;
-        const backHref = article
-            ? href() + `?category=${article.category}`
-            : routeHref(blogListBackRoute(language));
+        const backRoute = article
+            ? blogArticleBackRoute(input, language, article.category)
+            : blogListBackRoute(language);
         const backLabel = article ? t.backToBlog : t.backToServices;
         return (
             <main
@@ -196,7 +226,7 @@ export function BlogContent({
                     language={language}
                     back={
                         <PageBackLink
-                            {...link(backHref, article ? undefined : onBackToServices)}
+                            {...link(routeHref(backRoute), onReturn && (() => onReturn(backRoute)))}
                             label={backLabel}
                         />
                     }
@@ -217,7 +247,7 @@ export function BlogContent({
     const card = (article: BlogPublishedArticle, isFeatured = false) => (
         <article className={isFeatured ? 'blog-feature' : 'blog-card'} key={article.id}>
             <a
-                {...link(href(article.slug))}
+                {...link(routeHref(articleRoute(article.slug)))}
                 className="blog-cover"
                 data-image-kind={article.cover?.kind}
                 aria-label={t.readLabel + article.title}
@@ -227,7 +257,9 @@ export function BlogContent({
             <div className="blog-card-copy">
                 <ArticleLabels language={language} article={article} featured={isFeatured} />
                 <h2 className={isFeatured ? 'type-page' : 'type-section'}>
-                    <a {...link(href(article.slug))}>{article.skillProfile?.displayName ?? article.title}</a>
+                    <a {...link(routeHref(articleRoute(article.slug)))}>
+                        {article.skillProfile?.displayName ?? article.title}
+                    </a>
                 </h2>
                 {article.skill && <p className="blog-skill-name type-meta">{article.skill.name}</p>}
                 <p className="blog-card-summary type-body">
@@ -251,7 +283,10 @@ export function BlogContent({
                 <div className={`blog-card-footer${article.skill ? ' blog-card-footer-skill' : ''}`}>
                     <DateLine language={language} article={article} />
                     <div className="blog-card-actions">
-                        <a className="blog-read-link type-action" {...link(href(article.slug))}>
+                        <a
+                            className="blog-read-link type-action"
+                            {...link(routeHref(articleRoute(article.slug)))}
+                        >
                             {article.skill ? t.use : t.read} <ArrowRight aria-hidden="true" />
                         </a>
                         {article.skill && (
@@ -292,12 +327,28 @@ export function BlogContent({
             : sections[0]?.paragraphs[0]?.trim() === article.summary.trim();
         const headings = sections.filter(section => section.title);
         const updatedAt = article.updatedAt ?? article.reviewedAt ?? article.publishedAt;
+        const otherLanguage = language === 'zh' ? 'en' : 'zh';
+        const otherEdition = page.availableLanguages?.includes(languageCodeFor(otherLanguage));
         return renderPage(
             <>
                 <BlogThemeLibrary language={language} />
                 <article className="blog-article" data-skill-guide={isSkill || undefined}>
                     <header className="blog-article-header">
-                        <ArticleLabels language={language} article={article} />
+                        <div className="blog-article-labels">
+                            <ArticleLabels language={language} article={article} />
+                            {otherEdition && (
+                                <a
+                                    className="blog-read-link type-label"
+                                    {...link(routeHref(articleRoute(article.slug, otherLanguage)))}
+                                    hrefLang={otherLanguage === 'zh' ? 'zh-CN' : 'en'}
+                                    aria-label={t.switchEdition}
+                                >
+                                    <span lang={otherLanguage === 'zh' ? 'zh-CN' : 'en'}>
+                                        {t.otherEdition}
+                                    </span>
+                                </a>
+                            )}
+                        </div>
                         <h1 className="type-page">{article.skillProfile?.displayName ?? article.title}</h1>
                         {article.skill && <p className="blog-skill-name type-helper">{article.skill.name}</p>}
                         {!summaryInBody && (
@@ -536,7 +587,10 @@ export function BlogContent({
             <h1 className="sr-only">{page.title}</h1>
             <div className="blog-toolbar">
                 <nav className="blog-categories" aria-label={t.categoryNav}>
-                    {['', ...blogCategories].map(category => (
+                    {[
+                        '',
+                        ...blogCategories.filter(category => language === 'zh' || category !== 'skills'),
+                    ].map(category => (
                         <a
                             className="type-label"
                             key={category}

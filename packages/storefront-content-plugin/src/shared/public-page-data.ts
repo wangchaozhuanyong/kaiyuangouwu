@@ -86,8 +86,11 @@ export function publicLocalizedHref(
 export function canonicalPublicPageRequest(value: PublicPageRequest): PublicPageRequest {
     if (value.kind === 'home') return { kind: 'home' };
     if (value.kind === 'blog') {
-        const blogInput = value.input ?? {};
-        const category = blogInput.category;
+        const fromBlogList = value.input?.fromBlogList;
+        const listOrigin =
+            value.id && (fromBlogList === 'zh' || fromBlogList === 'en') ? fromBlogList : undefined;
+        const blogInput = (value.id && !listOrigin ? undefined : value.input) ?? {};
+        const { category } = blogInput;
         const parsed = canonicalPublicPageRequest({ kind: 'catalog', input: blogInput }) as Extract<
             PublicPageRequest,
             { kind: 'catalog' }
@@ -103,7 +106,13 @@ export function canonicalPublicPageRequest(value: PublicPageRequest): PublicPage
         return {
             kind: 'blog',
             id: value.id || undefined,
-            input: { term, category: category || undefined, skip, take },
+            input: {
+                term,
+                category: category || undefined,
+                skip,
+                take,
+                ...(listOrigin ? { fromBlogList: listOrigin } : {}),
+            },
         };
     }
     if (value.kind === 'page') {
@@ -184,7 +193,8 @@ export function publicPageRequestFromUrl(
     const pathname = rawPathname === '/' ? '/' : rawPathname.replace(/\/+$/u, '');
     if (pathname === '/' || pathname === '/home') return { kind: 'home' };
     const blog = /^\/blog(?:\/([a-z0-9_-]{1,100}))?$/iu.exec(pathname);
-    if (blog)
+    if (blog) {
+        const fromBlogList = query.get('fromBlogList');
         return canonicalPublicPageRequest({
             kind: 'blog',
             id: blog[1],
@@ -192,8 +202,10 @@ export function publicPageRequestFromUrl(
                 term: query.get('term') ?? undefined,
                 category: query.get('category') ?? undefined,
                 skip: (Number(query.get('page') ?? 1) - 1) * 12,
+                fromBlogList: fromBlogList === 'zh' || fromBlogList === 'en' ? fromBlogList : undefined,
             },
         });
+    }
     const article = /^\/guides\/([a-z0-9_-]{1,100})\/?$/iu.exec(pathname);
     if (article) return { kind: 'article', id: article[1] };
     if (pathname === '/services' || pathname === '/support')

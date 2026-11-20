@@ -17,6 +17,7 @@ import {
     budgetDate,
     contentIssues,
     hash,
+    newsSourceReviewIssue,
     normalizeDraft,
     serializeDraft,
     verifyGeneratedDraft,
@@ -30,11 +31,15 @@ import {
     reviewedSourceNews,
 } from './free-content';
 import {
+    awaitsNewsEditorial,
+    collectionOnlyMessage,
+    editorialWaitingMessage,
     freeRecoveryCount,
     freeRecoveryLimit,
     isUnpaidFreeRun,
     nextFreeRecovery,
     runTelemetry,
+    waitingForNewsEditorialState,
 } from './free-recovery';
 import { dayStart, historyDays } from './history';
 import { BlogMediaService } from './media';
@@ -235,6 +240,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
                 input.settingsVersion !== settings.version
             )
                 throw new Error('模型或预算配置已变化');
+            let waitingForEditorial = false;
             if (run.kind === 'SKILL' || run.kind === 'SKILL_REVIEW') {
                 if (this.blog.config(settings).skillEditorialMode !== 'LEGACY')
                     throw new Error('Skill 已改为 Codex 中文精选，请使用结构化内容导入');
@@ -248,7 +254,8 @@ export class BlogQueueService implements OnApplicationBootstrap {
                 );
             } else if (run.kind === 'COLLECT') await this.collect(ctx, run, input);
             else if (run.kind === 'MEDIA') await this.image(ctx, run, input);
-            else await this.generate(ctx, run, input);
+            else
+                waitingForEditorial = (await this.generate(ctx, run, input)) === waitingForNewsEditorialState;
             await repo.update(
                 { id: run.id, state: 'RUNNING' },
                 {
@@ -256,7 +263,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
                         .providerAttempted
                         ? { reservedMicros: 0 }
                         : {}),
-                    state: 'SUCCEEDED',
+                    state: waitingForEditorial ? waitingForNewsEditorialState : 'SUCCEEDED',
                     completedAt: new Date(),
                     message: (await repo.findOne({ where: { id: run.id } }))?.message || '任务完成',
                 },
@@ -642,7 +649,11 @@ export class BlogQueueService implements OnApplicationBootstrap {
                       where: { channelId: ctx.channelId, kind: 'GENERATE' },
                   })
                 : [];
-            const seen = new Set(previous.map(x => (JSON.parse(x.inputJson) as BlogRunInput).eventKey));
+            const seen = new Set(
+                previous
+                    .filter(previousRun => !awaitsNewsEditorial(previousRun))
+                    .map(previousRun => (JSON.parse(previousRun.inputJson) as BlogRunInput).eventKey),
+            );
             const fingerprints = new Set<string>();
             let queued = 0;
             for (const selectedDay of days.length ? days : ['']) {
@@ -795,9 +806,9 @@ export class BlogQueueService implements OnApplicationBootstrap {
         const config = this.blog.config(settings);
         if (config.freeMode && !config.freeAutoPublish) {
             await this.connection.getRepository(ctx, BlogRun).update(run.id, {
-                message: '当前仅采集来源资料，已保留资料供人工编辑；未生成或发布文章',
+                message: collectionOnlyMessage,
             });
-            return;
+            return waitingForNewsEditorialState;
         }
         const original = input.articleId ? await this.blog.get(ctx, input.articleId) : null;
         if (original && original.version !== input.expectedVersion) {
@@ -877,6 +888,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
             const sectionIssues = [
                 ...contentIssues(sectionDraft),
                 ...verifyGeneratedDraft(sectionDraft, sources),
+                newsSourceReviewIssue,
             ];
             await this.applyGenerated(ctx, original, sectionDraft, sectionIssues, original.version);
             return;
@@ -915,9 +927,9 @@ export class BlogQueueService implements OnApplicationBootstrap {
             const reviewed = freeNewsDraft(freeSource, input.historyDay);
             if (!reviewed) {
                 await this.connection.getRepository(ctx, BlogRun).update(run.id, {
-                    message: '官方来源已采集，等待双语编辑；可在资讯来源查看原文，再到文章管理撰写中英文稿件',
+                    message: editorialWaitingMessage,
                 });
-                return;
+                return waitingForNewsEditorialState;
             }
             data = reviewed;
         } else {
@@ -968,7 +980,7 @@ export class BlogQueueService implements OnApplicationBootstrap {
                           pinned: existing?.pinned ?? false,
                       }),
                   )
-                : verifyGeneratedDraft(draft, evidence)),
+                : [...verifyGeneratedDraft(draft, evidence), newsSourceReviewIssue]),
         ];
         let article = original;
         const runRepo = this.connection.getRepository(ctx, BlogRun);

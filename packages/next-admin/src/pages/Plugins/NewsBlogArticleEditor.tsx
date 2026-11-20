@@ -587,7 +587,13 @@ export function NewsBlogArticleEditor({
                     )}
                     {canPublish && (
                         <div className="space-y-3">
-                            <AdminField label="已核对来源、图片及自动检查提示">
+                            <AdminField
+                                label={
+                                    body.skill
+                                        ? '已核对来源、图片及自动检查提示'
+                                        : '已对照原文核对中英文的事实、图片及检查提示'
+                                }
+                            >
                                 <AdminInput
                                     type="checkbox"
                                     checked={acknowledged === String(current.version)}

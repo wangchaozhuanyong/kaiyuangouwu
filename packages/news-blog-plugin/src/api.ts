@@ -88,6 +88,12 @@ export class BlogAdminResolver {
     ) {
         return this.blog.save(ctx, args.input);
     }
+    @Mutation() @Allow(manageNewsBlog.Permission) openNewsBlogSourceDraft(
+        @Ctx() ctx: RequestContext,
+        @Args() args: { sourceId: string },
+    ) {
+        return this.blog.openSourceDraft(ctx, args.sourceId);
+    }
     @Mutation() @Allow(manageNewsBlog.Permission) requestNewsBlogTask(
         @Ctx() ctx: RequestContext,
         @Args() args: { input: BlogRunInput & { kind: string; requestKey: string } },
