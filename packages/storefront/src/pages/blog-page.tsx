@@ -5,6 +5,7 @@ import {
     type PublicPageRequest,
     publicPageRequestKey,
 } from '../../../storefront-content-plugin/src/shared/public-page-data';
+import { PageBackLink } from '../components/common/page-back-link';
 import { languageCodeFor } from '../i18n';
 import { storefrontInitialQueryError, storefrontQueryPresentation } from '../loading-state';
 import { usePageRouteCommit } from '../page-readiness';
@@ -15,26 +16,29 @@ import {
     storefrontQueryRetry,
 } from '../query-client';
 import { fetchPublicPage, publicSeoQueryKey } from '../storefront-page-data';
-import { routeFromRouterLocation } from '../storefront-router';
-import { AsyncRouteStatePage } from '../storefront-ui/page-shell';
+import { routeFromRouterLocation, routeHref } from '../storefront-router';
+import { AsyncRouteStatePage, Subpage } from '../storefront-ui/page-shell';
 import { useStorefront } from '../StorefrontContext';
 
-import { BlogContent } from './blog-content';
+import { BlogContent, blogArticleBackRoute, blogListBackRoute } from './blog-content';
+import { blogLabels } from './blog-labels';
 export function BlogPage({ slug }: { slug?: string }) {
     usePageRouteCommit();
     const client = useQueryClient();
     const runtime = useStorefront();
-    const { language, market } = runtime;
+    const { market } = runtime;
+    const language = runtime.route.publicLanguage ?? runtime.language;
     const input = {
         term: runtime.route.term,
         category: runtime.route.category,
         skip: ((runtime.route.page ?? 1) - 1) * 12,
         take: 12,
+        fromBlogList: slug ? runtime.route.fromBlogList : undefined,
     };
     const request: PublicPageRequest = {
         kind: 'blog',
         ...(slug ? { id: slug } : {}),
-        input: slug ? {} : input,
+        input,
     };
     const key = [
         ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), languageCodeFor(language)),
@@ -90,11 +94,34 @@ export function BlogPage({ slug }: { slug?: string }) {
     });
     const state = storefrontQueryPresentation(query);
     const error = storefrontInitialQueryError(query, language);
+    const returnRoute = slug ? blogArticleBackRoute(input, language) : blogListBackRoute(language);
+    if (slug && query.isSuccess && !query.data?.article) {
+        const labels = blogLabels[language];
+        const list = routeHref(returnRoute);
+        return (
+            <Subpage
+                title={labels.blog}
+                language={language}
+                back={<PageBackLink href={list} label={labels.backToBlog} />}
+            >
+                <section className="blog-empty" role="status">
+                    <h1 className="type-section">
+                        {language === 'zh' ? '这篇文章暂无中文版' : 'This article is unavailable in English'}
+                    </h1>
+                    <a className="blog-read-link type-action" href={list}>
+                        {labels.browse}
+                    </a>
+                </section>
+            </Subpage>
+        );
+    }
     if (query.data)
         return (
             <BlogContent
+                language={language}
                 page={query.data}
                 input={input}
+                onReturn={runtime.returnToRoute}
                 onNavigate={target => {
                     const url = new URL(target, window.location.origin);
                     runtime.navigate(
@@ -109,7 +136,7 @@ export function BlogPage({ slug }: { slug?: string }) {
             language={language}
             state={error || !state.initialLoading ? 'error' : 'loading'}
             error={error ?? ''}
-            onBack={runtime.goBack}
+            onBack={() => runtime.returnToRoute(returnRoute)}
             onRetry={() => void query.refetch({ cancelRefetch: false })}
         />
     );

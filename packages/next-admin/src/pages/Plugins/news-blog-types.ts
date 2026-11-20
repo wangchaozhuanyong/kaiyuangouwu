@@ -8,6 +8,10 @@ export type BlogAdminArticle = {
     published: unknown;
     issues: string[];
 };
+export type BlogAdminArticleSummary = Pick<BlogAdminArticle, 'id' | 'version' | 'state'> & {
+    draft: Pick<BlogDraft, 'title' | 'category'>;
+    published: { version: number } | null;
+};
 export type BlogAdminSettings = {
     freeMode?: boolean;
     freeAutoPublish?: boolean;
@@ -57,6 +61,8 @@ export type BlogAdminItem = {
     status: string;
     sourcePublishedAt: string;
     evidenceMode?: string;
+    articleId?: string | null;
+    articleState?: string | null;
 };
 export type BlogAdminRun = {
     id: string;

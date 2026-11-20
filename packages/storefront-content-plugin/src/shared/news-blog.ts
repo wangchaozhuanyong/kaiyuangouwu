@@ -91,7 +91,10 @@ export function skillProfileBody(profile: BlogSkillProfile): string {
         ...profile.limitations,
     ].join('\n\n');
 }
+export type BlogNewsEdition = Pick<BlogDraft, 'title' | 'summary' | 'body' | 'seoDescription' | 'tags'>;
 export interface BlogDraft {
+    /** Optional English copy of the same news story, reviewed and published in the same snapshot. */
+    translations?: { en: BlogNewsEdition };
     skill?: BlogSkillInfo;
     skillProfile?: BlogSkillProfile;
     sourceImages?: BlogSourceImage[];
@@ -123,8 +126,15 @@ export interface BlogPublishedArticle extends BlogDraft {
     updatedAt?: string;
     readingMinutes: number;
 }
-export type BlogListInput = { term?: string; category?: string; skip?: number; take?: number };
+export type BlogListInput = {
+    term?: string;
+    category?: string;
+    skip?: number;
+    take?: number;
+    fromBlogList?: 'zh' | 'en';
+};
 export interface BlogPublicPage {
+    availableLanguages?: Array<'zh_Hans' | 'en'>;
     title: string;
     description: string;
     items: BlogPublishedArticle[];

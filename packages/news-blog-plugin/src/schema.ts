@@ -32,6 +32,8 @@ export const adminSchema = gql`
         sourcePublishedAt: DateTime!
         fetchedAt: DateTime!
         evidenceMode: String!
+        articleId: ID
+        articleState: String
     }
     type NewsBlogRun {
         id: ID!
@@ -65,8 +67,21 @@ export const adminSchema = gql`
         skip: Int
         take: Int
     }
+    """
+    List projection with summary JSON. Keep its cache identity separate from the editable article.
+    """
+    type NewsBlogArticleAdminSummary {
+        id: ID!
+        slug: String!
+        version: Int!
+        state: String!
+        publishedAt: DateTime
+        draft: JSON!
+        published: JSON
+        issues: [String!]!
+    }
     type NewsBlogAdminList {
-        items: [NewsBlogArticleAdmin!]!
+        items: [NewsBlogArticleAdminSummary!]!
         totalItems: Int!
     }
     extend type Query {
@@ -103,6 +118,7 @@ export const adminSchema = gql`
         saveNewsBlogSettings(settings: JSON!, expectedVersion: Int!): JSON!
         saveNewsBlogSource(code: String!, enabled: Boolean!, expectedVersion: Int!): [NewsBlogSource!]!
         saveNewsBlogArticle(input: SaveNewsBlogArticleInput!): NewsBlogArticleAdmin!
+        openNewsBlogSourceDraft(sourceId: ID!): NewsBlogArticleAdmin!
         requestNewsBlogTask(input: RequestNewsBlogTaskInput!): NewsBlogRun!
         publishNewsBlogArticle(id: ID!, expectedVersion: Int!, acceptIssues: Boolean!): NewsBlogArticleAdmin!
         withdrawNewsBlogArticle(id: ID!, expectedVersion: Int!): NewsBlogArticleAdmin!

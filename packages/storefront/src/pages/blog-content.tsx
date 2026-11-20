@@ -4,64 +4,98 @@ import { type FormEvent, type MouseEvent, type ReactNode } from 'react';
 import {
     blogBodySections,
     blogCategories,
-    blogCategoryLabels,
-    skillDomains,
+    type BlogCategory,
+    type BlogCitation,
     type BlogCover,
-    type BlogFormat,
     type BlogListInput,
     type BlogPublicPage,
     type BlogPublishedArticle,
 } from '../../../storefront-content-plugin/src/shared/news-blog';
 import { publicLocalizedHref } from '../../../storefront-content-plugin/src/shared/public-page-data';
 import { PageBackLink } from '../components/common/page-back-link';
+import { interceptContentNavigation } from '../content-target-href';
+import { languageCodeFor } from '../i18n';
 import { SafeImage } from '../safe-image';
+import { routeHref, type RouteState } from '../storefront-router';
 import { SubHeader, SubpageBody } from '../storefront-ui/page-shell';
 import '../styles/blog.css';
+import { type StorefrontLanguage } from '../types';
 
+import { blogLabels } from './blog-labels';
 import { BlogSkillSections } from './blog-skill-sections';
 import { BlogTheme, BlogThemeLibrary } from './blog-theme';
 
-const href = (slug?: string) =>
-    publicLocalizedHref(slug ? `/blog/${encodeURIComponent(slug)}` : '/blog', 'zh_Hans');
-const dateLabel = (value: string) =>
-    new Date(value).toLocaleDateString('zh-CN', {
+export const blogListBackRoute = (language: StorefrontLanguage) =>
+    ({ name: 'services', publicLanguage: language }) as const;
+
+export function blogArticleBackRoute(
+    input: BlogListInput,
+    language: StorefrontLanguage,
+    category?: BlogCategory,
+): RouteState {
+    return input.fromBlogList
+        ? {
+              name: 'blog',
+              publicLanguage: input.fromBlogList,
+              term: input.term,
+              category: input.category,
+              page: input.skip ? Math.floor(input.skip / 12) + 1 : undefined,
+          }
+        : { name: 'blog', publicLanguage: language, category };
+}
+
+function dateLabel(value: string, language: StorefrontLanguage) {
+    return new Date(value).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
         timeZone: 'Asia/Kuala_Lumpur',
         year: 'numeric',
         month: 'long',
         day: 'numeric',
     });
-const formatLabels: Record<BlogFormat, string> = {
-    NEWS: '快讯',
-    ANALYSIS: '更新解读',
-    GUIDE: '使用指南',
-    COMPARISON: '对比分析',
-    SKILL: '用途指南',
-};
-function DateLine({ article, detail = false }: { article: BlogPublishedArticle; detail?: boolean }) {
+}
+function DateLine({
+    article,
+    language,
+    detail = false,
+}: {
+    article: BlogPublishedArticle;
+    language: StorefrontLanguage;
+    detail?: boolean;
+}) {
+    const t = blogLabels[language];
     const sourceDate = article.category === 'skills' ? null : article.sourcePublishedAt;
     const date = sourceDate ?? article.publishedAt;
     return (
         <p className="blog-meta type-meta">
             <span>
-                {sourceDate ? '消息日期：' : article.category === 'skills' ? '' : '本站发布：'}
-                <time dateTime={date}>{dateLabel(date)}</time>
+                {sourceDate ? t.newsDate : article.category === 'skills' ? '' : t.published}
+                <time dateTime={date}>{dateLabel(date, language)}</time>
             </span>
             {detail && sourceDate && (
                 <span>
-                    本站发布：<time dateTime={article.publishedAt}>{dateLabel(article.publishedAt)}</time>
+                    {t.published}
+                    <time dateTime={article.publishedAt}>{dateLabel(article.publishedAt, language)}</time>
                 </span>
             )}
-            <span>约 {article.readingMinutes} 分钟阅读</span>
+            <span>{t.readTime(article.readingMinutes)}</span>
         </p>
     );
 }
-function ArticleLabels({ article, featured = false }: { article: BlogPublishedArticle; featured?: boolean }) {
+function ArticleLabels({
+    article,
+    language,
+    featured = false,
+}: {
+    article: BlogPublishedArticle;
+    language: StorefrontLanguage;
+    featured?: boolean;
+}) {
+    const t = blogLabels[language];
     return (
         <div className="blog-labels">
-            <span className="blog-category-tag type-helper">{blogCategoryLabels[article.category]}</span>
+            <span className="blog-category-tag type-helper">{t.categories[article.category]}</span>
             {article.skillProfile && (
                 <span className="blog-category-tag type-helper">
-                    {skillDomains[article.skillProfile.domain]}
+                    {t.domains[article.skillProfile.domain]}
                 </span>
             )}
             <span className="blog-muted type-helper">
@@ -70,44 +104,64 @@ function ArticleLabels({ article, featured = false }: { article: BlogPublishedAr
                           .filter(
                               tag =>
                                   tag !== article.skill?.name &&
-                                  tag !== skillDomains[article.skillProfile?.domain ?? 'general'],
+                                  tag !== t.domains[article.skillProfile?.domain ?? 'general'],
                           )
                           .slice(0, 2)
-                          .join(' · ') || '用途指南'
+                          .join(' · ') || t.formats.SKILL
                     : featured
-                      ? '本期精选'
-                      : formatLabels[article.format]}
+                      ? t.featured
+                      : t.formats[article.format]}
             </span>
         </div>
     );
 }
-function ImageCaption({ image }: { image: BlogCover }) {
-    return image.kind === 'SOURCE' && image.sourcePageUrl ? (
+function isWebSource(url: string) {
+    try {
+        const value = new URL(url);
+        return (
+            (value.protocol === 'https:' || value.protocol === 'http:') && !value.username && !value.password
+        );
+    } catch {
+        return false;
+    }
+}
+
+function sourceParagraph(line: string, sources: BlogCitation[]) {
+    const match = /^\[([^\]\n]+)\]\((\S+)\)$/u.exec(line.trim());
+    return match && sources.find(source => source.url === match[2]);
+}
+
+function ImageCaption({ image, language }: { image: BlogCover; language: StorefrontLanguage }) {
+    const t = blogLabels[language];
+    return image.kind === 'SOURCE' && image.sourcePageUrl && isWebSource(image.sourcePageUrl) ? (
         <span>
-            来源：
+            {t.source}
             <a href={image.sourcePageUrl} target="_blank" rel="noopener noreferrer">
-                原文配图 ↗
+                {t.sourceImage} ↗
             </a>
             {image.credit ? ` · ${image.credit}` : ''}
         </span>
     ) : (
-        <span>{image.kind === 'TEMPLATE' ? '主题封面' : image.generated ? 'AI 示意图' : '文章配图'}</span>
+        <span>{image.kind === 'TEMPLATE' ? t.cover : image.generated ? t.generatedImage : t.image}</span>
     );
 }
 function ArticleDirectory({
     headings,
     className,
+    language,
 }: {
     headings: ReadonlyArray<{ id: string; title: string }>;
     className: string;
+    language: StorefrontLanguage;
 }) {
+    const t = blogLabels[language];
     if (headings.length <= 3) return null;
     return (
         <details className={`blog-toc ${className}`}>
             <summary className="type-label">
-                文章目录 <span className="blog-muted type-meta">{headings.length} 节</span>
+                {t.contents} <span className="blog-muted type-meta">{t.sections(headings.length)}</span>
             </summary>
-            <nav aria-label="文章目录">
+            <nav aria-label={t.contents}>
                 {headings.map((section, index) => (
                     <a className="type-label" key={section.id} href={`#${section.id}`}>
                         <span className="blog-toc-number type-meta" aria-hidden="true">
@@ -123,41 +177,59 @@ function ArticleDirectory({
 export function BlogContent({
     page,
     input = {},
+    language = 'zh',
     onNavigate,
+    onReturn,
 }: {
     page: BlogPublicPage;
     input?: BlogListInput;
+    language?: StorefrontLanguage;
     onNavigate?: (url: string) => void;
+    onReturn?: (target: RouteState) => void;
 }) {
-    const navigate = (url: string) => (event: MouseEvent<HTMLAnchorElement>) => {
-        if (
-            onNavigate &&
-            !event.metaKey &&
-            !event.ctrlKey &&
-            !event.shiftKey &&
-            !event.altKey &&
-            event.button === 0
-        ) {
-            event.preventDefault();
-            onNavigate(url);
-        }
-    };
-    const link = (url: string) => ({ href: url, onClick: navigate(url) });
+    const t = blogLabels[language];
+    const locale = language === 'zh' ? 'zh-CN' : 'en-US';
+    const href = () => publicLocalizedHref('/blog', languageCodeFor(language));
+    const fromBlogList = input.fromBlogList ?? (page.article ? undefined : language);
+    const articleRoute = (slug: string, publicLanguage = language): RouteState => ({
+        name: 'blog-article',
+        id: slug,
+        publicLanguage,
+        ...(fromBlogList
+            ? {
+                  fromBlogList,
+                  term: input.term,
+                  category: input.category,
+                  page: input.skip ? Math.floor(input.skip / 12) + 1 : undefined,
+              }
+            : {}),
+    });
+    const link = (url: string, action = onNavigate && (() => onNavigate(url))) => ({
+        href: url,
+        onClick: action
+            ? (event: MouseEvent<HTMLAnchorElement>) => interceptContentNavigation(event, action)
+            : undefined,
+    });
     function renderPage(content: ReactNode) {
         const article = page.article;
-        const backHref = article
-            ? href() + `?category=${article.category}`
-            : publicLocalizedHref('/', 'zh_Hans');
-        const backLabel = article ? '返回新闻博客' : '返回首页';
+        const backRoute = article
+            ? blogArticleBackRoute(input, language, article.category)
+            : blogListBackRoute(language);
+        const backLabel = article ? t.backToBlog : t.backToServices;
         return (
             <main
                 className={article ? 'page subpage blog-page blog-detail-page' : 'page subpage blog-page'}
                 aria-label={article?.title ?? page.title}
             >
                 <SubHeader
-                    title={article ? (article.skill ? 'Skill 介绍' : '资讯详情') : '新闻博客'}
-                    language="zh"
-                    back={<PageBackLink {...link(backHref)} label={backLabel} />}
+                    title={article ? (article.skill ? t.skill : t.article) : t.blog}
+                    language={language}
+                    back={
+                        <PageBackLink
+                            {...link(routeHref(backRoute), onReturn && (() => onReturn(backRoute)))}
+                            label={backLabel}
+                        />
+                    }
                     backLabel={backLabel}
                 />
                 <SubpageBody>{content}</SubpageBody>
@@ -175,39 +247,47 @@ export function BlogContent({
     const card = (article: BlogPublishedArticle, isFeatured = false) => (
         <article className={isFeatured ? 'blog-feature' : 'blog-card'} key={article.id}>
             <a
-                {...link(href(article.slug))}
+                {...link(routeHref(articleRoute(article.slug)))}
                 className="blog-cover"
                 data-image-kind={article.cover?.kind}
-                aria-label={`阅读：${article.title}`}
+                aria-label={t.readLabel + article.title}
             >
-                <BlogTheme article={article} featured={isFeatured} />
+                <BlogTheme language={language} article={article} featured={isFeatured} />
             </a>
             <div className="blog-card-copy">
-                <ArticleLabels article={article} featured={isFeatured} />
+                <ArticleLabels language={language} article={article} featured={isFeatured} />
                 <h2 className={isFeatured ? 'type-page' : 'type-section'}>
-                    <a {...link(href(article.slug))}>{article.skillProfile?.displayName ?? article.title}</a>
+                    <a {...link(routeHref(articleRoute(article.slug)))}>
+                        {article.skillProfile?.displayName ?? article.title}
+                    </a>
                 </h2>
                 {article.skill && <p className="blog-skill-name type-meta">{article.skill.name}</p>}
                 <p className="blog-card-summary type-body">
                     {article.skillProfile?.purpose ?? article.summary}
                 </p>
                 {article.skillProfile && (
-                    <p className="blog-muted type-helper">适合：{article.skillProfile.audience}</p>
+                    <p className="blog-muted type-helper">
+                        {t.audience}
+                        {article.skillProfile.audience}
+                    </p>
                 )}
                 {article.skill && (
                     <p className="blog-skill-metric type-helper">
-                        <span aria-hidden="true">★</span> 仓库 {article.skill.stars.toLocaleString('zh-CN')}{' '}
-                        Star{' '}
+                        <span aria-hidden="true">★</span> {t.repository}{' '}
+                        {article.skill.stars.toLocaleString(locale)} {language === 'zh' ? 'Star' : 'stars'}{' '}
                         <span className="blog-muted">
-                            {article.skill.trend === 'RECENT' ? '近期热门' : '长期热门'}
+                            {article.skill.trend === 'RECENT' ? t.recent : t.evergreen}
                         </span>
                     </p>
                 )}
                 <div className={`blog-card-footer${article.skill ? ' blog-card-footer-skill' : ''}`}>
-                    <DateLine article={article} />
+                    <DateLine language={language} article={article} />
                     <div className="blog-card-actions">
-                        <a className="blog-read-link type-action" {...link(href(article.slug))}>
-                            {article.skill ? '了解用途' : '阅读全文'} <ArrowRight aria-hidden="true" />
+                        <a
+                            className="blog-read-link type-action"
+                            {...link(routeHref(articleRoute(article.slug)))}
+                        >
+                            {article.skill ? t.use : t.read} <ArrowRight aria-hidden="true" />
                         </a>
                         {article.skill && (
                             <a
@@ -216,7 +296,7 @@ export function BlogContent({
                                 target="_blank"
                                 rel="noopener noreferrer"
                             >
-                                查看 GitHub 仓库 <ArrowUpRight aria-hidden="true" />
+                                {t.github} <ArrowUpRight aria-hidden="true" />
                             </a>
                         )}
                     </div>
@@ -226,24 +306,52 @@ export function BlogContent({
     );
     if (page.article) {
         const article = page.article;
-        const sections = blogBodySections(article.body);
+        const sources = article.sources.filter(source => isWebSource(source.url));
+        const sections = blogBodySections(article.body).filter(
+            section =>
+                !(
+                    /^(?:参考来源|来源|sources|references)$/iu.test(section.title.trim()) &&
+                    section.paragraphs.every(line => sourceParagraph(line, sources))
+                ),
+        );
         const isSkill = article.category === 'skills';
         const overviewLines = isSkill
-            ? sections.find(section => section.title === '解决什么问题')?.paragraphs
+            ? sections.find(
+                  section => section.title === (language === 'zh' ? '解决什么问题' : 'What it solves'),
+              )?.paragraphs
             : undefined;
         const showAudience =
-            article.skillProfile && !overviewLines?.includes('适合：' + article.skillProfile.audience);
+            article.skillProfile && !overviewLines?.includes(t.audience + article.skillProfile.audience);
+        const summaryInBody = isSkill
+            ? overviewLines?.includes(article.summary)
+            : sections[0]?.paragraphs[0]?.trim() === article.summary.trim();
         const headings = sections.filter(section => section.title);
         const updatedAt = article.updatedAt ?? article.reviewedAt ?? article.publishedAt;
+        const otherLanguage = language === 'zh' ? 'en' : 'zh';
+        const otherEdition = page.availableLanguages?.includes(languageCodeFor(otherLanguage));
         return renderPage(
             <>
-                <BlogThemeLibrary />
+                <BlogThemeLibrary language={language} />
                 <article className="blog-article" data-skill-guide={isSkill || undefined}>
                     <header className="blog-article-header">
-                        <ArticleLabels article={article} />
+                        <div className="blog-article-labels">
+                            <ArticleLabels language={language} article={article} />
+                            {otherEdition && (
+                                <a
+                                    className="blog-read-link type-label"
+                                    {...link(routeHref(articleRoute(article.slug, otherLanguage)))}
+                                    hrefLang={otherLanguage === 'zh' ? 'zh-CN' : 'en'}
+                                    aria-label={t.switchEdition}
+                                >
+                                    <span lang={otherLanguage === 'zh' ? 'zh-CN' : 'en'}>
+                                        {t.otherEdition}
+                                    </span>
+                                </a>
+                            )}
+                        </div>
                         <h1 className="type-page">{article.skillProfile?.displayName ?? article.title}</h1>
                         {article.skill && <p className="blog-skill-name type-helper">{article.skill.name}</p>}
-                        {!overviewLines?.includes(article.summary) && (
+                        {!summaryInBody && (
                             <p className="blog-article-summary type-reading">{article.summary}</p>
                         )}
                         {article.skillProfile &&
@@ -251,19 +359,22 @@ export function BlogContent({
                                 <p className="blog-profile-audience type-body">
                                     {showAudience && (
                                         <>
-                                            <strong>适合谁：</strong>
+                                            <strong>{t.audienceTitle}</strong>
                                             {article.skillProfile.audience}
                                         </>
                                     )}
                                     {article.skillProfile.industries.length > 0 && (
                                         <span>
-                                            {showAudience && ' · '}适用行业：
-                                            {article.skillProfile.industries.join('、')}
+                                            {showAudience && ' · '}
+                                            {t.industries}
+                                            {article.skillProfile.industries.join(
+                                                language === 'zh' ? '、' : ', ',
+                                            )}
                                         </span>
                                     )}
                                 </p>
                             )}
-                        <DateLine article={article} detail />
+                        <DateLine language={language} article={article} detail />
                         {article.skill && (
                             <a
                                 className="blog-detail-github blog-primary-link type-action"
@@ -271,33 +382,37 @@ export function BlogContent({
                                 target="_blank"
                                 rel="noopener noreferrer"
                             >
-                                查看 GitHub 仓库 <ArrowUpRight aria-hidden="true" />
+                                {t.github} <ArrowUpRight aria-hidden="true" />
                             </a>
                         )}
                         <p className="blog-attribution type-helper">
                             {article.publicationMode === 'AUTOMATIC'
                                 ? article.skillProfile
-                                    ? '中文编辑整理'
-                                    : '自动整理'
-                                : `AI 整理 · ${article.reviewerName ?? '编辑'} 审核`}
+                                    ? t.editorial
+                                    : t.automatic
+                                : t.reviewed(article.reviewerName)}
                             <span>
-                                更新于 <time dateTime={updatedAt}>{dateLabel(updatedAt)}</time>
+                                {t.updated} <time dateTime={updatedAt}>{dateLabel(updatedAt, language)}</time>
                             </span>
                         </p>
                     </header>
-                    <ArticleDirectory headings={headings} className="blog-toc-inline" />
+                    <ArticleDirectory language={language} headings={headings} className="blog-toc-inline" />
                     <div className="blog-article-cover">
-                        <BlogTheme article={article} />
+                        <BlogTheme language={language} article={article} />
                     </div>
                     <aside className="blog-sidebar">
                         {article.skill && (
-                            <section className="blog-skill-info" aria-label="Skill 来源与热度">
+                            <section className="blog-skill-info" aria-label={t.skillInfo}>
                                 <span className="blog-muted type-helper">
-                                    {article.skill.trend === 'RECENT' ? '近期热门 Skill' : '长期热门 Skill'}
+                                    {article.skill.trend === 'RECENT'
+                                        ? t.recent + ' Skill'
+                                        : t.evergreen + ' Skill'}
                                 </span>
                                 <p className="blog-muted type-body">{article.skill.repository}</p>
                                 <p className="blog-muted type-helper">
-                                    GitHub 仓库 {article.skill.stars.toLocaleString('zh-CN')} Star
+                                    {language === 'zh' ? 'GitHub 仓库' : 'GitHub repository'}{' '}
+                                    {article.skill.stars.toLocaleString(locale)}{' '}
+                                    {language === 'zh' ? 'Star' : 'stars'}
                                 </p>
                                 <a
                                     className="blog-primary-link type-action"
@@ -305,7 +420,7 @@ export function BlogContent({
                                     target="_blank"
                                     rel="noopener noreferrer"
                                 >
-                                    查看 GitHub 仓库 <ArrowUpRight aria-hidden="true" />
+                                    {t.github} <ArrowUpRight aria-hidden="true" />
                                 </a>
                                 <a
                                     className="blog-read-link type-label"
@@ -313,7 +428,7 @@ export function BlogContent({
                                     target="_blank"
                                     rel="noopener noreferrer"
                                 >
-                                    查看 Skill 目录 <ArrowUpRight aria-hidden="true" />
+                                    {t.directory} <ArrowUpRight aria-hidden="true" />
                                 </a>
                                 <p className="blog-skill-evidence type-helper">
                                     <a
@@ -321,18 +436,22 @@ export function BlogContent({
                                         target="_blank"
                                         rel="noopener noreferrer"
                                     >
-                                        {article.skill.rankingLabel} 榜单第 {article.skill.rank} 名 ↗
+                                        {t.ranking(article.skill.rankingLabel, article.skill.rank)} ↗
                                     </a>
                                     <span className="blog-muted">
-                                        采集于{' '}
+                                        {t.collected}{' '}
                                         <time dateTime={article.skill.observedAt}>
-                                            {dateLabel(article.skill.observedAt)}
+                                            {dateLabel(article.skill.observedAt, language)}
                                         </time>
                                     </span>
                                 </p>
                             </section>
                         )}
-                        <ArticleDirectory headings={headings} className="blog-toc-sidebar" />
+                        <ArticleDirectory
+                            language={language}
+                            headings={headings}
+                            className="blog-toc-sidebar"
+                        />
                     </aside>
                     <div className="blog-reading-body">
                         {isSkill ? (
@@ -341,11 +460,24 @@ export function BlogContent({
                             sections.map(section => (
                                 <section key={section.id} id={section.id}>
                                     {section.title && <h2 className="type-section">{section.title}</h2>}
-                                    {section.paragraphs.map((paragraph, index) => (
-                                        <p className="type-reading" key={index}>
-                                            {paragraph}
-                                        </p>
-                                    ))}
+                                    {section.paragraphs.map((paragraph, index) => {
+                                        const source = sourceParagraph(paragraph, sources);
+                                        return (
+                                            <p className="type-reading" key={index}>
+                                                {source ? (
+                                                    <a
+                                                        href={source.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                    >
+                                                        {source.label}
+                                                    </a>
+                                                ) : (
+                                                    paragraph
+                                                )}
+                                            </p>
+                                        );
+                                    })}
                                 </section>
                             ))
                         )}
@@ -359,12 +491,12 @@ export function BlogContent({
                                     height={900}
                                 />
                                 <figcaption className="blog-muted type-meta">
-                                    {image.caption} <ImageCaption image={image} />
+                                    {image.caption} <ImageCaption language={language} image={image} />
                                 </figcaption>
                             </figure>
                         ))}
                         {article.tags.length > 0 && (
-                            <div className="blog-tags" aria-label="文章标签">
+                            <div className="blog-tags" aria-label={t.tags}>
                                 {article.tags.map(tag => (
                                     <span className="type-helper" key={tag}>
                                         #{tag}
@@ -372,26 +504,28 @@ export function BlogContent({
                                 ))}
                             </div>
                         )}
-                        <section className="blog-sources">
-                            <h2 className="type-section">参考来源</h2>
-                            <ol>
-                                {article.sources.map(source => (
-                                    <li key={source.url}>
-                                        <a
-                                            className="type-body"
-                                            href={source.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                        >
-                                            {source.label} <ArrowUpRight aria-hidden="true" />
-                                        </a>
-                                    </li>
-                                ))}
-                            </ol>
-                        </section>
+                        {sources.length > 0 && (
+                            <section className="blog-sources">
+                                <h2 className="type-section">{t.sources}</h2>
+                                <ol>
+                                    {sources.map(source => (
+                                        <li key={source.url}>
+                                            <a
+                                                className="type-body"
+                                                href={source.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                {source.label} <ArrowUpRight aria-hidden="true" />
+                                            </a>
+                                        </li>
+                                    ))}
+                                </ol>
+                            </section>
+                        )}
                         {article.relatedProductIds.length > 0 && (
                             <section className="blog-related-services">
-                                <h2 className="type-section">相关服务</h2>
+                                <h2 className="type-section">{t.services}</h2>
                                 {article.relatedProductIds.map(id => (
                                     <a
                                         className="blog-read-link type-action"
@@ -399,11 +533,11 @@ export function BlogContent({
                                         {...link(
                                             publicLocalizedHref(
                                                 `/product?id=${encodeURIComponent(id)}`,
-                                                'zh_Hans',
+                                                languageCodeFor(language),
                                             ),
                                         )}
                                     >
-                                        查看相关服务 <ArrowRight aria-hidden="true" />
+                                        {t.viewService} <ArrowRight aria-hidden="true" />
                                     </a>
                                 ))}
                             </section>
@@ -412,7 +546,7 @@ export function BlogContent({
                             className="blog-back-link type-action"
                             {...link(href() + `?category=${article.category}`)}
                         >
-                            更多{blogCategoryLabels[article.category]} <ArrowRight aria-hidden="true" />
+                            {t.moreCategory(t.categories[article.category])} <ArrowRight aria-hidden="true" />
                         </a>
                     </div>
                 </article>
@@ -420,10 +554,10 @@ export function BlogContent({
                     <section className="blog-results" aria-labelledby="blog-related-title">
                         <div className="blog-section-heading">
                             <h2 className="type-section" id="blog-related-title">
-                                继续阅读
+                                {t.keepReading}
                             </h2>
                             <a className="blog-read-link type-label" {...link(href())}>
-                                全部文章 <ArrowRight aria-hidden="true" />
+                                {t.allArticles} <ArrowRight aria-hidden="true" />
                             </a>
                         </div>
                         <div className="blog-grid">{page.relatedArticles.map(x => card(x))}</div>
@@ -443,26 +577,27 @@ export function BlogContent({
     const featured = !input.term && !input.category && !input.skip ? page.featured : null;
     // The featured item already belongs to this page; keep pagination totals intact.
     const items = page.items.filter(article => article.id !== featured?.id);
-    const categoryLabel = blogCategoryLabels[input.category as keyof typeof blogCategoryLabels];
-    const resultTitle = input.term ? `“${input.term}”的搜索结果` : (categoryLabel ?? '最新发布');
+    const categoryLabel = t.categories[input.category as keyof typeof t.categories];
+    const resultTitle = input.term ? t.results(input.term) : (categoryLabel ?? t.latest);
     const currentPage = Math.floor((input.skip ?? 0) / 12) + 1;
     const totalPages = Math.max(1, Math.ceil(page.totalItems / 12));
     return renderPage(
         <>
-            {(featured || items.length > 0) && <BlogThemeLibrary />}
+            {(featured || items.length > 0) && <BlogThemeLibrary language={language} />}
             <h1 className="sr-only">{page.title}</h1>
             <div className="blog-toolbar">
-                <nav className="blog-categories" aria-label="文章分类">
-                    {['', ...blogCategories].map(category => (
+                <nav className="blog-categories" aria-label={t.categoryNav}>
+                    {[
+                        '',
+                        ...blogCategories.filter(category => language === 'zh' || category !== 'skills'),
+                    ].map(category => (
                         <a
                             className="type-label"
                             key={category}
                             aria-current={(input.category ?? '') === category ? 'page' : undefined}
                             {...link(listUrl({ category, skip: 0 }))}
                         >
-                            {category
-                                ? blogCategoryLabels[category as keyof typeof blogCategoryLabels]
-                                : '全部'}
+                            {category ? t.categories[category as keyof typeof t.categories] : t.all}
                         </a>
                     ))}
                 </nav>
@@ -471,11 +606,11 @@ export function BlogContent({
                     action={href()}
                     method="get"
                     role="search"
-                    aria-label="搜索文章"
+                    aria-label={t.searchLabel}
                     onSubmit={submit}
                 >
                     <label className="sr-only" htmlFor="blog-search">
-                        搜索文章
+                        {t.searchLabel}
                     </label>
                     <Search aria-hidden="true" />
                     <input
@@ -483,7 +618,7 @@ export function BlogContent({
                         className="type-input"
                         name="term"
                         type="search"
-                        placeholder="搜索文章或 Skill"
+                        placeholder={t.placeholder}
                         defaultValue={input.term ?? ''}
                         key={input.term ?? ''}
                         onKeyDown={event => {
@@ -494,11 +629,11 @@ export function BlogContent({
                     {input.category && <input type="hidden" name="category" value={input.category} />}
                     {input.term && (
                         <a className="blog-read-link type-label" {...link(listUrl({ term: '', skip: 0 }))}>
-                            清除搜索
+                            {t.clear}
                         </a>
                     )}
                     <button className="type-label" type="submit">
-                        搜索
+                        {t.search}
                     </button>
                 </form>
             </div>
@@ -514,50 +649,44 @@ export function BlogContent({
                             </span>
                             <h3 className="type-section">
                                 {input.term
-                                    ? '没有找到相关文章'
+                                    ? t.notFound
                                     : input.category === 'skills'
-                                      ? '热门 Skill 正在整理中'
-                                      : '文章正在整理中'}
+                                      ? t.pendingSkills
+                                      : t.pendingNews}
                             </h3>
-                            <p className="blog-muted type-body">
-                                {input.term
-                                    ? '试试产品名称、功能或用途，也可以浏览其他分类。'
-                                    : '新内容发布后会显示在这里，先看看其他文章吧。'}
-                            </p>
+                            <p className="blog-muted type-body">{input.term ? t.trySearch : t.tryArticles}</p>
                             <a className="blog-primary-link type-action" {...link(href())}>
-                                浏览全部文章 <ArrowRight aria-hidden="true" />
+                                {t.browse} <ArrowRight aria-hidden="true" />
                             </a>
                         </div>
                     )}
                 </section>
             )}
             {totalPages > 1 && (
-                <nav className="blog-pagination" aria-label="文章分页">
+                <nav className="blog-pagination" aria-label={t.pagination}>
                     {(input.skip ?? 0) > 0 ? (
                         <a
                             className="blog-page-link type-action"
                             {...link(listUrl({ skip: Math.max(0, (input.skip ?? 0) - 12) }))}
                         >
-                            ← 上一页
+                            ← {t.previous}
                         </a>
                     ) : (
                         <span className="blog-page-link type-action" aria-disabled="true">
-                            ← 上一页
+                            ← {t.previous}
                         </span>
                     )}
-                    <span className="blog-muted type-helper">
-                        第 {currentPage} / {totalPages} 页
-                    </span>
+                    <span className="blog-muted type-helper">{t.pageNumber(currentPage, totalPages)}</span>
                     {(input.skip ?? 0) + 12 < page.totalItems ? (
                         <a
                             className="blog-page-link type-action"
                             {...link(listUrl({ skip: (input.skip ?? 0) + 12 }))}
                         >
-                            下一页 →
+                            {t.next} →
                         </a>
                     ) : (
                         <span className="blog-page-link type-action" aria-disabled="true">
-                            下一页 →
+                            {t.next} →
                         </span>
                     )}
                 </nav>

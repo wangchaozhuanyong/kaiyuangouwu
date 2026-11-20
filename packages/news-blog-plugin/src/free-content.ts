@@ -1,6 +1,7 @@
 import { BlogDraft, emptyBlogDraft } from '@vendure/storefront-content-plugin';
 import { createHash } from 'node:crypto';
 
+import { reviewedNewsForSource } from './reviewed-news';
 import { preferredSkillRanking, SkillEvidence, skillSourceUrl } from './skills-source';
 
 export interface BriefSource {
@@ -32,11 +33,6 @@ export function freeSourceSufficient(source: Pick<BriefSource, 'body' | 'sourceC
 const day = (date: Date | string) =>
     new Date(new Date(date).getTime() + 8 * 3600000).toISOString().slice(0, 10);
 const plain = (value: string) => value.replace(/\s+/gu, ' ').trim();
-const shortTitle = (value: string) =>
-    /[\u3400-\u9fff]/u.test(value)
-        ? plain(value).slice(0, 18)
-        : plain(value).split(' ').slice(0, 7).join(' ').slice(0, 80);
-// The published excerpt and original headline together stay below 25 English words.
 function excerpt(body: string, title = '') {
     let value = plain(body);
     if (title && value.startsWith(plain(title))) value = value.slice(plain(title).length).trim();
@@ -52,59 +48,62 @@ function historyNotice(historyDay: string | undefined, sourceDate: string, colle
         ? `\n\n## 历史补录说明\n模拟整理日期：${historyDay}；来源日期：${sourceDate}；本次采集日期：${collectedAt}。这是根据本次可核对资料补录的历史内容，不代表本站在模拟日期已经发布，也不保证还原当日网页版本。`
         : '';
 }
-function newsTopic(title: string) {
-    if (/pric|subscription|quota|billing|价格|订阅|额度/iu.test(title)) return '订阅、计费与额度说明';
-    if (/deprecat|shutdown|retir|停用|弃用/iu.test(title)) return '版本弃用与迁移提醒';
-    if (/computer use/iu.test(title)) return 'Computer Use 相关更新';
-    if (/\bCLI\b|command.line/iu.test(title)) return '命令行工具更新';
-    if (/storage|logging|privacy|安全|隐私/iu.test(title)) return '数据与使用规则说明';
-    if (/science|research|科研|研究/iu.test(title)) return '科研与研究动态';
-    return shortTitle(title);
+/** A reviewed edition belongs to this source and to a specific set of verified claims. */
+export function reviewedSourceNews(source: Pick<BriefSource, 'url' | 'title' | 'body'>) {
+    const edition = reviewedNewsForSource(source.url, source.title + ' ' + source.body);
+    if (!edition?.facts.length) return;
+    const evidence = plain(source.body);
+    if (
+        edition.facts.every(
+            fact =>
+                fact.sourceUrl === source.url &&
+                fact.quote &&
+                plain(fact.quote).length >= 12 &&
+                evidence.includes(plain(fact.quote)),
+        )
+    )
+        return edition;
 }
 
-/** Deterministic source brief. This function never invokes a model or invents a translation. */
-export function freeNewsDraft(source: BriefSource, historyDay?: string): BlogDraft {
+/** Free publication never pays for translation or substitutes a generic template for reporting. */
+export function freeNewsDraft(source: BriefSource, historyDay?: string): BlogDraft | null {
     if (!freeSourceSufficient(source) || !source.title.trim()) throw new Error('官方原文不足，不能整理快讯');
     const label = labels[source.sourceCode];
     if (!label) throw new Error('未知官方来源');
+    const edition = reviewedSourceNews(source);
+    if (!edition) return null;
     const published = day(source.sourcePublishedAt);
     const collected = day(source.fetchedAt);
-    const quote = excerpt(source.body, source.title);
     const feed = source.evidenceMode === 'OFFICIAL_RSS' ? feeds[source.sourceCode] : undefined;
-    const basis = feed ? '官方订阅摘要' : '官方原文';
-    if (quote.length < 12) throw new Error('缺少可核对的原文要点');
-    const topic = newsTopic(source.title);
-    const title = `${label} 官方动态：${topic}（${published}）`.slice(0, 160);
-    const summary = `${label} 于${published}发布相关官方信息。本条快讯保留可核对的原文要点与来源入口，帮助读者确认更新内容。开放范围、账号条件与后续调整以官方说明为准；本文不补写未公布的价格、额度或性能结论。`;
+    const body =
+        edition.zh.body +
+        (feed ? '\n\n本篇依据官方订阅摘要整理，全文页面暂不可读取。' : '') +
+        historyNotice(historyDay, published, collected);
+    const englishBody =
+        edition.en.body +
+        (feed
+            ? '\n\nThis brief is based on the official feed summary. The full article was unavailable.'
+            : '') +
+        (historyDay
+            ? `\n\n## Archive note\nThe source is dated ${published} and was collected on ${collected}. ` +
+              `The replay date (${historyDay}) is not the publication date of this article.`
+            : '');
     return {
         ...emptyBlogDraft(),
-        title,
-        summary,
+        ...edition.zh,
+        body,
         category: source.category,
         format: 'NEWS',
-        tags: ['来源快讯', ...(historyDay ? ['历史补录'] : [])],
-        candidateTitles: [
-            title,
-            `${label} ${published} 公告要点：${topic}`.slice(0, 160),
-            `${topic}：${label} 官方来源速览`.slice(0, 160),
-        ],
-        body: [
-            `## 发生了什么\n${label} 于${published}发布了相关官方信息。本文根据官方来源整理，原文入口见文末。`,
-            `## 关键变化\n${basis}要点（节选）：「${safe(quote)}」`,
-            ...(feed ? ['本条快讯仅依据官方 RSS 摘要整理；全文页面暂不可读取，不补充摘要之外的细节。'] : []),
-            `这段原文用于核对消息内容，不代表本站进行了独立测试。为避免误译，未有可靠中文版本的原文要点保留原语言。`,
-            `## 对用户的影响\n正在使用相关产品的读者，可以对照原文确认是否涉及自己的账号、工作流程或所用版本，再决定是否调整使用方式。`,
-            `## 使用条件与限制\n功能是否对你的地区、套餐或账号开放，应以官方页面和账号内实际显示为准。公告未明确说明的价格、额度、兼容性及性能，本文不作推断。`,
-            `## 参考来源\n[${label} 官方原文](${source.url})${historyNotice(historyDay, published, collected)}`,
-        ].join('\n\n'),
+        tags: ['来源快讯', ...edition.zh.tags, ...(historyDay ? ['历史补录'] : [])],
+        candidateTitles: [edition.zh.title],
+        translations: { en: { ...edition.en, body: englishBody } },
         sources: [
             ...(feed
                 ? [{ label: `${label} 官方 RSS 摘要`, url: feed, accessedAt: source.fetchedAt.toISOString() }]
                 : []),
-            { label: `${label} 原文入口`, url: source.url, accessedAt: source.fetchedAt.toISOString() },
+            { label: `${label} 官方原文`, url: source.url, accessedAt: source.fetchedAt.toISOString() },
         ],
-        facts: [{ text: `${basis}要点`, sourceUrl: feed ?? source.url, quote }],
-        seoDescription: summary,
+        facts: edition.facts.map(fact => ({ ...fact, sourceUrl: feed ?? fact.sourceUrl })),
     };
 }
 

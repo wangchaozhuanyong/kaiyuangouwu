@@ -337,6 +337,13 @@
     gap: var(--space-16);
     min-width: 0;
 }
+.blog-article-labels {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4) var(--space-12);
+    flex-wrap: wrap;
+}
 .blog-article-summary {
     color: var(--muted);
 }

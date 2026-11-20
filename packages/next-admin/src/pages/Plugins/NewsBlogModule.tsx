@@ -15,7 +15,7 @@ import { useAdminQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 import {
-    type BlogAdminArticle,
+    type BlogAdminArticleSummary,
     type BlogAdminItem,
     type BlogAdminRun,
     type BlogAdminSettings,
@@ -42,6 +42,7 @@ const statusLabels: Record<string, string> = {
     QUEUED: '等待执行',
     RUNNING: '执行中',
     SUCCEEDED: '已完成',
+    WAITING_EDITORIAL: '待人工编辑',
     DEFERRED: '等待来源恢复',
     UNKNOWN: '需要核对',
 };
@@ -71,7 +72,7 @@ export function NewsBlogModule() {
     const isAdmin = hasAnyPermission(['SuperAdmin']);
     const query = useAdminQuery<{
         newsBlogSettings: BlogAdminSettings;
-        newsBlogArticleList: { items: BlogAdminArticle[]; totalItems: number };
+        newsBlogArticleList: { items: BlogAdminArticleSummary[]; totalItems: number };
     }>(G.NEWS_BLOG_WORKSPACE, {
         variables: {
             input: {
@@ -91,11 +92,14 @@ export function NewsBlogModule() {
         pollInterval: 15000,
     });
     const [sourceWrite, sourceState] = useMutation(G.SAVE_NEWS_BLOG_SOURCE);
+    const [openSourceDraft, openSourceState] = useMutation<{ openNewsBlogSourceDraft: { id: string } }>(
+        G.OPEN_NEWS_BLOG_SOURCE_DRAFT,
+    );
     const [request, requestState] = useMutation(G.REQUEST_NEWS_BLOG_TASK);
     const [retry, retryState] = useMutation(G.RETRY_NEWS_BLOG_TASK);
     const [feedback, setFeedback] = useState({ scope, message: '', failed: false });
     const pending = useRef(false);
-    const busy = sourceState.loading || requestState.loading || retryState.loading;
+    const busy = sourceState.loading || openSourceState.loading || requestState.loading || retryState.loading;
     const change = (patch: Record<string, string | undefined>) =>
         setParams(old => {
             const next = new URLSearchParams(old);
@@ -145,6 +149,20 @@ export function NewsBlogModule() {
                       : '采集任务已受理，资料将保留在资讯来源，等待人工编辑。'
                   : '请求已受理，可在运行记录查看任务状态；文章需人工审核发布。',
         );
+    const editSource = (item: BlogAdminItem) => {
+        if (item.articleId) {
+            change({ tab: 'articles', article: item.articleId });
+            return;
+        }
+        let opened: string | undefined;
+        void execute(async () => {
+            const response = await openSourceDraft({ variables: { sourceId: item.id } });
+            opened = response.data?.openNewsBlogSourceDraft.id;
+            if (!opened) throw new Error('草稿受理结果需重新读取核对');
+        }, '已打开关联这条来源的文章。').then(() => {
+            if (opened && getAdminQueryScope() === scope) change({ tab: 'articles', article: opened });
+        });
+    };
     const articles = query.data?.newsBlogArticleList.items ?? [];
     const pageNumber = Math.max(1, Number(params.get('page')) || 1);
     const totalItems = query.data?.newsBlogArticleList.totalItems ?? 0;
@@ -396,7 +414,8 @@ export function NewsBlogModule() {
                                 {item.title} ↗
                             </a>
                             <p className="text-sm text-slate-500">
-                                {item.sourcePublishedAt} · {statusLabel(item.status)}
+                                {item.sourcePublishedAt} ·{' '}
+                                {labels[item.articleState ?? ''] ?? statusLabel(item.status)}
                             </p>
                             <p className="text-sm text-slate-500">
                                 {item.evidenceMode === 'OFFICIAL_RSS'
@@ -407,19 +426,22 @@ export function NewsBlogModule() {
                                 <summary>查看采集资料</summary>
                                 <p className="whitespace-pre-wrap break-words">{item.body}</p>
                             </details>
-                            {query.data?.newsBlogSettings.freeMode &&
-                            !query.data.newsBlogSettings.freeAutoPublish ? (
-                                <p className="text-sm text-slate-500">
-                                    资料已保留，可核对来源后在“文章管理”中新建并编辑文章。
-                                </p>
-                            ) : (
+                            <div className="flex flex-wrap gap-2">
                                 <AdminButton
-                                    disabled={busy || item.status !== 'READY'}
-                                    onClick={() => void task('GENERATE', { sourceIds: [item.id] })}
+                                    disabled={busy || (!item.articleId && !item.body.trim())}
+                                    onClick={() => editSource(item)}
                                 >
-                                    生成待审图文
+                                    {item.articleId ? '打开关联文章' : '用此来源建稿'}
                                 </AdminButton>
-                            )}
+                                {!item.articleId && query.data && !query.data.newsBlogSettings.freeMode && (
+                                    <AdminButton
+                                        disabled={busy || item.status !== 'READY'}
+                                        onClick={() => void task('GENERATE', { sourceIds: [item.id] })}
+                                    >
+                                        生成待审图文
+                                    </AdminButton>
+                                )}
+                            </div>
                         </article>
                     ))}
                 </section>

@@ -190,11 +190,21 @@ const generated: BlogDraft = {
     ...emptyBlogDraft(),
     title: 'ChatGPT 更新解读：本地审核流程演练',
     summary: '这是本地合成资讯的摘要。'.repeat(8),
+    seoDescription: '本地审核流程演练',
     body:
         '## 发生了什么\n' +
         evidence +
         '\n## 用户影响\n本条内容只用于开发验证，公开内容必须由后台管理员审核。',
     category: 'chatgpt',
+    translations: {
+        en: {
+            title: 'Testing the review workflow with a sample announcement',
+            summary: 'This sample is used to exercise the review system locally.',
+            body: 'The material is synthetic. It lets the development team verify that the news becomes public only after an editor reviews it.',
+            seoDescription: 'A local test of the editorial review workflow.',
+            tags: [],
+        },
+    },
     candidateTitles: [
         'ChatGPT 更新解读：本地审核流程演练',
         'ChatGPT 本地演练：来源与事实如何核对',

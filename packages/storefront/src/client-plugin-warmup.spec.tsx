@@ -97,7 +97,7 @@ describe('configured image-studio warmup intent', () => {
             anchor?.dispatchEvent(click);
         });
         expect(click.defaultPrevented).toBe(true);
-        expect(onNavigate).toHaveBeenCalledExactlyOnceWith({ name: 'blog' });
+        expect(onNavigate).toHaveBeenCalledExactlyOnceWith({ name: 'blog', publicLanguage: 'zh' });
         const modified = new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true });
         act(() => {
             anchor?.dispatchEvent(modified);

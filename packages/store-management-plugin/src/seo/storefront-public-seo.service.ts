@@ -310,7 +310,7 @@ export class StorefrontPublicSeoService {
         } else if (request.kind === 'blog') {
             const blog = page.blog;
             if (!blog) throw new NotFoundException('Published blog not found');
-            completeLanguages = ['zh_Hans'];
+            completeLanguages = blog.availableLanguages ?? [code];
             title = blog.article?.title ?? blog.title;
             description = blog.article?.seoDescription || blog.article?.summary || blog.description;
             // Category artwork is rendered in HTML. Sharing uses the merchant's configured image.
@@ -319,6 +319,7 @@ export class StorefrontPublicSeoService {
                 structuredData.push({
                     '@context': 'https://schema.org',
                     '@type': 'BlogPosting',
+                    inLanguage: code === 'zh_Hans' ? 'zh-CN' : 'en',
                     headline: title,
                     description,
                     datePublished: blog.article.publishedAt,
@@ -479,7 +480,7 @@ export class StorefrontPublicSeoService {
                     { '@type': 'ListItem', position: 2, name: title, item: seo.canonical },
                 ],
             });
-        if (request.kind === 'blog' && request.input.term) {
+        if (request.kind === 'blog' && !request.id && request.input.term) {
             seo.indexable = false;
             seo.robots = 'noindex, follow';
             seo.alternates = [];
@@ -680,17 +681,16 @@ export class StorefrontPublicSeoService {
             } catch {
                 /* Optional plugin. */
             }
-            const blogPaths = blogReader
-                ? await blogReader.sitemap(ctx.copy({ languageCode: LanguageCode.zh_Hans }))
-                : [];
-            if (blogPaths.length)
-                requests.push(
-                    { kind: 'blog', input: {} },
-                    ...blogPaths.map(item => ({ kind: 'blog' as const, input: {}, id: item.slug })),
-                );
             for (const code of settings.enabledLanguages) {
                 const localizedCtx = ctx.copy({ languageCode: code as LanguageCode });
-                for (const request of requests) {
+                const blogPaths = blogReader ? await blogReader.sitemap(localizedCtx) : [];
+                const localizedRequests: PublicPageRequest[] = [...requests];
+                if (blogPaths.length)
+                    localizedRequests.push(
+                        { kind: 'blog', input: {} },
+                        ...blogPaths.map(item => ({ kind: 'blog' as const, input: {}, id: item.slug })),
+                    );
+                for (const request of localizedRequests) {
                     try {
                         const page = await this.enrich(
                             localizedCtx,

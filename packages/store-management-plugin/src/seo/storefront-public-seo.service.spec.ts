@@ -414,6 +414,72 @@ describe('request-local public SEO preparation', () => {
         );
     });
 
+    it('uses the English article for canonical metadata and advertises only available translations', async () => {
+        const test = fixture(LanguageCode.en);
+        test.configuration.payload.enabledLanguages = ['en', 'zh_Hans'];
+        test.page.request = {
+            kind: 'blog',
+            id: 'release-notes',
+            input: { term: 'release', category: 'chatgpt', skip: 12, fromBlogList: 'en' },
+        };
+        test.page.blog = {
+            title: 'AI news',
+            description: 'Official news and analysis.',
+            totalItems: 1,
+            availableLanguages: ['en', 'zh_Hans'],
+            items: [],
+            featured: null,
+            relatedArticles: [],
+            article: {
+                title: 'New release notes',
+                summary: 'A product update.',
+                seoDescription: 'What changed in the release.',
+                publishedAt: '2026-11-03T00:00:00Z',
+                sourcePublishedAt: '2026-10-27T00:00:00Z',
+                sources: [{ url: 'https://example.org/release' }],
+            } as never,
+        };
+        const seo = (await test.service.enrich(test.ctx, test.host, test.page)).seo;
+        if (!seo) throw new Error('Missing public SEO metadata');
+        expect(seo).toMatchObject({
+            indexable: true,
+            canonical: `https://${test.host}/en/blog/release-notes`,
+            description: 'What changed in the release.',
+        });
+        expect(seo.alternates.map(link => link.language)).toEqual(['en', 'zh-CN']);
+        expect(seo.structuredData).toContainEqual(
+            expect.objectContaining({
+                '@type': 'BlogPosting',
+                inLanguage: 'en',
+                headline: 'New release notes',
+                datePublished: '2026-11-03T00:00:00Z',
+            }),
+        );
+        test.page.blog.availableLanguages = ['en'];
+        expect(
+            (await test.service.enrich(test.ctx, test.host, test.page)).seo?.alternates.map(
+                link => link.language,
+            ),
+        ).toEqual(['en']);
+    });
+
+    it('does not index an English Skill list without a published edition', async () => {
+        const test = fixture(LanguageCode.en);
+        test.configuration.payload.enabledLanguages = ['en', 'zh_Hans'];
+        test.page.request = { kind: 'blog', input: { category: 'skills' } };
+        test.page.blog = {
+            title: 'AI news',
+            description: 'Official news and analysis.',
+            totalItems: 0,
+            availableLanguages: [],
+            items: [],
+            featured: null,
+            relatedArticles: [],
+            article: null,
+        };
+        const { seo } = await test.service.enrich(test.ctx, test.host, test.page);
+        expect(seo).toMatchObject({ indexable: false, alternates: [] });
+    });
     it('keeps preparation automatic for callers that only supply the page', async () => {
         const test = fixture();
 
