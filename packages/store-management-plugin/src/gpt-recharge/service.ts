@@ -6,6 +6,7 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
+import { randomUUID } from 'node:crypto';
 
 import { StorefrontClientPluginAccessService } from '../storefront-client-plugin-access.service';
 
@@ -25,6 +26,7 @@ import {
     sealRechargeSecret,
     validateRechargeSession,
 } from './security';
+import { isStandaloneRechargeRequest } from './standalone-api';
 
 const retryReason = 'verified_retry_available';
 const pendingSubmission = ['submitting', 'submission_unknown'];
@@ -46,6 +48,8 @@ type UpstreamTaskSnapshot = {
     updatedAt?: number;
     partner?: boolean;
 };
+type ReceiptSnapshot = (UpstreamTaskSnapshot | { id?: never }) & { submissionId?: string };
+
 type RechargeCredentials = { legacy?: string; partner?: string };
 @Injectable()
 export class GptRechargeService {
@@ -236,15 +240,16 @@ export class GptRechargeService {
             throw new UserInputError('充值服务暂时无法确认请求，请查询原兑换码');
         }
     }
-    async publicConfig(ctx: RequestContext) {
+    async publicConfig(ctx: RequestContext, partnerOnly = isStandaloneRechargeRequest(ctx.req)) {
         const configured = await this.configs(ctx).findOne({ where: { channelId: ctx.channelId } });
         if (!configured?.enabled || !(await this.access.isEnabled(ctx, 'gpt-recharge-entry')))
             return { enabled: false, maintenance: false };
         const keys = this.credentials(ctx, configured.encryptedServiceKey);
         const checks = await Promise.allSettled([
-            ...(keys.legacy ? [this.upstream(ctx, configured, 'config', {})] : []),
+            ...(keys.legacy && !partnerOnly ? [this.upstream(ctx, configured, 'config', {})] : []),
             ...(keys.partner ? [this.partnerUpstream(ctx, configured, '/config')] : []),
         ]);
+        if (checks.length === 0) return { enabled: false, maintenance: false };
         if (checks.every(result => result.status === 'rejected'))
             throw new UserInputError('暂时无法确认充值服务');
         return {
@@ -273,24 +278,21 @@ export class GptRechargeService {
     async verify(ctx: RequestContext, code: string) {
         const config = await this.connectionConfig(ctx, true);
         code = this.code(code);
-        if (partnerCode.test(code)) {
-            await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
-            const checked = await this.partnerUpstream(ctx, config, '/codes/verify', { code });
-            return { ...this.validateCodeResult(checked), task: null };
-        }
-        const result = this.validateCodeResult(await this.upstream(ctx, config, 'verify', { code }));
-        if (result.reason === retryReason) {
-            await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
+        const partner = partnerCode.test(code);
+        if (partner) await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
+        const result = this.validateCodeResult(
+            partner
+                ? await this.partnerUpstream(ctx, config, '/codes/verify', { code })
+                : await this.upstream(ctx, config, 'verify', { code }),
+        );
+        if (!partner) {
+            if (result.reason === retryReason) await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
             const row = await this.receipts(ctx).findOne({
                 where: { publicId: this.codePublicId(code, config.upstreamOrigin), channelId: ctx.channelId },
             });
-            if (row && pendingSubmission.includes(row.status))
-                return {
-                    plan: result.plan,
-                    status: 'reserved',
-                    reason: 'manual_review_required',
-                    task: null,
-                };
+            if (row && pendingSubmission.includes(row.status)) {
+                return { plan: row.plan, status: 'reserved', reason: 'manual_review_required', task: null };
+            }
         }
         return { ...result, task: null };
     }
@@ -334,12 +336,19 @@ export class GptRechargeService {
         }
         return row;
     }
-    private taskSnapshot(ctx: RequestContext, row: GptRechargeReceipt): UpstreamTaskSnapshot | null {
+    private receiptSnapshot(ctx: RequestContext, row: GptRechargeReceipt): ReceiptSnapshot | null {
         return row.encryptedUpstreamTask
             ? (JSON.parse(
                   openRechargeSecret(row.encryptedUpstreamTask, `${this.context(ctx)}:${row.publicId}`),
-              ) as UpstreamTaskSnapshot)
+              ) as ReceiptSnapshot)
             : null;
+    }
+    private sealSnapshot(ctx: RequestContext, row: GptRechargeReceipt, snapshot: ReceiptSnapshot) {
+        return sealRechargeSecret(JSON.stringify(snapshot), `${this.context(ctx)}:${row.publicId}`);
+    }
+    private taskSnapshot(ctx: RequestContext, row: GptRechargeReceipt): UpstreamTaskSnapshot | null {
+        const snapshot = this.receiptSnapshot(ctx, row);
+        return snapshot?.id ? snapshot : null;
     }
     private view(ctx: RequestContext, row: GptRechargeReceipt) {
         const status = ['new', 'submitting', 'submission_unknown'].includes(row.status)
@@ -352,7 +361,12 @@ export class GptRechargeService {
             plan: row.plan,
             status,
             stage: safeRechargeStage(status, snapshot?.stage),
-            ...(snapshot?.accountEmail && { accountEmail: snapshot.accountEmail }),
+            ...(snapshot?.accountEmail && {
+                accountEmail:
+                    snapshot.partner || isStandaloneRechargeRequest(ctx.req)
+                        ? snapshot.accountEmail.replace(/^(.).*(@.+)$/u, '$1***$2')
+                        : snapshot.accountEmail,
+            }),
             ...(snapshot?.progress && {
                 progress: {
                     ...snapshot.progress,
@@ -516,9 +530,16 @@ export class GptRechargeService {
         }
         const expectedStatus = afterFailedTask ? 'failed' : 'new';
         const claimRevision = row.revision + 1;
+        const submissionId = randomUUID();
+        const prior = this.taskSnapshot(ctx, row);
+        const encryptedUpstreamTask = this.sealSnapshot(
+            ctx,
+            row,
+            prior ? { ...prior, submissionId } : { submissionId },
+        );
         const claimed = await repository.update(
             { id: row.id, channelId: ctx.channelId, revision: row.revision, status: expectedStatus },
-            { status: 'submitting', revision: claimRevision },
+            { status: 'submitting', revision: claimRevision, encryptedUpstreamTask },
         );
         if (!claimed.affected)
             return this.view(
@@ -530,10 +551,15 @@ export class GptRechargeService {
             const result = await this.upstream(ctx, config, 'submit', {
                 code,
                 session,
+                submissionId,
                 ...(afterFailedTask && { afterFailedTask }),
             });
             if (result.rejected === true) {
-                await repository.update(claim, { status: expectedStatus, revision: claimRevision + 1 });
+                await repository.update(claim, {
+                    status: expectedStatus,
+                    revision: claimRevision + 1,
+                    encryptedUpstreamTask: row.encryptedUpstreamTask,
+                });
                 throw new GptRechargeNotAcceptedError();
             }
             if (afterFailedTask && result.id === afterFailedTask)
@@ -545,6 +571,53 @@ export class GptRechargeService {
             await repository.update(claim, { status: 'submission_unknown', revision: claimRevision + 1 });
             throw new UserInputError('提交结果待核对，请使用原兑换码查询');
         }
+    }
+    private async submissionReceipt(ctx: RequestContext, input: string) {
+        const code = this.code(input);
+        if (partnerCode.test(code)) throw new UserInputError('合作方兑换码请在 ID 后台核对');
+        const config = await this.connectionConfig(ctx, false);
+        const row = await this.receipts(ctx).findOne({
+            where: { publicId: this.codePublicId(code, config.upstreamOrigin), channelId: ctx.channelId },
+        });
+        return { code, config, row };
+    }
+
+    async submissionReview(ctx: RequestContext, input: string) {
+        const { row } = await this.submissionReceipt(ctx, input);
+        return { pending: !!row && pendingSubmission.includes(row.status), revision: row?.revision ?? -1 };
+    }
+
+    async recoverSubmission(ctx: RequestContext, input: string, expectedRevision: number) {
+        const { code, config, row } = await this.submissionReceipt(ctx, input);
+        if (!row || !pendingSubmission.includes(row.status) || row.revision !== expectedRevision)
+            throw new UserInputError('待核对记录已变化，请重新查询');
+        const priorTask = this.taskSnapshot(ctx, row);
+        const submissionId = this.receiptSnapshot(ctx, row)?.submissionId;
+        const result = await this.upstream(ctx, config, 'task', {
+            action: 'reconcile',
+            code,
+            ...(submissionId && { submissionId }),
+            ...(priorTask && { afterFailedTask: priorTask.id }),
+        });
+        if (result.fenced !== true) throw new UserInputError('原提交仍无法确认未受理，已保留锁定');
+        const status = priorTask ? 'failed' : 'new';
+        const update = await this.receipts(ctx).update(
+            { id: row.id, channelId: ctx.channelId, status: row.status, revision: row.revision },
+            {
+                status,
+                revision: row.revision + 1,
+                encryptedUpstreamTask: priorTask
+                    ? this.sealSnapshot(ctx, row, { ...priorTask, submissionId: undefined })
+                    : null,
+            },
+        );
+        if (!update.affected) throw new UserInputError('待核对记录已变化，请重新查询');
+        Logger.info(
+            `Recovered unaccepted recharge submission ${row.publicId} for channel ${ctx.channelId} ` +
+                `at revision ${row.revision} by administrator ${ctx.activeUserId ?? 'unknown'}`,
+            'GptRecharge',
+        );
+        return { pending: false, revision: row.revision + 1 };
     }
     async startAuthorization(ctx: RequestContext, codeInput: string, requestKey: string) {
         const code = this.code(codeInput);

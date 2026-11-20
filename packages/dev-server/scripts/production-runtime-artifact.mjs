@@ -182,6 +182,7 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/storefront/dist/.server/public-page-renderer.cjs',
     'packages/storefront/dist/.address-tool/index.html',
     'packages/storefront/dist/.mail-tool/index.html',
+    'packages/storefront/dist/.recharge-tool/index.html',
     'packages/storefront/dist/frontend-release.json',
     'packages/storefront/dist-two-factor/index.html',
     'packages/storefront/dist-two-factor/build-config.json',

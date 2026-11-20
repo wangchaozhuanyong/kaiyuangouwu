@@ -2,7 +2,7 @@
 import type { ShopAbuseAction, ShopAbuseProof } from '../../src/shop-abuse';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import {
@@ -27,6 +27,7 @@ import { DesktopLayoutContext, useDesktopViewport } from '../../src/desktop-layo
 import { PageReadinessBoundary } from '../../src/page-readiness';
 import { createStorefrontQueryClient } from '../../src/query-client';
 import { ShopApiGraphQlError } from '../../src/shop-api-errors';
+import { StorefrontPageFrame } from '../../src/storefront-page-frame';
 import { StorefrontQueryFeedback } from '../../src/StorefrontQueryFeedback';
 
 import demoChallengeImage from './assets/abuse-demo.png?inline';
@@ -53,6 +54,15 @@ const demoSession = JSON.stringify(
     null,
     2,
 );
+const demoPartnerCode = 'RA-' + 'A'.repeat(32);
+
+function demoPlanForCode(code: string): RechargePlan {
+    if (code === 'DEMO-500' || code === demoPartnerCode) return 'pro500';
+    if (code.includes('200')) return 'pro_20x';
+    if (code.includes('100')) return 'pro_5x';
+    return 'plus';
+}
+
 function Fixture() {
     const desktop = useDesktopViewport();
     const [language, setLanguage] = useState<'zh' | 'en'>(params.get('language') === 'en' ? 'en' : 'zh');
@@ -74,10 +84,10 @@ function Fixture() {
     const [stage, setStage] = useState<RechargeStage>('started');
     const [progressVersion, setProgressVersion] = useState(6);
     const [key, setKey] = useState(0);
+    const taskPlan = useRef<RechargePlan>('plus');
     const client = useMemo<GptRechargeClient>(() => {
         const availability = params.get('availability');
         let maintenance = availability === 'maintenance';
-        let lastPlan: RechargePlan = 'plus';
         let verifiedCode: string | undefined;
         let challengeSequence = 0;
         const spent = new Set<string>();
@@ -114,7 +124,7 @@ function Fixture() {
         const task = () => ({
             id: 'DEMO-20261016-001',
             credential: 'preview-only',
-            plan: lastPlan,
+            plan: taskPlan.current,
             status,
             stage: status === 'running' ? stage : status,
             updatedAt: '2026-10-16T10:30:00Z',
@@ -179,11 +189,10 @@ function Fixture() {
                     );
                 if (errorMode === 'verify' || (errorMode === 'verify-repeat' && code === verifiedCode))
                     throw new Error('Synthetic private verification provider detail');
-                if (!code.startsWith('DEMO-') && code !== 'RA-' + 'A'.repeat(32))
+                if (!code.startsWith('DEMO-') && code !== demoPartnerCode)
                     return Promise.reject(new Error('Only demo codes'));
                 verifiedCode = code;
-                lastPlan = code.includes('200') ? 'pro_20x' : code.includes('100') ? 'pro_5x' : 'plus';
-                return Promise.resolve({ plan: lastPlan, status: 'available' });
+                return Promise.resolve({ plan: demoPlanForCode(code), status: 'available' });
             },
             submit: async (code, _session, proof) => {
                 setOperationCalls(value => ({ ...value, submit: value.submit + 1 }));
@@ -194,6 +203,7 @@ function Fixture() {
                     });
                 if (params.get('error') === 'submit-unknown')
                     throw new Error('Synthetic lost response after submission');
+                taskPlan.current = demoPlanForCode(code);
                 return Promise.resolve(task());
             },
             query: async (code, proof) => {
@@ -206,12 +216,13 @@ function Fixture() {
                         plan: 'plus',
                         status: 'available',
                         reason: 'verified_retry_available',
-                        task: { ...task(), status: 'failed', stage: 'failed' },
+                        task: { ...task(), plan: 'plus', status: 'failed', stage: 'failed' },
                     };
                 if (params.get('error') === 'query')
                     throw new Error('Synthetic private lookup provider detail');
+                taskPlan.current = demoPlanForCode(code);
                 return Promise.resolve({
-                    plan: code.includes('200') ? 'pro_20x' : code.includes('100') ? 'pro_5x' : 'plus',
+                    plan: taskPlan.current,
                     status: status === 'succeeded' ? 'used' : 'reserved',
                     task: task(),
                 });
@@ -219,6 +230,7 @@ function Fixture() {
             authorize: (code, _requestKey, proof) => {
                 admit('RECHARGE_SUBMIT', code, proof);
                 if (!isPartnerRechargeCode(code)) return Promise.reject(new Error('Only demo partner code'));
+                taskPlan.current = demoPlanForCode(code);
                 setStatus('awaiting_authorization');
                 return Promise.resolve({
                     authorizationUrl: 'https://id.example.test/recharge/authorize#fixture',
@@ -271,110 +283,113 @@ function Fixture() {
     }
     return (
         <DesktopLayoutContext.Provider value={desktop}>
-            <div
-                className={`storefront-app${desktop ? ' desktop-store-layout' : ''}`}
-                data-route="gpt-recharge"
+            <output
+                hidden
+                data-demo-verify-calls={operationCalls.verify}
+                data-demo-query-calls={operationCalls.query}
+                data-demo-submit-calls={operationCalls.submit}
+                data-demo-task-calls={operationCalls.task}
+            />
+            <div className="gpt-preview-toolbar" hidden={params.get('presentation') === '1'}>
+                <span>设计预览 · 演示数据</span>
+                {params.get('abuse') ? (
+                    <output data-demo-abuse-calls={demoCalls}>
+                        安全验证演示 · 答案 ABC234 · 已请求 {demoCalls} 次
+                    </output>
+                ) : null}
+                <button onClick={() => void fill()}>填入演示资料</button>
+                <label>
+                    结果演示
+                    <select
+                        value={status}
+                        onChange={event => {
+                            setStatus(event.target.value as RechargeStatus);
+                            setProgressVersion(value => value + 1);
+                        }}
+                    >
+                        <option value="queued">已受理</option>
+                        <option value="running">处理中</option>
+                        <option value="succeeded">成功</option>
+                        <option value="failed">失败</option>
+                        <option value="awaiting_review">待核对</option>
+                    </select>
+                </label>
+                <label>
+                    步骤演示
+                    <select
+                        value={stage}
+                        onChange={event => {
+                            setStage(event.target.value as RechargeStage);
+                            setProgressVersion(value => value + 1);
+                        }}
+                    >
+                        <option value="started">已开始执行</option>
+                        <option value="payment_details">填写充值资料</option>
+                        <option value="paying">正在付款</option>
+                        <option value="paid">付款已确认</option>
+                        <option value="subscription_check">确认订阅</option>
+                    </select>
+                </label>
+                <button onClick={() => setKey(value => value + 1)}>重置预览</button>
+                <a href={`?skin=${preset === 'classic' ? 'neo-minimalist' : 'classic'}`}>切换皮肤</a>
+            </div>
+            <StorefrontPageFrame
+                routeName="gpt-recharge"
+                language={language}
+                desktop={desktop}
+                storefrontName={localePreferences.storefrontName}
+                logoUrl={null}
+                header={
+                    <div className="proto-header-inner gpt-preview-nav">
+                        <strong>{t('店铺预览', 'Store preview')}</strong>
+                        <nav>
+                            <span>{t('首页', 'Home')}</span>
+                            <span>{t('商品', 'Products')}</span>
+                            <span aria-current="page">{t('智能服务', 'Services')}</span>
+                        </nav>
+                        <LocalePreferencesTrigger
+                            language={language}
+                            currencyCode={currency}
+                            expanded={preferencesOpen}
+                            onClick={() => setPreferencesOpen(true)}
+                        />
+                    </div>
+                }
             >
-                <output
-                    hidden
-                    data-demo-verify-calls={operationCalls.verify}
-                    data-demo-query-calls={operationCalls.query}
-                    data-demo-submit-calls={operationCalls.submit}
-                    data-demo-task-calls={operationCalls.task}
+                <GptRechargePage
+                    key={key}
+                    marketKey={`preview:${currency}`}
+                    language={language}
+                    initialTab={
+                        params.get('tab') === 'guide'
+                            ? 'guide'
+                            : params.get('tab') === 'query'
+                              ? 'query'
+                              : 'recharge'
+                    }
+                    localePreferences={localePreferences}
+                    client={client}
+                    productCollections={[
+                        {
+                            id: 'preview-chatgpt-category',
+                            name: 'GPT成品',
+                            slug: 'chatgpt',
+                            description: '',
+                            position: 0,
+                            parentId: 'preview-root',
+                            featuredAsset: null,
+                        },
+                    ]}
+                    onBack={() => setKey(value => value + 1)}
+                    onViewProducts={() =>
+                        setPreviewDestination(
+                            t('演示：打开 ChatGPT 商品分类', 'Demo: open the ChatGPT product category'),
+                        )
+                    }
+                    onContactSupport={() =>
+                        setPreviewDestination(t('演示：打开本站客服页面', 'Demo: open store support'))
+                    }
                 />
-                <div className="gpt-preview-toolbar" hidden={params.get('presentation') === '1'}>
-                    <span>设计预览 · 演示数据</span>
-                    {params.get('abuse') ? (
-                        <output data-demo-abuse-calls={demoCalls}>
-                            安全验证演示 · 答案 ABC234 · 已请求 {demoCalls} 次
-                        </output>
-                    ) : null}
-                    <button onClick={() => void fill()}>填入演示资料</button>
-                    <label>
-                        结果演示
-                        <select
-                            value={status}
-                            onChange={event => {
-                                setStatus(event.target.value as RechargeStatus);
-                                setProgressVersion(value => value + 1);
-                            }}
-                        >
-                            <option value="queued">已受理</option>
-                            <option value="running">处理中</option>
-                            <option value="succeeded">成功</option>
-                            <option value="failed">失败</option>
-                            <option value="awaiting_review">待核对</option>
-                        </select>
-                    </label>
-                    <label>
-                        步骤演示
-                        <select
-                            value={stage}
-                            onChange={event => {
-                                setStage(event.target.value as RechargeStage);
-                                setProgressVersion(value => value + 1);
-                            }}
-                        >
-                            <option value="started">已开始执行</option>
-                            <option value="payment_details">填写充值资料</option>
-                            <option value="paying">正在付款</option>
-                            <option value="paid">付款已确认</option>
-                            <option value="subscription_check">确认订阅</option>
-                        </select>
-                    </label>
-                    <button onClick={() => setKey(value => value + 1)}>重置预览</button>
-                    <a href={`?skin=${preset === 'classic' ? 'neo-minimalist' : 'classic'}`}>切换皮肤</a>
-                </div>
-                <header className="gpt-preview-nav">
-                    <strong>{t('店铺预览', 'Store preview')}</strong>
-                    <nav>
-                        <span>{t('首页', 'Home')}</span>
-                        <span>{t('商品', 'Products')}</span>
-                        <span aria-current="page">{t('智能服务', 'Services')}</span>
-                    </nav>
-                    <LocalePreferencesTrigger
-                        language={language}
-                        currencyCode={currency}
-                        expanded={preferencesOpen}
-                        onClick={() => setPreferencesOpen(true)}
-                    />
-                </header>
-                <div className="gpt-preview-content">
-                    <GptRechargePage
-                        key={key}
-                        marketKey={`preview:${currency}`}
-                        language={language}
-                        initialTab={
-                            params.get('tab') === 'guide'
-                                ? 'guide'
-                                : params.get('tab') === 'query'
-                                  ? 'query'
-                                  : 'recharge'
-                        }
-                        localePreferences={localePreferences}
-                        client={client}
-                        productCollections={[
-                            {
-                                id: 'preview-chatgpt-category',
-                                name: 'GPT成品',
-                                slug: 'chatgpt',
-                                description: '',
-                                position: 0,
-                                parentId: 'preview-root',
-                                featuredAsset: null,
-                            },
-                        ]}
-                        onBack={() => setKey(value => value + 1)}
-                        onViewProducts={() =>
-                            setPreviewDestination(
-                                t('演示：打开 ChatGPT 商品分类', 'Demo: open the ChatGPT product category'),
-                            )
-                        }
-                        onContactSupport={() =>
-                            setPreviewDestination(t('演示：打开本站客服页面', 'Demo: open store support'))
-                        }
-                    />
-                </div>
                 <p className="gpt-preview-caption" role="status">
                     {previewDestination ||
                         t(
@@ -394,7 +409,7 @@ function Fixture() {
                         onClose={() => setPreferencesOpen(false)}
                     />
                 )}
-            </div>
+            </StorefrontPageFrame>
         </DesktopLayoutContext.Provider>
     );
 }

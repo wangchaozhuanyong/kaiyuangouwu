@@ -3,6 +3,7 @@ import { consumeRealtimeFrames, parseStorefrontRealtimeFrameFields } from '../re
 
 import { abortableDelay, createRequestSignal, shopApiHeaders, storefrontRealtimeUrl } from './helpers';
 import { sessionTransport } from './session-transport';
+import { standaloneRechargeApiPath } from './standalone-recharge-path';
 
 export async function watchRechargeEvents(
     id: string,
@@ -12,9 +13,12 @@ export async function watchRechargeEvents(
     signal: AbortSignal,
     onTask: (task: RechargeTask) => void,
     onConnection: (state: 'connecting' | 'live' | 'error' | 'denied') => void,
+    standalone = false,
 ): Promise<void> {
-    const url = new URL(storefrontRealtimeUrl());
-    url.pathname = url.pathname.replace(/\/events$/u, '/recharge-events');
+    const url = standalone
+        ? new URL(standaloneRechargeApiPath('events'), window.location.origin)
+        : new URL(storefrontRealtimeUrl());
+    if (!standalone) url.pathname = url.pathname.replace(/\/events$/u, '/recharge-events');
     url.search = '';
     const retries = [2000, 5000, 15000, 30000];
     let failures = 0;
@@ -27,20 +31,25 @@ export async function watchRechargeEvents(
             const request = createRequestSignal(signal, 10000);
             let response: Response;
             try {
-                response = await sessionTransport(url.toString(), false, request.signal, () =>
+                const send = () =>
                     fetch(url, {
                         method: 'POST',
-                        credentials: 'include',
+                        credentials: standalone ? 'omit' : 'include',
+                        ...(standalone
+                            ? { redirect: 'error' as const, referrerPolicy: 'no-referrer' as const }
+                            : {}),
                         cache: 'no-store',
                         signal: request.signal,
                         headers: {
-                            ...shopApiHeaders(undefined, market, token()),
+                            ...(standalone ? {} : shopApiHeaders(undefined, market, token())),
                             accept: 'text/event-stream',
                             'content-type': 'application/json',
                         },
                         body: JSON.stringify({ id, credential }),
-                    }),
-                );
+                    });
+                response = standalone
+                    ? await send()
+                    : await sessionTransport(url.toString(), false, request.signal, send);
             } finally {
                 request.cleanup();
             }

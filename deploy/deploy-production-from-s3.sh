@@ -1256,6 +1256,10 @@ sudo -n nginx -t
 sudo -n systemctl reload nginx
 node "${repository}/deploy/frontend-release.mjs" verify-two-factor \
     "$two_factor_verification_directory" "${deployment_id}"
+if [[ "$retain_frontends" == false ]]; then
+    node "${repository}/deploy/frontend-release.mjs" verify-recharge \
+        "${candidate}/packages/storefront/dist" "${deployment_id}"
+fi
 
 sudo -n ln -s "${candidate}" "/var/www/.kaiyuangouwu-current.new.$$"
 sudo -n mv -Tf "/var/www/.kaiyuangouwu-current.new.$$" "${current_pointer}"

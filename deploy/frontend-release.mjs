@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { lookup } from 'node:dns/promises';
 import { readFileSync, realpathSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { affectedFrontendsForFile, classifyChanges, STATIC_APPS } from '../scripts/ci-impact.mjs';
 
-import { preserveFrontendAssets } from './frontend-asset-compatibility.mjs';
+import { preserveFrontendAssets, RECHARGE_TOOL_DIRECTORY } from './frontend-asset-compatibility.mjs';
 import nginxRevision from './nginx-revision.cjs';
 import { loadProductionStorefronts } from './production-storefronts.mjs';
 import { assertServedStorefrontAssets, switchStorefront } from './storefront-release.mjs';
@@ -90,6 +91,7 @@ function verifyStaticBackendRuntime(backendSha, targetSha) {
 
 const TWO_FACTOR_DIRECTORY = '.two-factor';
 export const TWO_FACTOR_POINTER = '/var/www/kaiyuangouwu-two-factor-current';
+const rechargeOrigin = 'https://recharge.moyaoai.com';
 
 export function readTwoFactorConfig(candidate) {
     const config = JSON.parse(readFileSync(resolve(candidate, 'build-config.json'), 'utf8'));
@@ -159,7 +161,9 @@ export function frontendReleases(
         pointer: pointers[component],
     }));
     if (components.includes('storefront')) {
-        assertStorefrontRenderer(resolve(directory, 'storefront'));
+        const storefront = resolve(directory, 'storefront');
+        assertStorefrontRenderer(storefront);
+        validateRechargeCandidate(storefront);
         const candidate = resolve(directory, 'storefront', TWO_FACTOR_DIRECTORY);
         validateTwoFactorCandidate(candidate);
         const main = JSON.parse(readFileSync(resolve(directory, 'storefront/frontend-release.json'), 'utf8'));
@@ -188,6 +192,66 @@ export async function verifyTwoFactor(candidate, releaseId, { fetcher = fetch } 
         fetcher,
     });
     return { public: true, origin };
+}
+
+export function validateRechargeCandidate(storefront) {
+    const candidate = resolve(storefront, RECHARGE_TOOL_DIRECTORY);
+    const html = readFileSync(resolve(candidate, 'index.html'), 'utf8');
+    assertServedStorefrontAssets(html, html);
+    for (const [, asset] of html.matchAll(/(?:src|href)=["']([^"']+\.(?:js|css|svg))["']/gu)) {
+        assert.match(
+            asset,
+            /^\/assets\/(?:[\w.-]+\.(?:js|css)|daylight-dial-[\w-]+\.svg)$/u,
+            'Invalid isolated recharge entry asset',
+        );
+        assert.ok(readFileSync(resolve(candidate, asset.slice(1))).length > 0, 'Missing recharge asset');
+    }
+    return candidate;
+}
+
+export async function verifyRecharge(storefront, releaseId, { fetcher = fetch, lookupHost = lookup } = {}) {
+    const candidate = validateRechargeCandidate(storefront);
+    const manifestPath = resolve(storefront, 'frontend-release.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    assert.equal(manifest.component, 'storefront');
+    assert.match(manifest.sourceSha, /^[a-f0-9]{40}$/u);
+    assert.match(manifest.backendSha, /^[a-f0-9]{40}$/u);
+
+    try {
+        await lookupHost(new URL(rechargeOrigin).hostname);
+    } catch (error) {
+        if (error.code !== 'ENOTFOUND') throw error;
+        return {
+            public: false,
+            reason: 'Recharge hostname does not resolve; immutable companion validated.',
+        };
+    }
+
+    await verifyFrontend('recharge-tool', candidate, releaseId, {
+        config: { dashboardUrl: rechargeOrigin + '/', storefronts: [] },
+        fetcher,
+        manifestPath,
+    });
+    const config = await fetcher(new URL('/api/recharge/config', rechargeOrigin), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{"invalidField":true}',
+        cache: 'no-store',
+        redirect: 'error',
+        signal: AbortSignal.timeout(20000),
+    });
+    assert.equal(config.status, 400, 'Recharge request shape must be rejected before looking up any data');
+    assert.ok(
+        Array.isArray((await config.json()).errors),
+        'Recharge route did not return a validation error',
+    );
+    const storefrontApi = await fetcher(new URL('/shop-api', rechargeOrigin), {
+        cache: 'no-store',
+        redirect: 'error',
+        signal: AbortSignal.timeout(20000),
+    });
+    assert.equal(storefrontApi.status, 404, 'Isolated recharge site must not expose the storefront API');
+    return { public: true, origin: rechargeOrigin };
 }
 
 export const FRONTEND_POINTERS = {
@@ -298,15 +362,20 @@ export async function activateFrontends(releases, verify) {
     return previous;
 }
 
-export async function verifyFrontend(component, candidate, releaseId, { config, fetcher = fetch } = {}) {
-    assert.ok([...STATIC_APPS, 'two-factor'].includes(component));
+export async function verifyFrontend(
+    component,
+    candidate,
+    releaseId,
+    { config, fetcher = fetch, manifestPath = resolve(candidate, 'frontend-release.json') } = {},
+) {
+    assert.ok([...STATIC_APPS, 'two-factor', 'recharge-tool'].includes(component));
     config ??= await loadProductionStorefronts();
     const urls =
         component === 'storefront'
             ? config.storefronts.map(store => store.origin + '/')
             : [config.dashboardUrl];
     const expected = readFileSync(resolve(candidate, 'index.html'), 'utf8');
-    const manifest = readFileSync(resolve(candidate, 'frontend-release.json'), 'utf8');
+    const manifest = readFileSync(manifestPath, 'utf8');
     for (const base of urls) {
         for (const [path, expectedBody] of [
             ['', expected],
@@ -351,6 +420,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         const config = validateTwoFactorCandidate(candidate);
         assertTwoFactorRouting(readFileSync(0, 'utf8'), config.origin);
         process.stdout.write('TWO_FACTOR_ROUTING_OK\n');
+    } else if (command === 'verify-recharge') {
+        const result = await verifyRecharge(componentList, directory);
+        process.stdout.write(`RECHARGE_ACCEPTANCE ${JSON.stringify(result)}\n`);
     } else if (command === 'verify-two-factor') {
         const result = await verifyTwoFactor(componentList, directory);
         process.stdout.write(JSON.stringify(result) + '\n');
@@ -378,6 +450,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
                         releaseId,
                     );
                     process.stdout.write(`TWO_FACTOR_ACCEPTANCE ${JSON.stringify(result)}\n`);
+                    const recharge = await verifyRecharge(resolve(directory, 'storefront'), releaseId);
+                    process.stdout.write(`RECHARGE_ACCEPTANCE ${JSON.stringify(recharge)}\n`);
                 }
             });
             process.stdout.write(JSON.stringify({ components, releaseId, previous }) + '\n');

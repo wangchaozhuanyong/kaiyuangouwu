@@ -1,5 +1,6 @@
 .gpt-recharge-guide-content {
     display: grid;
+    container: recharge-guide / inline-size;
     gap: var(--space-32);
     min-width: 0;
     padding: var(--space-32);
@@ -36,24 +37,71 @@
 }
 .gpt-guide-section {
     gap: var(--space-24);
+    align-content: start;
+}
+.gpt-guide-intro h2,
+.gpt-guide-section-heading h2,
+.gpt-guide-faq h2 {
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
+}
+.gpt-guide-overview {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-24);
+    align-items: start;
 }
 .gpt-guide-session-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-24);
+    display: grid;
+    justify-items: center;
+    gap: var(--space-16);
 }
 .gpt-guide-session-heading .gpt-guide-section-heading {
-    flex: 1;
+    gap: var(--space-4);
+    text-align: center;
+    text-wrap: balance;
 }
-.gpt-guide-session-heading .gpt-guide-links {
-    flex-shrink: 0;
-    justify-content: flex-end;
+.gpt-guide-links {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-8);
+    width: min(100%, 27rem);
+}
+.gpt-guide-links > :is(a, button) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-8);
+    min-width: 0;
+    min-height: var(--experience-control-min);
+    padding: var(--space-8);
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--soft);
+    color: var(--text);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-medium);
+    text-align: center;
+    text-decoration: none;
+}
+.gpt-guide-links > :is(a, button):where(:hover:not(:disabled)) {
+    background: var(--selection-soft);
+    color: var(--selection);
+}
+.gpt-guide-links > .gpt-guide-open-session {
+    background: var(--accent);
+    color: var(--accent-foreground);
+    font-weight: var(--font-weight-semibold);
+}
+.gpt-guide-links > .gpt-guide-open-session:hover {
+    background: var(--accent-hover);
+    color: var(--accent-foreground);
 }
 .gpt-guide-recharge-steps,
 .gpt-guide-session-steps {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-24);
     padding: 0;
     list-style: none;
@@ -80,21 +128,18 @@
     flex-shrink: 0;
     width: 28px;
     height: 28px;
-    border-radius: var(--skin-control-radius);
+    border-radius: 50%;
     background: var(--selection-soft);
     color: var(--selection);
     font-size: var(--type-label-size);
     line-height: var(--type-label-leading);
     font-weight: var(--font-weight-semibold);
 }
-.gpt-guide-links,
 .gpt-guide-footer .gpt-guide-footer-actions {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-12);
 }
-.gpt-guide-links a,
-.gpt-guide-links button,
 .gpt-guide-footer-actions button,
 .gpt-guide-footer a {
     display: inline-flex;
@@ -306,6 +351,9 @@
 }
 .gpt-guide-faq {
     gap: 0;
+    padding: var(--space-16);
+    border-radius: var(--skin-control-radius);
+    background: var(--soft);
 }
 .gpt-guide-faq > h2 {
     margin-bottom: var(--space-12);
@@ -356,18 +404,16 @@
     .gpt-recharge-guide-content {
         padding: var(--space-24) var(--space-16);
     }
-    .gpt-guide-session-heading {
-        flex-direction: column;
-        align-items: stretch;
+}
+@container recharge-guide (min-width: 720px) {
+    .gpt-guide-overview {
+        grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
     }
-    .gpt-guide-recharge-steps,
+}
+@container recharge-guide (max-width: 719px) {
     .gpt-guide-session-steps,
     .gpt-guide-illustrations {
         grid-template-columns: minmax(0, 1fr);
-    }
-    .gpt-guide-links a,
-    .gpt-guide-links button {
-        width: 100%;
     }
     .gpt-guide-browser-body {
         min-height: 0;
@@ -375,5 +421,29 @@
     .gpt-guide-shortcuts > div {
         grid-template-columns: minmax(0, 1fr);
         gap: var(--space-4);
+    }
+}
+
+@container recharge-guide (max-width: 400px) {
+    .gpt-guide-links > :is(a, button) {
+        flex-direction: column;
+        gap: var(--space-4);
+        padding-inline: var(--space-4);
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
+    }
+}
+
+@media (max-width: 700px) {
+    .gpt-guide-intro,
+    .gpt-guide-section-heading,
+    .gpt-guide-faq > h2,
+    .gpt-guide-footer > div:first-child {
+        text-align: center;
+    }
+    .gpt-guide-footer .gpt-guide-footer-actions {
+        justify-content: center;
+        width: 100%;
+        margin-inline: auto;
     }
 }

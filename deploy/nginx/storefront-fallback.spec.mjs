@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+    chmodSync,
+    copyFileSync,
+    mkdirSync,
+    mkdtempSync,
+    readFileSync,
+    rmSync,
+    writeFileSync,
+} from 'node:fs';
 import { get, request } from 'node:http';
+import { request as requestHttps } from 'node:https';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -604,4 +613,164 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         assert.equal(post.status, 405);
         assert.equal(post.headers.get('cross-origin-opener-policy'), 'same-origin-allow-popups');
     });
+});
+
+test('dedicated recharge TLS fails closed before DNS/cert activation and validates the private artifact', async t => {
+    const docker = (...args) =>
+        execFileSync('docker', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    const endpoint = docker('context', 'inspect', '--format', '{{.Endpoints.docker.Host}}');
+    assert.match(process.env.DOCKER_HOST || endpoint, /^unix:\/\//u, 'Use an explicitly local Docker daemon');
+    const image = 'nginx@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913';
+    try {
+        docker('image', 'inspect', image);
+    } catch {
+        docker('pull', image);
+    }
+    const cache = path.resolve(repo, '.cache/nginx-fallback-tests');
+    mkdirSync(cache, { recursive: true });
+    const fixture = mkdtempSync(path.join(cache, 'recharge-'));
+    t.after(() => rmSync(fixture, { recursive: true, force: true }));
+    chmodSync(fixture, 0o755);
+    const hostname = 'recharge.moyaoai.com';
+    const mainHost = 'shop.example.test';
+    const cert = path.join(fixture, 'test-fullchain.pem');
+    const key = path.join(fixture, 'test-privkey.pem');
+    execFileSync(
+        'openssl',
+        [
+            'req',
+            '-x509',
+            '-newkey',
+            'rsa:2048',
+            '-nodes',
+            '-days',
+            '1',
+            '-subj',
+            '/CN=shop.example.test',
+            '-addext',
+            'subjectAltName=DNS:shop.example.test,DNS:recharge.moyaoai.com',
+            '-keyout',
+            key,
+            '-out',
+            cert,
+        ],
+        { stdio: 'ignore' },
+    );
+    const tool = path.join(fixture, 'www/.recharge-tool');
+    mkdirSync(path.join(tool, 'assets'), { recursive: true });
+    mkdirSync(path.join(tool, '.compat-assets/assets'), { recursive: true });
+    writeFileSync(path.join(tool, 'index.html'), '<main>Recharge tool fixture</main>');
+    writeFileSync(path.join(tool, 'assets/tool-A1234567.js'), 'export const code = true;');
+    writeFileSync(path.join(tool, '.compat-assets/assets/tool-B1234567.js'), 'export const previous = true;');
+    writeFileSync(path.join(fixture, 'www/frontend-release.json'), '{}');
+    const vhost = block('server', source.lastIndexOf('server {', source.indexOf('server_name ' + hostname)))
+        .replace(/^ +listen 443 ssl http2;$/mu, '    listen 8443 ssl;')
+        .replace(/^ +listen \[::\]:443[^\n]*\n/mu, '')
+        .replaceAll('/var/www/kaiyuangouwu-storefront-current', '/fixtures/www');
+    const config = [
+        'events {}',
+        'http {',
+        'access_log off;',
+        'types { application/javascript js; application/json json; }',
+        'limit_req_zone $binary_remote_addr zone=vendure_shop_api:1m rate=100r/s;',
+        'limit_conn_zone $binary_remote_addr zone=vendure_realtime_per_ip:1m;',
+        'map $remote_addr $trusted_cloudflare_origin { default 1; }',
+        block('map $request_uri $recharge_partner_slug'),
+        block('map $recharge_partner_slug $recharge_partner_host').replace(
+            'include /etc/nginx/recharge-partners.d/*.map;',
+            'fixture-partner partner.example.test;',
+        ),
+        block('map $ssl_server_name $recharge_tls_directory').replace(
+            '/etc/nginx/recharge-tls/recharge.moyaoai.com',
+            '/fixtures/recharge-tls',
+        ),
+        'upstream vendure_backend { server 127.0.0.1:8081; }',
+        'server { listen 8081; location / {',
+        'return 200 "host=$host;path=$uri;cookie=$http_cookie;token=$http_vendure_token;auth=$http_authorization";',
+        '} }',
+        'server { listen 8443 ssl; server_name shop.example.test;',
+        'ssl_certificate /fixtures/test-fullchain.pem; ssl_certificate_key /fixtures/test-privkey.pem;',
+        'location / { return 200 "existing host"; } }',
+        vhost,
+        '}',
+    ].join('\n');
+    writeFileSync(path.join(fixture, 'nginx.conf'), config);
+    const mount = [
+        '-v',
+        fixture + ':/fixtures:ro',
+        '-v',
+        path.join(fixture, 'nginx.conf') + ':/etc/nginx/nginx.conf:ro',
+    ];
+    docker('run', '--rm', '--pull=never', ...mount, image, 'nginx', '-t');
+    const id = docker('run', '-d', '--rm', '--pull=never', '-p', '127.0.0.1::8443', ...mount, image);
+    t.after(() => docker('stop', '--time', '1', id));
+    const port = Number(docker('port', id, '8443/tcp').split(':').at(-1));
+    const ca = readFileSync(cert);
+    const open = (servername, pathname, method = 'GET') =>
+        new Promise((resolve, reject) => {
+            const options = {
+                hostname: '127.0.0.1',
+                servername,
+                port,
+                ca,
+                path: pathname,
+                method,
+                headers: {
+                    host: servername,
+                    cookie: 'session=synthetic',
+                    authorization: 'Bearer synthetic',
+                    'vendure-token': 'synthetic',
+                    'content-type': 'application/json',
+                },
+            };
+            const req = requestHttps(options, response => {
+                let body = '';
+                response.setEncoding('utf8').on('data', chunk => {
+                    body += chunk;
+                });
+                response.on('error', reject);
+                response.on('end', () => resolve({ status: response.statusCode, body }));
+            });
+            req.on('error', reject);
+            req.setTimeout(2000, () => req.destroy(new Error('Fixture timeout')));
+            req.end(method === 'POST' ? '{}' : undefined);
+        });
+    const deadline = Date.now() + 5000;
+    while (true) {
+        try {
+            assert.equal((await open(mainHost, '/')).body, 'existing host');
+            break;
+        } catch (error) {
+            if (Date.now() >= deadline) throw error;
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+    }
+    await assert.rejects(open(hostname, '/'), /SSL alert|handshake failure|socket hang up/u);
+    assert.equal((await open(mainHost, '/')).status, 200);
+    mkdirSync(path.join(fixture, 'recharge-tls'));
+    // Only this disposable test key is made readable by the fixture worker.
+    copyFileSync(cert, path.join(fixture, 'recharge-tls/fullchain.pem'));
+    copyFileSync(key, path.join(fixture, 'recharge-tls/privkey.pem'));
+    chmodSync(path.join(fixture, 'recharge-tls/privkey.pem'), 0o644);
+    assert.equal((await open(hostname, '/')).body, '<main>Recharge tool fixture</main>');
+    assert.equal((await open(hostname, '/frontend-release.json')).body, '{}');
+    assert.equal((await open(hostname, '/assets/tool-A1234567.js')).status, 200);
+    assert.equal((await open(hostname, '/assets/tool-B1234567.js')).status, 200);
+    assert.equal((await open(hostname, '/p/fixture-partner/?tab=query')).status, 200);
+    assert.equal(
+        (await open(hostname, '/api/recharge/config', 'POST')).body,
+        'host=moyaoai.com;path=/api/recharge/config;cookie=;token=;auth=',
+    );
+    assert.equal(
+        (await open(hostname, '/p/fixture-partner/api/recharge/events', 'POST')).body,
+        'host=partner.example.test;path=/api/recharge/events;cookie=;token=;auth=',
+    );
+    for (const pathname of [
+        '/p/unknown/',
+        '/p/%66ixture-partner/',
+        '/shop-api',
+        '/zh/',
+        '/.recharge-tool/index.html',
+    ])
+        assert.equal((await open(hostname, pathname)).status, 404, pathname);
 });

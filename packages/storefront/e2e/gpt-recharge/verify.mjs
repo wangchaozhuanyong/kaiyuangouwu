@@ -39,7 +39,7 @@ try {
         await expect(planStatus).toHaveText('验码后自动匹配');
         await expect(plans.getByRole('listitem')).toHaveCount(4);
         await expect(plans.getByRole('button')).toHaveCount(0);
-        await expect(plans.getByText('暂未开放')).toBeVisible();
+        await expect(plans.getByRole('listitem')).toHaveText(['Plus', 'Pro100', 'Pro200', 'Pro500']);
         await expect(activePlan).toHaveCount(0);
         const codeBounds = await codeInput.boundingBox();
         const planBounds = await plans.boundingBox();
@@ -66,6 +66,10 @@ try {
         await expect(activePlan).toHaveCount(0);
         await verifyButton.click();
         await expect(activePlan).toHaveText('Pro200');
+        await codeInput.fill('DEMO-500');
+        await verifyButton.click();
+        await expect(activePlan).toHaveText('Pro500');
+        await expect(planStatus).toHaveText('已匹配 Pro500');
         await page.locator('#gpt-code').fill('INVALID');
         await expect(planStatus).toHaveText('验码后自动匹配');
         await page.getByRole('button', { name: '验证兑换码', exact: true }).click();

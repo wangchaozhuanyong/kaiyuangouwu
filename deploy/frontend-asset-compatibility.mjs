@@ -15,6 +15,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export const FRONTEND_ASSET_WINDOW_MS = 7 * 86400_000;
+export const RECHARGE_TOOL_DIRECTORY = '.recharge-tool';
 const manifestName = '.asset-compatibility.json';
 const hashedAsset = /^[\w.-]+-[A-Za-z0-9_-]{8}\.(?:css|js|webp|png|jpe?g|svg|avif|ico|woff2?)$/u;
 const digest = file => createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -53,8 +54,7 @@ function manifest(root) {
     return value.assets;
 }
 /** Only immutable generated files are retained. Native assets/ stays exactly this build's, so SSR cannot discover old CSS. */
-export function preserveFrontendAssets(previous, candidate, now = Date.now()) {
-    if (!previous || resolve(previous) === resolve(candidate)) return { retained: 0 };
+function preserveAssetDirectory(previous, candidate, now) {
     const native = new Map(assets(candidate).map(asset => [asset.name, asset.file]));
     const inherited = manifest(previous);
     const entries = manifest(candidate);
@@ -98,6 +98,16 @@ export function preserveFrontendAssets(previous, candidate, now = Date.now()) {
         entries[name] ??= { expiresAt, sha256 };
     }
     writeFileSync(resolve(candidate, manifestName), JSON.stringify({ version: 1, assets: entries }) + '\n');
+    return retained;
+}
+
+export function preserveFrontendAssets(previous, candidate, now = Date.now()) {
+    if (!previous || resolve(previous) === resolve(candidate)) return { retained: 0 };
+    let retained = preserveAssetDirectory(previous, candidate, now);
+    const previousRecharge = resolve(previous, RECHARGE_TOOL_DIRECTORY);
+    const candidateRecharge = resolve(candidate, RECHARGE_TOOL_DIRECTORY);
+    if (existsSync(previousRecharge) && existsSync(candidateRecharge))
+        retained += preserveAssetDirectory(previousRecharge, candidateRecharge, now);
     return { retained, windowMs: FRONTEND_ASSET_WINDOW_MS };
 }
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {

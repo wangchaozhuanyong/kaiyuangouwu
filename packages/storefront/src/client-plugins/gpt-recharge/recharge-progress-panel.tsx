@@ -1,10 +1,11 @@
-import { Check, CheckCircle2, CircleAlert, Clock3, Copy, RefreshCw } from 'lucide-react';
+import { ArrowRight, Check, CheckCircle2, CircleAlert, Clock3, Copy, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 
 import { type StorefrontLanguage } from '../../types';
 
 import { rechargePlanLabel, rechargeTaskFinished, type RechargeCode, type RechargeTask } from './contracts';
 import { rechargeCopy, rechargeProgressCopy, rechargeStateCopy } from './copy';
+import './recharge-progress.css';
 
 const steps = [
     ['accepted', '任务已受理', 'Task accepted'],
@@ -101,18 +102,26 @@ export function RechargeProgressPanel({
     sync,
     manual,
     onRefresh,
+    onLookup,
     onRetry,
+    onContinueAuthorization,
+    onStartRecharge,
     onContactSupport,
     code,
+    standalone = false,
 }: {
     task: RechargeTask | null;
     language: StorefrontLanguage;
     sync: 'connecting' | 'live' | 'error' | 'paused' | 'denied';
     manual: boolean;
     onRefresh: () => void;
+    onLookup?: () => void;
     onRetry?: () => void;
+    onContinueAuthorization?: () => void;
+    onStartRecharge?: () => void;
     onContactSupport?: () => void;
     code?: RechargeCode | null;
+    standalone?: boolean;
 }) {
     const t = rechargeCopy(language);
     const terminal = Boolean(task && rechargeTaskFinished(task.status));
@@ -139,11 +148,10 @@ export function RechargeProgressPanel({
     return (
         <div className="gpt-recharge-progress" data-status={task?.status ?? 'empty'}>
             <div className="gpt-recharge-progress-toolbar">
-                <h2>
-                    {task || code
-                        ? t('充值进度', 'Recharge progress')
-                        : t('在这里查看充值进度', 'Your progress appears here')}
-                </h2>
+                <h2>{t('任务进度', 'Task progress')}</h2>
+                {!task && !code && (
+                    <span className="gpt-recharge-idle-label">{t('暂无任务', 'No task yet')}</span>
+                )}
                 {task && (
                     <div className="gpt-recharge-progress-tools">
                         <span className="gpt-recharge-sync" data-sync={terminal ? 'finished' : sync}>
@@ -174,31 +182,59 @@ export function RechargeProgressPanel({
             </div>
             {!task ? (
                 <div className="gpt-recharge-progress-empty">
-                    {code && (
-                        <h3>
-                            {code.reason === 'manual_review_required'
-                                ? t('上次结果待核对', 'Previous result needs review')
-                                : code.status === 'available'
-                                  ? t('兑换码尚未使用', 'Code not yet used')
-                                  : t('兑换码暂不可用', 'Code unavailable')}
-                        </h3>
+                    {!code && (
+                        <svg className="gpt-recharge-idle-track" viewBox="0 0 256 20" aria-hidden="true">
+                            <path d="M10 10H246" stroke="var(--line)" strokeDasharray="3 3" />
+                            <circle cx="10" cy="10" r="8" fill="var(--selection-soft)" />
+                            <circle cx="10" cy="10" r="4" fill="var(--selection)" />
+                            <g fill="var(--surface)" stroke="var(--line)">
+                                <circle cx="89" cy="10" r="4" />
+                                <circle cx="167" cy="10" r="4" />
+                                <circle cx="246" cy="10" r="4" />
+                            </g>
+                        </svg>
                     )}
+                    <h3>
+                        {!code
+                            ? t('等待充值任务', 'Waiting for a recharge')
+                            : code.reason === 'manual_review_required'
+                              ? t('上次结果待核对', 'Previous result needs review')
+                              : code.status === 'available'
+                                ? t('兑换码尚未使用', 'Code not yet used')
+                                : t('兑换码暂不可用', 'Code unavailable')}
+                    </h3>
                     <p>
-                        {code
+                        {standalone && code?.reason === 'manual_review_required'
                             ? t(
-                                  '没有可展示的执行记录，请保留原兑换码。',
-                                  'No execution record is available. Keep your original code.',
+                                  '请保留原兑换码并联系发码方核对。',
+                                  'Keep your original code and ask its provider to check the result.',
                               )
-                            : t(
-                                  '提交充值或查询原兑换码后，关键步骤会在这里更新。',
-                                  'Submit a recharge or look up your code to follow the key steps here.',
-                              )}
+                            : code
+                              ? t(
+                                    '没有可展示的执行记录，请保留原兑换码。',
+                                    'No execution record is available. Keep your original code.',
+                                )
+                              : t(
+                                    '提交充值或查询原兑换码后，关键步骤会在这里更新。',
+                                    'Submit a recharge or look up your code to follow the key steps here.',
+                                )}
                     </p>
+                    {!code && onLookup && (
+                        <button type="button" className="gpt-recharge-text-button" onClick={onLookup}>
+                            {t('查询已有任务', 'Look up an existing task')}
+                            <ArrowRight size={16} aria-hidden="true" />
+                        </button>
+                    )}
                     {code && (
                         <p>
                             {t('绑定套餐：', 'Plan: ')}
                             {rechargePlanLabel(code.plan)}
                         </p>
+                    )}
+                    {onStartRecharge && (
+                        <button type="button" className="primary-action" onClick={onStartRecharge}>
+                            {t('使用原码重新验证', 'Verify the original code again')}
+                        </button>
                     )}
                 </div>
             ) : (
@@ -209,11 +245,23 @@ export function RechargeProgressPanel({
                         </span>
                         <div className="gpt-recharge-current-step">
                             <span>{t('当前状态', 'Current status')}</span>
-                            <strong>{current}</strong>
+                            <h3 className="gpt-recharge-current-title">
+                                <strong>{current}</strong>
+                            </h3>
                         </div>
                     </div>
                     <p className="gpt-recharge-status-description">
-                        {rechargeStateCopy(task.status, language)[1]}
+                        {standalone && task.status === 'failed'
+                            ? t(
+                                  '请保留兑换码并联系发码方核对。请勿重复提交或更换账号。',
+                                  'Keep the code and ask its provider to check the result. Do not resubmit or switch accounts.',
+                              )
+                            : standalone && task.status === 'awaiting_review'
+                              ? t(
+                                    '请保留兑换码并联系发码方核对原任务。请勿再次付款。',
+                                    'Keep the code and ask its provider to check the original task. Do not pay again.',
+                                )
+                              : rechargeStateCopy(task.status, language)[1]}
                     </p>
                     {task.status === 'running' && task.progress?.retryAt && (
                         <p className="gpt-recharge-helper">
@@ -299,6 +347,11 @@ export function RechargeProgressPanel({
                             {task.status === 'expired'
                                 ? t('重新发起授权', 'Restart authorization')
                                 : t('使用原码重新充值', 'Retry with original code')}
+                        </button>
+                    )}
+                    {onContinueAuthorization && (
+                        <button type="button" className="primary-action" onClick={onContinueAuthorization}>
+                            {t('继续账号授权', 'Resume account authorization')}
                         </button>
                     )}
                     {problem && onContactSupport && (

@@ -1,0 +1,59 @@
+.gpt-recharge-idle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
+    color: var(--muted);
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+}
+
+.gpt-recharge-idle-label::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.gpt-recharge-idle-track {
+    display: block;
+    width: min(100%, 16rem);
+    height: auto;
+    margin: 0 auto var(--space-12);
+}
+
+.gpt-recharge-progress .gpt-recharge-progress-empty {
+    justify-items: center;
+    text-align: center;
+    padding-inline: var(--space-8);
+}
+
+.gpt-recharge-progress-empty h3,
+.gpt-recharge-current-title {
+    margin: 0;
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
+    font-weight: var(--font-weight-semibold);
+}
+
+.gpt-recharge-progress-empty .gpt-recharge-text-button {
+    min-height: 44px;
+    justify-self: center;
+}
+
+.gpt-recharge-timeline-time {
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 700px) {
+    .gpt-recharge-progress .gpt-recharge-status-heading {
+        justify-content: center;
+        text-align: center;
+    }
+
+    .gpt-recharge-progress .gpt-recharge-status-description,
+    .gpt-recharge-task-details > h2 {
+        text-align: center;
+    }
+}

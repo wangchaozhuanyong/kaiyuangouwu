@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 TEMP_KINDS = ('client_body', 'proxy', 'fastcgi', 'uwsgi', 'scgi')
 LIVE_TEMP_PATHS = tuple(Path('/var/lib/nginx') / name for name in ('body', *TEMP_KINDS[1:]))
 VAULT_FRAME_INCLUDE = '/etc/nginx/customer-vault-frames/*.map'
+RECHARGE_PARTNER_INCLUDE = '/etc/nginx/recharge-partners.d/*.map'
 
 
 def vault_frame_entries(directory):
@@ -42,21 +43,52 @@ def vault_frame_entries(directory):
     return '\n'.join(f'{host} "{origin}";' for host, origin in entries.items())
 
 
+def recharge_partner_entries(directory):
+    # Review exact slug/host pairs without executing a live map include.
+    if directory.is_symlink():
+        raise ValueError('Recharge partner directory must not be a symlink')
+    entries = {}
+    for file in sorted(directory.glob('*.map')):
+        if file.is_symlink() or not file.is_file() or file.stat().st_size > 65536:
+            raise ValueError('Invalid recharge partner map file')
+        for line in file.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            match = re.fullmatch(r'([a-z0-9][a-z0-9-]{0,47})\s+([a-z0-9.-]+);', line)
+            if not match:
+                raise ValueError('Recharge partner map must contain only exact slug/host pairs')
+            slug, host = match.groups()
+            if (slug in ('include', 'default', 'hostnames', 'volatile') or slug in entries or
+                    '.' not in host or len(host) > 253 or
+                    not all(re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', label)
+                            for label in host.split('.'))):
+                raise ValueError('Invalid recharge partner slug or storefront host')
+            entries[slug] = host
+    return '\n'.join(f'{slug} {host};' for slug, host in entries.items())
+
+
 def live_metadata():
     return {str(p): (p.stat().st_uid, p.stat().st_gid, p.stat().st_mode, p.stat().st_ctime_ns)
             for p in LIVE_TEMP_PATHS}
 
 
-def candidate_config(source, root, frame_directory=Path('/etc/nginx/customer-vault-frames')):
+def candidate_config(source, root, frame_directory=Path('/etc/nginx/customer-vault-frames'),
+                     recharge_directory=Path('/etc/nginx/recharge-partners.d')):
     if re.search(r'(?m)^\s*(?:client_body|proxy|fastcgi|uwsgi|scgi)_temp_path\s', source):
         raise ValueError('Candidate defines temp paths; review isolation before validation')
     includes = [value.strip() for value in re.findall(r'(?m)^\s*include\s+([^;]+);', source)]
-    if any(value not in ('proxy_params', '/etc/nginx/proxy_params', VAULT_FRAME_INCLUDE)
+    if any(value not in ('proxy_params', '/etc/nginx/proxy_params', VAULT_FRAME_INCLUDE,
+                         RECHARGE_PARTNER_INCLUDE)
            for value in includes):
         raise ValueError('Candidate contains an unreviewed include')
     if VAULT_FRAME_INCLUDE in includes:
         entries = vault_frame_entries(frame_directory)
         source = re.sub(r'(?m)^\s*include\s+' + re.escape(VAULT_FRAME_INCLUDE) + r'\s*;',
+                        lambda _: entries, source)
+    if RECHARGE_PARTNER_INCLUDE in includes:
+        entries = recharge_partner_entries(recharge_directory)
+        source = re.sub(r'(?m)^\s*include\s+' + re.escape(RECHARGE_PARTNER_INCLUDE) + r'\s*;',
                         lambda _: entries, source)
     source = source.replace('include proxy_params;', 'include /etc/nginx/proxy_params;')
     source = re.sub(r'(?m)^\s*access_log\s+[^;]+;', '    access_log off;', source)
