@@ -221,7 +221,7 @@ describe('news blog review editor with actual Apollo and server schema', () => {
     it('edits structured Skill fields through the existing protected draft and save operation', async () => {
         const f = await fixture(false, true);
         const select = document.querySelector('section[aria-label="Skill 用途资料"] select');
-        expect(select).toBeInstanceOf(HTMLSelectElement);
+        if (!(select instanceof HTMLSelectElement)) throw new Error('Missing edition selector');
         await act(async () => {
             if (select instanceof HTMLSelectElement) {
                 select.value = 'research';
@@ -234,6 +234,30 @@ describe('news blog review editor with actual Apollo and server schema', () => {
         expect(f.current().draft.body).toContain('预期输出：得到保留来源的整理结果');
         expect(document.body.textContent).not.toContain('重做封面');
         expect(document.body.textContent).not.toContain('上传替换封面');
+    });
+    it('saves English edits without replacing the Chinese draft title', async () => {
+        const f = await fixture();
+        const byLabel = (label: string) =>
+            [...document.querySelectorAll('label')].find(field => field.textContent?.startsWith(label));
+        const select = byLabel('编辑与预览语言')?.querySelector('select');
+        expect(select).toBeInstanceOf(HTMLSelectElement);
+        await act(async () => {
+            select.value = 'en';
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        const title = byLabel('标题')?.querySelector('input');
+        expect(title?.value).toBe('');
+        await act(async () => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+                title,
+                'GSA expands access',
+            );
+            title?.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        await act(async () => button('保存草稿').click());
+        await vi.waitFor(() => expect(f.writes).toEqual(['save']));
+        expect(f.current().draft.title).toBe('原有待审标题');
+        expect(f.current().draft.translations?.en.title).toBe('GSA expands access');
     });
     it('saves the draft without triggering publication', async () => {
         const f = await fixture();

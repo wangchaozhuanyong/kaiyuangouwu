@@ -240,6 +240,8 @@ export function extractArticle(html: string): string {
     $('script,style,nav,header,footer,aside,form,button').remove();
     const body = $('article').first();
     const main = body.length ? body : $('main').first();
+    // DOM textContent alone joins adjacent headings and paragraphs into a single word.
+    main.find('h1,h2,h3,h4,h5,h6,p,li,dt,dd,blockquote,br,td,th').append(' ');
     return clip(main.text().replace(/\s+/gu, ' ').trim().slice(0, 30000));
 }
 

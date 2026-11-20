@@ -1,0 +1,1111 @@
+[
+  {
+    "url": "https://openai.com/index/grid-protectors-program",
+    "quote": "reduce electricity demand",
+    "zh": {
+      "title": "OpenAI 计划让新数据中心在电网吃紧时降低用电量",
+      "summary": "OpenAI 推出 Grid Protectors 计划，准备和美国电力公司商定，新建计算园区在用电高峰时能减多少负荷、多久能响应。",
+      "analysis": "对附近居民来说，关键是寒潮或热浪时能腾出多少电力。公告以佐治亚州拟建园区为例，称项目将承担自身接入和供电成本；各地执行条件由当地协议确定。"
+    },
+    "en": {
+      "title": "OpenAI plans to cut campus power demand during grid stress",
+      "summary": "OpenAI will work with US utilities to make future computing campuses reduce their draw when the grid is under strain.",
+      "analysis": "The local agreement matters more than the national announcement. At the planned Georgia campus, OpenAI says it will cover its infrastructure and service costs. The amount and timing of any reduction will depend on the utility."
+    }
+  },
+  {
+    "url": "https://openai.com/index/lifeval",
+    "quote": "tasks that matter in everyday life",
+    "zh": {
+      "title": "LifeVal 用入学、购物等日常事务评估 AI 助手",
+      "summary": "OpenAI 发布 LifeVal，用家庭照护、办事、教育和采购等任务评估 AI 助手。考察重点是能否完成多步工作，而非只给出一段建议。",
+      "analysis": "研究团队结合时间使用调查和近四千人的问卷来选题。例如搬家后找幼儿园，既要比较选项，还要理清报名手续。这样的任务能暴露聊天回答听着合理、执行却没完成的差距。"
+    },
+    "en": {
+      "title": "LifeVal measures whether an assistant can complete everyday tasks",
+      "summary": "OpenAI introduced LifeVal to test assistants on practical work such as finding childcare, comparing schools and organizing shopping.",
+      "analysis": "The researchers used time-use surveys and a survey of nearly 4,000 people to choose tasks. A kindergarten search tests several steps, from comparing local options to working out what enrollment requires."
+    }
+  },
+  {
+    "url": "https://openai.com/index/helping-websites-express-ai-training-preferences",
+    "quote": "AI training preferences",
+    "zh": {
+      "title": "OpenAI 将识别网站在 robots.txt 中表达的训练偏好",
+      "summary": "OpenAI 表示将支持一项共通信号，让站长在 robots.txt 里说明是否希望网站内容用于 AI 训练。",
+      "analysis": "站长可以在自己管理的网站上表达偏好，让参加这项约定的服务商读取。适用范围取决于哪些服务商支持该信号，发布配置本身不会让所有网络爬虫自动遵守。"
+    },
+    "en": {
+      "title": "OpenAI will read a shared training preference in robots.txt",
+      "summary": "OpenAI says it will honor a common robots.txt signal through which publishers can communicate their preferences for AI training.",
+      "analysis": "A publisher controls the signal on its own site. Its practical reach depends on which providers recognize it, so adoption by OpenAI does not establish how every crawler handles the same setting."
+    }
+  },
+  {
+    "url": "https://openai.com/index/fair-use-benefits-everyone",
+    "quote": "Fair use benefits everyone",
+    "zh": {
+      "title": "OpenAI 汇集创作者等人士对 AI 训练与合理使用的法庭意见",
+      "summary": "OpenAI 摘编了创作者、学者和无障碍倡导者等人士提交的法庭意见，介绍他们如何看待合理使用与 AI 训练的关系。",
+      "analysis": "读者看到的是法庭意见中的论据，由 OpenAI 选编。它说明不同提交方为什么支持这些用途；要判断某个具体案件的裁判结果，仍要区分意见书与法院判决。"
+    },
+    "en": {
+      "title": "OpenAI highlights court briefs on fair use and AI training",
+      "summary": "OpenAI published excerpts from briefs submitted by creators, scholars and accessibility advocates about fair use and model training.",
+      "analysis": "The publication presents arguments made to a court. Its value is in showing who argues for these uses and why. The excerpts are submissions selected by OpenAI, rather than a ruling on a particular use."
+    }
+  },
+  {
+    "url": "https://openai.com/index/updated-model-spec",
+    "quote": "An updated Model Spec",
+    "zh": {
+      "title": "OpenAI 修订模型行为规范，明确更强模型应如何作判断",
+      "summary": "OpenAI 发布新版 Model Spec，用五项核心价值说明模型处理请求时应如何判断、尊重人的选择，以及忠于用户意图。",
+      "analysis": "这份文件面向希望理解助手为何这样回答的人。它提供一套可讨论的行为目标；评估一个具体回答时，可以对照目标，再看模型在实际对话中的表现。"
+    },
+    "en": {
+      "title": "OpenAI revises the principles behind model behavior",
+      "summary": "OpenAI revised its Model Spec around five values that guide model judgments, human agency and faithfulness to a user's intent.",
+      "analysis": "Readers can use the specification as a reference when examining a response. It sets out intended behavior, while an individual interaction shows how closely a model follows that intention in practice."
+    }
+  },
+  {
+    "url": "https://openai.com/index/how-we-detect-frontier-model-misalignment",
+    "quote": "frontier model misalignment",
+    "zh": {
+      "title": "OpenAI 介绍如何识别偏离任务的模型行为",
+      "summary": "OpenAI 介绍了用于发现前沿模型偏离预期、或助手执行未经授权动作的多层监测办法。",
+      "analysis": "重点在于让异常活动尽早进入响应人员的视野。对运营 AI 助手的团队而言，既要衡量它是否完成任务，也要留意它是否在任务边界之外采取了行动。"
+    },
+    "en": {
+      "title": "How OpenAI monitors models for behavior outside their instructions",
+      "summary": "OpenAI described how it monitors advanced models for behavior that departs from their instructions, including unauthorized agent actions.",
+      "analysis": "The objective is to give responders time to intervene. A service running agents has to account for both task success and actions taken outside the scope of the task."
+    }
+  },
+  {
+    "url": "https://openai.com/index/oracle-apps-in-chatgpt",
+    "quote": "apps to ChatGPT",
+    "zh": {
+      "title": "Oracle 与 OpenAI 扩大合作，把企业应用接入 ChatGPT",
+      "summary": "Oracle 与 OpenAI 扩大合作，计划把 Oracle 的业务应用与 AI 助手接入 ChatGPT，并用 OpenAI 技术支持新的 Oracle 产品。",
+      "analysis": "对已经使用 Oracle 系统的企业，关注点是哪些原有业务操作可以从对话发起。公告描述的是两家公司产品的连接，员工实际能处理哪些记录仍取决于企业接入的应用。"
+    },
+    "en": {
+      "title": "Oracle and OpenAI expand plans for business apps inside ChatGPT",
+      "summary": "Oracle and OpenAI expanded their partnership to bring Oracle business applications and agents into ChatGPT and support new Oracle offerings.",
+      "analysis": "For an Oracle customer, the useful question is which existing business task becomes available in a conversation. Access depends on the applications the organization actually connects."
+    }
+  },
+  {
+    "url": "https://openai.com/index/introducing-gpt-6-1-terra",
+    "quote": "fast and capable computer use",
+    "zh": {
+      "title": "OpenAI 发布 GPT-6.1 Terra，面向需要操作电脑的任务",
+      "summary": "OpenAI 推出 GPT-6.1 Terra，把快速操作计算机界面作为这款模型的主要用途，面向需要连续完成界面操作的工作流。",
+      "analysis": "这类任务往往要观察界面、选择下一步，再确认页面是否按预期变化。团队评估 Terra 时，可以用自己的完整操作流程检验速度和成功率，而不只比较一轮文字问答。"
+    },
+    "en": {
+      "title": "OpenAI introduces GPT-6.1 Terra for computer-use tasks",
+      "summary": "OpenAI introduced GPT-6.1 Terra with an emphasis on fast interaction with computer interfaces.",
+      "analysis": "Interface work involves repeated observations and actions. A useful evaluation follows an entire workflow and checks both the time taken and whether the intended end state was reached."
+    }
+  },
+  {
+    "url": "https://openai.com/index/scaling-storage-one-billion-users-part-two",
+    "quote": "Rapidly scaling online storage",
+    "zh": {
+      "title": "OpenAI 解释 ChatGPT 存储如何通过缓存和租户隔离提速",
+      "summary": "OpenAI 在工程文章中介绍 Habitat 存储系统如何结合多租户隔离、全球缓存和 Azure Cosmos DB，为超过十亿用户规模的服务供给数据。",
+      "analysis": "团队报告存储读取加快了 12 倍。这个数字衡量的是这次工程改造的读取路径，不能直接当作用户每次对话或模型推理速度的提升。"
+    },
+    "en": {
+      "title": "How OpenAI redesigned storage reads for ChatGPT at scale",
+      "summary": "OpenAI described the combination of tenant isolation, global caching and Azure Cosmos DB behind its Habitat storage system for ChatGPT.",
+      "analysis": "The team reports a twelvefold improvement in reads. That figure describes the storage path it measured, so it should not be applied to end-to-end chat latency or model generation speed."
+    }
+  },
+  {
+    "url": "https://openai.com/index/securing-our-frontier-model-training-environment",
+    "quote": "frontier model training environment",
+    "zh": {
+      "title": "OpenAI 加强前沿模型训练和评估环境的隔离",
+      "summary": "OpenAI 介绍了对前沿模型训练与评估环境的调整，包括离线环境，以及用更大规模的压力测试查找防护薄弱环节。",
+      "analysis": "调整发生在模型训练设施内部。对关心模型安全的读者，这篇公告提供的是开发期间如何限制访问、检验隔离措施的说明，和普通用户的账户开关属于不同环节。"
+    },
+    "en": {
+      "title": "OpenAI tightens isolation around model training and evaluation",
+      "summary": "OpenAI outlined changes to the containment of advanced model training and evaluation, including offline environments and higher-compute testing.",
+      "analysis": "The changes concern the infrastructure used while models are being developed. They give readers a way to assess the company's containment practices before a model reaches a public product."
+    }
+  },
+  {
+    "url": "https://openai.com/index/anima",
+    "quote": "clinics cut call waits",
+    "zh": {
+      "title": "Anima 用 GPT 模型处理诊所来电，案例报告候接时间下降 75%",
+      "summary": "OpenAI 发布的 Anima 案例介绍了诊所如何使用 GPT-6 和 GPT-Live 处理患者来电。案例报告候接时间缩短了 75%。",
+      "analysis": "这里衡量的是接通电话要等多久。对诊所运营者而言，它涉及前台容量和患者联系渠道，不能从这个指标直接推算诊断质量或所有诊所的预期效果。"
+    },
+    "en": {
+      "title": "Anima reports shorter call waits in a clinic workflow using GPT",
+      "summary": "An OpenAI customer story describes how Anima used GPT-6 and GPT-Live in clinic call handling. It reports a 75% reduction in wait time.",
+      "analysis": "The metric concerns time spent waiting to reach a clinic. It is relevant to staffing and access, but it does not measure diagnostic quality or establish what every clinic would achieve."
+    }
+  },
+  {
+    "url": "https://openai.com/index/decisions-api",
+    "quote": "questions with bounded answers",
+    "zh": {
+      "title": "OpenAI 正式推出 Decisions API，用于分类和请求分流",
+      "summary": "OpenAI 正式推出基于 GPT-6 Luna 的 Decisions API。开发者可把文本、图片或结构化数据交给它，在预设答案范围内做分类、路由等判断。",
+      "analysis": "一个典型用途是先判断文件该交给哪个流程，再把需要解释的个案交给人工。这种接口适合大量重复的小决策，开发者需要先把可选答案和判断标准定义清楚。"
+    },
+    "en": {
+      "title": "OpenAI releases a dedicated API for bounded decisions",
+      "summary": "OpenAI made its GPT-6 Luna–based Decisions API generally available for bounded choices such as classifying an input or routing a request.",
+      "analysis": "A document pipeline could choose a destination before sending an ambiguous case to a reviewer. The design works best when a team can define the possible answers and how to judge the choice in advance."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/expanding-partnership-gsa",
+    "quote": "a 40% discount on Claude Enterprise",
+    "zh": {
+      "title": "Anthropic 扩大美国政府采购协议，三项 Claude 服务可打六折",
+      "summary": "Anthropic 与美国联邦总务管理局（GSA）扩大合作。符合条件的政府机构购买 Claude 企业版、政府版或 Claude API，价格可降低 40%，即按原价的六折采购。优惠也覆盖州、地方、部落和美国属地政府。",
+      "analysis": "公告发布时，机构直接采购已可使用折扣，通过云服务商购买则计划在随后几个月接入。协议没有最低消费承诺，按实际使用量付费。对预算有限的机构，这意味着可以先从一个部门或项目试用，再决定是否扩大采购。"
+    },
+    "en": {
+      "title": "Anthropic expands US government purchasing deal with a 40% Claude discount",
+      "summary": "Anthropic and the US General Services Administration (GSA) expanded a purchasing agreement. Eligible agencies can receive 40% off Claude Enterprise, Claude for Government and the Claude API. State, local, tribal and territorial governments are also covered.",
+      "analysis": "Direct purchases qualified at the time of the announcement. Cloud-provider purchases were scheduled to follow in the coming months. With no minimum spending commitment and billing based on usage, an agency can start with one project before committing a larger budget."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/s1-sec",
+    "quote": "registration statement on Form S-1",
+    "zh": {
+      "title": "Anthropic 递交美国上市申请，拟用股票代码 ANT",
+      "summary": "Anthropic 向美国证券交易委员会递交 S-1 注册文件，拟让 A 类普通股在纳斯达克全球精选市场上市，计划使用代码 ANT。",
+      "analysis": "递交注册文件是公开发行流程的一步。截至这份公告，发行股数和价格区间都还没确定。读者可以用这一点区分公司的上市计划、正式定价和开始交易这三个阶段。"
+    },
+    "en": {
+      "title": "Anthropic files for a proposed Nasdaq listing under ANT",
+      "summary": "Anthropic filed an S-1 with the US Securities and Exchange Commission for a proposed Nasdaq Global Select Market listing. It intends to use the symbol ANT for its Class A shares.",
+      "analysis": "The filing records an intention to go public. At the time of the announcement the share count and price range were still undetermined, and the filing did not mark a first trading day."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/donating-agent-skills-to-the-agentic-ai-foundation",
+    "quote": "donating Agent Skills",
+    "zh": {
+      "title": "Anthropic 将 Agent Skills 开放标准交给行业基金会",
+      "summary": "Anthropic 宣布将 Agent Skills 捐给 Agentic AI Foundation。这个标准让团队把一项任务的说明、脚本和参考材料装进同一目录，由不同 AI 工具读取。",
+      "analysis": "对维护技能的开发者，这次变化涉及标准由谁维护。已有超过 70 个平台接入，其中包括 ChatGPT、Cursor 和 GitHub Copilot；使用方可围绕同一种文件格式组织技能。"
+    },
+    "en": {
+      "title": "Anthropic hands the Agent Skills standard to the Agentic AI Foundation",
+      "summary": "Anthropic is donating Agent Skills to the Agentic AI Foundation. The standard packages task instructions, scripts and supporting material so different agent platforms can use them.",
+      "analysis": "The change concerns stewardship of a format already adopted by over 70 platforms, including ChatGPT, Cursor and GitHub Copilot. Authors can organize a skill around a shared file convention across participating tools."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/open-call-guest-investigators-life-sciences",
+    "quote": "proposals from principal investigators",
+    "zh": {
+      "title": "Anthropic 邀请生命科学团队申请短期合作研究",
+      "summary": "Anthropic 邀请高校、非营利机构和政府实验室的研究负责人提交项目，申请与其研究团队合作，探索 Claude 在生命科学问题中的用途。",
+      "analysis": "入选团队将在约 8 至 12 周内和 Anthropic 研究人员围绕一个问题开展工作，产出分析或工具。对于考虑申请的人，首先要准备的是一个范围明确、能在合作期内检验的研究问题。"
+    },
+    "en": {
+      "title": "Anthropic opens a guest research program for life scientists",
+      "summary": "Anthropic is inviting principal investigators at academic institutions, nonprofits and government labs to propose life sciences projects involving Claude.",
+      "analysis": "Selected teams will work with Anthropic researchers for roughly eight to twelve weeks on a specific question. Applicants should frame a problem that can yield a useful analysis or tool within that collaboration."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/christopher-stubbs-joins-long-term-benefit-trust",
+    "quote": "Long-Term Benefit Trust",
+    "zh": {
+      "title": "物理学家克里斯托弗·斯塔布斯加入 Anthropic 长期公益信托",
+      "summary": "Anthropic 宣布，曾任哈佛大学科学学院院长的实验物理学家克里斯托弗·斯塔布斯加入其长期公益信托。",
+      "analysis": "这是一项公司治理任命。斯塔布斯带来观测宇宙学、精密测量和公共政策咨询经验，将参与信托围绕长期公益使命的工作。消息本身没有宣布 Claude 产品或账户权限的变动。"
+    },
+    "en": {
+      "title": "Physicist Christopher Stubbs joins Anthropic’s governance trust",
+      "summary": "Anthropic named experimental physicist and former Harvard Dean of Science Christopher Stubbs to its Long-Term Benefit Trust.",
+      "analysis": "The appointment adds experience in observational science, precision measurement and public policy to a body concerned with Anthropic's public-benefit mission. It is a governance change with no announced change to Claude access."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/singapore-office-opening",
+    "quote": "opening a new office in Singapore",
+    "zh": {
+      "title": "Anthropic 在新加坡设立办公室，并与政府签署合作备忘录",
+      "summary": "Anthropic 在新加坡开设其亚太地区第五个办公室，并与新加坡数字发展及新闻部签署谅解备忘录，合作方向包括 AI 安全、评估和负责任的应用。",
+      "analysis": "此次扩张给当地企业和公共机构增加了本地对接团队。公告提到 GovTech Singapore、Grab 和星展银行已在使用 Claude；备忘录约定的是合作方向，各项目的实施仍需分别落实。"
+    },
+    "en": {
+      "title": "Anthropic opens a Singapore office and signs an AI cooperation agreement",
+      "summary": "Anthropic opened its fifth Asia-Pacific office in Singapore and signed an agreement with the country's digital development ministry covering AI safety, evaluation and responsible adoption.",
+      "analysis": "The expansion gives local organizations a team in the region. Anthropic cited existing use at GovTech Singapore, Grab and DBS. The memorandum sets out areas for cooperation rather than a completed rollout at every agency."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/2026-us-midterms",
+    "quote": "accurate voting information",
+    "zh": {
+      "title": "Anthropic 介绍如何在美国中期选举前改进投票信息提示",
+      "summary": "Anthropic 在美国中期选举前说明了 Claude 的选举相关措施，包括评估政治偏见、识别滥用，以及把查询投票信息的人引向可靠来源。",
+      "analysis": "这里涉及两种不同的问题：用户问去哪里投票，需要找到适用地区的权威信息；平台识别滥用，则需要检查服务如何被使用。公告介绍的是平台措施，具体投票规则应以当地选举部门为准。"
+    },
+    "en": {
+      "title": "Anthropic outlines Claude’s safeguards for the US midterm elections",
+      "summary": "Ahead of the US midterms, Anthropic described its work on political bias, misuse detection and directing voting questions toward accurate information.",
+      "analysis": "A voter asking where to vote needs information from the right local authority. Detecting misuse is a separate platform task. The announcement describes Anthropic’s safeguards, while election officials set the applicable voting rules."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/distillation-defenses",
+    "quote": "effectiveness of distillation attacks",
+    "zh": {
+      "title": "Anthropic 公布防止大规模未经授权复制 Claude 能力的进展",
+      "summary": "Anthropic 表示，已改进对未经授权大规模蒸馏活动的防护。这类活动试图从 Claude 系统性收集输出，用来复制其能力。",
+      "analysis": "公司估计，新措施使其观察到的此类活动所取得的数据量下降约 90% 至 99%。这个区间衡量平台观测到的数据采集量，不宜解读为所有攻击被阻止的比例。"
+    },
+    "en": {
+      "title": "Anthropic reports a reduction in unauthorized harvesting of Claude outputs",
+      "summary": "Anthropic reports progress against unauthorized distillation campaigns that collect Claude outputs at scale to replicate aspects of the model.",
+      "analysis": "Anthropic estimates that the volume of data harvested in the activity it observed fell by around 90% to 99%. This measures harvested data in that setting, not the percentage of all attempts that were prevented."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/genesis-mission-commitment",
+    "quote": "$150 million over three years",
+    "zh": {
+      "title": "Anthropic 承诺三年投入 1.5 亿美元支持美国 Genesis 科研计划",
+      "summary": "Anthropic 宣布加大对美国联邦 Genesis Mission 的支持，承诺在三年内提供 1.5 亿美元，用于让参与计划的科研机构使用 Claude。",
+      "analysis": "公告提到 NASA、美国国立卫生研究院和国家科学基金会等超过 15 个机构。资金对应的是让科研人员获得工具的三年安排；不能把全部承诺计为公告当天已发放的资金。"
+    },
+    "en": {
+      "title": "Anthropic pledges $150 million over three years to the Genesis Mission",
+      "summary": "Anthropic committed $150 million over three years to the federal Genesis Mission, with funding intended to make Claude available to participating US research agencies.",
+      "analysis": "The announcement names more than fifteen agencies, including NASA, NIH and NSF. The figure is a multi-year commitment to make tools available to researchers rather than an amount all disbursed on announcement day."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/anthropic-cyber-mission",
+    "quote": "support defenders with tools",
+    "zh": {
+      "title": "Anthropic 启动长期网络防御计划，向防守团队提供工具与研究支持",
+      "summary": "Anthropic 推出 Cyber Mission，计划通过工具、研究和资源，支持负责保护软件和关键系统的防守团队。",
+      "analysis": "这条消息关注的是维护系统的人如何获得持续支持。它说明公司把网络防御列为长期投入方向；采购团队还要按各个项目的资格和服务内容判断能否参与。"
+    },
+    "en": {
+      "title": "Anthropic launches a long-term initiative for cyber defenders",
+      "summary": "Anthropic launched its Cyber Mission to support the teams responsible for defending software and critical systems, combining research, tools and other resources.",
+      "analysis": "The announcement concerns sustained support for system maintainers. For procurement or security teams, eligibility and the support actually available will depend on the individual programs under the initiative."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/cyber-verification-program",
+    "quote": "three access tiers",
+    "zh": {
+      "title": "Anthropic 将面向安全专业人员的验证计划划分为三级",
+      "summary": "Anthropic 扩充 Cyber Verification Program，为符合条件的安全专业人员设置三级访问权限。团队可以按实际防御工作所需的能力申请相应级别。",
+      "analysis": "变化在于专业团队有了更细的准入机制：承担不同任务的组织可以选择对应级别，并接受该计划的资格审核。普通账户不会因为产品公告而自动获得专业访问权限。"
+    },
+    "en": {
+      "title": "Anthropic introduces three tiers in its verification program for security teams",
+      "summary": "Anthropic expanded its Cyber Verification Program into three access tiers. Eligible security professionals can seek a level suited to their defensive responsibilities.",
+      "analysis": "The tiers give organizations a way to match access to their professional responsibilities. Entry remains subject to program eligibility, so a general account does not acquire professional access automatically."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/claude-frontier-academy",
+    "quote": "train 10,000 Frontier Deployed Engineers",
+    "zh": {
+      "title": "Anthropic 投资 1 亿美元培训企业一线 AI 工程师",
+      "summary": "Anthropic 推出 Claude Frontier Academy，承诺投入 1 亿美元，目标是在 2027 年底前培训一万名能在企业现场落地 AI 项目的工程师。",
+      "analysis": "首批学员来自埃森哲、凯捷、澳大利亚联邦银行等机构，培训参照 Anthropic 自有工程师的技能标准。这里的一万人是培训目标；计划要解决的是企业从试验模型到实际部署时的人员缺口。"
+    },
+    "en": {
+      "title": "Anthropic commits $100 million to train engineers for enterprise AI deployments",
+      "summary": "Anthropic launched Claude Frontier Academy with a $100 million commitment and a goal of training 10,000 engineers for enterprise AI deployment by the end of 2027.",
+      "analysis": "Initial cohorts include staff from Accenture, Capgemini and Commonwealth Bank of Australia. The academy uses standards applied to Anthropic’s own engineers. The 10,000 figure is a training target intended to address shortages in deployment expertise."
+    }
+  },
+  {
+    "url": "https://blog.google/innovation-and-ai/products/gemini-app/edit-files-directly/",
+    "quote": "highlight text to ask questions",
+    "zh": {
+      "title": "Gemini 聊天新增文件编辑，手机也能修改 PDF",
+      "summary": "用户现在可以在 Gemini 对话里生成文件、查看排版，再选中文字要求修改，也可以切到全屏自己编辑。Google 举的例子是把手写课堂笔记整理成 PDF 复习资料，再逐段调整。",
+      "analysis": "PDF 的预览和编辑同时支持网页与手机。要改电子表格、幻灯片或代码，按本次公告需使用网页版。"
+    },
+    "en": {
+      "title": "Gemini adds file editing in chat, including PDFs on mobile",
+      "summary": "Gemini now lets users create a file in chat, inspect the layout and edit it by hand or by asking for changes to a selection. Google demonstrates the workflow with a PDF study guide made from handwritten notes.",
+      "analysis": "PDFs can be revised on either mobile or the web. For spreadsheets, presentations and code, this release puts editing in the web app."
+    }
+  },
+  {
+    "url": "https://blog.google/innovation-and-ai/products/gemini-notebook/new-access-textbooks/",
+    "quote": "direct links back to the original source",
+    "zh": {
+      "title": "Gemini Notebook 免费接入数百本教材，回答可回查原文",
+      "summary": "学生可以在笔记本的“添加来源”中选择“教科书”，免费加入美国和印度多家出版方提供的数百本教材，其中包括 OpenStax 和 S Chand 的书目。",
+      "analysis": "加入教材后可以按书里的内容提问、制作练习题或复习卡。回答附有指向原文的引文，学生能核对一道题的依据；可选教材以目录为准。"
+    },
+    "en": {
+      "title": "Gemini Notebook opens a free textbook catalog with linked citations",
+      "summary": "Students can add hundreds of textbooks from US and Indian providers, including OpenStax and S Chand, through the Textbooks option in Gemini Notebook. The listed books are free to add.",
+      "analysis": "Notebook can answer questions, create practice questions or make flashcards from a chosen book. Links in each answer let students check the reasoning against the text. Availability depends on the catalog."
+    }
+  },
+  {
+    "url": "https://blog.google/products-and-platforms/products/education/impact-studies-uk-italy/",
+    "quote": "human experts reviewed every AI response",
+    "zh": {
+      "title": "英国课堂试验发现，人工审核的 Gemini 数学辅导在阶段测验中接近真人辅导",
+      "summary": "Google 公布英国和意大利两项课堂研究。英国试验历时十周，超过一千一百名学生参与，人工专家逐条审核 AI 回复。接受 AI 辅导的学生在平台作业和阶段测验中与真人辅导组表现相近。",
+      "analysis": "同期独立标准化考试没有出现同样的进步。意大利教师报告用 Gemini 备课后课堂讨论更多，两项研究分别观察学生成绩和教师体验，结论适用的情境也不同。"
+    },
+    "en": {
+      "title": "Supervised Gemini tutoring matched human tutors on intermediate UK maths quizzes",
+      "summary": "Google reported classroom research from the UK and Italy. In a ten-week UK trial involving more than 1,100 pupils, experts checked every AI response. Pupils receiving that support did about as well as those with human tutors on platform tasks and intermediate quizzes.",
+      "analysis": "The improvement did not carry over to the independent standardized test during the trial. Italian teachers reported more discussion after planning lessons with Gemini. That study measured a different outcome in a different setting."
+    }
+  },
+  {
+    "url": "https://blog.google/innovation-and-ai/products/gemini-app/update-resume-with-gemini/",
+    "quote": "adjust details, tone, and focus",
+    "zh": {
+      "title": "Google 示范用 Gemini 把工作经历改成四条简历要点",
+      "summary": "Google 的简历教程从口述过往工作开始，再让 Gemini 针对一个具体职位提炼四条经历，要求每条用动作动词起头。得到初稿后，可以继续调整细节、语气和侧重点。",
+      "analysis": "这套方法把整理经历与润色分成两步。写进简历前，应检查每项职责和成果是否与本人经历相符；教程没有提供自动通过招聘筛选的保证。"
+    },
+    "en": {
+      "title": "Google shows how to turn career notes into four resume bullets with Gemini",
+      "summary": "Google’s tutorial starts with rough notes about past jobs, then asks Gemini for four bullets tailored to a specific role. Each opens with an action verb. A follow-up conversation lets the applicant refine the details, emphasis and tone.",
+      "analysis": "The exercise separates collecting experience from editing it. Applicants can check the duties and results against their own record before copying them into a resume. The tutorial makes no promise of passing an employer’s screening."
+    }
+  },
+  {
+    "url": "https://blog.google/innovation-and-ai/products/gemini-app/immersive-explorations-student-hub/",
+    "quote": "interactive and guided experiences",
+    "zh": {
+      "title": "Gemini 学生中心上线互动场景，可逐层探索闪电和喷气发动机",
+      "summary": "Gemini 应用的学生中心新增一组可点击的可视化场景。学习者可以沿丝绸之路查看商路，也能点开发动机或闪电示意图上的标记，逐层了解结构和物理过程。",
+      "analysis": "公告列出的首批六种支持语言包括简体中文；其他语言暂时显示英文。直接在对话里进入场景以及语音讲解，都是当时预告的后续功能。"
+    },
+    "en": {
+      "title": "Gemini’s student hub adds interactive scenes for exploring how things work",
+      "summary": "Gemini’s student hub now offers visual scenes learners can explore by selecting labels. Examples trace Silk Road trade routes, reveal the inside of a jet engine and explain the physics of lightning at different scales.",
+      "analysis": "Simplified Chinese is among the six launch languages. Users of other languages initially see English. Entry from an ordinary chat and narrated walkthroughs were announced as later additions."
+    }
+  },
+  {
+    "url": "https://ai.google.dev/gemini-api/docs/changelog#10-27-2026",
+    "quote": "zero-dependency command-line client",
+    "zh": {
+      "title": "Gemini API 推出命令行测试版，可在脚本中处理文件和生成内容",
+      "summary": "Google 为 Gemini API 发布名为 gemini-api 的命令行客户端测试版。它通过 Interactions API 生成文本和媒体、分析文件，也可以调用由 Gemini 托管的智能体。",
+      "analysis": "这让开发者能够把这些调用写进自动化脚本或持续集成流程。工具本身不保留状态，也没有额外依赖；已使用其他命令行工具的团队可以先核对这个客户端的名称和接口。"
+    },
+    "en": {
+      "title": "Gemini releases a beta command-line client for scripts and CI",
+      "summary": "Google released a beta of gemini-api, a command-line client for the Interactions API. It can generate text or media, analyze files and call managed Gemini agents.",
+      "analysis": "Developers can put those calls in automation scripts or CI jobs. The client keeps no state and adds no dependencies. Teams comparing command-line tools should check the client name and the API each one targets."
+    }
+  },
+  {
+    "url": "https://ai.google.dev/gemini-api/docs/changelog#10-26-2026",
+    "quote": "store requests by default",
+    "zh": {
+      "title": "Gemini 付费新项目默认保存生成请求，现有项目设置不变",
+      "summary": "Google 更改了付费层新项目的 Generate Content API 设置。普通生成、流式生成和批量生成请求现在默认保存，与 Interactions API 的默认行为一致。原有项目继续沿用先前配置。",
+      "analysis": "开发者如需关闭保存，可以对单次请求显式设置 store=false，也可以在日志与数据集控制台关闭该 API 的日志。需要根据项目创建时间和实际配置判断数据是否被保存。"
+    },
+    "en": {
+      "title": "New paid Gemini projects store Generate Content requests by default",
+      "summary": "For new paid-tier projects, Google now enables request storage by default for standard, streaming and batch Generate Content calls. This aligns the setting with the Interactions API. Existing projects retain their previous configuration.",
+      "analysis": "Developers can opt a single request out with store=false or turn logging off for the API in the Logs and Datasets dashboard. The applicable behavior depends on the project’s age and its actual settings."
+    }
+  },
+  {
+    "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/introducing-gemini-4-argon/",
+    "quote": "access to Gemini 4 Argon",
+    "zh": {
+      "title": "Google 发布 Gemini 4 Argon，开发者和订阅用户通过不同入口使用",
+      "summary": "Google 推出面向复杂、多步骤任务的 Gemini 4 Argon。开发者和企业可从 AI Studio 及 Gemini 平台的 API 使用模型；在消费产品中，Gemini 应用与搜索 AI 模式向 Pro 和 Ultra 订阅者提供入口。",
+      "analysis": "在 Antigravity 使用该模型需要 Ultra 订阅。判断团队能否使用 Argon，要分别看所用产品和订阅层级；使用消费端订阅与调用开发者 API 是不同的入口。"
+    },
+    "en": {
+      "title": "Google launches Gemini 4 Argon across developer and subscriber products",
+      "summary": "Google introduced Gemini 4 Argon for complex, multi-step tasks. It is available to developers and enterprises through the APIs in AI Studio and the Gemini platform. The Gemini app and AI Mode in Search offer access to Pro and Ultra subscribers.",
+      "analysis": "Access through Antigravity requires Ultra. Teams assessing availability need to check both their product and subscription. A consumer subscription and developer API access are separate ways to reach the model."
+    }
+  },
+  {
+    "url": "https://ai.google.dev/gemini-api/docs/changelog#10-13-2026",
+    "quote": "complex coding",
+    "zh": {
+      "title": "Gemini 4 Argon API 正式可用，调用标识为 gemini-4-argon",
+      "summary": "Google 在 Gemini API 更新日志中把新模型 Gemini 4 Argon 标为正式可用，并给出调用标识 gemini-4-argon。官方列出的目标任务包括复杂编程、智能体工作流、数学与科学问题。",
+      "analysis": "这是给接入应用的开发者的公告。准备替换旧模型时，可以用该标识试跑现有任务，再到更新指南逐项核对接口差异、价格及迁移要求。"
+    },
+    "en": {
+      "title": "Gemini 4 Argon reaches general availability in the API",
+      "summary": "Google’s API changelog lists Gemini 4 Argon as generally available under the model ID gemini-4-argon. Its stated workload includes demanding coding, agent workflows, mathematics and science.",
+      "analysis": "The notice targets application developers. A team considering a switch can use the ID to test its own workload and consult the release guide for API differences, pricing and migration requirements."
+    }
+  },
+  {
+    "url": "https://ai.google.dev/gemini-api/docs/changelog#10-08-2026",
+    "quote": "gemini-3.7-flash is deprecated",
+    "zh": {
+      "title": "Gemini 3.7 Flash 退役，旧 API 请求自动转到 3.8 Flash",
+      "summary": "Google 将 Gemini 3.7 Flash 标记为弃用。AI Studio 不再提供该版本供选择，仍然请求 gemini-3.7-flash 的应用会被自动转接到 gemini-3.8-flash。",
+      "analysis": "因此应用即便没有修改配置，成功返回的结果也可能已经来自新模型。开发团队可将模型标识明确更新为 3.8，并用原有样例核对输出变化。官方更新日志也给出了新版模型的使用指南。"
+    },
+    "en": {
+      "title": "Gemini API redirects 3.7 Flash calls to 3.8 Flash",
+      "summary": "Google deprecated Gemini 3.7 Flash and removed it from the AI Studio model selector. API calls that still specify gemini-3.7-flash are routed to gemini-3.8-flash.",
+      "analysis": "An application can receive results from the successor even if its configuration still names 3.7. Teams can set the 3.8 ID explicitly and compare its output with their existing examples. Google links the usage guide for the successor in its changelog."
+    },
+    "match": "gemini-3.7-flash is deprecated"
+  },
+  {
+    "url": "https://ai.google.dev/gemini-api/docs/changelog#10-08-2026",
+    "quote": "gemini-3.5-flash is deprecated",
+    "zh": {
+      "title": "Gemini 3.5 Flash 退役，仍用旧名称的请求将改由 3.6 处理",
+      "summary": "Google 停止在 AI Studio 中提供 Gemini 3.5 Flash 选项。对 gemini-3.5-flash 发起的 API 请求仍有接续路径，默认会转交给 gemini-3.6-flash。",
+      "analysis": "维护旧应用时应特别核对模型编号，同一天另有 3.7 的迁移公告。对使用 3.5 的应用，自动接手的是 3.6；若团队希望采用 3.8，需要主动修改模型标识。公告还附上迁移说明，供团队逐项核对现有应用的调用方式。"
+    },
+    "en": {
+      "title": "Gemini routes deprecated 3.5 Flash requests to 3.6 Flash",
+      "summary": "Google removed Gemini 3.5 Flash from the AI Studio selector. An API call addressed to gemini-3.5-flash is now handled by gemini-3.6-flash.",
+      "analysis": "Check the exact model ID in older applications, since a separate 3.7 migration was announced on the same day. For 3.5, the automatic destination is 3.6. Choosing 3.8 instead requires changing the requested model. The changelog also points teams to migration guidance for checking their existing calls."
+    },
+    "match": "gemini-3.5-flash is deprecated"
+  },
+  {
+    "url": "https://ai.google.dev/gemini-api/docs/changelog#10-06-2026",
+    "quote": "multi-turn character consistency",
+    "zh": {
+      "title": "Nano Banana 2.1 正式上线，支持超宽图和连续对话改图",
+      "summary": "Google 将 Gemini 图像模型 Nano Banana 2.1 标为正式可用，调用标识是 gemini-nano-banana-2.1。此次更新覆盖图中文字、提示词遵从度以及连续多轮改图时的人物一致性。",
+      "analysis": "制作横幅和长条素材时，开发者可以选用四比一、八比一或对应的竖版比例，分辨率覆盖 1K、2K 和 4K。需要同一人物反复出镜的作品也多了一项可测试的能力。"
+    },
+    "en": {
+      "title": "Nano Banana 2.1 adds panoramic formats and improves consistency across edits",
+      "summary": "Google released Nano Banana 2.1 under the ID gemini-nano-banana-2.1. The image model improves text rendering, adherence to prompts and the consistency of characters across successive editing requests, according to Google.",
+      "analysis": "Developers creating banners or tall artwork can select 4:1 or 8:1 formats and their portrait equivalents at 1K, 2K or 4K. Projects that reuse a character can also test consistency across edits."
+    }
+  },
+  {
+    "url": "https://openai.com/index/community-safety-report-and-new-protections-for-teens",
+    "quote": "new protections for teens",
+    "zh": {
+      "title": "OpenAI 收紧青少年武器内容限制，宣布将每半年公布社区安全报告",
+      "summary": "OpenAI 宣布，ChatGPT 将进一步限制未满十八岁用户获得可能被滥用的武器实用信息，同时继续提供缓和冲突和寻求成人帮助的支持。公司还承诺公布社区安全报告。",
+      "analysis": "按公告计划，首份报告将在二〇二七年初发布，覆盖二〇二六年下半年，之后每半年更新。报告拟披露防护措施、匿名案例及相关数据，供外界跟踪其效果。"
+    },
+    "en": {
+      "title": "OpenAI tightens teen safeguards and plans twice-yearly community safety reports",
+      "summary": "OpenAI announced tighter limits on practical weapons information for ChatGPT users under 18. Teens retain access to support for de-escalation and for seeking help from adults. The company also committed to publishing community safety reports.",
+      "analysis": "The first report was scheduled for early 2027, covering the second half of 2026, with updates every six months. OpenAI said it would include safeguards, anonymized examples and data so readers can track the results."
+    }
+  },
+  {
+    "url": "https://openai.com/index/openai-servicenow-partnership-expansion",
+    "quote": "enterprise workflows",
+    "zh": {
+      "title": "ServiceNow 扩大与 OpenAI 合作，计划让 IT 团队在 ChatGPT 处理工单",
+      "summary": "ServiceNow 与 OpenAI 扩大合作，计划把 OpenAI 模型接入更多 ServiceNow 产品，也让 ChatGPT 使用企业自身的 ServiceNow 数据和操作。例如，IT 人员可以在对话中查相似事件、评估变更风险并更新记录。",
+      "analysis": "企业需连接自己的 ServiceNow 实例并选择开放哪些功能。实际允许执行的动作沿用企业既有权限与业务规则，因此不同员工在对话中能办理的事项可能不同。"
+    },
+    "en": {
+      "title": "ServiceNow and OpenAI plan to bring incident workflows into ChatGPT",
+      "summary": "ServiceNow and OpenAI are expanding their partnership in both directions. More ServiceNow products will use OpenAI models, while a planned ChatGPT integration will let IT staff find similar incidents, assess a change and update a record during a conversation.",
+      "analysis": "Each customer connects its own ServiceNow instance and selects the available actions. Existing permissions and business rules still apply, so employees may see different choices in the same workflow."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/ai-for-science-expands-foundations-research-institutions",
+    "quote": "free Claude credits",
+    "zh": {
+      "title": "Anthropic 扩大科研资助，与二十家基金会、研究机构和团队合作",
+      "summary": "Anthropic 扩大 AI for Science 项目，公布二十家合作基金会、研究机构和科研团队。项目以 Claude 使用额度支持科研；基金会可以将额度分配给研究者，研究机构也可用于内部项目。",
+      "analysis": "这给个人申请之外的科研团队增加了获取资源的途径。部分合作计划产生开放数据、软件或共享标准；公告也说明多项研究仍在早期，尚不能把计划目标视作已取得的成果。"
+    },
+    "en": {
+      "title": "Anthropic expands Claude research credits through 20 scientific partners",
+      "summary": "Anthropic expanded AI for Science through 20 foundations, institutions and research groups. The program supplies Claude credits. Foundations can distribute them to researchers, while institutional partners can use credits in their own projects.",
+      "analysis": "The partnerships give research teams another route to resources beyond individual support. Some projects aim to produce public datasets, software or standards. Anthropic says many collaborations are still early, so those are intended outputs."
+    }
+  },
+  {
+    "url": "https://openai.com/index/openai-nask-ai-safety-security-partnership",
+    "quote": "technical research",
+    "zh": {
+      "title": "OpenAI 与波兰 NASK 签约，拟共同评估先进 AI 的安全风险",
+      "summary": "OpenAI 与波兰国家研究机构 NASK 签署合作协议。NASK 的 AI 安全研究中心将与 OpenAI 探索评估先进模型的方法，研究如何识别潜在风险并改善现有防护措施。",
+      "analysis": "这项合作把开发方与公共研究机构的专业经验放在同一项研究议程里。公告列出的是评估和研究方向，尚未公布联合测试结果、认证或面向用户的新功能。"
+    },
+    "en": {
+      "title": "OpenAI and Poland’s NASK agree to explore joint AI safety evaluations",
+      "summary": "OpenAI and Poland’s national research institute NASK signed an agreement to explore joint technical work. NASK’s AI Safety Research Center and OpenAI plan to study how to assess advanced models, identify risks and strengthen safeguards.",
+      "analysis": "The agreement brings a developer and a public institute together on a research agenda. It sets out questions for evaluation. The announcement contains no joint test results, certification or new feature for users."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/public-benefit-fund",
+    "quote": "Subject to stockholder approval",
+    "zh": {
+      "title": "Anthropic 拟把公司股份拨入公益基金，初始比例为百分之五",
+      "summary": "Anthropic 宣布设立一家全资持有的公益基金实体。初始安排须经股东批准，拟将公司百分之五的股份投入基金；公司估值每比基准增加百分之五十，董事会可酌情再拨百分之二。",
+      "analysis": "基金采用有限责任公司形式，以便向非营利组织等对象提供不同形式的支持。资金规模与公司价值及董事会决定有关；公告没有把估值增长写成自动拨款条件。"
+    },
+    "en": {
+      "title": "Anthropic proposes an initial 5% equity stake for a public benefit fund",
+      "summary": "Anthropic proposed putting 5% of its shares into a wholly owned public benefit fund, subject to stockholder approval. For each 50% increase in company value above a baseline, the board could allocate another 2%.",
+      "analysis": "The fund is structured as a limited liability company so it can support recipients in different ways, including grants to nonprofits. The eventual stake depends on company value and board decisions. Growth alone does not trigger an automatic allocation."
+    }
+  },
+  {
+    "url": "https://openai.com/index/introducing-the-rosalind-academic-plan",
+    "quote": "eligible academic labs",
+    "zh": {
+      "title": "OpenAI 推出 Rosalind 学术计划，合资格实验室可申请赞助席位",
+      "summary": "OpenAI 推出面向生命科学实验室的 Rosalind 学术计划。合资格实验室可获最多三十个 Business Standard 席位，最长十二个月免席位费，实际模型使用仍受方案额度约束。",
+      "analysis": "申请实验室席位与取得专用模型权限有两个环节。团队还须通过可信访问审核，才能使用 GPT-Rosalind；该计划默认不以实验室在其中分享的研究数据训练模型。"
+    },
+    "en": {
+      "title": "OpenAI offers sponsored workspace seats to eligible labs through the Rosalind Academic Plan",
+      "summary": "OpenAI introduced a plan for academic life sciences labs. Eligible teams can receive up to 30 Business Standard seats with no seat charge for up to 12 months. Model use remains subject to the plan’s limits.",
+      "analysis": "Sponsored seats and access to the specialized model are distinct. Labs must also receive trusted-access approval for GPT-Rosalind. Research data shared through the plan is excluded from model training by default."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/an-update-on-independent-evaluators",
+    "quote": "METR will publish its analysis",
+    "zh": {
+      "title": "Anthropic 向六名 METR 评估员开放内部工具，允许独立发表风险分析",
+      "summary": "Anthropic 已为非营利评估机构 METR 的六名员工配备设备和办公空间，开放接近内部风险评估团队的工具与系统。团队可以独立发表对风险水平、事件和做法的分析。",
+      "analysis": "这种安排让外部评估员能检查更多一手信息。客户数据等类别仍受限制；Anthropic 不能否决发表，但可要求删去事先界定的保密内容。其他合作机构当前的权限也可能不同。"
+    },
+    "en": {
+      "title": "Anthropic gives six METR evaluators internal access to assess model risks",
+      "summary": "Anthropic gave six staff members from the nonprofit evaluator METR equipment, office space and access to tools similar to those used by its own risk teams. METR can publish its own analysis of risks, incidents and practices.",
+      "analysis": "The arrangement gives outside evaluators more first-hand evidence. Certain information, such as customer data, remains restricted. Anthropic cannot veto publication but can require redactions in predefined categories. Other partners may have narrower access."
+    }
+  },
+  {
+    "url": "https://openai.com/index/sophos",
+    "quote": "preserving human oversight",
+    "zh": {
+      "title": "Sophos 案例报告：使用 OpenAI 模型后，威胁调查耗时减少百分之九十六",
+      "summary": "OpenAI 发布客户案例，介绍 Sophos 如何将 Daybreak 的模型与自己的威胁情报和响应流程结合。案例报告调查耗时减少百分之九十六，托管检测与响应案件中有百分之五十二由 AI 全程处理。",
+      "analysis": "这些数字来自 Sophos 的实际工作流程，人类分析人员继续负责监督和判断。评估其他团队是否能获得类似收益，需要同时考虑案件构成、已有数据和人工复核安排。"
+    },
+    "en": {
+      "title": "Sophos reports a 96% drop in threat investigation time using OpenAI models",
+      "summary": "An OpenAI customer case study describes how Sophos combined Daybreak models with its threat intelligence and response procedures. Sophos reports a 96% reduction in investigation time and says AI handled 52% of its managed detection and response cases end to end.",
+      "analysis": "These figures describe the Sophos deployment, where analysts retain oversight and judgment. Applying the results elsewhere requires taking account of the local mix of cases, available data and review procedures."
+    }
+  },
+  {
+    "url": "https://ai.google.dev/gemini-api/docs/changelog#10-08-2026",
+    "quote": "deep-research-pro-preview-12-2025 agent",
+    "zh": {
+      "title": "Google 为旧 Deep Research 预览代理设定十月二十三日停用期限",
+      "summary": "Google 在十月八日的更新日志里宣布，编号为 deep-research-pro-preview-12-2025 的研究代理计划于十月二十三日关闭。继续使用研究功能的应用需要更换 interactions.create 请求里的 agent 参数。",
+      "analysis": "新选项分工不同：四月版标准预览侧重速度，适合将过程逐步显示在界面上；四月版 Max 预览侧重尽量全面地搜集和整理资料，适合后台研究任务。"
+    },
+    "en": {
+      "title": "Google sets an October 23 shutdown for its December 2025 Deep Research preview",
+      "summary": "Google’s October 8 changelog scheduled the retirement of deep-research-pro-preview-12-2025 for October 23. Applications using the research agent need to update the agent parameter in their interactions.create requests.",
+      "analysis": "The April standard preview prioritizes speed and suits an interface that streams progress to the user. The April Max preview favors broader evidence gathering and synthesis for automated research jobs."
+    },
+    "match": "deep-research-pro-preview-12-2025 agent is deprecated"
+  },
+  {
+    "url": "https://openai.com/index/forward-deployed-engineering-means",
+    "quote": "What FDE means at OpenAI",
+    "zh": {
+      "title": "OpenAI 的驻场工程师怎样把客户难题做成可复用的工具",
+      "summary": "OpenAI 驻场工程团队介绍了自己的工作方式：工程师与客户一起拆解生产中的难题，先确定怎样才算解决，再在真实流程里检验模型。",
+      "analysis": "一次项目也会改变后续产品。已经跑通的做法可由产品团队整理成其他客户能用的工具；模型仍做不好的环节则被带回研究团队，成为下一轮改进的具体问题。"
+    },
+    "en": {
+      "title": "How OpenAI’s embedded engineers turn customer problems into reusable tools",
+      "summary": "OpenAI’s field engineers describe how they work with customers to define a useful outcome and test models against the constraints of a real workflow.",
+      "analysis": "Working solutions can become product features that other customers can use. When a model falls short, the team takes a specific failure back to researchers."
+    }
+  },
+  {
+    "url": "https://openai.com/index/uber-chatgpt-work-rollout",
+    "quote": "Uber brings ChatGPT Work to all employees",
+    "zh": {
+      "title": "Uber 将 ChatGPT Work 推向三万多名员工",
+      "summary": "Uber 宣布面向全公司逐步开放 ChatGPT Work，让运营、财务、市场和产品团队用同一套工具做调研、分析数据和准备演示文稿。",
+      "analysis": "员工培训将配合内部技能库与获准使用的系统连接，帮助不同岗位把工具用进日常工作。软件工程团队则继续使用 Codex，处理开发和代码相关任务。"
+    },
+    "en": {
+      "title": "Uber rolls out ChatGPT Work to more than 30,000 employees",
+      "summary": "Uber is extending ChatGPT Work across the company for research, data analysis and presentations in operations, finance, marketing and product teams.",
+      "analysis": "The rollout includes training, an internal skills library and approved integrations. Software engineers will continue to use Codex for development work."
+    }
+  },
+  {
+    "url": "https://openai.com/index/chatgpt-ads-expands-26-new-countries",
+    "quote": "ChatGPT Ads expands to 26 new countries",
+    "zh": {
+      "title": "ChatGPT 广告新增 26 个投放市场，累计覆盖 89 个国家",
+      "summary": "OpenAI 宣布在另外 26 个国家开放 ChatGPT 广告，覆盖面增至 89 国。自推出以来，已有超过十万家广告主在该平台投放过广告。",
+      "analysis": "对原先无法在当地投放的商家，这意味着多了一个接触潜在客户的渠道：用户询问商品、比较选项的过程也可能出现相关广告。十万家指累计使用过平台的广告主。"
+    },
+    "en": {
+      "title": "ChatGPT advertising expands to 89 countries",
+      "summary": "OpenAI is opening ChatGPT Ads in 26 more countries, bringing coverage to 89. More than 100,000 advertisers have run campaigns since launch.",
+      "analysis": "Businesses in newly supported markets gain a channel for reaching people researching or comparing products. The advertiser count is cumulative since launch."
+    }
+  },
+  {
+    "url": "https://openai.com/index/openai-models-google-cloud",
+    "quote": "OpenAI models are coming to Google Cloud",
+    "zh": {
+      "title": "谷歌云计划通过模型目录销售 OpenAI 模型",
+      "summary": "OpenAI 与谷歌云宣布合作，企业将能通过谷歌云的模型目录选择 OpenAI 模型，并在 Google Cloud Marketplace 完成购买。合作还涉及 Codex 开发流程。",
+      "analysis": "对已经签下谷歌云消费承诺的企业，新采购路径尤为实际：符合条件的购买可抵扣既有承诺，团队可以在现有云采购体系内评估另一家厂商的模型。"
+    },
+    "en": {
+      "title": "Google Cloud adds a procurement route for OpenAI models",
+      "summary": "OpenAI and Google Cloud plan to offer OpenAI models through Google’s model catalog, with purchasing handled by its cloud marketplace. The partnership also covers Codex workflows.",
+      "analysis": "Customers with Google Cloud spending commitments will be able to apply them to these purchases, allowing teams to evaluate another provider within their existing procurement process."
+    }
+  },
+  {
+    "url": "https://openai.com/index/ted-taylor-restaurant",
+    "quote": "reconciles cash in 94% less time",
+    "zh": {
+      "title": "餐厅加盟商用 ChatGPT Work 对账，报告耗时减少 94%",
+      "summary": "一名同时经营 Schlotzsky’s 和 Cinnabon 门店的独立加盟商用 ChatGPT Work 整理现金对账和菜单调价流程。案例报告对账耗时下降 94%，重新定价耗时下降 95%。",
+      "analysis": "这两个数字衡量的是完成具体任务所需的时间。经营者还设计了一套有望释放十万美元现金流的流程，原文将这笔金额描述为潜在收益，尚不能计作已到账的节省。"
+    },
+    "en": {
+      "title": "Restaurant franchisee reports a 94% cut in cash reconciliation time",
+      "summary": "An independent Schlotzsky’s and Cinnabon operator used ChatGPT Work for cash reconciliation and menu repricing, reporting time reductions of 94% and 95% respectively.",
+      "analysis": "The percentages measure time spent on specific tasks. The operator also designed a workflow with the potential to release $100,000 in cash flow; that amount is a projection."
+    }
+  },
+  {
+    "url": "https://openai.com/index/terminal-x",
+    "quote": "matches senior investor judgment",
+    "zh": {
+      "title": "Terminal X 用 54 项标准检查模型回答是否偏离基金要求",
+      "summary": "投资研究平台 Terminal X 用评估智能体按 54 项标准给回答打分，并拿结果与资深投资人员判断对照。案例报告 GPT-6.1 Sol 的判断一致率为 88.6%。",
+      "analysis": "团队关心的一个错误是回答偏离基金自身的投资要求。与测试中次优模型相比，Sol 多找出 25% 的此类偏差。指标衡量审查判断的一致性，不能直接换算成投资回报。"
+    },
+    "en": {
+      "title": "Terminal X tests model answers against 54 investment criteria",
+      "summary": "Terminal X scores answers against a 54-part rubric and compares them with senior investors’ judgments. Its case study reports 88.6% agreement for GPT-6.1 Sol.",
+      "analysis": "Sol caught 25% more deviations from a fund’s mandate than the runner-up in the test. These numbers describe review performance, not investment returns."
+    }
+  },
+  {
+    "url": "https://openai.com/index/openai-to-acquire-orchestra-bio",
+    "quote": "OpenAI acquires Orchestra Bio",
+    "zh": {
+      "title": "OpenAI 收购 Orchestra Bio，补上药物研发项目协调环节",
+      "summary": "OpenAI 宣布收购 Orchestra Bio，把这家公司的研发项目协调平台及其团队与自身的 Rosalind 生命科学工具结合起来，帮助生物制药团队推进项目。",
+      "analysis": "药物研发需要内部部门和外部伙伴围绕同一项发现安排后续研究与决策。此次收购瞄准的正是这些交接工作；公告描述的是产品方向，未报告某款药物因此获批。"
+    },
+    "en": {
+      "title": "OpenAI acquires Orchestra Bio to connect drug research and project operations",
+      "summary": "OpenAI has acquired Orchestra Bio and plans to combine its operations platform and team with Rosalind, its suite of tools for life sciences research.",
+      "analysis": "Drug development requires internal groups and outside partners to coordinate studies and decisions. Those handoffs are the focus of the deal; the announcement describes a product direction, not a drug approval."
+    }
+  },
+  {
+    "url": "https://openai.com/index/low-resource-programming-languages",
+    "quote": "low-resource programming languages",
+    "zh": {
+      "title": "OpenAI 为 COBOL 等训练资料较少的语言建立编程评测",
+      "summary": "OpenAI 介绍了改进模型处理 COBOL、Fortran 和 Visual Basic 等语言的研究，并展示软件工程、SQLite 和 COBOL 代码迁移等任务的新评测。",
+      "analysis": "许多旧系统仍依赖这些语言，能供模型学习的公开代码和文档却相对少。对维护团队而言，针对修复与迁移任务的测试，比仅凭模型在主流语言上的表现判断可用性更直接。"
+    },
+    "en": {
+      "title": "OpenAI measures coding performance on languages with less training material",
+      "summary": "OpenAI describes work on languages such as COBOL, Fortran and Visual Basic, with new evaluations covering software engineering, SQLite and COBOL migration tasks.",
+      "analysis": "Teams maintaining older systems often have less public code or documentation to draw on. Tests built around maintenance and migration give them a more relevant measure than results for mainstream languages."
+    }
+  },
+  {
+    "url": "https://openai.com/index/itau-generative-ai",
+    "quote": "generative AI for its entire customer base",
+    "zh": {
+      "title": "巴西银行 Itaú 用对话界面服务客户，用治理平台管理 AI",
+      "summary": "巴西银行 Itaú 介绍了两项配套建设：ia.i 提供对话式交互，IARA 承担 AI 治理。银行希望把生成式 AI 的使用范围从员工工作扩展到客户服务。",
+      "analysis": "这项银行案例把两件常被分开讨论的事放到一起：客户如何向系统提出问题，以及银行如何管理系统的使用。受监管的服务扩大覆盖面时，后台治理是同一项目的一部分。"
+    },
+    "en": {
+      "title": "Itaú pairs conversational banking with a platform for AI oversight",
+      "summary": "Itaú is combining its ia.i conversational interface with the IARA governance platform as it extends generative AI across employee workflows and customer services.",
+      "analysis": "The case shows both sides of a regulated rollout: customers need a way to ask questions, and the bank needs a way to oversee the systems providing the service."
+    }
+  },
+  {
+    "url": "https://openai.com/index/stack-overflow-chatgpt-plugin",
+    "quote": "Stack Overflow for Agents triples signups",
+    "zh": {
+      "title": "Stack Overflow 推出 ChatGPT 插件后，智能体服务注册量增至三倍",
+      "summary": "OpenAI 的案例介绍，两名工程师借助 Codex 在数周内上线 Stack Overflow for Agents。随后推出的 ChatGPT 插件为这项服务带来更多注册和智能体创建。",
+      "analysis": "团队报告注册量增至三倍，创建智能体的数量最高增至十倍。这是两个不同的采用指标：前者记录多少人进来，后者记录用户实际创建了多少智能体，不能相加理解。"
+    },
+    "en": {
+      "title": "Stack Overflow reports a threefold signup increase for its agent service",
+      "summary": "Two engineers used Codex to ship Stack Overflow for Agents in weeks, according to OpenAI’s case study. A ChatGPT plugin then helped bring users into the service.",
+      "analysis": "The team reports three times as many signups and up to ten times as much agent creation. One metric tracks people signing up; the other tracks what users create."
+    }
+  },
+  {
+    "url": "https://openai.com/index/benefit-street-partners",
+    "quote": "Benefit Street Partners answers questions faster",
+    "zh": {
+      "title": "Benefit Street Partners 用 Codex 编写贷款估值与信贷协议审查工具",
+      "summary": "信贷投资机构 Benefit Street Partners 的投资经理介绍，自己用 Codex 开发并检查代码，把贷款估值比较、信贷协议分析做成能反复使用的内部工具。",
+      "analysis": "变化体现在投资委员会提出追问时。经理表示，分析人员现在可在一天内处理一轮意见，有些问题在会上就能回答。模型协助整理和核对材料，投资团队仍负责判断。"
+    },
+    "en": {
+      "title": "Benefit Street Partners builds loan-review tools with Codex",
+      "summary": "A portfolio manager at Benefit Street Partners describes using Codex to write and review code for comparing loan valuations and analyzing credit agreements.",
+      "analysis": "The manager says analysts can now turn around a round of comments in a day and sometimes answer during the meeting. The tools support the team’s review and judgment."
+    }
+  },
+  {
+    "url": "https://openai.com/index/localiza-generative-ai",
+    "quote": "Localiza reorganized work around generative AI",
+    "zh": {
+      "title": "巴西出行企业 Localiza 用六十多个专用智能体改造工作流程",
+      "summary": "Localiza 介绍了如何结合企业版 ChatGPT、OpenAI 接口和 Codex，建立六十多个专用智能体。项目同时覆盖内部工作、与客户交流的界面和新的出行业务产品。",
+      "analysis": "这家公司把员工试验与产品开发连在一起：先在具体岗位上找出反复出现的需求，再判断哪些经验可以用来改进面向客户的服务。智能体数量反映部署范围，不等同于使用成效。"
+    },
+    "en": {
+      "title": "Localiza reorganizes mobility workflows with more than 60 specialized agents",
+      "summary": "Localiza describes combining ChatGPT Enterprise, the OpenAI API and Codex with more than 60 specialized agents for internal work, customer interfaces and mobility products.",
+      "analysis": "The company links employee experiments to product design, using recurring needs from individual teams to inform customer services. The agent count describes the scale of deployment."
+    }
+  },
+  {
+    "url": "https://openai.com/index/grupo-boticario",
+    "quote": "Grupo Boticário uses AI",
+    "zh": {
+      "title": "巴西美妆集团用自建智能体处理经销商的日常请求",
+      "summary": "巴西美妆集团 Grupo Boticário 介绍了自己的智能体平台。按该公司披露，平台能自行解决最多八成的经销商运营请求，覆盖对象是与集团合作的销售渠道。",
+      "analysis": "自动处理的是经营中的例行问题。这让销售人员可以把更多时间用于了解经销商需求和提供建议。八成是企业报告的最高处理比例，所指范围是经销商运营请求。"
+    },
+    "en": {
+      "title": "Grupo Boticário automates routine requests from its resellers",
+      "summary": "Brazilian beauty group Grupo Boticário says its in-house agent platform resolves up to 80% of operational requests from resellers without staff intervention.",
+      "analysis": "The system takes on routine operational questions so sales representatives can spend more time advising resellers. The reported upper bound applies specifically to reseller operations requests."
+    }
+  },
+  {
+    "url": "https://openai.com/index/teaching-students-to-think-and-learn-through-questions",
+    "quote": "Teaching students to think and learn through questions",
+    "zh": {
+      "title": "OpenAI 推出巴西葡语教师课程，示范用提问引导学生学习",
+      "summary": "OpenAI 在巴西教师节介绍了巴西葡萄牙语版 AI 教师课程，并演示如何把 ChatGPT 学习模式用于课堂，让学生通过提问和分步推理理解问题。",
+      "analysis": "对教师来说，实际用法是把一个问题拆开，请学生逐步解释思路，再决定哪里需要继续追问。课程面向安排教学活动的老师，课堂节奏和学生是否理解仍由老师把握。"
+    },
+    "en": {
+      "title": "OpenAI offers Brazilian Portuguese teacher training on question-led learning",
+      "summary": "For Brazil’s Teachers’ Day, OpenAI highlighted a Brazilian Portuguese course for educators and demonstrated how ChatGPT’s Study Mode can support learning through questions and guided steps.",
+      "analysis": "Teachers can break a problem into steps, ask students to explain their reasoning and decide where further prompts are useful. Teachers remain responsible for the activity and its pace."
+    }
+  },
+  {
+    "url": "https://openai.com/index/sullivan-cromwell",
+    "quote": "brings legal expertise into agreement review",
+    "zh": {
+      "title": "苏利文·克伦威尔律所用 AI 对照先例审查合同草案",
+      "summary": "苏利文·克伦威尔律所与 OpenAI 合作开发 Agreement Analyzer。律师可提交合同草案，指定要参考的先例和谈判立场，工具据此找出可能存在问题的条款。",
+      "analysis": "输出包括审查备忘录和带修订痕迹的建议。律师能逐项查看同类条款在不同先例中怎样处理，再接受、调整或驳回建议，最终交给客户的判断仍来自律师。"
+    },
+    "en": {
+      "title": "Sullivan & Cromwell builds a tool to compare draft agreements with precedents",
+      "summary": "Sullivan & Cromwell and OpenAI developed Agreement Analyzer. A lawyer supplies the draft, selected precedents and negotiating positions so the tool can identify potential issues.",
+      "analysis": "The tool returns a memo and suggested tracked changes. Lawyers can compare how precedents handle a clause, then accept, adapt or reject each suggestion before advising a client."
+    }
+  },
+  {
+    "url": "https://openai.com/index/amp-beyond-coding",
+    "quote": "puts AI agents to work beyond code",
+    "zh": {
+      "title": "Amp 为开发智能体加入语音协作，也用于文档和页面设计",
+      "summary": "Amp 正把开发智能体的用途扩展到代码之外。其团队用 GPT-6 Astra 编写文档和设计页面，还通过搭载语音模型的 Puck 助手启动、协调其他智能体。",
+      "analysis": "例如，开发者可以口头要求 Puck 派一个智能体检查问题，或找回以前讨论过的技术细节。这样，安排任务、查看进度和编写产品材料都可以成为开发流程的一部分。"
+    },
+    "en": {
+      "title": "Amp adds voice coordination and extends its agents into writing and design",
+      "summary": "Amp is extending its agents beyond coding. Its team uses GPT-6 Astra to write documentation and design pages, while the voice-enabled Puck assistant can launch and coordinate other agents.",
+      "analysis": "A developer can ask Puck to assign an investigation or find a prior technical discussion. Task coordination and product documentation can therefore sit alongside programming in the same workflow."
+    }
+  },
+  {
+    "url": "https://openai.com/index/sentinelone",
+    "quote": "cuts malware analysis from weeks to hours",
+    "zh": {
+      "title": "SentinelOne 报告恶意软件分析从数周缩短到数小时",
+      "summary": "安全公司 SentinelOne 介绍，其研究团队借助 OpenAI Daybreak 分析恶意软件行为，部分原先以周计算的工作可在数小时内完成。该数据来自公司的防御研究案例。",
+      "analysis": "时间缩短能腾出人手研究更多样本，并在不同威胁之间寻找关联。团队仍对调查结论和重要改动负责；这里的耗时变化针对恶意样本分析，不是所有安全事件的响应时间。"
+    },
+    "en": {
+      "title": "SentinelOne reports reducing malware analysis from weeks to hours",
+      "summary": "SentinelOne says its researchers use OpenAI Daybreak to study how malware behaves, bringing investigations that previously took weeks down to hours in the reported case.",
+      "analysis": "The team can examine more samples and compare threats for possible connections. Researchers remain accountable for conclusions and significant changes; the timing refers to sample analysis."
+    }
+  },
+  {
+    "url": "https://openai.com/index/higgsfield-longer-videos-voice",
+    "quote": "takes AI video from 1 minute to over 10",
+    "zh": {
+      "title": "Higgsfield 报告可制作超过十分钟的 AI 视频",
+      "summary": "Higgsfield 介绍了将视频制作从约一分钟拓展到十分钟以上的工作流程。其创作智能体使用 GPT-6 Astra 与图像模型，处理镜头变体等重复制作环节。",
+      "analysis": "片长增加后，创作者需要让前后镜头中的人物、物件和画面保持一致。案例将这项连续性工作列为重点；公布的时长属于整套制作流程，不能当作单次生成镜头的上限。"
+    },
+    "en": {
+      "title": "Higgsfield extends its AI filmmaking workflow past ten minutes",
+      "summary": "Higgsfield describes expanding its filmmaking workflow from about one minute to more than ten. Its agents use GPT-6 Astra and an image model for production tasks such as generating shot variations.",
+      "analysis": "Longer productions require visual consistency across shots. Higgsfield identifies that continuity as a challenge; the reported duration describes a production workflow rather than the length of one generated shot."
+    }
+  },
+  {
+    "url": "https://openai.com/index/asana-browser-agent",
+    "quote": "model costs 76x in browser tests",
+    "zh": {
+      "title": "Asana 测试浏览器智能体，单次模型成本降至原方案约七十六分之一",
+      "summary": "Asana 用 Codex 协助试验不同的浏览器自动化流程。其对照测试显示，优化后的 GPT-6.1 Sol 方案平均模型成本约 0.47 美元，耗时约四分钟。",
+      "analysis": "相较原来采用另一款模型的生产配置，测试中的模型成本降至约七十六分之一，速度约为五倍。比较对象包含模型与流程两方面的改动，数字不代表通用的模型定价折扣。"
+    },
+    "en": {
+      "title": "Asana’s browser-agent test cuts estimated model cost to one seventy-sixth",
+      "summary": "Asana used Codex to experiment with its browser automation workflow. In its test, the optimized GPT-6.1 Sol setup averaged about $0.47 in estimated model cost and four minutes per run.",
+      "analysis": "Against the original production setup on a different model, the tested workflow cost about one seventy-sixth as much and ran five times faster. Both the model and the workflow changed."
+    }
+  },
+  {
+    "url": "https://openai.com/index/oracle",
+    "quote": "turns days of work into minutes",
+    "zh": {
+      "title": "甲骨文用 ChatGPT Work 汇总招聘市场资料，并把专家流程做成内部工具",
+      "summary": "甲骨文介绍，招聘、工程和运营团队正使用 ChatGPT Work 与 Codex。招聘团队开发的工具可以读取岗位描述，查找可比职位、薪酬水平和不同地点的人才情况。",
+      "analysis": "这些资料原本需要招聘人员分头搜集。把它们整理到一次准备流程中，招聘人员便能更快与用人经理讨论岗位定位；案例所说的提速对应这些特定的准备工作。"
+    },
+    "en": {
+      "title": "Oracle turns recruiting research and other specialist workflows into reusable tools",
+      "summary": "Oracle describes using ChatGPT Work and Codex in recruiting, engineering and operations. Its recruiting tool starts from a job description and gathers comparable roles, compensation benchmarks and local talent information.",
+      "analysis": "Recruiters previously assembled the information separately. Bringing it together speeds preparation for conversations with hiring managers about the role; the time savings concern those specific tasks."
+    }
+  },
+  {
+    "url": "https://openai.com/index/pollo-ai",
+    "quote": "turns creative ideas into campaigns",
+    "zh": {
+      "title": "Pollo AI 用模板与创作助手把广告构想转成图像和视频",
+      "summary": "Pollo AI 介绍了使用 OpenAI 模型的创作流程。创作者可以从简单的广告构想或视频模板开始，通过 Pollo Agent 逐步生成所需的视觉素材。",
+      "analysis": "营销团队原先要自行挑选模型并在不同工具间切换。该平台把这些选择放入引导流程，重点是让不熟悉视频制作的人也能尝试不同画面，逐步整理成广告内容。"
+    },
+    "en": {
+      "title": "Pollo AI guides creators from campaign ideas to images and video",
+      "summary": "Pollo AI describes a production workflow built with OpenAI models. Creators can start from a campaign idea or a video template and use Pollo Agent to develop visual assets step by step.",
+      "analysis": "Marketers would otherwise have to select models and move between tools. The guided workflow helps people without production expertise try different visuals as they develop an advertisement."
+    }
+  },
+  {
+    "url": "https://openai.com/index/teens-learn-and-plan",
+    "quote": "Helping teens learn, plan, and shape the future",
+    "zh": {
+      "title": "ChatGPT 青少年版将加入大学申请规划工具",
+      "summary": "OpenAI 计划为青少年版 ChatGPT 提供大学申请规划工具 College Planner，首批面向美国拟申请四年制大学的高中十至十二年级学生，另有学习卡片和测验功能。",
+      "analysis": "学生可以按学校追踪申请和助学金截止日期，了解资助要求并查找奖学金。不同国家和其他类型院校属于后续扩展计划，首批服务的范围影响哪些家庭现在适合使用。"
+    },
+    "en": {
+      "title": "ChatGPT for Teens is adding a college application planner",
+      "summary": "OpenAI plans to add College Planner to ChatGPT for Teens, initially for US students in grades 10–12 considering four-year colleges. It also announced flashcards and quizzes.",
+      "analysis": "Students can track application and aid deadlines, understand funding requirements and explore scholarships. Other countries and college types are planned for later, which matters to families assessing eligibility."
+    }
+  },
+  {
+    "url": "https://openai.com/index/radisson",
+    "quote": "brings hotel discovery into ChatGPT",
+    "zh": {
+      "title": "丽笙酒店把查找和比较酒店的入口接入 ChatGPT",
+      "summary": "丽笙酒店集团与埃森哲合作推出 ChatGPT 插件。旅客规划行程时可以在对话中查找丽笙旗下酒店、比较住宿选项，并从查询继续进入预订流程。",
+      "analysis": "对酒店方而言，这个入口出现在旅客筛选候选住宿的阶段。丽笙报告插件早期预订转化率约为其自然搜索渠道的 1.5 倍；比较对象是丽笙自己的两个渠道。"
+    },
+    "en": {
+      "title": "Radisson brings hotel search and comparison into ChatGPT",
+      "summary": "Radisson Hotel Group and Accenture developed a ChatGPT plugin that lets travelers find and compare Radisson properties during trip planning and proceed toward booking.",
+      "analysis": "The plugin reaches travelers while they are shortlisting accommodation. Radisson reports an early booking conversion rate about 1.5 times that of its own organic-search channel."
+    }
+  },
+  {
+    "url": "https://openai.com/index/gpt-6-for-everyone",
+    "quote": "Intelligent UI for everyone",
+    "zh": {
+      "title": "ChatGPT 面向更多用户推出 GPT-6，回答中可直接操作交互界面",
+      "summary": "OpenAI 宣布在全球逐步扩大 ChatGPT 内 GPT-6 的使用范围，并加入智能交互界面。回答可以显示图形和可操作的组件，让用户直接在对话里探索问题。",
+      "analysis": "例如，用户理解复杂概念时可以操作回答中的界面，需要处理具体任务时也可以使用当场生成的小工具。这里公布的是 ChatGPT 产品体验，推出过程按阶段进行。"
+    },
+    "en": {
+      "title": "ChatGPT expands GPT-6 access and adds interactive answers",
+      "summary": "OpenAI is expanding the rollout of GPT-6 in ChatGPT globally. Its Intelligent UI can present visual explanations and interactive components that users can explore within a conversation.",
+      "analysis": "People can interact with an explanation while learning a concept or use a small tool generated for a particular task. The announcement concerns the ChatGPT product and describes a phased rollout."
+    }
+  },
+  {
+    "url": "https://openai.com/index/sharing-ai-progress-in-mathematics",
+    "quote": "Sharing AI progress in mathematics",
+    "zh": {
+      "title": "OpenAI 公开内部模型的数学研究结果，并提供可检查的 Lean 证明",
+      "summary": "OpenAI 在公开代码仓库发布内部模型针对数学开放问题得到的一批结果，并为其中多项证明提供 Lean 形式化版本，另附研究方法、修订与引用说明。",
+      "analysis": "Lean 能让计算机检查形式化证明是否成立。研究者因此有机会对照论文和可执行的证明材料逐项核验，再讨论结果如何得到或能否推广；公开材料并非开放该内部模型本身。"
+    },
+    "en": {
+      "title": "OpenAI shares mathematical results and machine-checkable proofs",
+      "summary": "OpenAI published mathematical results from an internal model in a public repository, with Lean formalizations for many proofs and guidance on methods, revisions and citations.",
+      "analysis": "Lean allows a computer to check formal proofs. Researchers can compare the papers with the formalizations and investigate how the results generalize; the release is of research materials rather than the internal model."
+    }
+  },
+  {
+    "url": "https://openai.com/index/eu-text-provenance",
+    "quote": "approach to EU text provenance rules",
+    "zh": {
+      "title": "OpenAI 说明欧盟文本水印安排：部分 API 模型可选用，检测器先向研究者开放",
+      "summary": "OpenAI 介绍其文本来源标记计划：全球 API 客户可为部分模型选择启用水印，默认关闭；公司计划在欧盟为符合条件的 ChatGPT 和 Codex 文本输出加入不可见水印。",
+      "analysis": "识别水印的工具将先向获准研究人员和专业机构开放，以评估实际效果。普通读者不能据此假定已有面向所有人的检测器，也不能把未检出水印当作人工撰写的证明。"
+    },
+    "en": {
+      "title": "OpenAI outlines an EU text-watermark rollout and limited detector access",
+      "summary": "OpenAI says API customers worldwide can opt into watermarking on selected models, with the feature off by default. It plans invisible watermarks for eligible ChatGPT and Codex text in the EU.",
+      "analysis": "Detector access will initially go to approved researchers and expert organizations for evaluation. That limited scope means a missing watermark is not proof that a person wrote the text."
+    }
+  },
+  {
+    "url": "https://openai.com/index/new-chatgpt-ads-format-and-measurement",
+    "quote": "advertising for the way people use AI",
+    "zh": {
+      "title": "ChatGPT 测试图片广告，并增加广告效果衡量工具",
+      "summary": "OpenAI 公布新的图片广告样式，计划先在免费版和 Go 方案用户生成图片时进行测试。广告会标明身份，并与用户正在生成的图片分开展示。",
+      "analysis": "广告主除了可以用图片介绍商品，还将获得扩展的衡量工具与归因合作渠道，用来评估广告对业务的贡献。这是一次广告格式和评估方式的调整，最初只在指定场景测试。"
+    },
+    "en": {
+      "title": "ChatGPT tests a visual ad format and expands campaign measurement",
+      "summary": "OpenAI plans to test a visual ad format during image generation for users on the Free and Go plans. Ads are labeled and shown separately from the image being generated.",
+      "analysis": "Advertisers gain a visual way to present products along with more measurement tools and attribution partners. The initial test is limited to a specific product experience."
+    }
+  },
+  {
+    "url": "https://openai.com/index/practical-guide-building-gpt-6",
+    "quote": "A model guide for the GPT‑6 family",
+    "zh": {
+      "title": "OpenAI 发布 GPT-6 选型指南，讲解推理设置与工具协作",
+      "summary": "OpenAI 面向开发团队发布 GPT-6 系列使用指南，覆盖如何选择模型、设置推理投入、编写提示和组织技能，也讨论需要多步操作的工具协作流程。",
+      "analysis": "原型能够跑通后，团队还要判断长任务如何持续执行，以及怎样在代码库、数据库和外部接口之间交接。指南把这些上线前的问题与模型选择放在同一套开发流程中。"
+    },
+    "en": {
+      "title": "OpenAI publishes a guide to choosing and configuring GPT-6 models",
+      "summary": "OpenAI’s guide covers choosing a GPT-6 model, setting reasoning effort, writing instructions and organizing skills. It also discusses coordinating tools across multi-step workflows.",
+      "analysis": "After a prototype works, teams still need to manage long-running tasks and handoffs across repositories, databases and external APIs. The guide connects these production questions with model selection."
+    }
+  },
+  {
+    "url": "https://openai.com/index/chatham-financial",
+    "quote": "scales its capital markets expertise",
+    "zh": {
+      "title": "Chatham Financial 将交易核验从三十分钟缩短到四分钟以内",
+      "summary": "资本市场顾问公司 Chatham Financial 用 Codex 开发工具，用 GPT-5.6 支持 AI 功能。公司称，重新设计流程后，一项交易核验工作从三十分钟缩短到四分钟以内。",
+      "analysis": "核验需要比对客户授权、实际成交和系统记录。团队先列出每步要用的证据和必须依靠人工判断的环节，再把可重复的工作自动化。公布的分钟数对应这一具体核验流程。"
+    },
+    "en": {
+      "title": "Chatham Financial reports cutting trade validation to under four minutes",
+      "summary": "Chatham Financial uses Codex to build tools and GPT-5.6 for AI features. It reports shortening one trade-validation workflow from 30 minutes to less than four.",
+      "analysis": "Validation compares what a client authorized, what was executed and what systems recorded. The team identifies required evidence and human decisions before automating repeatable steps."
+    }
+  },
+  {
+    "url": "https://openai.com/index/the-eternal-complement",
+    "quote": "The eternal complement",
+    "zh": {
+      "title": "观点：AI 的经济价值也可能来自执行突破性想法的日常工作",
+      "summary": "两位作者在 OpenAI 发布的署名文章中提出，取得突破除了需要新想法，也需要实验、设备、人员协调和制度支持。先进 AI 的经济价值可能来自减轻这些日常执行负担。",
+      "analysis": "这个论点提供了观察研究效率的另一种角度：当构思比验证和落实更快时，提高执行能力也可能推动进展。这是作者提出的经济观点，文中没有发布新的模型或产品。"
+    },
+    "en": {
+      "title": "An essay argues that routine execution could magnify AI’s economic value",
+      "summary": "In a signed essay hosted by OpenAI, the authors argue that breakthroughs depend on experiments, equipment and coordination as well as ideas. They suggest that advanced AI could ease some of this routine work.",
+      "analysis": "The argument reframes research productivity: when ideas accumulate faster than people can test and implement them, better execution may accelerate progress. It is an economic argument by the authors."
+    }
+  },
+  {
+    "url": "https://openai.com/index/albertsons-reimagining-retail",
+    "quote": "reimagining retail from the inside out",
+    "zh": {
+      "title": "Albertsons 将 Safeway 买菜入口接入 ChatGPT",
+      "summary": "美国零售集团 Albertsons 扩大与 OpenAI 的合作。一方面以企业版 ChatGPT 和接口支持内部工作，另一方面让顾客在 ChatGPT 中从菜谱、照片或购物清单开始挑选商品。",
+      "analysis": "例如，顾客可以提出一餐要做什么，再查看匹配食材、优惠和购物车，随后转到 Safeway 结账。从用餐构想到选购之间少了一次手动整理清单的步骤。"
+    },
+    "en": {
+      "title": "Albertsons brings Safeway grocery planning into ChatGPT",
+      "summary": "Albertsons is expanding its work with OpenAI on internal tools and a Safeway shopping experience. Customers can start in ChatGPT with a recipe, photo or shopping list.",
+      "analysis": "Shoppers can plan a meal, review matching groceries and savings, build a cart and go to Safeway for checkout. That shortens the handoff between deciding what to cook and assembling a shopping list."
+    }
+  },
+  {
+    "url": "https://openai.com/index/introducing-gpt-6-1-sol",
+    "quote": "Near-Astra intelligence for a fifth of the price",
+    "zh": {
+      "title": "GPT-6.1 Sol 发布，标准输入和输出单价均为 Astra 的五分之一",
+      "summary": "OpenAI 发布 GPT-6.1 Sol，称其在编程智能体、计算机操作和专业工作中的表现接近 GPT-6 Astra，而标准 API 输入和输出单价均为 Astra 的五分之一。",
+      "analysis": "对于要反复调用模型的开发者，这提供了按任务评估质量与成本的另一种选项。五分之一对应标准 token 单价，具体项目账单仍取决于实际输入输出长度、缓存和调用次数。"
+    },
+    "en": {
+      "title": "OpenAI introduces GPT-6.1 Sol at one-fifth of Astra’s standard token prices",
+      "summary": "OpenAI says GPT-6.1 Sol approaches GPT-6 Astra on agentic coding, computer use and professional tasks while charging one-fifth of Astra’s standard API input and output token prices.",
+      "analysis": "For developers making repeated calls, Sol offers another quality-and-cost option to test on their own tasks. The comparison is for token prices; actual spending depends on usage and caching."
+    }
+  },
+  {
+    "url": "https://www.anthropic.com/news/barclays-scales-claude",
+    "quote": "Barclays is extending Claude across the bank",
+    "zh": {
+      "title": "巴克莱扩大 Claude 部署，计划分阶段推广给软件工程师",
+      "summary": "巴克莱扩大与 Anthropic 的合作，计划将 Claude 用于软件开发、旧系统现代化和运营。银行预计到 2026 年底，约一半开发人员会使用 Claude Code。",
+      "analysis": "银行预计到 2027 年使用范围会扩大到多数软件工程师。这里给出的是分阶段采用目标；在受监管的银行环境中，治理与可靠部署也是这项推广需要同时解决的问题。"
+    },
+    "en": {
+      "title": "Barclays expands Claude use across engineering and operations",
+      "summary": "Barclays is expanding its Anthropic partnership to support software development, legacy modernization and operations. It expects Claude Code adoption to reach half its developer population by the end of 2026.",
+      "analysis": "The bank expects adoption to reach a majority of software engineers in 2027. These are rollout targets, and Barclays identifies governance and reliable deployment as part of extending use in a regulated organization."
+    }
+  },
+  {
+    "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/",
+    "quote": "Gemini 4 Argon delivers frontier performance",
+    "zh": {
+      "title": "谷歌发布 Gemini 4 Argon，先向受信任的网络防御团队开放",
+      "summary": "谷歌宣布推出 Gemini 4 Argon，面向软件工程、企业知识工作和网络防御等复杂任务。首批获得访问的是 Fairwind 计划中的受信任防御团队。",
+      "analysis": "谷歌表示会先收集测试反馈并调整防护措施，再扩大面向开发者、企业及消费者的使用范围。因此对普通团队而言，模型已公布和自己的账号已经能调用，是两个不同阶段。"
+    },
+    "en": {
+      "title": "Google begins a phased Gemini 4 Argon rollout with trusted defenders",
+      "summary": "Google announced Gemini 4 Argon for complex software engineering, enterprise knowledge work and cyber defense. Trusted defenders in its Fairwind Program are receiving early access.",
+      "analysis": "Google says it will use early feedback to refine safeguards before expanding to developers, enterprises and consumers. The announcement and general account availability are separate stages of this rollout."
+    }
+  }
+]

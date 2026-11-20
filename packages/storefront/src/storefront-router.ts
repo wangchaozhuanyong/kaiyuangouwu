@@ -240,9 +240,7 @@ export function createStorefrontScrollRestorationKey(
 export function routeSearch(route: RouteState): StorefrontRouteSearch {
     const { name: _name, publicLanguage, ...search } = route;
     const code = typeof window === 'undefined' ? undefined : publicLanguageFromUrl(window.location.pathname);
-    const language = route.name.startsWith('blog')
-        ? 'zh'
-        : (publicLanguage ?? (code === 'zh_Hans' ? 'zh' : code === 'en' ? 'en' : undefined));
+    const language = publicLanguage ?? (code === 'zh_Hans' ? 'zh' : code === 'en' ? 'en' : undefined);
     return {
         ...search,
         ...(isArticleRoute(route.name) ? { id: undefined } : {}),
@@ -422,7 +420,7 @@ export function routeHref(route: RouteState): string {
     const code = route.publicLanguage === 'zh' ? 'zh_Hans' : route.publicLanguage;
     const locationCode =
         typeof window === 'undefined' ? undefined : publicLanguageFromUrl(window.location.pathname);
-    const languageCode = route.name.startsWith('blog') ? 'zh_Hans' : (code ?? locationCode);
+    const languageCode = code ?? locationCode;
     const plainPath = isArticleRoute(route.name)
         ? `${route.name === 'guide' ? '/guides' : '/blog'}/${encodeURIComponent(route.id ?? '')}`
         : routePath(route.name);

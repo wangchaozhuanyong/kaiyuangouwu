@@ -43,6 +43,15 @@ import {
     runTelemetry,
 } from './free-recovery';
 import { historyDays, previousMonth } from './history';
+import {
+    changedNewsCopy,
+    editableBlogSnapshots,
+    editionText,
+    englishNewsEdition,
+    projectBlogArticle,
+    reviewedLegacyNews,
+} from './localized-news';
+import { reviewedNewsSourceUrls } from './reviewed-news';
 import { BlogSkill, BlogSkillRecommendation, BlogSkillState } from './skill-entities';
 import { sourceAllows, sourceCatalog } from './sources';
 
@@ -272,14 +281,18 @@ export class BlogService {
         return row;
     }
     view(row: BlogArticle) {
+        const snapshots = editableBlogSnapshots(
+            JSON.parse(row.draftJson),
+            row.publishedJson ? JSON.parse(row.publishedJson) : null,
+            row.state,
+        );
         return {
             id: String(row.id),
             slug: row.slug,
             version: row.version,
             state: row.state,
             publishedAt: row.publishedAt,
-            draft: JSON.parse(row.draftJson),
-            published: row.publishedJson ? JSON.parse(row.publishedJson) : null,
+            ...snapshots,
             issues: JSON.parse(row.issuesJson) as string[],
         };
     }
@@ -289,7 +302,13 @@ export class BlogService {
             order: { updatedAt: 'DESC' },
             take: 200,
         });
-        return rows.map(row => this.view(row));
+        return rows.map(row => {
+            const view = this.view(row);
+            const { translations: _draftEdition, ...draft } = view.draft;
+            if (!view.published) return { ...view, draft };
+            const { translations: _publishedEdition, ...published } = view.published;
+            return { ...view, draft, published };
+        });
     }
     async articleList(
         ctx: RequestContext,
@@ -312,10 +331,23 @@ export class BlogService {
             .where('a.channelId = :channelId', { channelId: ctx.channelId });
         if (input.state) query.andWhere('a.state = :state', { state: input.state });
         const term = (input.term ?? '').trim().slice(0, 200).toLowerCase();
-        if (term)
-            query.andWhere("LOWER(a.draftJson) LIKE :term ESCAPE '!'", {
+        if (term) {
+            const matches: string[] = [];
+            for (const row of await this.reviewCandidates(ctx, true)) {
+                const snapshots = editableBlogSnapshots(
+                    JSON.parse(row.draftJson),
+                    JSON.parse(row.publishedJson ?? 'null'),
+                    row.state,
+                );
+                if (JSON.stringify(snapshots.draft).toLowerCase().includes(term))
+                    matches.push(String(row.id));
+            }
+            const rawMatch = "LOWER(a.draftJson) LIKE :term ESCAPE '!'";
+            query.andWhere(matches.length ? `(${rawMatch} OR a.id IN (:...matches))` : rawMatch, {
                 term: `%${term.replace(/[!%_]/gu, '!$&')}%`,
+                matches,
             });
+        }
         const [rows, totalItems] = await query
             .orderBy('a.updatedAt', 'DESC')
             .addOrderBy('a.id', 'DESC')
@@ -326,10 +358,11 @@ export class BlogService {
             totalItems,
             items: rows.map(row => {
                 const view = this.view(row);
+                const { translations: _edition, ...draftSummary } = view.draft;
                 return {
                     ...view,
                     draft: {
-                        ...view.draft,
+                        ...draftSummary,
                         body: '',
                         sources: [],
                         facts: [],
@@ -382,7 +415,7 @@ export class BlogService {
         if (!/^[a-z0-9][a-z0-9_-]{0,99}$/u.test(input.slug))
             throw new Error('网址标识需为 1～100 位小写字母、数字或短横线');
         const originalRow = input.id ? await this.get(ctx, input.id) : null;
-        const originalDraft = originalRow ? (JSON.parse(originalRow.draftJson) as BlogDraft) : null;
+        const originalDraft = originalRow ? this.view(originalRow).draft : null;
         const trustedMedia = [
             originalDraft?.cover,
             ...(originalDraft?.illustrations ?? []),
@@ -391,6 +424,16 @@ export class BlogService {
         const provenance = (value: BlogCover | null) =>
             trustedMedia.find(x => x?.assetId === value?.assetId) ?? undefined;
         const draft = normalizeDraft(input.draft);
+        if (originalDraft?.translations?.en) {
+            if (!changedNewsCopy(originalDraft, draft)) {
+                draft.translations ??= originalDraft.translations;
+            } else if (
+                JSON.stringify(draft.translations?.en) === JSON.stringify(originalDraft.translations.en)
+            ) {
+                // An editor can change the Chinese draft while posting a previously loaded English version.
+                delete draft.translations;
+            }
+        }
         draft.sourceImages = originalDraft?.sourceImages;
         draft.cover = await this.media(ctx, input.draft.cover, provenance(input.draft.cover));
         draft.illustrations = [];
@@ -472,8 +515,13 @@ export class BlogService {
         const result = await this.connection.withTransaction(ctx, async tx => {
             const row = await this.get(tx, id);
             if (row.version !== expectedVersion) throw new Error('文章版本已变化');
-            const draft = normalizeDraft(JSON.parse(row.draftJson));
-            const raw = JSON.parse(row.draftJson) as BlogDraft;
+            const stored = JSON.parse(row.draftJson) as BlogDraft;
+            const { draft: raw } = editableBlogSnapshots(
+                stored,
+                row.publishedJson ? JSON.parse(row.publishedJson) : null,
+                row.state,
+            );
+            const draft = normalizeDraft(raw);
             draft.skill = raw.skill;
             draft.cover = await this.media(tx, raw.cover, raw.cover ?? undefined);
             draft.illustrations = [];
@@ -525,6 +573,7 @@ export class BlogService {
                     version: expectedVersion + 1,
                     state: withdraw ? 'WITHDRAWN' : 'PUBLISHED',
                     publishedJson: withdraw ? null : JSON.stringify(published),
+                    ...(!withdraw && raw !== stored ? { draftJson: serializeDraft(raw) } : {}),
                     publishedAt: withdraw ? row.publishedAt : new Date(published.publishedAt),
                     publishedTitle: withdraw ? '' : draft.title,
                     publishedCategory: withdraw ? '' : draft.category,
@@ -1058,26 +1107,54 @@ export class BlogService {
             .findOne({ where: { channelId: ctx.channelId } });
         if (
             !row?.enabled ||
-            (!asset && ctx.languageCode !== LanguageCode.zh_Hans) ||
+            (!asset && ctx.languageCode !== LanguageCode.zh_Hans && ctx.languageCode !== LanguageCode.en) ||
             !(await this.access.isEnabled(ctx, 'news-blog-entry'))
         )
             throw new NotFoundException('新闻博客未开放');
         return row;
     }
-    private publicSnapshot(raw: string | null, detail = false): BlogPublishedArticle {
-        if (!raw) throw new NotFoundException('已发布文章不存在');
-        const { sourceImages: _candidates, ...published } = JSON.parse(raw) as BlogPublishedArticle;
-        return {
-            ...published,
-            candidateTitles: [],
-            facts: [],
-            ...(detail ? {} : { body: '', sources: [], illustrations: [], relatedProductIds: [] }),
-        };
+    private async reviewCandidates(ctx: RequestContext, includeDraft = false): Promise<BlogArticle[]> {
+        if (!reviewedNewsSourceUrls.length) return [];
+        const hosts = [...new Set(reviewedNewsSourceUrls.map(source => new URL(source).origin + '/'))];
+        return this.connection
+            .getRepository(ctx, BlogArticle)
+            .createQueryBuilder('article')
+            .select([
+                'article.id',
+                'article.publishedJson',
+                ...(includeDraft ? ['article.draftJson', 'article.state'] : []),
+            ])
+            .where('article.channelId = :channelId', { channelId: ctx.channelId })
+            .andWhere('article.publishedTitle LIKE :oldTitle', { oldTitle: '% 官方动态：%' })
+            .andWhere(
+                '(' + hosts.map((_, i) => `article.publishedJson LIKE :sourceUrl${i}`).join(' OR ') + ')',
+                Object.fromEntries(hosts.map((url, i) => [`sourceUrl${i}`, `%${url}%`])),
+            )
+            .getMany();
     }
     async read(raw: unknown, input: BlogListInput = {}, slug?: string): Promise<BlogPublicPage> {
         const ctx = raw as RequestContext;
         const settings = await this.publicEnabled(ctx);
         const config = this.config(settings);
+        const english = ctx.languageCode === LanguageCode.en;
+        const term = (input.term ?? '').trim().toLowerCase().slice(0, 200);
+        const repo = this.connection.getRepository(ctx, BlogArticle);
+        const driver = repo.manager.connection.options.type;
+        const englishField = (field: 'title' | 'summary' | 'tags') => {
+            if (driver === 'postgres' || driver === 'cockroachdb')
+                return `(CAST(article.publishedJson AS jsonb) -> 'translations' -> 'en' ->> '${field}')`;
+            const extract = `JSON_EXTRACT(article.publishedJson, '$.translations.en.${field}')`;
+            return driver === 'mysql' || driver === 'mariadb' ? `JSON_UNQUOTE(${extract})` : extract;
+        };
+        // Pre-existing snapshots predate the English search data. Only consider known sources with the
+        // legacy title pattern, then verify the complete published snapshot before admitting an override.
+        const matches = new Map<string, string>();
+        if ((english || term) && reviewedNewsSourceUrls.length) {
+            for (const row of await this.reviewCandidates(ctx)) {
+                const reviewed = row.publishedJson && reviewedLegacyNews(JSON.parse(row.publishedJson));
+                if (reviewed) matches.set(String(row.id), editionText(english ? reviewed.en : reviewed.zh));
+            }
+        }
         // Existing event evidence supplies the original news date, including historical imports.
         // Match the channel as well as the event; editorial Skills retain their own publication date.
         const sourceDateQuery = this.connection
@@ -1087,9 +1164,8 @@ export class BlogService {
             .where('source.channelId = article.channelId')
             .andWhere('source.eventKey = article.eventKey')
             .getQuery();
-        const base = () =>
-            this.connection
-                .getRepository(ctx, BlogArticle)
+        const base = () => {
+            const q = repo
                 .createQueryBuilder('article')
                 .addSelect(
                     `COALESCE(CASE WHEN article.publishedCategory <> 'skills' THEN (${sourceDateQuery}) END, article.publishedAt)`,
@@ -1100,15 +1176,36 @@ export class BlogService {
                 .orderBy('news_display_date', 'DESC')
                 .addOrderBy('article.publishedAt', 'DESC')
                 .addOrderBy('article.id', 'DESC');
+            if (english) {
+                const hasTranslation = `(article.publishedCategory <> 'skills' AND ${englishField('title')} IS NOT NULL)`;
+                q.andWhere(
+                    matches.size ? `(${hasTranslation} OR article.id IN (:...reviewedIds))` : hasTranslation,
+                    { reviewedIds: [...matches.keys()] },
+                );
+            }
+            return q;
+        };
         const filtered = () => {
             const query = base();
             if (input.category)
                 query.andWhere('article.publishedCategory = :category', { category: input.category });
-            const term = (input.term ?? '').trim().toLowerCase().slice(0, 200);
-            if (term)
-                query.andWhere("LOWER(article.publishedSearchText) LIKE :term ESCAPE '!'", {
+            if (term) {
+                const like = (field: string) => `LOWER(${field}) LIKE :term ESCAPE '!'`;
+                const indexed = english
+                    ? (['title', 'summary', 'tags'] as const)
+                          .map(field => like(englishField(field)))
+                          .join(' OR ')
+                    : like('article.publishedSearchText');
+                const reviewedHits = [...matches].filter(([, copy]) => copy.includes(term)).map(([id]) => id);
+                const original = matches.size
+                    ? `((${indexed}) AND article.id NOT IN (:...oldIds))`
+                    : `(${indexed})`;
+                query.andWhere(reviewedHits.length ? `(${original} OR article.id IN (:...hits))` : original, {
                     term: `%${term.replace(/[!%_]/gu, '!$&')}%`,
+                    oldIds: [...matches.keys()],
+                    hits: reviewedHits,
                 });
+            }
             return query;
         };
         const skip = input.skip ?? 0;
@@ -1131,11 +1228,12 @@ export class BlogService {
             .getOne();
         const articleRow = slug ? await base().andWhere('article.slug = :slug', { slug }).getOne() : null;
         if (slug && !articleRow) throw new NotFoundException('已发布文章不存在');
-        const article = articleRow ? this.publicSnapshot(articleRow.publishedJson, true) : null;
-        const related = article
+        const related = articleRow
             ? await base()
-                  .andWhere('article.publishedCategory = :category', { category: article.category })
-                  .andWhere('article.id != :id', { id: article.id })
+                  .andWhere('article.publishedCategory = :category', {
+                      category: articleRow.publishedCategory,
+                  })
+                  .andWhere('article.id != :id', { id: articleRow.id })
                   .take(3)
                   .getMany()
             : [];
@@ -1159,16 +1257,32 @@ export class BlogService {
         for (const item of evidence)
             if (!sourceDates.has(item.eventKey))
                 sourceDates.set(item.eventKey, item.sourcePublishedAt.toISOString());
-        const snapshot = (row: BlogArticle, detail = false): BlogPublishedArticle => ({
-            ...this.publicSnapshot(row.publishedJson, detail),
-            sourcePublishedAt:
+        const snapshot = (row: BlogArticle, detail = false): BlogPublishedArticle => {
+            const article =
+                row.publishedJson && projectBlogArticle(JSON.parse(row.publishedJson), english, detail);
+            if (!article) throw new NotFoundException('Published translation not found');
+            article.sourcePublishedAt =
                 row.publishedCategory !== 'skills' && row.eventKey
                     ? (sourceDates.get(row.eventKey) ?? null)
-                    : null,
-        });
+                    : null;
+            return article;
+        };
+        const availableLanguages: NonNullable<BlogPublicPage['availableLanguages']> = [
+            english ? 'en' : 'zh_Hans',
+        ];
+        const other = english ? LanguageCode.zh_Hans : LanguageCode.en;
+        if (
+            (!articleRow ||
+                english ||
+                (articleRow.publishedJson && englishNewsEdition(JSON.parse(articleRow.publishedJson)))) &&
+            (await this.access.isEnabled(ctx.copy({ languageCode: other }), 'news-blog-entry'))
+        ) {
+            availableLanguages.push(english ? 'zh_Hans' : 'en');
+        }
         return {
-            title: config.title,
-            description: config.description,
+            availableLanguages,
+            title: english ? 'AI news and practical guides' : config.title,
+            description: english ? 'Updates and analysis from official AI sources.' : config.description,
             totalItems,
             items: rows.map(row => snapshot(row)),
             featured: featuredRow ? snapshot(featuredRow) : null,
@@ -1187,10 +1301,11 @@ export class BlogService {
         const rows = await this.connection
             .getRepository(ctx, BlogArticle)
             .find({ where: { channelId: ctx.channelId, publishedJson: Not(IsNull()) } });
-        return rows.map(x => {
+        return rows.flatMap(x => {
             if (!x.publishedJson) throw new NotFoundException('已发布文章不存在');
             const a = JSON.parse(x.publishedJson) as BlogPublishedArticle;
-            return { slug: x.slug, updatedAt: a.updatedAt ?? a.reviewedAt ?? a.publishedAt };
+            if (ctx.languageCode === LanguageCode.en && !englishNewsEdition(a)) return [];
+            return [{ slug: x.slug, updatedAt: a.updatedAt ?? a.reviewedAt ?? a.publishedAt }];
         });
     }
     async assertCurrent(raw: unknown, page: BlogPublicPage) {
@@ -1214,11 +1329,18 @@ export class BlogService {
     }
     async isAssetPublic(raw: unknown, identifier: string) {
         const ctx = raw as RequestContext;
+        let englishOnly = false;
         try {
-            // Asset URLs have no locale prefix; the Chinese publication owns their admission.
+            // Public asset URLs have no locale. The image must belong to a version visible in an enabled locale.
             await this.publicEnabled(ctx.copy({ languageCode: LanguageCode.zh_Hans }), true);
-        } catch {
-            return false;
+        } catch (error) {
+            if (!(error instanceof NotFoundException)) return false;
+            try {
+                await this.publicEnabled(ctx.copy({ languageCode: LanguageCode.en }), true);
+                englishOnly = true;
+            } catch {
+                return false;
+            }
         }
         const asset = await this.connection.getRepository(ctx, Asset).findOne({
             where: [{ source: identifier }, { preview: identifier }],
@@ -1239,6 +1361,7 @@ export class BlogService {
         return rows.some(row => {
             if (!row.publishedJson) return false;
             const x = JSON.parse(row.publishedJson) as BlogPublishedArticle;
+            if (englishOnly && !englishNewsEdition(x)) return false;
             return [x.cover, ...x.illustrations].some(media => media?.assetId === String(asset.id));
         });
     }

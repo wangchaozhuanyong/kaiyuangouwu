@@ -205,9 +205,48 @@ for (const [index, profile] of profiles.entries()) {
         ],
     });
 }
+// Optional replay of already-public per-language snapshots for browser acceptance.
+const editions = process.env.BLOG_QA_EDITIONS
+    ? JSON.parse(await readFile(process.env.BLOG_QA_EDITIONS, 'utf8'))
+    : null;
 export function newsBlogFixture(url, host) {
-    const page = syntheticPage('synthetic-a', 'zh_Hans', 'home', { host, origin: `http://${host}` });
+    const en = url.pathname.startsWith('/en/') || url.searchParams.get('languageCode') === 'en';
+    const language = en ? 'en' : 'zh_Hans';
+    const prefix = en ? '/en' : '/zh';
+    const rows = editions?.[language] ?? (en ? [] : articles);
+    const page = syntheticPage('synthetic-a', language, 'home', { host, origin: `http://${host}` });
     page.visualPreset = { presetId: visualPreset };
+    page.content.blocks.push({
+        ...page.content.blocks[0],
+        id: 'news-blog-services',
+        code: 'storefront-client-plugins',
+        type: 'CLIENT_PLUGINS',
+        items: [
+            {
+                id: 'news-blog',
+                enabled: true,
+                position: 0,
+                targetType: 'NONE',
+                targetValue: null,
+                label: en ? 'AI news' : '新闻博客',
+                description: '',
+                imageUrl: null,
+                settings: { pluginCode: 'news-blog-entry', placement: 'BUSINESS_SERVICES_MAIN' },
+            },
+        ],
+    });
+    page.content.settings.configuredBlockTypes.push('CLIENT_PLUGINS');
+    if (
+        url.pathname === prefix + '/services' ||
+        (url.searchParams.get('kind') === 'page' && url.searchParams.get('id') === 'services')
+    ) {
+        page.request = { kind: 'page', id: 'services' };
+        page.requestKey = JSON.stringify(page.request);
+        page.route = prefix + '/services';
+        page.seo.requestKey = page.requestKey;
+        page.seo.canonical = `http://${host}${page.route}`;
+        return page;
+    }
     const slug =
         url.pathname.match(/\/blog\/([^/]+)/u)?.[1] ||
         (url.searchParams.get('kind') === 'blog' ? url.searchParams.get('id') : undefined);
@@ -219,11 +258,15 @@ export function newsBlogFixture(url, host) {
               skip: (Number(url.searchParams.get('page') || 1) - 1) * 12,
               take: 12,
           };
-    const filtered = articles
+    const filtered = rows
         .filter(
             x =>
                 (!input.category || x.category === input.category) &&
-                (!input.term || [x.title, x.summary, ...x.tags].join(' ').includes(input.term)),
+                (!input.term ||
+                    [x.title, x.summary, ...x.tags]
+                        .join(' ')
+                        .toLowerCase()
+                        .includes(input.term.toLowerCase())),
         )
         .sort((a, b) => {
             const date = article =>
@@ -240,20 +283,29 @@ export function newsBlogFixture(url, host) {
     page.requestKey = JSON.stringify(page.request);
     page.route = slug ? `/blog/${slug}` : '/blog';
     page.blog = {
-        title: 'AI 最新资讯与实用指南',
-        description: '本地合成验收页面：关注 ChatGPT、Claude、Gemini 的产品更新与使用方法。',
+        title: en ? 'AI news and practical guides' : 'AI 最新资讯与实用指南',
+        description: en
+            ? 'Updates and analysis from official AI sources.'
+            : '关注 ChatGPT、Claude、Gemini 的产品更新与使用方法。',
         items: filtered.slice(input.skip ?? 0, (input.skip ?? 0) + 12),
         totalItems: filtered.length,
         featured: filtered.find(article => article.skillProfile?.domain === 'design') ?? filtered[0] ?? null,
-        article: slug ? (articles.find(x => x.slug === slug) ?? null) : null,
-        relatedArticles: slug ? articles.filter(x => x.slug !== slug).slice(0, 3) : [],
+        article: slug ? (rows.find(x => x.slug === slug) ?? null) : null,
+        relatedArticles: slug ? rows.filter(x => x.slug !== slug).slice(0, 3) : [],
     };
+    page.blog.availableLanguages = ['zh_Hans', 'en'].filter(
+        code => code === language || (editions?.[code] ?? []).some(item => !slug || item.slug === slug),
+    );
     page.seo = {
         ...page.seo,
         title: page.blog.article?.title ?? page.blog.title,
         description: page.blog.description,
         requestKey: page.requestKey,
-        canonical: `http://${host}/zh${page.route}`,
+        canonical: `http://${host}${prefix}${page.route}`,
+        alternates: page.blog.availableLanguages.map(code => ({
+            language: code === 'zh_Hans' ? 'zh-CN' : 'en',
+            href: `http://${host}/${code === 'zh_Hans' ? 'zh' : 'en'}${page.route}`,
+        })),
         structuredData: page.blog.article
             ? [
                   {

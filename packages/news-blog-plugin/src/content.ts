@@ -1,6 +1,7 @@
 import {
     blogCategories,
     BlogDraft,
+    type BlogNewsEdition,
     BlogSkillProfile,
     emptyBlogDraft,
     skillDomains,
@@ -115,6 +116,24 @@ export function normalizeDraft(raw: unknown): BlogDraft {
         throw new Error('文章类型无效');
     draft.format = x.format as BlogDraft['format'];
     draft.pinned = x.pinned === true;
+    const english = (x.translations as { en?: Partial<BlogNewsEdition> } | undefined)?.en;
+    if (english !== undefined) {
+        if (!english || typeof english !== 'object' || Array.isArray(english))
+            throw new Error('英文稿格式无效');
+        if (draft.category === 'skills') throw new Error('双语资讯翻译仅适用于新闻文章');
+        draft.translations = {
+            en: {
+                title: text(english.title, 160),
+                summary: text(english.summary, 800),
+                body: text(english.body, 50000),
+                seoDescription: text(english.seoDescription, 800),
+                tags: Array.isArray(english.tags)
+                    ? [...new Set(english.tags.map(tag => text(tag, 160)).filter(Boolean))].slice(0, 12)
+                    : [],
+            },
+        };
+    }
+
     if (x.skillProfile !== undefined) {
         if (draft.category !== 'skills') throw new Error('用途资料仅用于 Skill 文章');
         draft.skillProfile = normalizeSkillProfile({
@@ -162,6 +181,43 @@ export function contentIssues(draft: BlogDraft): string[] {
     const issues: string[] = [];
     if (!draft.title || draft.body.length < 100 || !draft.summary) issues.push('标题、摘要或正文不完整');
     if (!draft.sources.length) issues.push('缺少可核对的官方来源');
+    if (
+        draft.category !== 'skills' &&
+        (draft.summary.includes('本条快讯保留可核对的原文要点') ||
+            draft.body.includes('未有可靠中文版本的原文要点保留原语言'))
+    )
+        issues.push('请根据原文写明具体事件、变化和影响，替换旧快讯模板');
+    const english = draft.translations?.en;
+    if (english) {
+        if (
+            [draft.title, draft.summary, draft.body, draft.seoDescription].some(
+                value => !/\p{Script=Han}/u.test(value),
+            )
+        )
+            issues.push('中文资讯的标题、摘要、正文和搜索描述均需使用中文');
+        const untranslatedPassage = [draft.title, draft.summary, draft.body, draft.seoDescription].some(
+            value =>
+                value
+                    .replace(/https?:\/\/[^\s)]+/gu, '')
+                    .split(/[\n。！？：“”「」]/u)
+                    .some(
+                        part =>
+                            !/\p{Script=Han}/u.test(part) &&
+                            (part.match(/\b[a-z]+(?:['’-][a-z]+)*\b/giu) || []).length >= 8,
+                    ),
+        );
+        if (untranslatedPassage) issues.push('中文资讯中有未翻译的英文语句，请翻译成完整中文');
+        if (
+            [english.title, english.summary, english.body, english.seoDescription].some(
+                value => !/[a-z]/iu.test(value),
+            ) ||
+            [english.title, english.summary, english.body, english.seoDescription, ...english.tags].some(
+                value => /\p{Script=Han}/u.test(value),
+            )
+        )
+            issues.push('英文资讯的标题、摘要、正文、标签和搜索描述均需使用英文');
+    }
+
     const urls = new Set(draft.sources.map(x => x.url));
     if (draft.facts.some(x => !urls.has(x.sourceUrl))) issues.push('事实引用不在本文来源内');
     if ([draft.cover, ...draft.illustrations].some(x => x?.kind === 'SOURCE' && !x.rightsConfirmed))
@@ -179,8 +235,20 @@ export function verifyGeneratedDraft(
         .map(x => x.title + ' ' + x.body)
         .join(' ')
         .toLowerCase();
+    const english = draft.translations?.en;
+    if (draft.category !== 'skills' && !english) issues.push('缺少英文资讯稿');
     const numbers =
-        [draft.title, draft.summary, draft.body, ...draft.candidateTitles, ...draft.facts.map(x => x.text)]
+        [
+            draft.title,
+            draft.summary,
+            draft.body,
+            draft.seoDescription,
+            ...draft.candidateTitles,
+            ...(english
+                ? [english.title, english.summary, english.body, english.seoDescription, ...english.tags]
+                : []),
+            ...draft.facts.map(x => x.text),
+        ]
             .join(' ')
             .match(/(?:[$¥€]\s*)?\d+(?:[.,]\d+)*(?:\s*%|\s*美元|\s*万|\s*倍)?/gu) ?? [];
     for (const number of numbers) {

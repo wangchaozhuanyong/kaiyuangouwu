@@ -8,6 +8,7 @@ import {
     skillDomains,
     skillProfileBody,
     type BlogDraft,
+    type BlogNewsEdition,
     type BlogSkillProfile,
 } from '../../../../storefront-content-plugin/src/shared/news-blog';
 import { getAdminQueryScope } from '../../apollo';
@@ -71,6 +72,7 @@ export function NewsBlogArticleEditor({
         G.WITHDRAW_NEWS_BLOG_ARTICLE,
     );
     const [acknowledged, setAcknowledged] = useState('');
+    const [editingLanguage, setEditingLanguage] = useState<'zh' | 'en'>('zh');
     const current = server.draft,
         body = current?.draft,
         busy = saveState.loading || requestState.loading || publishState.loading || withdrawState.loading;
@@ -115,6 +117,14 @@ export function NewsBlogArticleEditor({
                 {query.error ? '文章读取失败，请重新读取。' : '正在读取文章…'}
             </div>
         );
+    const editingEnglish = editingLanguage === 'en' && body.category !== 'skills';
+    const edition = editingEnglish
+        ? (body.translations?.en ?? { title: '', summary: '', body: '', tags: [], seoDescription: '' })
+        : body;
+    const updateEdition = (patch: Partial<BlogNewsEdition>) => {
+        if (editingEnglish) update({ translations: { en: { ...edition, ...patch } } });
+        else update(patch);
+    };
     return (
         <section className="space-y-4 rounded-xl border p-4">
             <header className="flex items-center justify-between gap-3">
@@ -143,22 +153,33 @@ export function NewsBlogArticleEditor({
                             onChange={e => server.setDraft(x => (x ? { ...x, slug: e.target.value } : x))}
                         />
                     </AdminField>
+                    {body.category !== 'skills' && (
+                        <AdminField label="编辑与预览语言">
+                            <AdminSelect
+                                value={editingLanguage}
+                                onChange={e => setEditingLanguage(e.target.value === 'en' ? 'en' : 'zh')}
+                            >
+                                <option value="zh">简体中文</option>
+                                <option value="en">英文</option>
+                            </AdminSelect>
+                        </AdminField>
+                    )}
                     <AdminField label="标题">
                         <AdminInput
-                            value={body.title}
+                            value={edition.title}
                             onChange={e =>
                                 body.skillProfile
                                     ? updateProfile({ displayName: e.target.value })
-                                    : update({ title: e.target.value })
+                                    : updateEdition({ title: e.target.value })
                             }
                         />
                     </AdminField>
-                    {body.candidateTitles.length > 0 && (
+                    {!editingEnglish && body.candidateTitles.length > 0 && (
                         <AdminField label="候选标题">
                             <AdminSelect
                                 value={body.candidateTitles.includes(body.title) ? body.title : ''}
                                 onChange={e => {
-                                    if (e.target.value) update({ title: e.target.value });
+                                    if (e.target.value) updateEdition({ title: e.target.value });
                                 }}
                             >
                                 <option value="">选择候选标题</option>
@@ -205,11 +226,11 @@ export function NewsBlogArticleEditor({
                     <AdminField label="摘要" layout="stacked">
                         <AdminTextArea
                             rows={3}
-                            value={body.summary}
+                            value={edition.summary}
                             onChange={e =>
                                 body.skillProfile
                                     ? updateProfile({ purpose: e.target.value })
-                                    : update({ summary: e.target.value })
+                                    : updateEdition({ summary: e.target.value })
                             }
                         />
                     </AdminField>
@@ -294,15 +315,15 @@ export function NewsBlogArticleEditor({
                         <AdminTextArea
                             rows={18}
                             readOnly={Boolean(body.skillProfile)}
-                            value={body.body}
-                            onChange={e => update({ body: e.target.value })}
+                            value={edition.body}
+                            onChange={e => updateEdition({ body: e.target.value })}
                         />
                     </AdminField>
                     <AdminField label="标签（逗号分隔）">
                         <AdminInput
-                            value={body.tags.join(',')}
+                            value={edition.tags.join(',')}
                             onChange={e =>
-                                update({
+                                updateEdition({
                                     tags: e.target.value
                                         .split(/[,，]/u)
                                         .map(x => x.trim())
@@ -314,8 +335,8 @@ export function NewsBlogArticleEditor({
                     <AdminField label="SEO 描述" layout="stacked">
                         <AdminTextArea
                             rows={2}
-                            value={body.seoDescription}
-                            onChange={e => update({ seoDescription: e.target.value })}
+                            value={edition.seoDescription}
+                            onChange={e => updateEdition({ seoDescription: e.target.value })}
                         />
                     </AdminField>
                     <AdminField label="关联商品 ID（逗号分隔）">
@@ -503,13 +524,13 @@ export function NewsBlogArticleEditor({
                         图文预览与核对
                         <FeatureHelpButton title="图文预览与核对" topic="news-blog.preview" />
                     </h3>
-                    <h2 className="break-words text-xl font-semibold">{body.title || '文章标题'}</h2>
-                    <p className="text-slate-500">{body.summary}</p>
-                    {blogBodySections(body.body).map((section, index) => (
+                    <h2 className="break-words text-xl font-semibold">{edition.title || '文章标题'}</h2>
+                    <p className="text-slate-500">{edition.summary}</p>
+                    {blogBodySections(edition.body).map((section, index) => (
                         <section className="space-y-2" key={section.id}>
                             <div className="flex justify-between gap-2">
                                 <h3 className="font-semibold">{section.title}</h3>
-                                {!body.skill && (
+                                {!body.skill && !editingEnglish && (
                                     <AdminButton
                                         disabled={busy || !current.id || server.dirty || server.sourceChanged}
                                         onClick={() => void task('SECTION', { sectionIndex: index })}

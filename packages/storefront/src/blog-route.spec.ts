@@ -10,14 +10,14 @@ import {
 
 import { routeFromRouterLocation, routeHref, routeNavigateOptions } from './storefront-router';
 describe('news blog route identity', () => {
-    it('links every blog entry to the available Chinese publication from either storefront language', () => {
+    it('links each list and article to the selected storefront language', () => {
         for (const publicLanguage of ['zh', 'en'] as const) {
-            expect(routeHref({ name: 'blog', publicLanguage })).toBe('/zh/blog');
+            expect(routeHref({ name: 'blog', publicLanguage })).toBe(`/${publicLanguage}/blog`);
             expect(routeHref({ name: 'blog-article', id: 'official-update', publicLanguage })).toBe(
-                '/zh/blog/official-update',
+                `/${publicLanguage}/blog/official-update`,
             );
             expect(routeNavigateOptions({ name: 'blog', publicLanguage }).search).toMatchObject({
-                __storefrontLanguage: 'zh',
+                __storefrontLanguage: publicLanguage,
             });
         }
     });

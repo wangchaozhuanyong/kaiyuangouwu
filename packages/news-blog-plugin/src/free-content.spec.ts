@@ -1,10 +1,13 @@
 import { brotliCompressSync, deflateSync, gzipSync } from 'node:zlib';
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
+
+import { fixtureNewsReview } from '../test/news-review-fixture';
 
 import { freeDraftDigest, freeDraftIssues, freeNewsDraft, freeSkillDraft } from './free-content';
 import { dayStart, historyDays, previousMonth } from './history';
 import { SkillEvidence } from './skills-source';
 import { decodeSourceResponse } from './source-response';
+vi.mock('./reviewed-news', () => ({ reviewedNewsForSource: (url: string) => fixtureNewsReview(url) }));
 vi.mock(
     '@vendure/storefront-content-plugin',
     async () => import('../../storefront-content-plugin/src/shared/news-blog.js'),
@@ -58,6 +61,9 @@ describe('free source briefs and bounded historical replay', () => {
     });
     it('retains actual publication/collection dates and discloses historical reconstruction', () => {
         const draft = freeNewsDraft(source, '2026-10-05');
+        assert(draft);
+        expect(draft.translations?.en.title).toContain('test announcement');
+        expect(draft.body).not.toContain('发布相关官方信息');
         expect(draft.body).toContain('2026-10-04');
         expect(draft.body).toContain('2026-11-02');
         expect(draft.body).toContain('不代表本站在模拟日期已经发布');
@@ -67,6 +73,7 @@ describe('free source briefs and bounded historical replay', () => {
     });
     it('checks full prose and metadata, independent of selected fact quotes', () => {
         const expected = freeNewsDraft(source);
+        assert(expected);
         expect(freeDraftIssues(expected, expected)).toEqual([]);
         expect(
             freeDraftIssues({ ...expected, body: expected.body + '\n夸大且没有依据的收费承诺' }, expected),
@@ -85,9 +92,15 @@ describe('free source briefs and bounded historical replay', () => {
     });
     it('uses a verified short official RSS summary without pretending to have read the full page', () => {
         const body =
-            'Synthetic official feed summary with enough concrete source words for a short brief only. Additional supported details.';
+            'Synthetic official feed summary with enough concrete evidence for a short brief only. Additional supported details.';
         expect(() => freeNewsDraft({ ...source, body })).toThrow('原文不足');
-        const brief = freeNewsDraft({ ...source, body, evidenceMode: 'OFFICIAL_RSS' });
+        const brief = freeNewsDraft({
+            ...source,
+            url: 'https://openai.com/news/rss-fixture',
+            body,
+            evidenceMode: 'OFFICIAL_RSS',
+        });
+        assert(brief);
         expect(brief.body).toContain('全文页面暂不可读取');
         expect(brief.facts[0].sourceUrl).toBe('https://openai.com/news/rss.xml');
         expect(brief.sources.some(x => x.url === brief.facts[0].sourceUrl)).toBe(true);
@@ -95,12 +108,11 @@ describe('free source briefs and bounded historical replay', () => {
             freeNewsDraft({ ...source, body: 'Only a title', evidenceMode: 'OFFICIAL_RSS' }),
         ).toThrow('原文不足');
     });
-    it('keeps excerpts short for both English and Chinese sources', () => {
-        expect(freeNewsDraft(source).facts[0].quote?.split(' ').length).toBeLessThanOrEqual(16);
+    it('withholds unreviewed sources and revised evidence without inventing news or a translation', () => {
+        expect(freeNewsDraft({ ...source, url: 'https://openai.com/news/unreviewed' })).toBeNull();
         expect(
-            freeNewsDraft({ ...source, body: '这是明确标注为合成的中文测试资料。'.repeat(20) }).facts[0].quote
-                ?.length,
-        ).toBeLessThanOrEqual(28);
+            freeNewsDraft({ ...source, body: 'Other source material about a different event. '.repeat(6) }),
+        ).toBeNull();
     });
     it('discloses that historical skills use current observed heat and fixed source versions', () => {
         const evidence: SkillEvidence = {
