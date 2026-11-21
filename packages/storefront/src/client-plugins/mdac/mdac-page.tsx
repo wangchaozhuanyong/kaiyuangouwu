@@ -19,6 +19,8 @@ import { Sheet, Subpage, SubpageBody } from '../../storefront-ui/page-shell';
 
 import './mdac.css';
 import { MdacFieldHelp } from './field-help';
+import { isTicketFlightNumber, type MdacFlight } from './flight-lookup';
+import { MdacFlightPicker, type MdacFlightService } from './flight-picker';
 import { MdacHotelPicker, type MdacHotel } from './hotel-picker';
 import {
     AIR_TRAVEL,
@@ -50,10 +52,12 @@ export function MdacPage({
     language: initialLanguage,
     onBack,
     storeName,
+    flightService,
 }: {
     language: StorefrontLanguage;
     onBack?: () => void;
     storeName?: string;
+    flightService?: MdacFlightService;
 }) {
     const [chosenLanguage, setChosenLanguage] = useState<StorefrontLanguage>();
     const language = chosenLanguage ?? initialLanguage;
@@ -71,6 +75,8 @@ export function MdacPage({
     const [departureIsSuggested, setDepartureIsSuggested] = useState(false);
     const [checkDeparture, setCheckDeparture] = useState(false);
     const [flightReviewed, setFlightReviewed] = useState(false);
+    const [arrivalAirport, setArrivalAirport] = useState('');
+    const [selectedFlight, setSelectedFlight] = useState<MdacFlight | null>(null);
     const [confirmedTrip, setConfirmedTrip] = useState(false);
     const fieldId = useId();
     const heading = useRef<HTMLHeadingElement>(null);
@@ -89,8 +95,11 @@ export function MdacPage({
     }, [step, fieldId]);
     const byAir = draft.shared.trvlMode === AIR_TRAVEL;
     const flight = normalizeFlightNumber(draft.shared.vesselNm ?? '');
-    const showFlightHint =
-        byAir && flightReviewed && flight && !/^[A-Z0-9]{2,3}[0-9]{1,4}[A-Z]?$/u.test(flight);
+    const flightLookup = byAir ? flightService : undefined;
+    const validFlight = flightLookup
+        ? isTicketFlightNumber(flight)
+        : /^[A-Z0-9]{2,3}[0-9]{1,4}[A-Z]?$/u.test(flight);
+    const showFlightHint = byAir && flightReviewed && flight && !validFlight;
     const generation = useRef(0);
     const imageInput = useRef<HTMLInputElement>(null);
     const albumInput = useRef<HTMLInputElement>(null);
@@ -169,7 +178,17 @@ export function MdacPage({
             setDepartureIsSuggested(false);
             setCheckDeparture(false);
         }
-        if (!personal && field.key === 'vesselNm') setFlightReviewed(false);
+        if (!personal && field.key === 'vesselNm') {
+            setFlightReviewed(false);
+            if (normalizeFlightNumber(value) !== flight) setSelectedFlight(null);
+        }
+        if (
+            !personal &&
+            (field.key === 'arrDt' || field.key === 'trvlMode') &&
+            value !== draft.shared[field.key]
+        ) {
+            setSelectedFlight(null);
+        }
         save(next);
     }
     function selectHotel(hotel: MdacHotel) {
@@ -268,6 +287,22 @@ export function MdacPage({
                 );
                 return;
             }
+            if (
+                flightLookup &&
+                (!selectedFlight ||
+                    selectedFlight.status !== 'SCHEDULED' ||
+                    selectedFlight.flightNumber !== flight ||
+                    selectedFlight.effectiveArrivalDate !== draft.shared.arrDt ||
+                    selectedFlight.arrivalAirport !== arrivalAirport)
+            ) {
+                setMessage(
+                    t(
+                        '请查找并选择与机票一致的抵达航班。',
+                        'Find and select the arrival flight on your ticket.',
+                    ),
+                );
+                return;
+            }
             const today = malaysiaToday();
             const missing = draft.travelers.findIndex(
                 person => !validPersonalFields(person) || !validateDates(person, draft.shared, today),
@@ -326,6 +361,8 @@ export function MdacPage({
         setDepartureIsSuggested(false);
         setCheckDeparture(false);
         setFlightReviewed(false);
+        setArrivalAirport('');
+        setSelectedFlight(null);
         setConfirmedTrip(false);
         if (imageInput.current) imageInput.current.value = '';
         save(emptyDraft(), false);
@@ -553,6 +590,7 @@ export function MdacPage({
         { title: t('航班与出入境日期', 'Transport and travel dates'), items: travelFields },
         { title: t('在马来西亚的住宿', 'Accommodation in Malaysia'), items: lodgingFields },
     ];
+    const flightNumberFields = travelFields.filter(field => field.key === 'vesselNm');
     function editStep(index: number, key: string) {
         setMessage('');
         setConfirmedTrip(false);
@@ -828,7 +866,40 @@ export function MdacPage({
                                     {groups.slice(0, 2).map(group => (
                                         <section className="mdac-block" key={group.items[0].key}>
                                             <h2 className="type-section">{group.title}</h2>
-                                            {fields(group.items, draft.shared, false)}
+                                            {flightLookup && group.items === travelFields ? (
+                                                <>
+                                                    {fields(
+                                                        group.items.filter(field => field.key !== 'vesselNm'),
+                                                        draft.shared,
+                                                        false,
+                                                    )}
+                                                    <MdacFlightPicker
+                                                        language={language}
+                                                        service={flightLookup}
+                                                        input={{
+                                                            arrivalDate: draft.shared.arrDt ?? '',
+                                                            arrivalAirport,
+                                                            flightNumber: flight,
+                                                        }}
+                                                        onAirportChange={value => {
+                                                            setArrivalAirport(value);
+                                                            setSelectedFlight(null);
+                                                        }}
+                                                        selected={selectedFlight}
+                                                        onSelect={value => {
+                                                            setSelectedFlight(value);
+                                                            setMessage('');
+                                                        }}
+                                                        numberField={fields(
+                                                            flightNumberFields,
+                                                            draft.shared,
+                                                            false,
+                                                        )}
+                                                    />
+                                                </>
+                                            ) : (
+                                                fields(group.items, draft.shared, false)
+                                            )}
                                         </section>
                                     ))}
                                 </div>
@@ -908,6 +979,22 @@ export function MdacPage({
                                                     <dd>{reviewField(field)}</dd>
                                                 </div>
                                             ))}
+                                            {group.items === travelFields &&
+                                                flightLookup &&
+                                                selectedFlight && (
+                                                    <div>
+                                                        <dt className="type-helper">
+                                                            {t('已核验抵达航班', 'Verified arrival flight')}
+                                                        </dt>
+                                                        <dd>
+                                                            {selectedFlight.departureAirport} →{' '}
+                                                            {selectedFlight.arrivalAirport}
+                                                            {' · '}
+                                                            {selectedFlight.effectiveArrivalDate}{' '}
+                                                            {selectedFlight.effectiveArrivalTime}
+                                                        </dd>
+                                                    </div>
+                                                )}
                                         </dl>
                                     </section>
                                 ))}

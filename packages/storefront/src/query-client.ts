@@ -324,6 +324,15 @@ export const storefrontQueryKeys = {
     commerceMode: (marketCode: string) => ['storefront', marketCode, 'commerce-mode'] as const,
     content: (marketCode: string, languageCode: string) =>
         [...storefrontQueryKeys.scope(marketCode, languageCode), 'content'] as const,
+    mdacFlights: (
+        marketCode: string,
+        languageCode: string,
+        input: {
+            arrivalDate: string;
+            arrivalAirport: string;
+            flightNumber: string;
+        },
+    ) => [...storefrontQueryKeys.scope(marketCode, languageCode), 'mdac-flights', input] as const,
     announcements: (marketCode: string, languageCode: string, page: number, take: number) =>
         [...storefrontQueryKeys.content(marketCode, languageCode), 'announcements', { page, take }] as const,
     announcement: (marketCode: string, languageCode: string, id: string) =>

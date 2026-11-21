@@ -1,4 +1,5 @@
 // organize-imports-ignore -- Preserve production stylesheet order.
+import type { MdacFlightResult, MdacFlightSearch } from '../../src/client-plugins/mdac/flight-lookup';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router';
 import { createRoot } from 'react-dom/client';
@@ -16,6 +17,29 @@ import '../../src/commerce-styles';
 const params = new URLSearchParams(location.search);
 const preset = params.get('skin') === 'neo-minimalist' ? 'neo-minimalist' : 'classic';
 const language = params.get('lang') === 'en' ? 'en' : 'zh';
+const demoFlights = params.get('flight') === 'demo';
+function lookupDemoFlight({ arrivalDate, arrivalAirport, flightNumber }: MdacFlightSearch): MdacFlightResult {
+    if (flightNumber === 'XX998') return { status: 'UNAVAILABLE', flights: [] };
+    if (arrivalAirport !== 'KUL' || !['MH123', 'CX777', 'MH999'].includes(flightNumber)) {
+        return { status: 'NO_MATCH', flights: [] };
+    }
+    return {
+        status: 'MATCHED',
+        flights: [
+            {
+                flightNumber,
+                operatingFlightNumber: flightNumber === 'CX777' ? 'MH123' : flightNumber,
+                departureAirport: 'HKG',
+                arrivalAirport,
+                scheduledArrivalDate: arrivalDate,
+                scheduledArrivalTime: '03:00',
+                effectiveArrivalDate: arrivalDate,
+                effectiveArrivalTime: '03:00',
+                status: flightNumber === 'MH999' ? 'CANCELLED' : 'SCHEDULED',
+            },
+        ],
+    };
+}
 const palette = resolveStorefrontSemanticPalette(preset);
 document.documentElement.dataset.storefrontPreset = preset;
 for (const [key, value] of Object.entries({
@@ -34,7 +58,25 @@ function Fixture() {
                     data-route="mdac"
                     style={{ maxWidth: 1344, margin: 'auto' }}
                 >
-                    <MdacPage language={language} storeName={language === 'zh' ? '大马通' : 'Damatong'} />
+                    {demoFlights && (
+                        <p className="mdac-message type-label">
+                            {language === 'zh'
+                                ? '测试预览 · 航班为虚构数据'
+                                : 'Test preview · Fictional flight data'}
+                        </p>
+                    )}
+                    <MdacPage
+                        language={language}
+                        storeName={language === 'zh' ? '大马通' : 'Damatong'}
+                        flightService={
+                            demoFlights
+                                ? {
+                                      marketKey: 'mdac-fixture',
+                                      lookup: input => Promise.resolve(lookupDemoFlight(input)),
+                                  }
+                                : undefined
+                        }
+                    />
                     <p className="type-helper">本地实际组件预览 · 请使用虚构资料 · 未发布</p>
                 </div>
             </DesktopLayoutContext.Provider>
