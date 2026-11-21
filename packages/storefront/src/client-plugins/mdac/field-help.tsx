@@ -1,7 +1,17 @@
-import { CircleHelp } from 'lucide-react';
+import { CircleHelp, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 
-export function MdacFieldHelp({ id, label, text }: { id: string; label: string; text: string }) {
+export function MdacFieldHelp({
+    id,
+    label,
+    text,
+    icon: Icon = CircleHelp,
+}: {
+    id: string;
+    label: string;
+    text: string;
+    icon?: LucideIcon;
+}) {
     const [hovered, setHovered] = useState(false);
     const [focused, setFocused] = useState(false);
     const [pinned, setPinned] = useState(false);
@@ -31,7 +41,7 @@ export function MdacFieldHelp({ id, label, text }: { id: string; label: string; 
                     setPinned(false);
                 }}
             >
-                <CircleHelp size={16} aria-hidden="true" />
+                <Icon size={16} aria-hidden="true" />
             </button>
             <span id={id} className="mdac-field-help type-helper" hidden={!open}>
                 {text}

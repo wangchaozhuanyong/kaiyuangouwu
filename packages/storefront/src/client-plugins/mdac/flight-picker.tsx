@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Check, Search } from 'lucide-react';
 import { useId, useState } from 'react';
 
+import { useDesktopLayout } from '../../desktop-layout';
 import { storefrontQueryKeys } from '../../query-client';
 import { type StorefrontLanguage } from '../../types';
 
@@ -11,6 +12,7 @@ import {
     type MdacFlightLookup,
     type MdacFlightSearch,
 } from './flight-lookup';
+import { MdacSelect } from './mdac-select';
 import { isIsoDate, malaysiaToday } from './model';
 
 export interface MdacFlightService {
@@ -27,6 +29,10 @@ const airports = [
     ['LGK', '兰卡威', 'Langkawi'],
     ['SZB', '梳邦', 'Subang'],
 ] as const;
+
+function customAirportCode(query: string) {
+    return /^[a-z]{3}$/iu.test(query) ? query.toUpperCase() : undefined;
+}
 
 function matchLabel(flight: MdacFlight) {
     return !flight.operatingFlightNumber || flight.flightNumber === flight.operatingFlightNumber
@@ -52,8 +58,17 @@ export function MdacFlightPicker({
     numberField: React.ReactNode;
 }) {
     const t = (zh: string, en: string) => (language === 'zh' ? zh : en);
+    const desktop = useDesktopLayout();
     const id = useId();
     const [submitted, setSubmitted] = useState<MdacFlightSearch | null>(null);
+    const airportOptions: Array<[string, string]> = airports.map(([code, zh, en]) => [
+        code,
+        `${code} · ${t(zh, en)}`,
+    ]);
+    const currentCustomAirport = customAirportCode(input.arrivalAirport);
+    if (currentCustomAirport && !airportOptions.some(([code]) => code === currentCustomAirport)) {
+        airportOptions.push([currentCustomAirport, currentCustomAirport]);
+    }
     const ready =
         isIsoDate(input.arrivalDate) &&
         input.arrivalDate >= malaysiaToday() &&
@@ -119,25 +134,45 @@ export function MdacFlightPicker({
                             {t('抵达机场', 'Arrival airport')}
                         </label>
                     </div>
-                    <input
-                        id={id}
-                        className="type-input"
-                        list={id + '-airports'}
-                        placeholder={t('机场代码，如 KUL', 'Airport code, e.g. KUL')}
-                        maxLength={3}
-                        pattern="[A-Z]{3}"
-                        value={input.arrivalAirport}
-                        autoComplete="off"
-                        required
-                        onChange={event => onAirportChange(event.currentTarget.value.toUpperCase())}
-                    />
-                    <datalist id={id + '-airports'}>
-                        {airports.map(([code, zh, en]) => (
-                            <option value={code} key={code}>
-                                {t(zh, en)}
-                            </option>
-                        ))}
-                    </datalist>
+                    {desktop ? (
+                        <>
+                            <input
+                                id={id}
+                                className="type-input"
+                                list={id + '-airports'}
+                                placeholder={t('机场代码，如 KUL', 'Airport code, e.g. KUL')}
+                                maxLength={3}
+                                pattern="[A-Z]{3}"
+                                value={input.arrivalAirport}
+                                autoComplete="off"
+                                required
+                                onChange={event => onAirportChange(event.currentTarget.value.toUpperCase())}
+                            />
+                            <datalist id={id + '-airports'}>
+                                {airports.map(([code, zh, en]) => (
+                                    <option value={code} key={code}>
+                                        {t(zh, en)}
+                                    </option>
+                                ))}
+                            </datalist>
+                        </>
+                    ) : (
+                        <MdacSelect
+                            id={id}
+                            title={t('抵达机场', 'Arrival airport')}
+                            language={language}
+                            options={airportOptions}
+                            value={input.arrivalAirport}
+                            placeholder={t('请选择', 'Select')}
+                            customOption={customAirportCode}
+                            searchPlaceholder={t(
+                                '搜索机场名称或三字代码',
+                                'Search airports or enter a three-letter code',
+                            )}
+                            required
+                            onChange={onAirportChange}
+                        />
+                    )}
                 </div>
                 {numberField}
             </div>

@@ -4,6 +4,7 @@ import { requestMdacFlights } from '../client-plugins/mdac/flight-lookup';
 import { usePageRouteCommit } from '../page-readiness';
 import { storefrontQueryKeys } from '../query-client';
 import { storefrontErrorMessage } from '../storefront-errors';
+import { hasStorefrontBackSource } from '../storefront-navigation-history';
 import { AsyncRouteStatePage } from '../storefront-ui/page-shell';
 
 import { registerRoutePreload, useRouteRuntime as useRuntime } from './shared';
@@ -14,6 +15,7 @@ export function MdacRoutePage() {
     usePageRouteCommit();
     const runtime = useRuntime();
     const router = useRouter({ warn: false });
+    const onBack = router && hasStorefrontBackSource(router) ? runtime.goBack : undefined;
     const plugin = runtime.contentBlocks
         .filter(
             block =>
@@ -40,7 +42,7 @@ export function MdacRoutePage() {
                         : ''
                 }
                 language={runtime.language}
-                onBack={runtime.goBack}
+                onBack={onBack}
                 onRetry={() => void runtime.contentQuery.refetch({ cancelRefetch: false })}
             />
         );
@@ -55,7 +57,7 @@ export function MdacRoutePage() {
                         : 'Malaysia arrival card is not enabled in this store'
                 }
                 language={runtime.language}
-                onBack={runtime.goBack}
+                onBack={onBack}
                 onRetry={() => void runtime.contentQuery.refetch({ cancelRefetch: false })}
             />
         );
@@ -63,7 +65,7 @@ export function MdacRoutePage() {
         <MdacPage
             language={runtime.language}
             storeName={runtime.storefrontName}
-            onBack={router?.history.canGoBack() ? runtime.goBack : undefined}
+            onBack={onBack}
             flightService={
                 plugin.settings?.flightLookupEnabled === true
                     ? {

@@ -6,7 +6,11 @@ import { MobilePageHeader } from './components/common/mobile-page-header';
 import { publicRouteRewrite, storefrontRouterSearch } from './public-route-rewrite';
 import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { routeTree } from './routeTree.gen';
-import { goBackInStorefront, registerStorefrontNavigationHistory } from './storefront-navigation-history';
+import {
+    goBackInStorefront,
+    hasStorefrontBackSource,
+    registerStorefrontNavigationHistory,
+} from './storefront-navigation-history';
 import {
     createStorefrontScrollRestorationKey,
     routeFromHash,
@@ -46,21 +50,30 @@ export const router = createRouter({
 registerStorefrontNavigationHistory(router);
 router.subscribe('onLoad', event => scroll.commit(event.toLocation));
 
+function routeBack(activeRouter: typeof router, name: string, onBack: () => void) {
+    return name === 'mdac' && !hasStorefrontBackSource(activeRouter) ? undefined : onBack;
+}
+
 function StorefrontRouteError() {
     const activeRouter = useRouter();
     const location = useRouterState({ select: state => state.location });
     const context = useContext(StorefrontContext);
+    const route = routeFromRouterLocation(location.pathname, location.search);
     const language =
         context?.language ??
         (typeof document !== 'undefined' && document.documentElement.lang.startsWith('zh') ? 'zh' : 'en');
     return (
         <AsyncRouteStatePage
-            routeName={routeFromRouterLocation(location.pathname, location.search).name}
+            routeName={route.name}
             state="error"
             failureKind="module"
             error={language === 'zh' ? '重新加载页面后再试。' : 'Reload this page to try again.'}
             language={language}
-            onBack={context?.goBack ?? (() => goBackInStorefront(activeRouter))}
+            onBack={routeBack(
+                activeRouter,
+                route.name,
+                context?.goBack ?? (() => goBackInStorefront(activeRouter)),
+            )}
             onRetry={reloadStorefrontResources}
         />
     );
@@ -81,7 +94,7 @@ function StorefrontPendingPage() {
                 state="loading"
                 error=""
                 language={context.language}
-                onBack={context.goBack}
+                onBack={routeBack(activeRouter, route.name, context.goBack)}
                 onRetry={() => void activeRouter.load()}
             />
         );

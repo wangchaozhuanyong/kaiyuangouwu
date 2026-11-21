@@ -91,7 +91,7 @@ export function AsyncRouteStatePage({
     state: Exclude<QueryLoadState, 'ready'>;
     error: string;
     language: StorefrontLanguage;
-    onBack: () => void;
+    onBack?: () => void;
     onRetry: () => void;
     failureKind?: 'data' | 'module';
 }) {
@@ -134,7 +134,7 @@ export function AsyncRouteStatePage({
     }
 
     return (
-        <Subpage title={title} language={language} onBack={onBack}>
+        <Subpage title={title} language={language} onBack={onBack} back={onBack ? undefined : false}>
             {content}
         </Subpage>
     );
