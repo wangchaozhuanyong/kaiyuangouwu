@@ -1,31 +1,4 @@
-/* The environment tool has a light palette across storefront presets. */
 .page.subpage.environment-monitor {
-    color-scheme: light;
-    --bg: #faf9f1;
-    --surface: #fffef9;
-    --text: #343622;
-    --muted: #655f4b;
-    --line: #dedbc8;
-    --line-subtle: #e7e2d1;
-    --soft: #f1ecd9;
-    --accent: #785819;
-    --accent-hover: #61450e;
-    --accent-foreground: #fff;
-    --selection: var(--accent);
-    --selection-hover: var(--accent-hover);
-    --focus: #866316;
-    --control-surface: #f5f1df;
-    --interaction-hover: var(--control-surface);
-    --interaction-ink: var(--accent-hover);
-    --skin-tool-security-foreground: var(--accent);
-    --skin-tool-mail-foreground: #59735e;
-    --skin-tool-coupon-foreground: #936423;
-    --coupon-gold-surface: #fbf0c9;
-    --warning: #936423;
-    --warning-text: #754a16;
-    --success: #17684f;
-    --danger: #aa321d;
-    --skin-card-shadow: none;
     min-height: 100dvh;
     color: var(--text);
     background: var(--bg);
@@ -166,8 +139,10 @@
     align-items: center;
     gap: var(--space-12);
     min-height: 38px;
-    padding-block: var(--space-4);
-    border-bottom: 1px solid var(--line-subtle);
+    padding: var(--space-4);
+}
+.environment-network-row:nth-child(even) {
+    background: color-mix(in srgb, var(--soft) 46%, var(--surface));
 }
 .environment-network-row dt {
     display: flex;
@@ -392,7 +367,6 @@
     justify-content: space-between;
     gap: var(--space-4) var(--space-8);
     padding: var(--space-4) var(--space-12);
-    border-top: 1px solid var(--line-subtle);
     background: color-mix(in srgb, var(--surface) 68%, transparent);
     color: var(--muted);
 }
