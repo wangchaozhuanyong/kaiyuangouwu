@@ -48,7 +48,10 @@ function inputOfType(type: 'checkbox' | 'file') {
     return input;
 }
 
-const queryClient = new QueryClient();
+let queryClient: QueryClient;
+beforeEach(() => {
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+});
 const render = (language: 'zh' | 'en' = 'zh') =>
     act(() =>
         root.render(
@@ -58,44 +61,153 @@ const render = (language: 'zh' | 'en' = 'zh') =>
         ),
     );
 
+const sampleTraveler = {
+    name: 'SAMPLE TRAVELER',
+    passNo: 'E00000001',
+    nationality: 'CHN',
+    pob: 'CHN',
+    dob: '1990-01-01',
+    sex: '1',
+    passExpDte: '2034-01-01',
+};
+const sampleHotel = {
+    id: 'sample',
+    name: 'Sample Hotel',
+    address: '99 Sample Avenue',
+    state: '14',
+    city: 'KUALA LUMPUR',
+    postcode: '50450',
+};
+const directoryKey = ['mdac-hotel-directory', 1];
+
+function lodgingValue(key: string) {
+    return host.querySelector<HTMLInputElement | HTMLSelectElement>(
+        `[data-field="${key}"] input, [data-field="${key}"] select`,
+    )?.value;
+}
+
+function replaceInput(input: HTMLInputElement | null, value: string) {
+    assert.ok(input);
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+it('fills a hotel when an existing draft has blank lodging fields and keeps the suggestion when returning', async () => {
+    const draft = emptyDraft();
+    draft.travelers[0] = sampleTraveler;
+    Object.assign(draft.shared, {
+        accommodationAddress1: '',
+        accommodationAddress2: ' ',
+        accommodationState: '',
+        accommodationCity: '',
+        accommodationPostcode: '',
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    queryClient.setQueryData(directoryKey, [sampleHotel]);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json([sampleHotel]));
+    const selectRandom = vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    render();
+    await act(() => Promise.resolve(button('下一步').click()));
+    expect(lodgingValue('accommodationAddress1')).toBe(sampleHotel.address);
+    expect(lodgingValue('accommodationState')).toBe(sampleHotel.state);
+    expect(lodgingValue('accommodationCity')).toBe(sampleHotel.city);
+    expect(lodgingValue('accommodationPostcode')).toBe(sampleHotel.postcode);
+    expect(readDraft()).toEqual(draft);
+
+    selectRandom.mockClear();
+    act(() => button('上一步').click());
+    act(() => button('下一步').click());
+    expect(lodgingValue('accommodationAddress1')).toBe(sampleHotel.address);
+    expect(selectRandom).not.toHaveBeenCalled();
+});
+
+it('fills the default while a search is open and replaces all fields with the selected hotel', async () => {
+    const draft = emptyDraft();
+    draft.travelers[0] = sampleTraveler;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    const bookedHotel = {
+        id: 'booked',
+        name: 'Taman Connaught Hotel',
+        address: '17 Jalan Menara Gading',
+        address2: 'Lobby A',
+        state: '10',
+        city: 'CHERAS',
+        postcode: '56000',
+    };
+    let deliver!: (response: Response) => void;
+    const fetchDirectory = vi.spyOn(globalThis, 'fetch').mockImplementation(
+        () =>
+            new Promise(resolve => {
+                deliver = resolve;
+            }),
+    );
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    render('en');
+    act(() => button('Next').click());
+    expect(fetchDirectory).toHaveBeenCalledWith('/mdac/hotels.json', expect.anything());
+    act(() => replaceInput(host.querySelector('[type=search]'), '56000, ConnAUG'));
+    expect(lodgingValue('accommodationAddress1')).toBe('');
+    await act(async () => {
+        deliver(Response.json([sampleHotel, bookedHotel]));
+        await vi.waitFor(() => expect(queryClient.getQueryState(directoryKey)?.status).toBe('success'));
+    });
+    expect(lodgingValue('accommodationAddress1')).toBe(sampleHotel.address);
+    expect(readDraft()).toEqual(draft);
+
+    const result = host.querySelector<HTMLButtonElement>('.mdac-hotel-results button');
+    assert.ok(result);
+    expect(result.textContent).toContain(bookedHotel.name);
+    act(() => result.click());
+    expect(lodgingValue('accommodationAddress1')).toBe(bookedHotel.address);
+    expect(lodgingValue('accommodationAddress2')).toBe(bookedHotel.address2);
+    expect(lodgingValue('accommodationState')).toBe(bookedHotel.state);
+    expect(lodgingValue('accommodationCity')).toBe(bookedHotel.city);
+    expect(lodgingValue('accommodationPostcode')).toBe(bookedHotel.postcode);
+    expect(readDraft()?.shared.accommodationAddress1).toBe(bookedHotel.address);
+});
+
+it('leaves manual lodging edits in control even when the automatic address is cleared', async () => {
+    const draft = emptyDraft();
+    draft.travelers[0] = sampleTraveler;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    queryClient.setQueryData(directoryKey, [sampleHotel]);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json([sampleHotel]));
+    render();
+    await act(() => Promise.resolve(button('下一步').click()));
+    const address = host.querySelector<HTMLInputElement>('[data-field="accommodationAddress1"] input');
+    assert.ok(address);
+    expect(address.value).toBe(sampleHotel.address);
+    // JSDOM matches :autofill on empty inputs, unlike a manual edit in Chromium.
+    vi.spyOn(address, 'matches').mockReturnValue(false);
+
+    act(() => replaceInput(address, ''));
+    expect(address.value).toBe('');
+    expect(lodgingValue('accommodationPostcode')).toBe('');
+    act(() => replaceInput(address, 'A real reservation'));
+    expect(address.value).toBe('A real reservation');
+    expect(readDraft()?.shared.accommodationAddress1).toBe('A real reservation');
+    expect(readDraft()?.shared.accommodationPostcode).toBeUndefined();
+});
+
 it.each(['restore', 'change stay'] as const)(
     'suggests a complete hotel and preserves an old draft on %s',
     async action => {
         const draft = emptyDraft();
-        draft.travelers[0] = {
-            name: 'SAMPLE TRAVELER',
-            passNo: 'E00000001',
-            nationality: 'CHN',
-            pob: 'CHN',
-            dob: '1990-01-01',
-            sex: '1',
-            passExpDte: '2034-01-01',
-        };
+        draft.travelers[0] = sampleTraveler;
         draft.shared.accommodationAddress1 = 'Old draft address';
         draft.shared.accommodationState = '';
         localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
-        const hotel = {
-            id: 'sample',
-            name: 'Sample Hotel',
-            address: '99 Sample Avenue',
-            state: '14',
-            city: 'KUALA LUMPUR',
-            postcode: '50450',
-        };
-        const directoryKey = ['mdac-hotel-directory', 1];
-        queryClient.setQueryData(directoryKey, [hotel]);
-        vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json([hotel]));
+        queryClient.setQueryData(directoryKey, [sampleHotel]);
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json([sampleHotel]));
 
         render();
         await act(() => Promise.resolve(button('下一步').click()));
-        const value = (key: string) =>
-            host.querySelector<HTMLInputElement | HTMLSelectElement>(
-                `[data-field="${key}"] input, [data-field="${key}"] select`,
-            )?.value;
-        expect(value('accommodationAddress1')).toBe(hotel.address);
-        expect(value('accommodationState')).toBe(hotel.state);
-        expect(value('accommodationCity')).toBe(hotel.city);
-        expect(value('accommodationPostcode')).toBe(hotel.postcode);
+        expect(lodgingValue('accommodationAddress1')).toBe(sampleHotel.address);
+        expect(lodgingValue('accommodationState')).toBe(sampleHotel.state);
+        expect(lodgingValue('accommodationCity')).toBe(sampleHotel.city);
+        expect(lodgingValue('accommodationPostcode')).toBe(sampleHotel.postcode);
         expect(readDraft()).toEqual(draft);
 
         if (action === 'restore') {
@@ -109,14 +221,13 @@ it.each(['restore', 'change stay'] as const)(
             act(() => button('亲友住所').click());
             expect(readDraft()?.shared.accommodationStay).toBe('02');
         }
-        expect(value('accommodationAddress1')).toBe(draft.shared.accommodationAddress1);
+        expect(lodgingValue('accommodationAddress1')).toBe(draft.shared.accommodationAddress1);
         expect(readDraft()?.shared.accommodationAddress2).toBe('');
         act(() => root.unmount());
         root = createRoot(host);
         render();
         act(() => button('下一步').click());
-        expect(value('accommodationAddress1')).toBe(draft.shared.accommodationAddress1);
-        queryClient.removeQueries({ queryKey: directoryKey });
+        expect(lodgingValue('accommodationAddress1')).toBe(draft.shared.accommodationAddress1);
     },
 );
 

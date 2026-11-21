@@ -52,6 +52,10 @@ import {
 
 const lodgingAddressFields = lodgingFields.slice(1);
 
+function hasLodgingDetails(fields: Fields): boolean {
+    return lodgingAddressFields.some(field => Boolean(fields[field.key]?.trim()));
+}
+
 function hotelAddressFields(hotel: MdacHotel): Fields {
     return {
         accommodationAddress1: hotel.address,
@@ -93,9 +97,8 @@ export function MdacPage({
     const [arrivalAirport, setArrivalAirport] = useState('');
     const [selectedFlight, setSelectedFlight] = useState<MdacFlight | null>(null);
     const [suggestedHotel, setSuggestedHotel] = useState<MdacHotel | null>(null);
-    const [restoredLodging, setRestoredLodging] = useState(() =>
-        lodgingAddressFields.some(field => Boolean(draft.shared[field.key])),
-    );
+    const [editingLodgingManually, setEditingLodgingManually] = useState(false);
+    const [restoredLodging, setRestoredLodging] = useState(() => hasLodgingDetails(draft.shared));
     const [confirmedTrip, setConfirmedTrip] = useState(false);
     const legacyAddress =
         restoredLodging &&
@@ -110,10 +113,9 @@ export function MdacPage({
     }
     // Keep suggested addresses separate from saved trip details until confirmation.
     const tripValues = suggestedHotel
-        ? { ...hotelAddressFields(suggestedHotel), ...lodgingDraft }
+        ? { ...lodgingDraft, ...hotelAddressFields(suggestedHotel) }
         : lodgingDraft;
-    const canSuggestHotel =
-        !suggestedHotel && lodgingAddressFields.every(field => lodgingDraft[field.key] === undefined);
+    const canSuggestHotel = !suggestedHotel && !editingLodgingManually && !hasLodgingDetails(lodgingDraft);
     const fieldId = useId();
     const heading = useRef<HTMLHeadingElement>(null);
     const editField = useRef<string | null>(null);
@@ -196,9 +198,8 @@ export function MdacPage({
         const editingLodging = !personal && lodgingFields.includes(field);
         if (editingLodging) {
             setRestoredLodging(false);
-            if (legacyAddress || field.key === 'accommodationStay' || field.key === 'accommodationAddress1') {
-                setSuggestedHotel(null);
-            }
+            setEditingLodgingManually(field.key !== 'accommodationStay');
+            setSuggestedHotel(null);
         }
         const next = personal
             ? {
@@ -416,6 +417,7 @@ export function MdacPage({
         setArrivalAirport('');
         setSelectedFlight(null);
         setSuggestedHotel(null);
+        setEditingLodgingManually(false);
         setRestoredLodging(false);
         setConfirmedTrip(false);
         if (imageInput.current) imageInput.current.value = '';
