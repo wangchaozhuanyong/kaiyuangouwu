@@ -18,6 +18,7 @@ import { StorefrontClientPluginAccessService } from '../storefront-client-plugin
 import { adminSchema, shopSchema } from './api-extensions';
 import { GptRechargeConfig, GptRechargeReceipt } from './entities';
 import { GptRechargeService } from './service';
+import { standaloneRechargeApi } from './standalone-api';
 
 async function respond<T>(ctx: RequestContext, work: () => Promise<T>): Promise<T> {
     ctx.req?.res?.setHeader('Cache-Control', 'no-store');
@@ -93,6 +94,22 @@ export class GptRechargeAdminResolver {
     gptRechargeAdminConfig(@Ctx() ctx: RequestContext) {
         return respond(ctx, () => this.service.adminConfig(ctx));
     }
+    @Query()
+    @Allow(Permission.SuperAdmin)
+    gptRechargeSubmissionReview(@Ctx() ctx: RequestContext, @Args('code') code: string) {
+        return respond(ctx, () => this.service.submissionReview(ctx, code));
+    }
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    recoverGptRechargeSubmission(
+        @Ctx() ctx: RequestContext,
+        @Args('code') code: string,
+        @Args('expectedRevision') expectedRevision: number,
+    ) {
+        return respond(ctx, () => this.service.recoverSubmission(ctx, code, expectedRevision));
+    }
+
     @Mutation()
     @Allow(Permission.SuperAdmin)
     updateGptRechargeConfig(
@@ -112,6 +129,14 @@ export class GptRechargeAdminResolver {
 
 @VendurePlugin({
     imports: [PluginCommonModule, StorefrontContentPlugin, ShopAbuseProtectionPlugin],
+    configuration: config => {
+        config.apiOptions.middleware.push({
+            route: '/',
+            beforeListen: true,
+            handler: standaloneRechargeApi(config.apiOptions.shopApiPath),
+        });
+        return config;
+    },
     entities: [GptRechargeConfig, GptRechargeReceipt],
     providers: [GptRechargeService, StorefrontClientPluginAccessService],
     shopApiExtensions: { schema: shopSchema, resolvers: [GptRechargeShopResolver] },

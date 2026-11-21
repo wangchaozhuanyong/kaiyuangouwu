@@ -5,6 +5,7 @@ export const rechargePlans = [
     { key: 'plus', label: 'Plus' },
     { key: 'pro_5x', label: 'Pro100' },
     { key: 'pro_20x', label: 'Pro200' },
+    { key: 'pro500', label: 'Pro500' },
 ] as const;
 export type RechargePlan = (typeof rechargePlans)[number]['key'];
 export type RechargeStatus =
@@ -57,7 +58,7 @@ export interface RechargeCode {
 export interface GptRechargeClient extends Partial<ShopAbuseClient> {
     config(signal?: AbortSignal): Promise<{ enabled: boolean; maintenance: boolean }>;
     verify(code: string, proof?: ShopAbuseProof): Promise<RechargeCode>;
-    submit(code: string, session: string, proof?: ShopAbuseProof): Promise<RechargeTask>;
+    submit?(code: string, session: string, proof?: ShopAbuseProof): Promise<RechargeTask>;
     query(code: string, proof?: ShopAbuseProof): Promise<RechargeCode>;
     task(id: string, credential: string, signal?: AbortSignal): Promise<RechargeTask>;
     watch?(

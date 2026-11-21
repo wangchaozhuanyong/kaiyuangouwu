@@ -94,6 +94,9 @@ jobs:
                               bun run build:core-common
                           fi
                           bun run --cwd "packages/$app" build
+                          if [[ "$app" == storefront ]]; then
+                              node packages/storefront/scripts/build-standalone-recharge.mjs --release
+                          fi
                       fi
                       node deploy/frontend-artifact.mjs stage "$app" "$RUNNER_TEMP/frontend-payload/$app"
                   done

@@ -111,6 +111,8 @@ describe('GPT recharge real SQL migration and service boundary', () => {
     let remote: (typeof upstream & { stage?: string; message?: string }) | null;
     let plan: string;
     let mode: string;
+    let canFence: boolean;
+    let submissionIds: string[];
     let submits: number;
     let retryFor: string | undefined;
     let access: { assertEnabled: ReturnType<typeof vi.fn>; isEnabled: ReturnType<typeof vi.fn> };
@@ -136,6 +138,8 @@ describe('GPT recharge real SQL migration and service boundary', () => {
         remote = null;
         plan = 'plus';
         mode = 'ok';
+        canFence = false;
+        submissionIds = [];
         submits = 0;
         retryFor = undefined;
         vi.stubGlobal(
@@ -156,15 +160,27 @@ describe('GPT recharge real SQL migration and service boundary', () => {
                     );
                 }
                 if (action === 'task') {
-                    expect(Object.keys(JSON.parse(init.body as string)).sort()).toEqual(['id', 'taskToken']);
+                    const taskInput = JSON.parse(init.body as string);
+                    if (taskInput.action === 'reconcile') {
+                        expect(taskInput.submissionId).toBe(submissionIds.at(-1));
+                        return Promise.resolve(Response.json({ fenced: canFence }));
+                    }
+                    expect(Object.keys(taskInput).sort()).toEqual(['id', 'taskToken']);
                     return Promise.resolve(Response.json(remote ?? upstream));
                 }
                 submits++;
                 const input = JSON.parse(init.body as string);
+                expect(input.submissionId).toMatch(/^[a-f0-9-]{36}$/);
+                submissionIds.push(input.submissionId);
                 if (retryFor && remote?.id === retryFor) {
                     expect(input.afterFailedTask).toBe(retryFor);
-                    expect(Object.keys(input).sort()).toEqual(['afterFailedTask', 'code', 'session']);
-                } else expect(Object.keys(input).sort()).toEqual(['code', 'session']);
+                    expect(Object.keys(input).sort()).toEqual([
+                        'afterFailedTask',
+                        'code',
+                        'session',
+                        'submissionId',
+                    ]);
+                } else expect(Object.keys(input).sort()).toEqual(['code', 'session', 'submissionId']);
                 if (mode === 'unknown') return Promise.reject(new Error(`transport ${source} ${key}`));
                 if (mode === 'rejected') return Promise.resolve(Response.json({ rejected: true }));
                 if (mode === 'replay-old') return Promise.resolve(Response.json(remote));
@@ -236,7 +252,7 @@ describe('GPT recharge real SQL migration and service boundary', () => {
         expect(cancelled).toBe(true);
         expect(pulls).toBeLessThanOrEqual(4);
     });
-    it.each(['plus', 'pro_5x', 'pro_20x'])(
+    it.each(['plus', 'pro_5x', 'pro_20x', 'pro500'])(
         'uses code-bound %s and stores no plaintext credentials',
         async value => {
             plan = value;
@@ -333,7 +349,7 @@ describe('GPT recharge real SQL migration and service boundary', () => {
         expect(retained.progress?.milestones).toEqual(progress.milestones);
     });
     it.runIf(Boolean(process.env.GPT_RECHARGE_ID_PROJECT))(
-        'connects the actual ID task bridge to Vendure encrypted receipts and task streams',
+        'redeems a code-bound Pro500 through the actual ID task bridge, receipts and task stream',
         async () => {
             const { pathToFileURL } = await import('node:url');
             const { createServer } = await import('node:http');
@@ -342,11 +358,24 @@ describe('GPT recharge real SQL migration and service boundary', () => {
             const moduleUrl = pathToFileURL(peer + '/modules/recharge/vendure/loopback-bridge.mjs').href;
             const { createLoopbackVendureRechargeBridge, signRechargeWorkerRequest, rechargeWorkerPrefix } =
                 await import(/* @vite-ignore */ moduleUrl);
+            const clientUrl = pathToFileURL(peer + '/server/order-recharge-client.mjs').href;
+            const { createOrderRechargeClient } = await import(/* @vite-ignore */ clientUrl);
+            const code = 'KC-AAAAAAAAAAAAAAA';
+            const native = createOrderRechargeClient(
+                { upstreamUrl: 'http://127.0.0.1:1', secret: 'synthetic-cross-project-native-key-only' },
+                (url: URL, init: RequestInit) => {
+                    expect(url.pathname).toBe('/api/verify-cdk');
+                    if (typeof init.body !== 'string') throw new Error('Expected a JSON body');
+                    expect(JSON.parse(init.body)).toEqual({ cdk: code });
+                    return Response.json({ success: true, data: { type: '自助', plan_type: 'pro500' } });
+                },
+            );
             const workerSecret = 'synthetic-cross-project-worker-key-only';
             const bridge = createLoopbackVendureRechargeBridge({
                 vendureKey: key,
                 workerSecret,
-                codes: [{ code: 'joint-test', plan: 'plus' }],
+                codes: [],
+                lookupAdmission: native.verifyStorefrontCode,
             });
             const server = createServer((req, res) => void bridge.handle(req, res));
             await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -354,16 +383,35 @@ describe('GPT recharge real SQL migration and service boundary', () => {
             const abort = new AbortController();
             let watching: Promise<void> | undefined;
             try {
-                vi.mocked(fetch).mockImplementation((url, options) =>
-                    nativeFetch(
-                        (typeof url === 'string' ? url : url instanceof URL ? url.href : url.url).replace(
-                            source,
-                            origin,
-                        ),
-                        options,
-                    ),
-                );
-                const accepted = await service.submit(ctx(), 'joint-test', session);
+                let delayedSubmit: (() => Promise<Response>) | undefined;
+                vi.mocked(fetch).mockImplementation((url, options) => {
+                    const destination = (
+                        typeof url === 'string' ? url : url instanceof URL ? url.href : url.url
+                    ).replace(source, origin);
+                    if (destination.endsWith('/submit') && !delayedSubmit) {
+                        delayedSubmit = () => nativeFetch(destination, options);
+                        return Promise.reject(
+                            new Error('Synthetic connection lost before ID received submit'),
+                        );
+                    }
+                    return nativeFetch(destination, options);
+                });
+                expect(await service.verify(ctx(), code)).toMatchObject({
+                    plan: 'pro500',
+                    status: 'available',
+                });
+                await expect(service.submit(ctx(), code, session)).rejects.toThrow('提交结果待核对');
+                const review = await service.submissionReview(ctx(), code);
+                expect(review.pending).toBe(true);
+                expect(await service.recoverSubmission(ctx(), code, review.revision)).toMatchObject({
+                    pending: false,
+                });
+                if (!delayedSubmit) throw new Error('Missing delayed request fixture');
+                const late = await delayedSubmit();
+                expect(await late.json()).toMatchObject({ rejected: true });
+                expect(await service.query(ctx(), code)).toMatchObject({ status: 'available', task: null });
+                const accepted = await service.submit(ctx(), code, session);
+                expect(accepted.plan).toBe('pro500');
                 expect(accepted.accountEmail).toBe('demo@example.test');
                 const values: any[] = [];
                 let first!: () => void;
@@ -397,6 +445,7 @@ describe('GPT recharge real SQL migration and service boundary', () => {
                     return reply.json();
                 };
                 const lease = (await worker('claim')).task;
+                expect(lease.plan).toBe('pro500');
                 await worker('progress', {
                     id: lease.id,
                     leaseToken: lease.leaseToken,
@@ -415,7 +464,7 @@ describe('GPT recharge real SQL migration and service boundary', () => {
                     evidenceId: 'synthetic-completion',
                 });
                 await watching;
-                expect(values.at(-1).status).toBe('succeeded');
+                expect(values.at(-1)).toMatchObject({ plan: 'pro500', status: 'succeeded' });
                 expect(values.at(-1).progress.milestones).toEqual(
                     expect.arrayContaining([
                         expect.objectContaining({ key: 'card', state: 'complete' }),
@@ -424,9 +473,7 @@ describe('GPT recharge real SQL migration and service boundary', () => {
                 );
                 expect(JSON.stringify(values)).not.toContain(lease.leaseToken);
                 expect(JSON.stringify(values)).not.toContain(lease.id);
-                expect((await service.query(ctx(), 'joint-test')).task?.progress).toEqual(
-                    values.at(-1).progress,
-                );
+                expect((await service.query(ctx(), code)).task?.progress).toEqual(values.at(-1).progress);
             } finally {
                 abort.abort();
                 await watching?.catch(() => undefined);
@@ -455,6 +502,31 @@ describe('GPT recharge real SQL migration and service boundary', () => {
         remote = { ...upstream, status: 'succeeded' };
         expect((await service.query(ctx(), 'unknown')).task?.status).toBe('succeeded');
         expect(submits).toBe(1);
+    });
+    it('keeps uncertain submissions locked until an explicit fenced recovery and never resends', async () => {
+        const code = 'lost-before-enqueue';
+        mode = 'unknown';
+        await expect(service.submit(ctx(), code, session)).rejects.toThrow('提交结果待核对');
+        const review = await service.submissionReview(ctx(), code);
+        expect(review.pending).toBe(true);
+        await expect(service.verify(ctx(), code)).resolves.toMatchObject({
+            status: 'reserved',
+            reason: 'manual_review_required',
+        });
+        await expect(service.recoverSubmission(ctx(), code, review.revision - 1)).rejects.toThrow('已变化');
+        await expect(service.recoverSubmission(ctx(), code, review.revision)).rejects.toThrow('已保留锁定');
+        expect(await service.submissionReview(ctx(), code)).toEqual(review);
+        canFence = true;
+        await expect(service.recoverSubmission(ctx(), code, review.revision)).resolves.toEqual({
+            pending: false,
+            revision: review.revision + 1,
+        });
+        expect(submits).toBe(1);
+        await expect(service.verify(ctx(), code)).resolves.toMatchObject({ status: 'available' });
+        mode = 'ok';
+        await expect(service.submit(ctx(), code, session)).resolves.toMatchObject({ status: 'queued' });
+        expect(submits).toBe(2);
+        expect(new Set(submissionIds).size).toBe(2);
     });
     it('a proven rejection permits corrected input', async () => {
         mode = 'rejected';
@@ -685,64 +757,112 @@ describe('GPT recharge real SQL migration and service boundary', () => {
         expect(await service.publicConfig(ctx())).toEqual({ enabled: false, maintenance: false });
         expect(submits).toBe(0);
     });
-    it('keeps the legacy connection while using a private partner key and ID-hosted authorization', async () => {
-        const apiKey = 'rp_' + 'a'.repeat(24) + '.' + 'b'.repeat(43);
-        const code = 'RA-' + 'A'.repeat(32);
-        const ticket = 'c'.repeat(43);
-        const exchange: string[] = [];
-        const authUrl = source + '/recharge/authorize#' + upstream.id + '.' + ticket;
-        let status = 'awaiting_authorization';
-        let updatedAt = '2026-10-16T10:00:00.000Z';
-        const legacy = vi.mocked(fetch).getMockImplementation();
-        if (!legacy) throw new Error('Missing legacy test transport');
-        vi.mocked(fetch).mockImplementation((url, init) => {
-            if (typeof url !== 'string' || !url.includes('/api/recharge/v1/')) return legacy(url, init);
-            const path = url.split('/api/recharge/v1')[1];
-            expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer ' + apiKey);
-            expect(new Headers(init?.headers).get('x-vendure-recharge-key')).toBeNull();
-            exchange.push(path);
-            if (path === '/codes/query')
-                return Promise.resolve(Response.json({ plan: 'plus', status: 'available' }));
-            if (path === '/redemptions') {
-                expect(new Headers(init?.headers).get('Idempotency-Key')).toBe('shop-request');
-                expect(init?.body).toBe(JSON.stringify({ code }));
-            }
-            return Promise.resolve(
-                Response.json({
-                    id: upstream.id,
-                    plan: 'plus',
-                    status,
-                    updatedAt,
-                    ...(path === '/redemptions' && { authorizationUrl: authUrl }),
-                }),
-            );
-        });
-        const config = await service.saveConfig(ctx(), {
+    it('checks only partner connectivity for the independent portal', async () => {
+        expect(await service.publicConfig(ctx(), true)).toEqual({ enabled: false, maintenance: false });
+        expect(fetch).not.toHaveBeenCalled();
+        expect(await service.publicConfig(ctx())).toEqual({ enabled: true, maintenance: false });
+        await service.saveConfig(ctx(), {
             enabled: true,
-            upstreamOrigin: source + '/api/recharge/v1',
-            partnerApiKey: apiKey,
+            upstreamOrigin: source,
+            partnerApiKey: 'rp_' + 'a'.repeat(24) + '.' + 'b'.repeat(43),
             expectedRevision: 0,
         });
-        expect(config).toMatchObject({ partnerConfigured: true, legacyConfigured: true });
-        expect(config.upstreamOrigin).toBe(source);
-        expect(JSON.stringify(config)).not.toContain(apiKey);
-        const saved = await db.getRepository(GptRechargeConfig).findOneByOrFail({ channelId: 1 });
-        expect(openRechargeSecret(saved.encryptedServiceKey, 'gpt:1')).toBe(key);
-        expect((await service.verify(ctx(), 'legacy-code')).status).toBe('available');
-        await expect(service.submit(ctx(), code, session)).rejects.toThrow('本次提交未受理');
-        const result = await service.startAuthorization(ctx(), code.toLowerCase(), 'shop-request');
-        expect(result.authorizationUrl).toBe(authUrl);
-        expect(result.task.status).toBe('awaiting_authorization');
-        expect(result.task.id).not.toBe(upstream.id);
-        status = 'queued';
-        updatedAt = '2026-10-16T10:00:01.000Z';
-        expect((await service.task(ctx(), result.task.id, result.task.credential)).status).toBe('queued');
-        await expect(service.task(ctx(2), result.task.id, result.task.credential)).rejects.toThrow();
-        const row = await db.getRepository(GptRechargeReceipt).findOneByOrFail({ publicId: result.task.id });
-        expect(JSON.stringify(row)).not.toContain(ticket);
-        expect(JSON.stringify(row)).not.toContain(apiKey);
-        expect(exchange).toEqual(['/codes/query', '/redemptions', '/redemptions/' + upstream.id]);
+        const legacy = vi.mocked(fetch).getMockImplementation();
+        if (!legacy) throw new Error('Missing legacy test transport');
+        vi.mocked(fetch).mockImplementation((url, init) =>
+            typeof url === 'string' && url.endsWith('/api/recharge/v1/config')
+                ? Promise.resolve(Response.json({ maintenance: true }))
+                : legacy(url, init),
+        );
+        expect(await service.publicConfig(ctx(), true)).toEqual({ enabled: true, maintenance: true });
+        expect(await service.publicConfig(ctx())).toEqual({ enabled: true, maintenance: false });
     });
+    it.each(['plus', 'pro500'])(
+        'uses ID-hosted partner authorization for code-bound %s while retaining the legacy connection',
+        async partnerPlan => {
+            const apiKey = 'rp_' + 'a'.repeat(24) + '.' + 'b'.repeat(43);
+            const code = 'RA-' + 'A'.repeat(32);
+            const ticket = 'c'.repeat(43);
+            const exchange: string[] = [];
+            const authUrl = source + '/recharge/authorize#' + upstream.id + '.' + ticket;
+            let status = 'awaiting_authorization';
+            let updatedAt = '2026-10-16T10:00:00.000Z';
+            const legacy = vi.mocked(fetch).getMockImplementation();
+            if (!legacy) throw new Error('Missing legacy test transport');
+            vi.mocked(fetch).mockImplementation((url, init) => {
+                if (typeof url !== 'string' || !url.includes('/api/recharge/v1/')) return legacy(url, init);
+                const path = url.split('/api/recharge/v1')[1];
+                expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer ' + apiKey);
+                expect(new Headers(init?.headers).get('x-vendure-recharge-key')).toBeNull();
+                exchange.push(path);
+                if (path === '/codes/query' || path === '/codes/verify')
+                    return Promise.resolve(Response.json({ plan: partnerPlan, status: 'available' }));
+                if (path === '/redemptions') {
+                    expect(new Headers(init?.headers).get('Idempotency-Key')).toBe('shop-request');
+                    expect(init?.body).toBe(JSON.stringify({ code }));
+                }
+                return Promise.resolve(
+                    Response.json({
+                        id: upstream.id,
+                        plan: partnerPlan,
+                        status,
+                        updatedAt,
+                        accountEmail: 'customer@example.test',
+                        ...(path === '/redemptions' && { authorizationUrl: authUrl }),
+                    }),
+                );
+            });
+            const config = await service.saveConfig(ctx(), {
+                enabled: true,
+                upstreamOrigin: source + '/api/recharge/v1',
+                partnerApiKey: apiKey,
+                expectedRevision: 0,
+            });
+            expect(config).toMatchObject({ partnerConfigured: true, legacyConfigured: true });
+            expect(config.upstreamOrigin).toBe(source);
+            expect(JSON.stringify(config)).not.toContain(apiKey);
+            const saved = await db.getRepository(GptRechargeConfig).findOneByOrFail({ channelId: 1 });
+            expect(openRechargeSecret(saved.encryptedServiceKey, 'gpt:1')).toBe(key);
+            expect((await service.verify(ctx(), 'legacy-code')).status).toBe('available');
+            await expect(service.submit(ctx(), code, session)).rejects.toThrow('本次提交未受理');
+            expect(await service.verify(ctx(), code)).toMatchObject({
+                status: 'available',
+                plan: partnerPlan,
+            });
+            const result = await service.startAuthorization(ctx(), code.toLowerCase(), 'shop-request');
+            expect(result.authorizationUrl).toBe(authUrl);
+            expect(result.task).toMatchObject({
+                status: 'awaiting_authorization',
+                plan: partnerPlan,
+                accountEmail: 'c***@example.test',
+            });
+            expect(result.task.id).not.toBe(upstream.id);
+            status = 'queued';
+            updatedAt = '2026-10-16T10:00:01.000Z';
+            expect(await service.task(ctx(), result.task.id, result.task.credential)).toMatchObject({
+                status: 'queued',
+                plan: partnerPlan,
+            });
+            await expect(service.task(ctx(2), result.task.id, result.task.credential)).rejects.toThrow();
+            const row = await db
+                .getRepository(GptRechargeReceipt)
+                .findOneByOrFail({ publicId: result.task.id });
+            expect(JSON.stringify(row)).not.toContain(ticket);
+            expect(JSON.stringify(row)).not.toContain(apiKey);
+            expect(exchange).toEqual([
+                '/codes/verify',
+                '/codes/query',
+                '/redemptions',
+                '/redemptions/' + upstream.id,
+            ]);
+
+            vi.mocked(fetch).mockResolvedValue(Response.json({ plan: 'unknown', status: 'available' }));
+            await expect(service.startAuthorization(ctx(), code, 'another-request')).rejects.toThrow(
+                '兑换码状态暂不可用',
+            );
+            expect(vi.mocked(fetch).mock.lastCall?.[0]).toBe(source + '/api/recharge/v1/codes/query');
+        },
+    );
     it('requires published access before contacting the executor', async () => {
         access.assertEnabled.mockRejectedValueOnce(new Error('disabled'));
         await expect(service.verify(ctx(), 'code')).rejects.toThrow();

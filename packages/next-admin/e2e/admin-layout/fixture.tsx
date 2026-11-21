@@ -95,6 +95,9 @@ const legacyOwnershipFixture = params.has('legacyOwnership') && digitalFixture &
 const productCreateResetFixture = params.has('productCreateReset') && mockWritesEnabled;
 const categoryReadbackFixture = params.has('categoryReadback') && mockWritesEnabled;
 const productCreateFieldsFixture = productCreateResetFixture && params.has('productUnifiedFields');
+const rechargeFixture = params.has('rechargeFixture');
+const rechargeReviewCode = 'KC-' + 'X'.repeat(15);
+let rechargeReview = { pending: true, revision: 3 };
 const legacyStockLevel = {
     id: 'legacy-stock-demo',
     stockLocationId: 'legacy-location-demo',
@@ -1415,7 +1418,7 @@ const client = new ApolloClient({
                     }
                     const input = operation.variables.input ?? {};
                     let result: unknown;
-                    if (params.has('rechargeFixture') && field.name.value === 'updateGptRechargeConfig') {
+                    if (rechargeFixture && field.name.value === 'updateGptRechargeConfig') {
                         const config = data.gptRechargeAdminConfig as {
                             revision: number;
                             legacyConfigured: boolean;
@@ -1435,6 +1438,14 @@ const client = new ApolloClient({
                             revision: config.revision + 1,
                         };
                         data.gptRechargeAdminConfig = result;
+                    } else if (rechargeFixture && field.name.value === 'recoverGptRechargeSubmission') {
+                        const { code, expectedRevision } = operation.variables;
+                        if (code !== rechargeReviewCode || expectedRevision !== rechargeReview.revision) {
+                            observer.error(new Error('本地模拟充值恢复版本冲突'));
+                            return;
+                        }
+                        rechargeReview = { pending: false, revision: rechargeReview.revision + 1 };
+                        result = rechargeReview;
                     } else if (categoryReadbackFixture && field.name.value === 'updateProduct') {
                         product.translations = input.translations;
                         for (const fieldName of ['name', 'slug', 'description'] as const)
@@ -1980,6 +1991,15 @@ const client = new ApolloClient({
                         collection: collections.find(item => item.id === operation.variables.id) ?? null,
                     };
                 }
+                if (rechargeFixture && operation.operationName === 'GptRechargeSubmissionReview') {
+                    responseData = {
+                        ...responseData,
+                        gptRechargeSubmissionReview:
+                            operation.variables.code === rechargeReviewCode
+                                ? rechargeReview
+                                : { pending: false, revision: -1 },
+                    };
+                }
                 const finish = () => {
                     if (operationTrace) operationTrace.completed = true;
                     observer.next({
@@ -2268,7 +2288,7 @@ if (view === 'performance') {
             {layoutAudit && <FixtureAuditTheme />}
             <ApolloProvider client={client}>
                 <FixtureSettingsConfirmation
-                    settingsFixture={params.has('settingsFixture')}
+                    settingsFixture={params.has('settingsFixture') || rechargeFixture}
                     mockWritesEnabled={mockWritesEnabled}
                 >
                     <FeatureHelpProvider>

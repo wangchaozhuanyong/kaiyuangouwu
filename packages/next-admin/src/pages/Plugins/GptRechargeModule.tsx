@@ -10,7 +10,8 @@ import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useAdminQuery } from '../../hooks/use-admin-query';
 import { useServerDraft } from '../../hooks/use-server-draft';
-import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
+import { GptRechargeSubmissionReview } from './GptRechargeSubmissionReview';
+import './gpt-recharge-settings.css';
 
 type Configuration = {
     enabled: boolean;
@@ -20,7 +21,11 @@ type Configuration = {
     legacyConfigured: boolean;
     revision: number;
 };
-type Draft = Pick<Configuration, 'enabled' | 'upstreamOrigin'> & { expectedRevision: number };
+type Draft = Pick<Configuration, 'enabled' | 'upstreamOrigin'> & {
+    expectedRevision: number;
+    serviceKey: string;
+    partnerApiKey: string;
+};
 export const GPT_RECHARGE_ADMIN_CONFIG = gql`
     query GptRechargeAdminConfig {
         gptRechargeAdminConfig {
@@ -49,6 +54,8 @@ const toDraft = (config: Configuration): Draft => ({
     enabled: config.enabled,
     upstreamOrigin: config.upstreamOrigin,
     expectedRevision: config.revision,
+    serviceKey: '',
+    partnerApiKey: '',
 });
 
 export function GptRechargeModule() {
@@ -62,10 +69,7 @@ export function GptRechargeModule() {
         source ? String(source.revision) : '',
         source ? toDraft(source) : null,
     );
-    const [secret, setSecret] = useState({ scope, value: '', partner: '' });
-    const serviceKey = secret.scope === scope ? secret.value : '';
-    const partnerApiKey = secret.scope === scope ? secret.partner : '';
-    useUnsavedChangesWarning(Boolean(serviceKey || partnerApiKey), '当前连接凭证尚未保存，确定离开吗？');
+    const { serviceKey, partnerApiKey } = server.draft ?? { serviceKey: '', partnerApiKey: '' };
     const [feedback, setFeedback] = useState({ scope, message: '', failed: false });
     const message = feedback.scope === scope ? feedback.message : '';
     const pending = useRef(false);
@@ -76,7 +80,7 @@ export function GptRechargeModule() {
     const update = (patch: Partial<Draft>) =>
         server.setDraft(value => (value ? { ...value, ...patch } : value));
     const submit = async () => {
-        if (!server.draft || server.sourceChanged || pending.current) return;
+        if (!server.draft || !server.dirty || server.sourceChanged || pending.current) return;
         pending.current = true;
         setFeedback({ scope, message: '', failed: false });
         try {
@@ -94,7 +98,6 @@ export function GptRechargeModule() {
             if (getAdminQueryScope() !== scope) return;
             if (!saved) throw new Error('No saved configuration');
             server.accept(toDraft(saved), String(saved.revision));
-            setSecret({ scope, value: '', partner: '' });
             setFeedback({
                 scope,
                 message: '当前店铺的充值连接已保存。前台入口还需在客户端插件中启用并发布。',
@@ -103,11 +106,12 @@ export function GptRechargeModule() {
             try {
                 await query.refetch();
             } catch {
-                setFeedback({
-                    scope,
-                    message: '配置已保存，但最新状态读取失败。请点击重新读取核对，勿重复保存。',
-                    failed: true,
-                });
+                if (getAdminQueryScope() === scope)
+                    setFeedback({
+                        scope,
+                        message: '配置已保存，但最新状态读取失败。请点击重新读取核对，勿重复保存。',
+                        failed: true,
+                    });
             }
         } catch {
             if (getAdminQueryScope() === scope)
@@ -122,12 +126,13 @@ export function GptRechargeModule() {
     };
     return (
         <section
-            className="mx-auto h-full w-full max-w-6xl space-y-6 overflow-y-auto p-4 sm:p-6"
+            className="recharge-settings mx-auto h-full w-full max-w-6xl space-y-5 overflow-y-auto p-4 sm:p-6"
             data-admin-page="gpt-recharge"
         >
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2">
-                <h1 className="flex flex-wrap items-center gap-2 text-xl font-semibold">
-                    GPT自助充值
+            <header className="recharge-settings-heading">
+                <h1 className="font-semibold">充值连接设置</h1>
+                <p className="text-sm text-slate-500">配置当前店铺的充值连接，仅超级管理员可见。</p>
+                <div className="recharge-settings-tools">
                     <FeatureHelpButton
                         title="GPT自助充值"
                         content={{
@@ -140,20 +145,17 @@ export function GptRechargeModule() {
                             impact: '关闭只阻止当前店铺的新提交；原任务仍可查询。套餐由兑换码决定。',
                         }}
                     />
-                </h1>
-                <AdminButton
-                    refreshPage
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
-                    disabled={query.loading}
-                    onClick={() => void query.refetch()}
-                >
-                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                    重新读取
-                </AdminButton>
-                <p className="col-span-2 text-sm text-slate-500">
-                    配置当前店铺的充值连接，仅超级管理员可见。
-                </p>
-            </div>
+                    <AdminButton
+                        refreshPage
+                        className="recharge-settings-read inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium"
+                        disabled={query.loading}
+                        onClick={() => void query.refetch()}
+                    >
+                        <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                        重新读取
+                    </AdminButton>
+                </div>
+            </header>
             {query.loading && !source && (
                 <p role="status" className="rounded-xl bg-white p-6 text-sm text-slate-500">
                     正在读取充值配置…
@@ -175,10 +177,10 @@ export function GptRechargeModule() {
             )}
             {server.sourceChanged && <DraftUpdateNotice onReload={server.reload} />}
             {server.draft && source && (
-                <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_16rem]">
+                <div className="recharge-settings-layout">
                     <form
                         aria-label="GPT 充值连接配置"
-                        className="min-w-0 overflow-hidden rounded-xl bg-white"
+                        className="recharge-settings-sheet min-w-0"
                         onSubmit={event => {
                             event.preventDefault();
                             void submit();
@@ -205,7 +207,7 @@ export function GptRechargeModule() {
                             >
                                 <AdminInput
                                     type="checkbox"
-                                    className="h-4 w-4 rounded border-slate-300 accent-blue-600"
+                                    className="recharge-settings-check h-5 w-5"
                                     checked={server.draft.enabled}
                                     disabled={saveState.loading}
                                     onChange={event => update({ enabled: event.target.checked })}
@@ -218,7 +220,7 @@ export function GptRechargeModule() {
                             >
                                 <AdminInput
                                     type="url"
-                                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                                    className="w-full border px-3 py-2 text-sm"
                                     placeholder="https://recharge.example.com"
                                     required
                                     value={server.draft.upstreamOrigin}
@@ -258,7 +260,7 @@ export function GptRechargeModule() {
                             >
                                 <AdminInput
                                     type="password"
-                                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                                    className="w-full border px-3 py-2 text-sm"
                                     placeholder={
                                         source.legacyConfigured ? '留空保留现有凭证' : '输入原商城服务凭证'
                                     }
@@ -267,13 +269,7 @@ export function GptRechargeModule() {
                                     minLength={32}
                                     maxLength={512}
                                     disabled={saveState.loading}
-                                    onChange={event =>
-                                        setSecret({
-                                            scope,
-                                            value: event.target.value,
-                                            partner: partnerApiKey,
-                                        })
-                                    }
+                                    onChange={event => update({ serviceKey: event.target.value })}
                                 />
                             </AdminField>
                             <AdminField
@@ -287,7 +283,7 @@ export function GptRechargeModule() {
                             >
                                 <AdminInput
                                     type="password"
-                                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                                    className="w-full border px-3 py-2 text-sm"
                                     placeholder={
                                         source.partnerConfigured ? '留空保留现有密钥' : '输入合作方 API 密钥'
                                     }
@@ -296,25 +292,21 @@ export function GptRechargeModule() {
                                     autoComplete="new-password"
                                     maxLength={71}
                                     disabled={saveState.loading}
-                                    onChange={event =>
-                                        setSecret({ scope, partner: event.target.value, value: serviceKey })
-                                    }
+                                    onChange={event => update({ partnerApiKey: event.target.value })}
                                 />
                             </AdminField>
                         </section>
-                        <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                        <div className="recharge-settings-actions flex flex-col gap-3 border-t p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
                             <p role="status" className="text-sm text-slate-500">
-                                {server.dirty || serviceKey || partnerApiKey
-                                    ? '有未保存的更改'
-                                    : '当前没有未保存的更改'}
+                                {server.dirty ? '有未保存的更改' : '当前没有未保存的更改'}
                             </p>
                             <AdminButton
                                 type="submit"
-                                className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                                className="recharge-settings-save inline-flex w-full shrink-0 items-center justify-center gap-2 px-4 py-2 text-sm font-semibold sm:w-auto"
                                 disabled={
                                     saveState.loading ||
                                     server.sourceChanged ||
-                                    (!server.dirty && !serviceKey && !partnerApiKey) ||
+                                    !server.dirty ||
                                     (!source.credentialConfigured && !serviceKey && !partnerApiKey)
                                 }
                                 aria-busy={saveState.loading}
@@ -325,7 +317,10 @@ export function GptRechargeModule() {
                         </div>
                     </form>
                     <aside aria-label="配置状态与使用指引" className="min-w-0 space-y-6">
-                        <section aria-labelledby="recharge-status-title" className="space-y-4 p-1">
+                        <section
+                            aria-labelledby="recharge-status-title"
+                            className="recharge-settings-summary space-y-4 p-5"
+                        >
                             <h2
                                 id="recharge-status-title"
                                 className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900"
@@ -351,7 +346,7 @@ export function GptRechargeModule() {
                         </section>
                         <section
                             aria-labelledby="recharge-entry-title"
-                            className="space-y-3 rounded-xl bg-slate-100 p-5"
+                            className="recharge-settings-entry space-y-3 p-5"
                         >
                             <h2
                                 id="recharge-entry-title"
@@ -368,7 +363,7 @@ export function GptRechargeModule() {
                             </p>
                             <Link
                                 to="/plugins/client-plugins"
-                                className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-blue-600 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4"
+                                className="recharge-settings-link inline-flex min-h-11 items-center gap-1 text-sm font-medium hover:underline"
                             >
                                 管理前台入口
                                 <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
@@ -392,6 +387,7 @@ export function GptRechargeModule() {
                     </aside>
                 </div>
             )}
+            <GptRechargeSubmissionReview key={scope} scope={scope} />
         </section>
     );
 }

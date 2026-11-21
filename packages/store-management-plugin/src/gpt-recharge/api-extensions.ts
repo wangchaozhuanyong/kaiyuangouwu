@@ -58,6 +58,10 @@ export const adminSchema = gql`
         legacyConfigured: Boolean!
         revision: Int!
     }
+    type GptRechargeSubmissionReview {
+        pending: Boolean!
+        revision: Int!
+    }
     input GptRechargeConfigInput {
         enabled: Boolean!
         upstreamOrigin: String!
@@ -67,8 +71,10 @@ export const adminSchema = gql`
     }
     extend type Query {
         gptRechargeAdminConfig: GptRechargeAdminConfig!
+        gptRechargeSubmissionReview(code: String!): GptRechargeSubmissionReview!
     }
     extend type Mutation {
+        recoverGptRechargeSubmission(code: String!, expectedRevision: Int!): GptRechargeSubmissionReview!
         updateGptRechargeConfig(input: GptRechargeConfigInput!): GptRechargeAdminConfig!
     }
 `;

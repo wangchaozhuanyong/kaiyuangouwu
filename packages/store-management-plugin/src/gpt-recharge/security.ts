@@ -80,7 +80,7 @@ export function allowedRechargeOrigin(value: string, allowPartnerPath = false): 
     return url.origin;
 }
 
-export const rechargeAllowedPlans = ['plus', 'pro_5x', 'pro_20x'];
+export const rechargeAllowedPlans = ['plus', 'pro_5x', 'pro_20x', 'pro500'];
 export const rechargeAllowedStatuses = [
     'queued',
     'running',

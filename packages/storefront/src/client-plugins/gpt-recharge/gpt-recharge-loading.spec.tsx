@@ -75,6 +75,7 @@ afterAll(() => act(() => root.unmount()));
 it.each(['zh', 'en'] as const)(
     'keeps the cold-load form and draft stable while availability resolves (%s)',
     async language => {
+        vi.useFakeTimers();
         let finish!: (value: { enabled: boolean; maintenance: boolean }) => void;
         config.mockImplementationOnce(() => new Promise(resolve => (finish = resolve)));
         await render(true, 'test:MYR', language);
@@ -99,7 +100,7 @@ it.each(['zh', 'en'] as const)(
         expect(submit).not.toHaveBeenCalled();
         await act(async () => {
             finish({ enabled: true, maintenance: false });
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await vi.advanceTimersByTimeAsync(10);
         });
         expect(container.querySelector('#gpt-code')).toBe(input);
         expect(container.querySelector('#gpt-session')).toBe(sessionInput);
