@@ -91,14 +91,18 @@ export const lodgingFields: Field[] = [
     { key: 'accommodationPostcode', zh: '邮编', en: 'Postcode', maxLength: 5, pattern: '[0-9]{5}' },
 ];
 export const tripFields = [...contactFields, ...travelFields, ...lodgingFields];
-export function validPersonalFields(person: Fields): boolean {
-    return personalFields.every(field => {
-        const value = person[field.key]?.trim();
-        return Boolean(
-            value &&
-            value.length <= (field.maxLength ?? 250) &&
-            (!field.pattern || new RegExp(`^${field.pattern}$`).test(value)) &&
-            (!field.options || field.options.some(([code]) => code === value)),
+export function invalidPersonalField(person: Fields, today: string): Field | undefined {
+    return personalFields.find(field => {
+        const raw = person[field.key];
+        const value = raw?.trim();
+        return (
+            !value ||
+            value.length > (field.maxLength ?? 250) ||
+            (field.pattern && !new RegExp(`^${field.pattern}$`).test(value)) ||
+            (field.options && !field.options.some(([code]) => code === value)) ||
+            (field.type === 'date' && !isIsoDate(raw)) ||
+            (field.key === 'dob' && value > today) ||
+            (field.key === 'passExpDte' && value <= today)
         );
     });
 }
@@ -185,14 +189,9 @@ export function exportConfig(draft: Draft) {
         })),
     };
 }
-export function validateDates(person: Fields, shared: Fields, today: string): boolean {
-    return Boolean(
-        [person.dob, person.passExpDte, shared.arrDt, shared.depDt].every(isIsoDate) &&
-        person.dob <= today &&
-        person.passExpDte > shared.arrDt &&
-        shared.depDt >= shared.arrDt &&
-        shared.arrDt >= today,
-    );
+export function invalidTripDate(shared: Fields, today: string): 'arrDt' | 'depDt' | undefined {
+    if (!isIsoDate(shared.arrDt) || shared.arrDt < today) return 'arrDt';
+    if (!isIsoDate(shared.depDt) || shared.depDt < shared.arrDt) return 'depDt';
 }
 
 export function isIsoDate(value: string | undefined): boolean {

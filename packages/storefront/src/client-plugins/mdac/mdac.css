@@ -452,8 +452,11 @@
     flex: none;
     color: var(--mdac-green);
 }
-.mdac-page .mdac-select-trigger[aria-invalid='true'] {
-    border-color: #90452c;
+.mdac-page :is(.mdac-field input, .mdac-field select, .mdac-select-trigger)[aria-invalid='true'] {
+    border-color: var(--danger);
+}
+.mdac-page .mdac-field-error {
+    color: var(--danger);
 }
 .mdac-help-button {
     display: grid;
@@ -640,6 +643,12 @@
 .mdac-page .mdac-navigation {
     margin-top: 20px;
     justify-content: space-between;
+}
+@media (min-width: 601px) {
+    .mdac-page .mdac-fields > .mdac-navigation {
+        align-self: end;
+        margin-top: 0;
+    }
 }
 .mdac-navigation [type='submit'] {
     margin-inline-start: auto;
