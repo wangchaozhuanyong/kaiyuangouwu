@@ -216,7 +216,6 @@ html:has(.storefront-app[data-route='gpt-recharge']) {
         linear-gradient(100deg, transparent, rgb(234 225 201 / 24%));
 }
 .gpt-recharge-stages li {
-    position: relative;
     display: grid;
     justify-items: center;
     gap: var(--space-8);
@@ -225,15 +224,6 @@ html:has(.storefront-app[data-route='gpt-recharge']) {
     line-height: var(--type-helper-leading);
     text-align: center;
     text-wrap: balance;
-}
-.gpt-recharge-stages li:not(:last-child)::after {
-    content: '';
-    position: absolute;
-    inset-inline-start: calc(50% + 18px);
-    inset-block-start: 13px;
-    width: calc(100% - 36px);
-    height: 1px;
-    background: #d8cfbc;
 }
 .gpt-recharge-stage-number {
     display: grid;
@@ -1043,7 +1033,6 @@ body:has(.gpt-recharge-page[data-standalone]) {
     gap: var(--space-16);
     margin-block-end: var(--space-24);
     padding-block: var(--space-24) var(--space-16);
-    border-bottom: 1px solid var(--line-subtle);
 }
 .gpt-recharge-portal-identity {
     display: flex;

@@ -50,6 +50,8 @@ import {
     type Fields,
 } from './model';
 
+const lodgingAddressFields = lodgingFields.slice(1);
+
 function hotelAddressFields(hotel: MdacHotel): Fields {
     return {
         accommodationAddress1: hotel.address,
@@ -92,15 +94,26 @@ export function MdacPage({
     const [selectedFlight, setSelectedFlight] = useState<MdacFlight | null>(null);
     const [suggestedHotel, setSuggestedHotel] = useState<MdacHotel | null>(null);
     const [restoredLodging, setRestoredLodging] = useState(() =>
-        lodgingFields.slice(1).some(field => Boolean(draft.shared[field.key])),
+        lodgingAddressFields.some(field => Boolean(draft.shared[field.key])),
     );
     const [confirmedTrip, setConfirmedTrip] = useState(false);
+    const legacyAddress =
+        restoredLodging &&
+        draft.shared.accommodationStay === HOTEL_STAY &&
+        draft.shared.accommodationAddress2 === undefined &&
+        lodgingAddressFields.slice(1).every(field => !draft.shared[field.key]?.trim())
+            ? draft.shared.accommodationAddress1
+            : '';
+    const lodgingDraft = legacyAddress ? { ...draft.shared } : draft.shared;
+    if (legacyAddress) {
+        for (const field of lodgingAddressFields) delete lodgingDraft[field.key];
+    }
     // Keep suggested addresses separate from saved trip details until confirmation.
     const tripValues = suggestedHotel
-        ? { ...hotelAddressFields(suggestedHotel), ...draft.shared }
-        : draft.shared;
+        ? { ...hotelAddressFields(suggestedHotel), ...lodgingDraft }
+        : lodgingDraft;
     const canSuggestHotel =
-        !suggestedHotel && lodgingFields.slice(1).every(field => draft.shared[field.key] === undefined);
+        !suggestedHotel && lodgingAddressFields.every(field => lodgingDraft[field.key] === undefined);
     const fieldId = useId();
     const heading = useRef<HTMLHeadingElement>(null);
     const editField = useRef<string | null>(null);
@@ -180,9 +193,12 @@ export function MdacPage({
         return true;
     }
     function update(field: Field, value: string, personal: boolean) {
-        if (restoredLodging && lodgingFields.includes(field)) setRestoredLodging(false);
-        if (!personal && (field.key === 'accommodationStay' || field.key === 'accommodationAddress1')) {
-            setSuggestedHotel(null);
+        const editingLodging = !personal && lodgingFields.includes(field);
+        if (editingLodging) {
+            setRestoredLodging(false);
+            if (legacyAddress || field.key === 'accommodationStay' || field.key === 'accommodationAddress1') {
+                setSuggestedHotel(null);
+            }
         }
         const next = personal
             ? {
@@ -192,6 +208,14 @@ export function MdacPage({
                   ),
               }
             : { ...draft, shared: { ...draft.shared, [field.key]: value } };
+        if (
+            editingLodging &&
+            (field.key === 'accommodationAddress1' || legacyAddress) &&
+            next.shared.accommodationAddress2 === undefined
+        ) {
+            // An explicit blank second line distinguishes a deliberate edit from old address-only drafts.
+            next.shared.accommodationAddress2 = '';
+        }
         if (!personal && field.key === 'arrDt' && value !== draft.shared.arrDt) {
             if (departureIsSuggested || !draft.shared.depDt) {
                 next.shared.depDt = suggestedDepartureDate(value);
@@ -948,13 +972,33 @@ export function MdacPage({
                                     onChangeCapture={rejectProfileAddress}
                                 >
                                     <h2 className="type-section">{groups[2].title}</h2>
-                                    {restoredLodging && (
-                                        <p className="type-helper">
-                                            {t(
-                                                '住宿资料来自本机草稿。',
-                                                'Accommodation restored from your local draft.',
-                                            )}
-                                        </p>
+                                    {legacyAddress ? (
+                                        <div className="mdac-actions">
+                                            <p className="type-helper">
+                                                {t(
+                                                    '旧草稿只保存了一行住宿地址。',
+                                                    'The old draft contains only one line of the accommodation address.',
+                                                )}
+                                            </p>
+                                            <button
+                                                type="button"
+                                                className="mdac-link type-action"
+                                                onClick={() =>
+                                                    update(lodgingAddressFields[0], legacyAddress, false)
+                                                }
+                                            >
+                                                {t('使用原草稿地址', 'Use original draft address')}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        restoredLodging && (
+                                            <p className="type-helper">
+                                                {t(
+                                                    '住宿资料来自本机草稿。',
+                                                    'Accommodation restored from your local draft.',
+                                                )}
+                                            </p>
+                                        )
                                     )}
                                     {fields(lodgingFields.slice(0, 1), draft.shared, false)}
                                     {draft.shared.accommodationStay === HOTEL_STAY && (
@@ -968,7 +1012,7 @@ export function MdacPage({
                                             />
                                         </div>
                                     )}
-                                    {fields(lodgingFields.slice(1), tripValues, false)}
+                                    {fields(lodgingAddressFields, tripValues, false)}
                                 </section>
                             </div>
                             {draftSettings}

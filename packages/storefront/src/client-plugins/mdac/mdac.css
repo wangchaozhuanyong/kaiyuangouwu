@@ -10,7 +10,6 @@
     --surface: var(--mdac-paper);
     --text: var(--mdac-ink);
     --muted: var(--mdac-muted);
-    --line: var(--mdac-line);
     color: var(--mdac-ink);
 }
 .storefront-app[data-route='mdac'],
@@ -23,6 +22,7 @@
 .page.subpage.mdac-page {
     --mdac-content-max: 1040px;
     --mdac-content-gutter: clamp(16px, 3vw, 40px);
+    --header-padding: 10px max(var(--mdac-content-gutter), calc((100% - var(--mdac-content-max)) / 2));
     width: 100%;
     max-width: none;
     margin: 0;
@@ -36,12 +36,8 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 64px;
-    height: auto;
-    padding: 8px max(var(--mdac-content-gutter), calc((100% - var(--mdac-content-max)) / 2));
     background: #faf1d6;
     border: 0;
-    border-bottom: 1px solid var(--mdac-line);
     color: var(--text);
 }
 .page.subpage.mdac-page > .topbar.subpage-header::before {
@@ -72,8 +68,7 @@
 }
 .mdac-brand {
     color: var(--mdac-ink);
-    border-inline-end: 1px solid #bfbda3;
-    padding-inline-end: 9px;
+    margin-inline-end: var(--space-8);
 }
 .page.subpage.mdac-page > .topbar.subpage-header .subpage-header-actions {
     margin-inline-start: auto;
@@ -100,7 +95,7 @@
 .mdac-steps {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: clamp(var(--space-8), 2vw, var(--space-32));
     list-style: none;
     padding: 0;
 }
@@ -110,12 +105,6 @@
     align-items: center;
     gap: 6px;
     color: var(--mdac-muted);
-}
-.mdac-steps li:not(:last-child)::after {
-    content: '';
-    flex: 0 0 clamp(12px, 2vw, 28px);
-    height: 1px;
-    background: var(--line);
 }
 .mdac-steps li span {
     display: grid;
@@ -143,7 +132,6 @@
     gap: 16px 32px;
     padding: 8px 0 20px;
     margin-bottom: 20px;
-    border-bottom: 1px solid var(--mdac-line);
 }
 .mdac-page .mdac-heading h1 {
     --skin-display-font: 'Songti SC', 'STSong', 'Noto Serif CJK SC', Georgia, serif;
@@ -331,7 +319,8 @@
     .mdac-passport-data span {
         flex: 1;
         height: 24px;
-        background: linear-gradient(var(--mdac-green) 0 0) left top / 58% 3px no-repeat,
+        background:
+            linear-gradient(var(--mdac-green) 0 0) left top / 58% 3px no-repeat,
             linear-gradient(var(--mdac-line) 0 0) left center / 90% 2px no-repeat,
             linear-gradient(var(--mdac-line) 0 0) left bottom / 72% 2px no-repeat;
     }
@@ -346,16 +335,7 @@
         white-space: nowrap;
     }
     .mdac-photo-guide figcaption {
-        position: relative;
-        margin: 0 0 7px 19px;
-        padding-inline-start: 13px;
-    }
-    .mdac-photo-guide figcaption::before {
-        content: '';
-        position: absolute;
-        inset: 9px auto auto -27px;
-        width: 34px;
-        border-top: 1px solid var(--mdac-green);
+        margin: 0 0 var(--space-8) var(--space-16);
     }
     .mdac-photo-guide figcaption small {
         display: block;
@@ -398,7 +378,6 @@
 }
 .mdac-draft-bar {
     justify-content: space-between;
-    border-bottom: 1px solid var(--line);
     padding: 10px 0;
 }
 .mdac-draft-bar button {
@@ -407,10 +386,8 @@
 .mdac-block {
     margin-top: 23px;
     padding: 15px 0 4px;
-    border-top: 1px solid var(--line);
 }
 .mdac-draft-bar + .mdac-block {
-    border-top: 0;
     padding-top: 0;
 }
 .mdac-fields,
@@ -501,7 +478,7 @@
 }
 .mdac-message {
     padding: 12px;
-    border-left: 3px solid #ac851d;
+    border-radius: var(--skin-control-radius);
     background: #fff0cc;
     margin-block: 10px !important;
 }
@@ -582,7 +559,7 @@
     padding: 10px;
     color: var(--mdac-green);
     background: var(--surface);
-    border: 1px solid var(--line);
+    border: 1px solid var(--mdac-line);
     border-radius: var(--radius-sm, 8px);
 }
 .mdac-flight-confirmed svg {
@@ -604,7 +581,7 @@
 .mdac-hotel-status button {
     min-height: 44px;
     background: #fffdf6;
-    border: 1px solid var(--line);
+    border: 1px solid var(--mdac-line);
     border-radius: 6px;
     color: var(--text);
     padding: 8px 12px;
@@ -618,7 +595,6 @@
 }
 .mdac-export-options {
     padding-top: 12px;
-    border-top: 1px solid var(--line);
 }
 .mdac-export-options summary {
     min-height: 44px;
@@ -628,7 +604,6 @@
 .mdac-person-review,
 .mdac-summary {
     padding: 12px 0;
-    border-bottom: 1px solid var(--line);
 }
 .mdac-person-review summary {
     cursor: pointer;
@@ -769,7 +744,6 @@
     justify-self: end;
 }
 .mdac-sheet-body h3 {
-    border-top: 1px solid var(--line);
     padding-top: 14px;
     margin-top: 14px;
 }
@@ -797,13 +771,9 @@
     }
     .mdac-steps {
         width: 100%;
-        gap: 6px;
-    }
-    .mdac-steps li:not(:last-child) {
-        flex: 1;
-    }
-    .mdac-steps li:not(:last-child)::after {
-        flex: 1 0 6px;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: var(--space-8);
     }
     .mdac-heading {
         gap: 14px;

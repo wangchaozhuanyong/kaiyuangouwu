@@ -58,6 +58,68 @@ const render = (language: 'zh' | 'en' = 'zh') =>
         ),
     );
 
+it.each(['restore', 'change stay'] as const)(
+    'suggests a complete hotel and preserves an old draft on %s',
+    async action => {
+        const draft = emptyDraft();
+        draft.travelers[0] = {
+            name: 'SAMPLE TRAVELER',
+            passNo: 'E00000001',
+            nationality: 'CHN',
+            pob: 'CHN',
+            dob: '1990-01-01',
+            sex: '1',
+            passExpDte: '2034-01-01',
+        };
+        draft.shared.accommodationAddress1 = 'Old draft address';
+        draft.shared.accommodationState = '';
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+        const hotel = {
+            id: 'sample',
+            name: 'Sample Hotel',
+            address: '99 Sample Avenue',
+            state: '14',
+            city: 'KUALA LUMPUR',
+            postcode: '50450',
+        };
+        const directoryKey = ['mdac-hotel-directory', 1];
+        queryClient.setQueryData(directoryKey, [hotel]);
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json([hotel]));
+
+        render();
+        await act(() => Promise.resolve(button('下一步').click()));
+        const value = (key: string) =>
+            host.querySelector<HTMLInputElement | HTMLSelectElement>(
+                `[data-field="${key}"] input, [data-field="${key}"] select`,
+            )?.value;
+        expect(value('accommodationAddress1')).toBe(hotel.address);
+        expect(value('accommodationState')).toBe(hotel.state);
+        expect(value('accommodationCity')).toBe(hotel.city);
+        expect(value('accommodationPostcode')).toBe(hotel.postcode);
+        expect(readDraft()).toEqual(draft);
+
+        if (action === 'restore') {
+            act(() => button('使用原草稿地址').click());
+        } else {
+            const stay = host.querySelector<HTMLButtonElement>(
+                '[data-field="accommodationStay"] button[aria-haspopup="dialog"]',
+            );
+            assert.ok(stay);
+            act(() => stay.click());
+            act(() => button('亲友住所').click());
+            expect(readDraft()?.shared.accommodationStay).toBe('02');
+        }
+        expect(value('accommodationAddress1')).toBe(draft.shared.accommodationAddress1);
+        expect(readDraft()?.shared.accommodationAddress2).toBe('');
+        act(() => root.unmount());
+        root = createRoot(host);
+        render();
+        act(() => button('下一步').click());
+        expect(value('accommodationAddress1')).toBe(draft.shared.accommodationAddress1);
+        queryClient.removeQueries({ queryKey: directoryKey });
+    },
+);
+
 it('saves on first edit, drops only the stored copy on opt-out, and remembers the choice after remount', () => {
     localStorage.setItem('other', 'retained');
     render();
