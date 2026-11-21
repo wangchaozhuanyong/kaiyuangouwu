@@ -258,6 +258,16 @@ it('keeps an air trip with no matching result on the trip step', async () => {
     expect(host.querySelector('h1')?.textContent).toBe('行程与联系');
 });
 
+it('offers the official registration link without permitting a trip with unavailable flight data', async () => {
+    openAirTrip({ status: 'UNAVAILABLE', flights: [] });
+    await searchAirTrip();
+    const picker = host.querySelector('.mdac-flight-picker');
+    expect(picker?.querySelector('[role="status"]')?.textContent).toContain('暂时无法核验');
+    expect(picker?.querySelector('a')?.href).toBe('https://imigresen-online.imi.gov.my/mdac/register');
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('行程与联系');
+});
+
 it.each([
     { status: 'CANCELLED' },
     { effectiveArrivalDate: '2026-11-23' },

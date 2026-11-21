@@ -58,7 +58,11 @@
 
 追加 `flight=demo` 可用虚构班次体验航班查找。机场填 `KUL`，共享编号用 `CX777`，取消用 `MH999`，无匹配用 `XX999`，不可用用 `XX998`。
 
-正式接入使用 OAG Flight Info API。先使用内部评估权限核验真实班次和马来西亚机场覆盖，面向旅客展示前核对供应商许可、用量和实际接口联调。只有在服务端设定 `STOREFRONT_MDAC_FLIGHT_LOOKUP_ENABLED=true` 并提供 `STOREFRONT_MDAC_OAG_SUBSCRIPTION_KEY` 时，已开放并发布的 MDAC 入口才显示航班查询。开关默认关闭，此时无需调用 OAG，乘飞机的旅客可保留草稿或前往移民局官网自行登记。航班未匹配、查询未完成或供应商不可用时，航空行程停留在第二步。其他入境方式沿用原流程。班次核验与 MDAC 官方提交是独立流程，官方提交暂沿用移民局登记入口。
+已开放并发布的 MDAC 入口从 Vendure 服务端读取航班核验能力。令 `STOREFRONT_MDAC_FLIGHT_LOOKUP_ENABLED=true`，并通过受管服务端环境设置 `STOREFRONT_MDAC_FLIGHTBYTE_API_KEY`，可使用 FlightByte。未配置 FlightByte 时可使用允许对客显示的 OAG Flight Info v2 套餐，密钥名为 `STOREFRONT_MDAC_OAG_SUBSCRIPTION_KEY`。密钥仅供服务端使用。
+
+FlightByte 每月提供 120 次免费查询。接口按起飞地当地日期定位航班，服务端核对旅客填写的票面航班号、机场和马来西亚当地抵达日期，并在需要时检查前一日出发的班次。近期班次可核验。较远日期、配额耗尽或数据源暂不可用时，旅客可保留草稿后重试，也可自行前往移民局官网登记。缺少匹配记录时请旅客对照机票核对。
+
+开关默认关闭。航空行程必须选中已核验的符合条件班次才可进入核对页，其他入境方式沿用原流程。官方入境卡提交继续使用移民局的登记页。
 
 后台组件：在 `packages/next-admin` 执行 `bun run dev --host 127.0.0.1 --port 5180`，打开 `http://127.0.0.1:5180/e2e/admin-layout/index.html?view=plugins&mdac&light`。去掉 `mdac` 参数模拟未开放店铺。
 
