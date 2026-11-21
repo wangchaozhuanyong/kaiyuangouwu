@@ -13,6 +13,7 @@ type Entry = {
     href: string;
     page: string;
     key?: string;
+    sourceIndex?: number;
     categoryNavigation?: { scope: string; collapsed: boolean };
 };
 type NavigationHistory = { entries: Map<number, Entry>; pending?: object };
@@ -24,13 +25,48 @@ function routeKey(route: RouteState): string {
     return JSON.stringify([routeHref(route), route.variantId ?? null]);
 }
 
-function entryFor(history: RouterHistory): Entry {
-    const location = history.location;
-    const route = routeFromRouterLocation(
+function routeAt(location: { pathname: string; search: string }): RouteState {
+    return routeFromRouterLocation(
         location.pathname,
         Object.fromEntries(new URLSearchParams(location.search)),
     );
-    return { href: routeKey(route), page: routePageIdentity(route), key: location.state.__TSR_key };
+}
+
+function entryFor(history: RouterHistory): Entry {
+    const { location } = history;
+    const route = routeAt(location);
+    const state = location.state as typeof location.state & { storefrontBackIndex?: number };
+    return {
+        href: routeKey(route),
+        page: routePageIdentity(route),
+        key: state.__TSR_key,
+        sourceIndex: state.storefrontBackIndex,
+    };
+}
+
+function previousPage(
+    tracker: NavigationHistory,
+    current: Entry,
+    index: number,
+    targetPage = current.page,
+): number | undefined {
+    let entry = current;
+    for (let previousIndex = index - 1; previousIndex >= 0; previousIndex--) {
+        const previous = tracker.entries.get(previousIndex);
+        if (!previous) {
+            // After reload, only use a source that was recorded by a storefront navigation.
+            const source = entry.sourceIndex;
+            return source !== undefined &&
+                Number.isSafeInteger(source) &&
+                source >= 0 &&
+                source <= previousIndex &&
+                targetPage === entry.page
+                ? source
+                : undefined;
+        }
+        if (previous.page !== targetPage) return previousIndex;
+        entry = previous;
+    }
 }
 
 function navigationHistory(router: Pick<NavigationRouter, 'history'>): NavigationHistory {
@@ -40,6 +76,20 @@ function navigationHistory(router: Pick<NavigationRouter, 'history'>): Navigatio
     const tracker: NavigationHistory = { entries: new Map() };
     histories.set(history, tracker);
     tracker.entries.set(history.location.state.__TSR_index, entryFor(history));
+    function withSource(navigate: RouterHistory['push'], replace: boolean): RouterHistory['push'] {
+        return (path, state, options) => {
+            const current = entryFor(history);
+            const index = history.location.state.__TSR_index;
+            const page = routePageIdentity(routeAt(new URL(path, 'https://storefront.invalid')));
+            const source =
+                !replace && page !== current.page ? index : previousPage(tracker, current, index, page);
+            // Let the router write the metadata alongside its own key and index. Keep
+            // URLs and identifiers in browser history rather than copying them into state.
+            navigate(path, { ...state, storefrontBackIndex: source }, options);
+        };
+    }
+    history.push = withSource(history.push, false);
+    history.replace = withSource(history.replace, true);
     history.subscribe(({ location, action }) => {
         const index = location.state.__TSR_index;
         if (action.type === 'PUSH') {
@@ -59,7 +109,6 @@ function navigationHistory(router: Pick<NavigationRouter, 'history'>): Navigatio
 }
 
 // Track every router history operation, including Links and native back/forward.
-// Only entries observed in this document can be used as a trusted return path.
 export function registerStorefrontNavigationHistory(router: NavigationRouter): void {
     navigationHistory(router);
 }
@@ -105,17 +154,18 @@ function replaceWithRoute(router: NavigationRouter, tracker: NavigationHistory, 
 export function goBackInStorefront(router: NavigationRouter, fallback: RouteState = { name: 'home' }): void {
     const tracker = navigationHistory(router);
     if (tracker.pending) return;
-    const current = entryFor(router.history);
-    for (let index = router.history.location.state.__TSR_index - 1; ; index--) {
-        const previous = tracker.entries.get(index);
-        if (!previous) break;
-        // Filters, pagination, variants and overlay switches belong to the same page.
-        if (previous.page !== current.page) {
-            returnToIndex(router, tracker, index);
-            return;
-        }
-    }
-    replaceWithRoute(router, tracker, fallback);
+    const source = backSource(router);
+    if (source !== undefined) returnToIndex(router, tracker, source);
+    else replaceWithRoute(router, tracker, fallback);
+}
+
+function backSource(router: NavigationRouter): number | undefined {
+    const { history } = router;
+    return previousPage(navigationHistory(router), entryFor(history), history.location.state.__TSR_index);
+}
+
+export function hasStorefrontBackSource(router: NavigationRouter): boolean {
+    return backSource(router) !== undefined;
 }
 
 export function returnToStorefrontRoute(router: NavigationRouter, target: RouteState): void {

@@ -4,8 +4,8 @@ import {
     BookUser,
     Camera,
     Check,
-    ChevronDown,
     ChevronRight,
+    CircleAlert,
     Flower2,
     Image,
     PenLine,
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 
+import { useDesktopLayout } from '../../desktop-layout';
 import { Sheet, Subpage, SubpageBody } from '../../storefront-ui/page-shell';
 
 import './mdac.css';
@@ -22,6 +23,7 @@ import { MdacFieldHelp } from './field-help';
 import { isTicketFlightNumber, type MdacFlight } from './flight-lookup';
 import { MdacFlightPicker, type MdacFlightService } from './flight-picker';
 import { MdacHotelPicker, type MdacHotel } from './hotel-picker';
+import { MdacSelect } from './mdac-select';
 import {
     AIR_TRAVEL,
     contactFields,
@@ -48,6 +50,16 @@ import {
     type Fields,
 } from './model';
 
+function hotelAddressFields(hotel: MdacHotel): Fields {
+    return {
+        accommodationAddress1: hotel.address,
+        accommodationAddress2: hotel.address2 ?? '',
+        accommodationState: hotel.state,
+        accommodationCity: hotel.city,
+        accommodationPostcode: hotel.postcode,
+    };
+}
+
 export function MdacPage({
     language: initialLanguage,
     onBack,
@@ -61,6 +73,7 @@ export function MdacPage({
 }) {
     const [chosenLanguage, setChosenLanguage] = useState<StorefrontLanguage>();
     const language = chosenLanguage ?? initialLanguage;
+    const desktop = useDesktopLayout();
     const t = (zh: string, en: string) => (language === 'zh' ? zh : en);
     const [draft, setDraft] = useState<Draft>(() => readDraft() ?? emptyDraft());
     const [preference] = useState(draftSavingPreference);
@@ -77,7 +90,17 @@ export function MdacPage({
     const [flightReviewed, setFlightReviewed] = useState(false);
     const [arrivalAirport, setArrivalAirport] = useState('');
     const [selectedFlight, setSelectedFlight] = useState<MdacFlight | null>(null);
+    const [suggestedHotel, setSuggestedHotel] = useState<MdacHotel | null>(null);
+    const [restoredLodging, setRestoredLodging] = useState(() =>
+        lodgingFields.slice(1).some(field => Boolean(draft.shared[field.key])),
+    );
     const [confirmedTrip, setConfirmedTrip] = useState(false);
+    // Keep suggested addresses separate from saved trip details until confirmation.
+    const tripValues = suggestedHotel
+        ? { ...hotelAddressFields(suggestedHotel), ...draft.shared }
+        : draft.shared;
+    const canSuggestHotel =
+        !suggestedHotel && lodgingFields.slice(1).every(field => draft.shared[field.key] === undefined);
     const fieldId = useId();
     const heading = useRef<HTMLHeadingElement>(null);
     const editField = useRef<string | null>(null);
@@ -157,6 +180,10 @@ export function MdacPage({
         return true;
     }
     function update(field: Field, value: string, personal: boolean) {
+        if (restoredLodging && lodgingFields.includes(field)) setRestoredLodging(false);
+        if (!personal && (field.key === 'accommodationStay' || field.key === 'accommodationAddress1')) {
+            setSuggestedHotel(null);
+        }
         const next = personal
             ? {
                   ...draft,
@@ -192,17 +219,18 @@ export function MdacPage({
         save(next);
     }
     function selectHotel(hotel: MdacHotel) {
-        save({
-            ...draft,
-            shared: {
-                ...draft.shared,
-                accommodationAddress1: hotel.address,
-                accommodationAddress2: hotel.address2 ?? '',
-                accommodationState: hotel.state,
-                accommodationCity: hotel.city,
-                accommodationPostcode: hotel.postcode,
-            },
-        });
+        setSuggestedHotel(null);
+        setRestoredLodging(false);
+        save({ ...draft, shared: { ...draft.shared, ...hotelAddressFields(hotel) } });
+    }
+    function rejectProfileAddress(event: FormEvent<HTMLElement>) {
+        const control = event.target;
+        if (!(control instanceof HTMLInputElement || control instanceof HTMLSelectElement)) return;
+        const key = control.closest<HTMLElement>('[data-field]')?.dataset.field;
+        if (!key || !control.matches(':is(:autofill, :-webkit-autofill)')) return;
+        // Browser address profiles can override autocomplete="off". Keep the trip's value.
+        control.value = tripValues[key] ?? '';
+        event.stopPropagation();
     }
     function normalizeFlight() {
         if (byAir && flight !== (draft.shared.vesselNm ?? '')) {
@@ -363,6 +391,8 @@ export function MdacPage({
         setFlightReviewed(false);
         setArrivalAirport('');
         setSelectedFlight(null);
+        setSuggestedHotel(null);
+        setRestoredLodging(false);
         setConfirmedTrip(false);
         if (imageInput.current) imageInput.current.value = '';
         save(emptyDraft(), false);
@@ -444,6 +474,10 @@ export function MdacPage({
                   '请在票据或行程单上查找抵马段的交通工具编号。',
                   'Find the transport number for the leg into Malaysia on your ticket or itinerary.',
               ),
+        trvlMode: t(
+            '按实际进入马来西亚的方式选择。乘飞机选「飞机」，经陆路口岸入境选「LAND」，乘船选「SEA」。',
+            'Choose how you enter Malaysia. Select Air if you fly in, LAND if you cross a land border, or SEA if you arrive by boat.',
+        ),
         embark: t(
             '如有转机，请填写飞往马来西亚的最后一段航程从哪里出发。',
             'For a connection, enter the departure point of the last leg into Malaysia.',
@@ -454,11 +488,15 @@ export function MdacPage({
         if (field === 'region' && value === '86') return t('中国 +86', 'China +86');
         if (field === 'trvlMode' && value === AIR_TRAVEL) return t('飞机', 'Air');
         if (field === 'embark' && value === 'CHN') return t('中国', 'China');
-        if (field === 'accommodationStay' && value === HOTEL_STAY) return t('酒店', 'Hotel');
+        if (field === 'accommodationStay') {
+            if (value === HOTEL_STAY) return t('酒店', 'Hotel');
+            if (value === '02') return t('亲友住所', label);
+            if (value === '99') return t('其他', label);
+        }
         return label;
     }
     function reviewField(field: Field) {
-        const value = draft.shared[field.key];
+        const value = tripValues[field.key];
         const option = field.options?.find(([code]) => code === value);
         return option ? optionLabel(field.key, value, option[1]) : value || '—';
     }
@@ -494,27 +532,28 @@ export function MdacPage({
                                 {help && (
                                     <MdacFieldHelp
                                         id={id + '-help'}
+                                        icon={field.key === 'trvlMode' ? CircleAlert : undefined}
                                         label={t(label + '说明', label + ' help')}
                                         text={help}
                                     />
                                 )}
                             </div>
                             {field.options ? (
-                                <select
+                                <MdacSelect
                                     id={id}
-                                    aria-describedby={description}
+                                    title={label}
+                                    language={language}
+                                    describedBy={description}
+                                    placeholder={t('请选择', 'Select')}
+                                    options={field.options.map(([value, option]) => [
+                                        value,
+                                        optionLabel(field.key, value, option),
+                                    ])}
                                     value={values[field.key] ?? ''}
                                     required={!field.optional}
                                     disabled={busy}
-                                    onChange={event => update(field, event.target.value, personal)}
-                                >
-                                    <option value="">{t('请选择', 'Select')}</option>
-                                    {field.options.map(([value, option], index) => (
-                                        <option key={value + index} value={value}>
-                                            {optionLabel(field.key, value, option)}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={value => update(field, value, personal)}
+                                />
                             ) : (
                                 <input
                                     id={id}
@@ -524,6 +563,7 @@ export function MdacPage({
                                     disabled={busy}
                                     className="type-input"
                                     type={field.type ?? 'text'}
+                                    max={field.type === 'date' ? '9999-12-31' : undefined}
                                     maxLength={field.maxLength ?? 250}
                                     autoComplete="off"
                                     pattern={field.pattern}
@@ -674,44 +714,45 @@ export function MdacPage({
                                     {t('当前旅客', 'Current traveler')}
                                 </span>
                                 <div className="mdac-traveler-toolbar">
-                                    <div
-                                        className="mdac-traveler-list"
-                                        role="radiogroup"
-                                        aria-labelledby={fieldId + '-traveler-label'}
-                                    >
-                                        {travelerLabels.map((label, index) => (
-                                            <label key={index} className="mdac-traveler-choice">
-                                                <input
-                                                    className="visually-hidden"
-                                                    type="radio"
-                                                    name={fieldId + '-traveler'}
-                                                    checked={traveler === index}
-                                                    disabled={busy}
-                                                    onChange={() => setTraveler(index)}
-                                                />
-                                                <span className="type-label">
-                                                    <Check size={16} aria-hidden="true" />
-                                                    {label}
-                                                </span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                    <div className="mdac-traveler-mobile">
-                                        <select
-                                            className="type-input"
+                                    {desktop ? (
+                                        <div
+                                            className="mdac-traveler-list"
+                                            role="radiogroup"
                                             aria-labelledby={fieldId + '-traveler-label'}
-                                            value={traveler}
-                                            disabled={busy}
-                                            onChange={event => setTraveler(Number(event.target.value))}
                                         >
                                             {travelerLabels.map((label, index) => (
-                                                <option key={index} value={index}>
-                                                    {label}
-                                                </option>
+                                                <label key={index} className="mdac-traveler-choice">
+                                                    <input
+                                                        className="visually-hidden"
+                                                        type="radio"
+                                                        name={fieldId + '-traveler'}
+                                                        checked={traveler === index}
+                                                        disabled={busy}
+                                                        onChange={() => setTraveler(index)}
+                                                    />
+                                                    <span className="type-label">
+                                                        <Check size={16} aria-hidden="true" />
+                                                        {label}
+                                                    </span>
+                                                </label>
                                             ))}
-                                        </select>
-                                        <ChevronDown size={18} aria-hidden="true" />
-                                    </div>
+                                        </div>
+                                    ) : (
+                                        <div className="mdac-traveler-mobile">
+                                            <MdacSelect
+                                                id={fieldId + '-traveler'}
+                                                title={t('当前旅客', 'Current traveler')}
+                                                language={language}
+                                                options={travelerLabels.map((label, index) => [
+                                                    String(index),
+                                                    label,
+                                                ])}
+                                                value={String(traveler)}
+                                                disabled={busy}
+                                                onChange={value => setTraveler(Number(value))}
+                                            />
+                                        </div>
+                                    )}
                                     <div className="mdac-actions">
                                         <button
                                             className="mdac-link type-action"
@@ -866,59 +907,68 @@ export function MdacPage({
                                     {groups.slice(0, 2).map(group => (
                                         <section className="mdac-block" key={group.items[0].key}>
                                             <h2 className="type-section">{group.title}</h2>
-                                            {flightLookup && group.items === travelFields ? (
-                                                <>
-                                                    {fields(
-                                                        group.items.filter(field => field.key !== 'vesselNm'),
+                                            {fields(
+                                                flightLookup && group.items === travelFields
+                                                    ? group.items.filter(field => field.key !== 'vesselNm')
+                                                    : group.items,
+                                                draft.shared,
+                                                false,
+                                            )}
+                                            {flightLookup && group.items === travelFields && (
+                                                <MdacFlightPicker
+                                                    language={language}
+                                                    service={flightLookup}
+                                                    input={{
+                                                        arrivalDate: draft.shared.arrDt ?? '',
+                                                        arrivalAirport,
+                                                        flightNumber: flight,
+                                                    }}
+                                                    onAirportChange={value => {
+                                                        setArrivalAirport(value);
+                                                        setSelectedFlight(null);
+                                                    }}
+                                                    selected={selectedFlight}
+                                                    onSelect={value => {
+                                                        setSelectedFlight(value);
+                                                        setMessage('');
+                                                    }}
+                                                    numberField={fields(
+                                                        flightNumberFields,
                                                         draft.shared,
                                                         false,
                                                     )}
-                                                    <MdacFlightPicker
-                                                        language={language}
-                                                        service={flightLookup}
-                                                        input={{
-                                                            arrivalDate: draft.shared.arrDt ?? '',
-                                                            arrivalAirport,
-                                                            flightNumber: flight,
-                                                        }}
-                                                        onAirportChange={value => {
-                                                            setArrivalAirport(value);
-                                                            setSelectedFlight(null);
-                                                        }}
-                                                        selected={selectedFlight}
-                                                        onSelect={value => {
-                                                            setSelectedFlight(value);
-                                                            setMessage('');
-                                                        }}
-                                                        numberField={fields(
-                                                            flightNumberFields,
-                                                            draft.shared,
-                                                            false,
-                                                        )}
-                                                    />
-                                                </>
-                                            ) : (
-                                                fields(group.items, draft.shared, false)
+                                                />
                                             )}
                                         </section>
                                     ))}
                                 </div>
-                                <section className="mdac-block mdac-lodging">
+                                <section
+                                    className="mdac-block mdac-lodging"
+                                    onInputCapture={rejectProfileAddress}
+                                    onChangeCapture={rejectProfileAddress}
+                                >
                                     <h2 className="type-section">{groups[2].title}</h2>
+                                    {restoredLodging && (
+                                        <p className="type-helper">
+                                            {t(
+                                                '住宿资料来自本机草稿。',
+                                                'Accommodation restored from your local draft.',
+                                            )}
+                                        </p>
+                                    )}
                                     {fields(lodgingFields.slice(0, 1), draft.shared, false)}
                                     {draft.shared.accommodationStay === HOTEL_STAY && (
                                         <div className="mdac-hotel-box">
                                             <div className="mdac-map" aria-hidden="true" />
-                                            <MdacHotelPicker language={language} onSelect={selectHotel} />
+                                            <MdacHotelPicker
+                                                language={language}
+                                                suggestedName={suggestedHotel?.name}
+                                                onSuggest={canSuggestHotel ? setSuggestedHotel : undefined}
+                                                onSelect={selectHotel}
+                                            />
                                         </div>
                                     )}
-                                    <p className="type-helper">
-                                        {t(
-                                            '可直接手填实际住宿地址。',
-                                            'You can also enter your actual address below.',
-                                        )}
-                                    </p>
-                                    {fields(lodgingFields.slice(1), draft.shared, false)}
+                                    {fields(lodgingFields.slice(1), tripValues, false)}
                                 </section>
                             </div>
                             {draftSettings}
@@ -996,6 +1046,14 @@ export function MdacPage({
                                                     </div>
                                                 )}
                                         </dl>
+                                        {group.items === lodgingFields && suggestedHotel && (
+                                            <p className="type-helper">
+                                                {t(
+                                                    '酒店地址为自动带入，请核对是否为实际住宿。',
+                                                    'A hotel address was suggested. Check that it is where you will stay.',
+                                                )}
+                                            </p>
+                                        )}
                                     </section>
                                 ))}
                             </section>
@@ -1013,7 +1071,14 @@ export function MdacPage({
                                     <input
                                         type="checkbox"
                                         checked={confirmedTrip}
-                                        onChange={event => setConfirmedTrip(event.target.checked)}
+                                        onChange={event => {
+                                            const checked = event.target.checked;
+                                            setConfirmedTrip(checked);
+                                            if (checked && suggestedHotel) {
+                                                save({ ...draft, shared: tripValues });
+                                                setSuggestedHotel(null);
+                                            }
+                                        }}
                                     />
                                     {t(
                                         '我已核对实际离境日期和住宿地址。',

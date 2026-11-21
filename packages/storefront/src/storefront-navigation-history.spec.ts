@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     getStorefrontNavigationEntryPresentation,
     goBackInStorefront,
+    hasStorefrontBackSource,
     registerStorefrontNavigationHistory,
     returnToStorefrontRoute,
 } from './storefront-navigation-history';
@@ -23,9 +24,14 @@ import {
 
 const cleanup: Array<() => void> = [];
 
-function harness(initialEntries = ['/'], initialIndex = initialEntries.length - 1) {
+function harness(
+    initialEntries = ['/'],
+    initialIndex = initialEntries.length - 1,
+    restoredState?: RouterHistory['location']['state'],
+) {
     const rootRoute = createRootRoute();
     const history = createMemoryHistory({ initialEntries: [...initialEntries], initialIndex });
+    if (restoredState) Object.assign(history.location.state, restoredState);
     const routeTree = rootRoute.addChildren(
         storefrontRouteNames.map(name =>
             createRoute({
@@ -160,12 +166,31 @@ describe('shared storefront return history', () => {
     it('does not read an unrecorded pre-refresh entry even when native history can go back', () => {
         const flow = harness(['/account', '/announcements?id=notice-a'], 1);
         expect(flow.history.canGoBack()).toBe(true);
+        expect(hasStorefrontBackSource(flow.router)).toBe(false);
         goBackInStorefront(flow.router);
         expect(flow.pathname).toBe('/');
         expect(flow.index).toBe(1);
         expect(flow.go).not.toHaveBeenCalled();
         expect(flow.history.length).toBe(2);
     });
+
+    it.each(['/zh/services', '/en/category?collectionId=collection-a&sort=price-asc'])(
+        'returns to the exact %s entry after refreshing a tool',
+        source => {
+            const flow = harness([source]);
+            flow.push({ name: 'mdac' });
+            flow.history.push('/mdac?tab=travel');
+            flow.history.replace('/mdac?tab=review');
+
+            const refreshed = harness([source, '/mdac', '/mdac?tab=review'], 2, flow.history.location.state);
+            expect(hasStorefrontBackSource(refreshed.router)).toBe(true);
+            goBackInStorefront(refreshed.router);
+            expect(refreshed.history.location.href).toBe(source);
+            expect(refreshed.go).toHaveBeenCalledExactlyOnceWith(-2);
+            expect(refreshed.navigate).not.toHaveBeenCalled();
+            expect(refreshed.history.length).toBe(3);
+        },
+    );
 
     it('honors a configured safe fallback without adding another history entry', () => {
         const flow = harness(['/orders']);
