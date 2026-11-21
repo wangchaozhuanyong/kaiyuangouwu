@@ -65,6 +65,12 @@ describe('public storefront browsing boundary', () => {
         expect(invoke('environmentNetworkReport', 'Mutation').run).toThrow();
         expect(invoke('environmentMonitorSettings').run).toThrow();
     });
+    it('routes an anonymous MDAC lookup to its resolver without allowing a mutation', () => {
+        const { run, next } = invoke('mdacFlightLookup');
+        expect(run).not.toThrow();
+        expect(next.handle).toHaveBeenCalledTimes(1);
+        expect(invoke('mdacFlightLookup', 'Mutation').run).toThrow();
+    });
     it('admits only the declared anonymous recharge operations before their service checks', () => {
         for (const field of ['gptRechargeConfig', 'gptRechargeTask']) {
             const { run, next } = invoke(field);

@@ -42,6 +42,8 @@ const publicQueries = new Set([
     'imageStudioConfig',
     // The service requires an active store, enabled plugin and shared lookup budgets.
     'environmentNetworkReport',
+    // The MDAC resolver checks the active shop, published entry and server-side enable flag.
+    'mdacFlightLookup',
     // The mail service authorizes each read with its query code and expiry.
     'icloudQueryMails',
     // Recharge reads are scoped by the active store and opaque task credentials.
