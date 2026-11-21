@@ -8,6 +8,7 @@ import {
     Check,
     CheckCheck,
     ChevronDown,
+    ChevronRight,
     CircleAlert,
     Copy as CopyIcon,
     Eraser,
@@ -40,6 +41,7 @@ import {
     offsetAt,
     reportView,
 } from './detection';
+import { EnvironmentMonitorIllustration } from './environment-monitor-illustration';
 import './environment-monitor.css';
 import { diagnose, type NetworkView, scanFeedback } from './guidance';
 import { ProxyCleanupGuide } from './proxy-cleanup-guide';
@@ -639,244 +641,274 @@ export function EnvironmentMonitorPage({
                     }
                 />
                 <SubpageBody className="environment-body">
-                    <section
-                        className="environment-overview"
-                        aria-label={t('环境检测总览', 'Environment check overview')}
-                    >
+                    <div className="environment-overview">
                         <section
                             className={`environment-scan level-${level}`}
                             aria-labelledby="environment-scan-title"
                             aria-busy={running}
                         >
-                            <div className="environment-scan-heading">
-                                <h2 id="environment-scan-title" className="type-section">
-                                    <ColorIcon name="shield" />
-                                    {t('环境检测报告', 'Environment report')}
-                                </h2>
-                                <span className="type-meta">
-                                    {t('12 项信号 · 10 项评分', '12 signals · 10 scored')}
-                                </span>
-                            </div>
-                            <div
-                                className={`environment-gauge${running ? ' is-running' : ''}${waitingLabel ? ' is-indeterminate' : ''}`}
-                            >
-                                <svg viewBox="0 0 200 200" aria-hidden="true">
-                                    <circle className="environment-gauge-track" cx="100" cy="100" r="86" />
-                                    <circle
-                                        className="environment-gauge-fill"
-                                        cx="100"
-                                        cy="100"
-                                        r="86"
-                                        pathLength="100"
-                                        strokeDasharray={`${waitingLabel ? 22 : running ? percent : (score ?? 0)} 100`}
-                                    />
-                                </svg>
-                                <div className="environment-gauge-value">
+                            <EnvironmentMonitorIllustration
+                                language={language}
+                                progress={percent}
+                                running={running}
+                            />
+                            <div className="environment-scan-content">
+                                <div className="environment-scan-heading">
+                                    <h2 id="environment-scan-title" className="type-section">
+                                        <ColorIcon name="shield" />
+                                        {t('环境检测报告', 'Environment report')}
+                                    </h2>
+                                    <span className="type-meta">
+                                        {t('12 项信号 · 10 项评分', '12 signals · 10 scored')}
+                                    </span>
+                                </div>
+                                <div
+                                    className={`environment-gauge${running ? ' is-running' : ''}${waitingLabel ? ' is-indeterminate' : ''}`}
+                                >
+                                    <svg viewBox="0 0 200 200" aria-hidden="true">
+                                        <circle
+                                            className="environment-gauge-track"
+                                            cx="100"
+                                            cy="100"
+                                            r="86"
+                                        />
+                                        <circle
+                                            className="environment-gauge-fill"
+                                            cx="100"
+                                            cy="100"
+                                            r="86"
+                                            pathLength="100"
+                                            strokeDasharray={`${waitingLabel ? 22 : running ? percent : (score ?? 0)} 100`}
+                                        />
+                                    </svg>
+                                    <div className="environment-gauge-value">
+                                        <span className="type-helper">
+                                            {running
+                                                ? t('检测进度', 'Progress')
+                                                : t('环境风险参考分', 'Environment risk reference score')}
+                                        </span>
+                                        {waitingLabel ? (
+                                            <strong className="type-label">{waitingLabel}</strong>
+                                        ) : (
+                                            <>
+                                                <strong className="environment-metric">
+                                                    {running ? percent : (score ?? '—')}
+                                                    <small className="type-helper">
+                                                        {running ? '%' : score !== null ? '/ 100' : ''}
+                                                    </small>
+                                                </strong>
+                                                <span
+                                                    className={`environment-gauge-status type-helper ${running ? 'is-pending' : 'is-signal'}`}
+                                                >
+                                                    {running ? (
+                                                        <LoaderCircle className="environment-spinner" />
+                                                    ) : score !== null ? (
+                                                        <CheckCheck />
+                                                    ) : null}
+                                                    {running
+                                                        ? t('检查中', 'Checking')
+                                                        : score === null
+                                                          ? report
+                                                              ? t('信号不完整', 'Incomplete signals')
+                                                              : t('等待开始', 'Ready when you are')
+                                                          : level === 'low'
+                                                            ? t('区域特征较少', 'Fewer regional signals')
+                                                            : level === 'medium'
+                                                              ? t('区域特征中等', 'Some regional signals')
+                                                              : t('区域特征较多', 'More regional signals')}
+                                                </span>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="environment-scan-message" aria-live="polite">
+                                    <p className="type-body">
+                                        {running
+                                            ? waitingForNetwork
+                                                ? completed === 12
+                                                    ? t('本地检测已完成', 'Local checks complete')
+                                                    : t('正在查询网络信息', 'Looking up network details')
+                                                : `${t('正在检查：', 'Checking: ')}${copy(current.title)}`
+                                            : localError
+                                              ? t(
+                                                    '浏览器信息读取失败，请重新检测；已保留其他可用结果。',
+                                                    'Browser readings failed. Check again; other available results are retained.',
+                                                )
+                                              : report
+                                                ? feedback
+                                                    ? copy(feedback)
+                                                    : t(
+                                                          '检测结果已更新，请查看各项采集值。',
+                                                          'Results updated. Review the observed values.',
+                                                      )
+                                                : t(
+                                                      '检查浏览器信号，同时了解当前网络',
+                                                      'Check browser signals and your network together',
+                                                  )}
+                                    </p>
                                     <span className="type-helper">
                                         {running
-                                            ? t('检测进度', 'Progress')
-                                            : t('环境风险参考分', 'Environment risk reference score')}
-                                    </span>
-                                    {waitingLabel ? (
-                                        <strong className="type-label">{waitingLabel}</strong>
-                                    ) : (
-                                        <>
-                                            <strong className="environment-metric">
-                                                {running ? percent : (score ?? '—')}
-                                                <small className="type-helper">
-                                                    {running ? '%' : score !== null ? '/ 100' : ''}
-                                                </small>
-                                            </strong>
-                                            <span
-                                                className={`environment-gauge-status type-helper ${running ? 'is-pending' : 'is-signal'}`}
-                                            >
-                                                {running ? (
-                                                    <LoaderCircle className="environment-spinner" />
-                                                ) : score !== null ? (
-                                                    <CheckCheck />
-                                                ) : null}
-                                                {running
-                                                    ? t('检查中', 'Checking')
-                                                    : score === null
-                                                      ? report
-                                                          ? t('信号不完整', 'Incomplete signals')
-                                                          : t('等待开始', 'Ready when you are')
-                                                      : level === 'low'
-                                                        ? t('区域特征较少', 'Fewer regional signals')
-                                                        : level === 'medium'
-                                                          ? t('区域特征中等', 'Some regional signals')
-                                                          : t('区域特征较多', 'More regional signals')}
-                                            </span>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="environment-scan-message" aria-live="polite">
-                                <p className="type-body">
-                                    {running
-                                        ? waitingForNetwork
-                                            ? completed === 12
-                                                ? t('本地检测已完成', 'Local checks complete')
-                                                : t('正在查询网络信息', 'Looking up network details')
-                                            : `${t('正在检查：', 'Checking: ')}${copy(current.title)}`
-                                        : localError
-                                          ? t(
-                                                '浏览器信息读取失败，请重新检测；已保留其他可用结果。',
-                                                'Browser readings failed. Check again; other available results are retained.',
-                                            )
-                                          : report
-                                            ? feedback
-                                                ? copy(feedback)
-                                                : t(
-                                                      '检测结果已更新，请查看各项采集值。',
-                                                      'Results updated. Review the observed values.',
+                                            ? retryingCheck !== null
+                                                ? t(
+                                                      '仅重试当前项目，其他检测结果保留',
+                                                      'Retrying this item only; all other results are retained',
                                                   )
-                                            : t(
-                                                  '检查浏览器信号，同时了解当前网络',
-                                                  'Check browser signals and your network together',
-                                              )}
-                                </p>
-                                <span className="type-helper">
-                                    {running
-                                        ? retryingCheck !== null
-                                            ? t(
-                                                  '仅重试当前项目，其他检测结果保留',
-                                                  'Retrying this item only; all other results are retained',
-                                              )
-                                            : '' +
-                                              String(t('本地检测', 'Local checks')) +
-                                              ' ' +
-                                              String(completed) +
-                                              ' / 12 · ' +
-                                              String(
-                                                  networkState === 'ready'
-                                                      ? t('网络查询已完成', 'Network ready')
-                                                      : networkState === 'error'
-                                                        ? t('网络查询失败', 'Network unavailable')
-                                                        : t('网络查询中', 'Network lookup in progress'),
-                                              )
-                                        : checkedAt
-                                          ? '' +
-                                            String(
-                                                localError ||
-                                                    networkState === 'error' ||
-                                                    score === null ||
-                                                    findings.some(finding => finding.tone === 'unknown')
-                                                    ? t('部分完成', 'Partially complete')
-                                                    : t('检测完成', 'Complete'),
-                                            ) +
-                                            ' · ' +
-                                            String(formattedTime(checkedAt))
-                                          : t(
-                                                '无需安装，手动开始，结果逐项呈现',
-                                                'No installation. Start manually and review each result.',
-                                            )}
-                                </span>
-                            </div>
-                            <div
-                                className="environment-progress-track"
-                                role="progressbar"
-                                aria-label={t('环境检测进度', 'Environment check progress')}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                                aria-valuenow={percent}
-                            >
-                                <span style={{ transform: `scaleX(${percent / 100})` }} />
-                            </div>
-                            <div className="environment-scan-actions">
-                                <button
-                                    type="button"
-                                    className="environment-primary type-action"
-                                    onClick={() => void start()}
-                                    disabled={running}
-                                >
-                                    {running ? (
-                                        <LoaderCircle className="environment-spinner" />
-                                    ) : report ? (
-                                        <RotateCcw />
-                                    ) : (
-                                        <ScanLine />
-                                    )}
-                                    {running
-                                        ? t('正在检测', 'Checking')
-                                        : report
-                                          ? t('重新检测', 'Check again')
-                                          : t('开始检测', 'Start check')}
-                                    {!running && <ArrowRight />}
-                                </button>
-                                {!networkBusy && (data?.network?.ipv6 || data?.network?.ip.includes(':')) && (
-                                    <aside className="environment-ipv6-notice" role="status">
-                                        <TriangleAlert aria-hidden="true" />
-                                        <div>
-                                            <p className="type-helper">
-                                                {networkState === 'error'
-                                                    ? t(
-                                                          '最近一次检测到 IPv6。当前网络查询未完成，请重新检测确认。',
-                                                          'IPv6 was detected in the last result. The current network check is incomplete. Check again to confirm.',
-                                                      )
-                                                    : t(
-                                                          '当前为 IPv6 环境，不建议采用 IPv6 访问 Claude Code。部分检测结果可能不完整。',
-                                                          'IPv6 was detected. Using IPv6 to access Claude Code is not recommended. Some check results may be incomplete.',
-                                                      )}
-                                            </p>
-                                            <a
-                                                className="type-helper"
-                                                href="https://ip.net.coffee/claude/ipv6.html"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                            >
-                                                {t('了解为什么不建议用 IPv6', 'Why IPv6 is not recommended')}
-                                                <ExternalLink aria-hidden="true" />
-                                            </a>
-                                        </div>
-                                    </aside>
-                                )}
-                                <div className="environment-tool-actions">
-                                    <a
-                                        className="environment-external-check type-action"
-                                        href="https://ip.net.coffee/claude/"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                    >
-                                        <span>{t('Claude AI IP 检测', 'Claude AI IP check')}</span>
-                                        <ExternalLink aria-hidden="true" />
-                                    </a>
-                                    <button
-                                        className="environment-external-check type-action"
-                                        type="button"
-                                        aria-haspopup="dialog"
-                                        onClick={() => setCleanupOpen(true)}
-                                    >
-                                        <span>{t('删除中转 API 变量', 'Remove relay API variables')}</span>
-                                        <Eraser aria-hidden="true" />
-                                    </button>
+                                                : '' +
+                                                  String(t('本地检测', 'Local checks')) +
+                                                  ' ' +
+                                                  String(completed) +
+                                                  ' / 12 · ' +
+                                                  String(
+                                                      networkState === 'ready'
+                                                          ? t('网络查询已完成', 'Network ready')
+                                                          : networkState === 'error'
+                                                            ? t('网络查询失败', 'Network unavailable')
+                                                            : t('网络查询中', 'Network lookup in progress'),
+                                                  )
+                                            : checkedAt
+                                              ? '' +
+                                                String(
+                                                    localError ||
+                                                        networkState === 'error' ||
+                                                        score === null ||
+                                                        findings.some(finding => finding.tone === 'unknown')
+                                                        ? t('部分完成', 'Partially complete')
+                                                        : t('检测完成', 'Complete'),
+                                                ) +
+                                                ' · ' +
+                                                String(formattedTime(checkedAt))
+                                              : t(
+                                                    '无需安装，手动开始，结果逐项呈现',
+                                                    'No installation. Start manually and review each result.',
+                                                )}
+                                    </span>
                                 </div>
-                            </div>
-                            {report && !running && (
-                                <p className="environment-next-step type-helper">
-                                    {t(
-                                        '展开对应建议，按需调整后点击“重新检测”；同时确认原来的使用问题是否恢复。',
-                                        'Open the related guidance, make any needed changes, then check again. Also verify whether the original operation works.',
-                                    )}
-                                </p>
-                            )}
-                            <p className="environment-scan-disclosure type-meta">
-                                <ColorIcon name="shield" small />
-                                {t(
-                                    '本地信号留在浏览器；网络查询仅发送本次公网 IP。',
-                                    'Local signals stay in your browser. Network lookups send only this connection’s public IP.',
+                                <div
+                                    className="environment-progress-track"
+                                    role="progressbar"
+                                    aria-label={t('环境检测进度', 'Environment check progress')}
+                                    aria-valuemin={0}
+                                    aria-valuemax={100}
+                                    aria-valuenow={percent}
+                                >
+                                    <span style={{ transform: `scaleX(${percent / 100})` }} />
+                                </div>
+                                <div className="environment-scan-actions">
+                                    <button
+                                        type="button"
+                                        className="environment-primary type-action"
+                                        onClick={() => void start()}
+                                        disabled={running}
+                                    >
+                                        {running ? (
+                                            <LoaderCircle className="environment-spinner" />
+                                        ) : report ? (
+                                            <RotateCcw />
+                                        ) : (
+                                            <ScanLine />
+                                        )}
+                                        {running
+                                            ? t('正在检测', 'Checking')
+                                            : report
+                                              ? t('重新检测', 'Check again')
+                                              : t('开始检测', 'Start check')}
+                                        {!running && <ArrowRight />}
+                                    </button>
+                                    {!networkBusy &&
+                                        (data?.network?.ipv6 || data?.network?.ip.includes(':')) && (
+                                            <aside className="environment-ipv6-notice" role="status">
+                                                <TriangleAlert aria-hidden="true" />
+                                                <div>
+                                                    <p className="type-helper">
+                                                        {networkState === 'error'
+                                                            ? t(
+                                                                  '最近一次检测到 IPv6。当前网络查询未完成，请重新检测确认。',
+                                                                  'IPv6 was detected in the last result. The current network check is incomplete. ' +
+                                                                      'Check again to confirm.',
+                                                              )
+                                                            : t(
+                                                                  '当前为 IPv6 环境，不建议采用 IPv6 访问 Claude Code。部分检测结果可能不完整。',
+                                                                  'IPv6 was detected. Using IPv6 to access Claude Code is not recommended. ' +
+                                                                      'Some check results may be incomplete.',
+                                                              )}
+                                                    </p>
+                                                    <a
+                                                        className="type-helper"
+                                                        href="https://ip.net.coffee/claude/ipv6.html"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                    >
+                                                        {t(
+                                                            '了解为什么不建议用 IPv6',
+                                                            'Why IPv6 is not recommended',
+                                                        )}
+                                                        <ExternalLink aria-hidden="true" />
+                                                    </a>
+                                                </div>
+                                            </aside>
+                                        )}
+                                </div>
+                                {report && !running && (
+                                    <p className="environment-next-step type-helper">
+                                        {t(
+                                            '展开对应建议，按需调整后点击“重新检测”；同时确认原来的使用问题是否恢复。',
+                                            'Open the related guidance, make any needed changes, then check again. Also verify whether the original operation works.',
+                                        )}
+                                    </p>
                                 )}
-                            </p>
-                            {report && running && previousScore.current !== null && (
-                                <p className="environment-previous type-meta">
+                                <p className="environment-scan-disclosure type-meta">
+                                    <ColorIcon name="shield" small />
                                     {t(
-                                        `上次环境风险参考分 ${previousScore.current ?? '—'} / 100；正在更新，旧结果保留在明细中。`,
-                                        'Previous environment risk reference score: ' +
-                                            String(previousScore.current ?? '—') +
-                                            ' / 100. Earlier values remain in the details while updating.',
+                                        '本地信号留在浏览器；网络查询仅发送本次公网 IP。',
+                                        'Local signals stay in your browser. Network lookups send only this connection’s public IP.',
                                     )}
                                 </p>
-                            )}
+                                {report && running && previousScore.current !== null && (
+                                    <p className="environment-previous type-meta">
+                                        {t(
+                                            `上次环境风险参考分 ${previousScore.current ?? '—'} / 100；正在更新，旧结果保留在明细中。`,
+                                            'Previous environment risk reference score: ' +
+                                                String(previousScore.current ?? '—') +
+                                                ' / 100. Earlier values remain in the details while updating.',
+                                        )}
+                                    </p>
+                                )}
+                            </div>
+                            <div className="environment-tool-actions">
+                                <a
+                                    className="environment-external-check type-action"
+                                    href="https://ip.net.coffee/claude/"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    <ColorIcon name="globe" small />
+                                    <span>{t('Claude AI IP 检测', 'Claude AI IP check')}</span>
+                                    <ChevronRight aria-hidden="true" />
+                                </a>
+                                <button
+                                    className="environment-external-check type-action"
+                                    type="button"
+                                    aria-haspopup="dialog"
+                                    onClick={() => setCleanupOpen(true)}
+                                >
+                                    <Eraser aria-hidden="true" />
+                                    <span>{t('删除中转 API 变量', 'Remove relay API variables')}</span>
+                                    <ChevronRight aria-hidden="true" />
+                                </button>
+                                <a
+                                    className="environment-external-check type-action"
+                                    href="#environment-method-title"
+                                    onClick={() =>
+                                        document
+                                            .getElementById('environment-method-title')
+                                            ?.focus({ preventScroll: true })
+                                    }
+                                >
+                                    <CircleAlert aria-hidden="true" />
+                                    <span>{t('评分说明与常见问题', 'Scoring and FAQ')}</span>
+                                    <ChevronRight aria-hidden="true" />
+                                </a>
+                            </div>
                         </section>
                         <section
                             className="environment-network"
@@ -929,7 +961,11 @@ export function EnvironmentMonitorPage({
                                     </div>
                                 ))}
                             </dl>
-                            <span className="environment-copy-feedback type-meta" aria-live="polite">
+                            <span
+                                className="environment-copy-feedback type-meta"
+                                aria-live="polite"
+                                data-visible={Boolean(copied || copyError)}
+                            >
                                 {copied
                                     ? t('完整 IP 已复制', 'Full IP copied')
                                     : copyError
@@ -1190,7 +1226,7 @@ export function EnvironmentMonitorPage({
                                 </details>
                             )}
                         </section>
-                    </section>
+                    </div>
 
                     <section
                         className="environment-detail-section"
@@ -1439,7 +1475,7 @@ export function EnvironmentMonitorPage({
                     <div className="environment-help-layout">
                         <section className="environment-method" aria-labelledby="environment-method-title">
                             <div className="environment-section-heading">
-                                <h2 id="environment-method-title" className="type-section">
+                                <h2 id="environment-method-title" tabIndex={-1} className="type-section">
                                     <ColorIcon name="shield" />
                                     {t('检测原理与评分', 'How checks and scoring work')}
                                 </h2>

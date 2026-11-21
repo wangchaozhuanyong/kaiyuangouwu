@@ -1,5 +1,31 @@
-/* Environment monitor consumes the storefront’s shared semantic tokens. */
-.environment-monitor {
+/* The environment tool has a light palette across storefront presets. */
+.page.subpage.environment-monitor {
+    color-scheme: light;
+    --bg: #faf9f1;
+    --surface: #fffef9;
+    --text: #343622;
+    --muted: #655f4b;
+    --line: #dedbc8;
+    --line-subtle: #e7e2d1;
+    --soft: #f1ecd9;
+    --accent: #785819;
+    --accent-hover: #61450e;
+    --accent-foreground: #fff;
+    --selection: var(--accent);
+    --selection-hover: var(--accent-hover);
+    --focus: #866316;
+    --control-surface: #f5f1df;
+    --interaction-hover: var(--control-surface);
+    --interaction-ink: var(--accent-hover);
+    --skin-tool-security-foreground: var(--accent);
+    --skin-tool-mail-foreground: #59735e;
+    --skin-tool-coupon-foreground: #936423;
+    --coupon-gold-surface: #fbf0c9;
+    --warning: #936423;
+    --warning-text: #754a16;
+    --success: #17684f;
+    --danger: #aa321d;
+    --skin-card-shadow: none;
     min-height: 100dvh;
     color: var(--text);
     background: var(--bg);
@@ -60,13 +86,16 @@
     height: 18px;
 }
 .environment-overview {
-    display: grid;
-    min-width: 0;
-    gap: var(--space-card);
-    padding: var(--space-card);
-    border-radius: var(--skin-hero-radius);
+    display: contents;
+}
+.environment-monitor .environment-body {
+    column-gap: var(--space-24);
+    row-gap: var(--space-16);
+    align-items: start;
+}
+.environment-monitor .subpage-header {
     background: var(--surface);
-    box-shadow: var(--skin-card-shadow);
+    color: var(--text);
 }
 .environment-section-heading,
 .environment-section-heading h2,
@@ -81,11 +110,11 @@
     font-weight: var(--font-weight-semibold);
 }
 .environment-network {
-    order: 2;
     min-width: 0;
     padding: var(--space-card);
+    border: 1px solid var(--line-subtle);
     border-radius: var(--skin-card-radius);
-    background: color-mix(in srgb, var(--success) 4%, var(--surface));
+    background: var(--surface);
 }
 .environment-network .environment-section-heading > .environment-state {
     margin-inline-start: auto;
@@ -128,14 +157,17 @@
 }
 .environment-network-rows {
     display: grid;
-    gap: var(--space-12);
-    margin-top: var(--space-24) !important;
+    gap: 0;
+    margin-top: var(--space-12) !important;
 }
 .environment-network-row {
     display: grid;
     grid-template-columns: minmax(84px, 0.8fr) minmax(0, 1.8fr);
-    align-items: start;
+    align-items: center;
     gap: var(--space-12);
+    min-height: 38px;
+    padding-block: var(--space-4);
+    border-bottom: 1px solid var(--line-subtle);
 }
 .environment-network-row dt {
     display: flex;
@@ -197,6 +229,10 @@
 }
 .environment-placeholder.is-loading {
     opacity: 0.7;
+}
+.environment-copy-feedback[data-visible='false'] {
+    min-height: 0;
+    margin: 0;
 }
 .environment-network-assessment {
     margin-top: var(--space-8);
@@ -320,36 +356,68 @@
     padding: var(--space-8) 0;
 }
 .environment-scan {
-    order: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-16) var(--space-24);
     min-width: 0;
     padding: var(--space-card);
+    border: 1px solid var(--line);
+    border-radius: var(--skin-hero-radius);
+    background: color-mix(in srgb, var(--coupon-gold-surface) 16%, var(--surface));
 }
-.environment-scan-heading {
-    order: 0;
+.environment-instrument {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    overflow: hidden;
+    min-width: 0;
+    margin: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--skin-card-radius);
+    background:
+        radial-gradient(ellipse at 62% 24%, var(--surface), transparent 70%), var(--coupon-gold-surface);
 }
-.environment-gauge {
-    order: 2;
+.environment-instrument-surface {
+    position: relative;
+    min-height: clamp(120px, 39vw, 182px);
 }
-.environment-scan-actions {
-    order: 3;
+.environment-instrument-surface canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
 }
-.environment-scan-message {
-    order: 4;
+.environment-instrument figcaption {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--space-4) var(--space-8);
+    padding: var(--space-4) var(--space-12);
+    border-top: 1px solid var(--line-subtle);
+    background: color-mix(in srgb, var(--surface) 68%, transparent);
+    color: var(--muted);
 }
-.environment-progress-track {
-    order: 5;
+.environment-instrument-title {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
 }
-.environment-stage-track {
-    order: 6;
+.environment-instrument-title::before {
+    content: '';
+    inline-size: 7px;
+    block-size: 7px;
+    border: 1px solid var(--accent);
+    border-radius: 50%;
 }
-.environment-scan-disclosure {
-    order: 7;
+.environment-instrument:not([data-phase='idle']) .environment-instrument-title::before {
+    background: var(--accent);
 }
-.environment-previous {
-    order: 8;
+.environment-instrument-readout {
+    font-family: var(--font-numeric);
+    font-variant-numeric: tabular-nums;
+}
+.environment-scan-content {
+    min-width: 0;
+    align-self: center;
 }
 .environment-scan-heading {
     width: 100%;
@@ -365,16 +433,18 @@
 }
 .environment-gauge {
     position: relative;
-    width: 200px;
-    height: 200px;
-    flex: none;
-    margin-top: var(--space-16);
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    min-height: var(--experience-control-min);
+    margin-top: var(--space-4);
     color: var(--muted);
 }
 .environment-gauge > svg {
     display: block;
-    width: 100%;
-    height: 100%;
+    width: 30px;
+    height: 30px;
+    flex: none;
     overflow: visible;
     transform: rotate(-90deg);
 }
@@ -412,18 +482,13 @@
     }
 }
 .environment-gauge-value {
-    position: absolute;
-    inset: 0;
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: center;
-    gap: var(--space-12);
+    gap: var(--space-4) var(--space-12);
 }
 .environment-gauge-value > span:first-child {
-    max-width: 70%;
     color: var(--muted);
-    text-align: center;
 }
 .environment-gauge-value > strong {
     display: flex;
@@ -449,9 +514,8 @@
     height: 14px;
 }
 .environment-scan-message {
-    min-height: 48px;
-    margin-top: var(--space-12);
-    text-align: center;
+    margin-top: var(--space-8);
+    text-align: start;
 }
 .environment-scan-message p {
     font-weight: var(--font-weight-medium);
@@ -463,9 +527,8 @@
 }
 .environment-progress-track {
     width: 100%;
-    max-width: 420px;
-    height: var(--space-8);
-    margin-top: var(--space-16);
+    height: var(--space-4);
+    margin-top: var(--space-12);
     overflow: hidden;
     border-radius: var(--skin-control-radius);
     background: var(--soft);
@@ -512,7 +575,6 @@
     align-items: center;
     gap: var(--space-12);
     width: 100%;
-    max-width: 420px;
     margin-top: 0;
     padding-top: var(--space-12);
 }
@@ -591,30 +653,42 @@
 }
 .environment-tool-actions {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: 1fr;
     gap: var(--space-8);
     width: 100%;
 }
-.environment-external-check {
-    display: flex;
+.environment-monitor .environment-tool-actions > .environment-external-check {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) 16px;
     align-items: center;
-    justify-content: center;
-    gap: var(--space-4);
-    width: 100%;
+    gap: var(--space-8);
     min-width: 0;
     min-height: var(--experience-control-min);
-    padding: var(--space-12) var(--space-4);
-    border: 0;
+    padding: var(--space-4) var(--space-12);
+    border: 1px solid var(--line);
     border-radius: var(--skin-control-radius);
     color: var(--text);
-    background: var(--control-surface);
+    background: var(--surface);
     text-decoration: none;
-    text-align: center;
+    text-align: start;
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+    font-weight: var(--font-weight-semibold);
 }
-.environment-external-check > span {
-    text-wrap: balance;
+.environment-external-check > svg:first-child {
+    box-sizing: border-box;
+    width: 28px;
+    height: 28px;
+    padding: var(--space-4);
+    border-radius: var(--skin-control-radius);
+    color: var(--accent);
+    background: var(--control-surface);
 }
-.environment-external-check:hover {
+.environment-external-check > svg:last-child {
+    color: var(--accent);
+}
+.environment-monitor .environment-tool-actions > .environment-external-check:hover {
     color: var(--interaction-ink);
     background: var(--interaction-hover);
 }
@@ -753,7 +827,7 @@
     text-align: center;
 }
 .environment-detail-section {
-    margin-top: var(--space-16);
+    min-width: 0;
 }
 .environment-detail-heading {
     display: grid;
@@ -795,6 +869,7 @@
 .environment-check-card {
     min-width: 0;
     padding: var(--space-card);
+    border: 1px solid var(--line-subtle);
     border-radius: var(--skin-card-radius);
     background: var(--surface);
     box-shadow: var(--skin-card-shadow);
@@ -934,17 +1009,21 @@
 }
 .environment-help-layout {
     display: grid;
-    gap: var(--space-section);
-    margin-top: var(--space-16);
+    gap: var(--space-16);
+    min-width: 0;
     align-items: start;
 }
 .environment-method,
 .environment-faq {
     min-width: 0;
     padding: var(--space-card);
+    border: 1px solid var(--line-subtle);
     border-radius: var(--skin-card-radius);
     background: var(--surface);
     box-shadow: var(--skin-card-shadow);
+}
+#environment-method-title {
+    scroll-margin-top: var(--space-24);
 }
 .environment-method > p {
     margin-top: var(--space-16);
@@ -1060,21 +1139,28 @@
     }
 }
 @media (min-width: 1024px) {
-    .environment-overview {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: var(--space-32);
-        align-items: start;
+    .environment-monitor .environment-body {
+        grid-template-columns: minmax(0, 0.87fr) minmax(0, 1.13fr);
+        grid-template-rows: auto min-content minmax(min-content, 1fr) auto;
+    }
+    .environment-scan,
+    .environment-footer {
+        grid-column: 1 / -1;
     }
     .environment-network {
-        order: 1;
+        grid-column: 1;
+        grid-row: 2;
     }
-    .environment-scan {
-        order: 2;
-        padding: var(--space-card);
+    .environment-detail-section {
+        grid-column: 2;
+        grid-row: 2 / 4;
     }
-    .environment-gauge {
-        width: 280px;
-        height: 280px;
+    .environment-help-layout {
+        grid-column: 1;
+        grid-row: 3;
+    }
+    .environment-footer {
+        grid-row: 4;
     }
     .environment-check-card {
         padding-inline: var(--space-24);
@@ -1088,18 +1174,12 @@
     .environment-check-card .environment-advice {
         margin-inline-start: 40px;
     }
-    .environment-help-layout {
-        grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    }
     .environment-footer > span {
         flex-basis: auto;
         margin-inline-start: auto;
     }
 }
 @media (max-width: 479px) {
-    .environment-overview {
-        padding: var(--space-16);
-    }
     .environment-network,
     .environment-scan {
         padding: var(--space-16);
@@ -1174,13 +1254,26 @@
     background: var(--control-surface);
 }
 
+@media (min-width: 721px) {
+    .environment-scan {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .environment-instrument-surface {
+        min-height: 235px;
+    }
+    .environment-tool-actions {
+        grid-column: 1 / -1;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
 /* Reference-style rows: result and contribution remain visible; advice opens in place. */
 @media (min-width: 768px) {
     .environment-check-card {
         position: relative;
     }
     .environment-check-name {
-        padding-inline-end: 200px;
+        padding-inline-end: 112px;
     }
     .environment-check-description {
         margin-top: var(--space-8) !important;
