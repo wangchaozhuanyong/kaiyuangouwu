@@ -8,6 +8,7 @@ import {
     Copy,
     Eye,
     EyeOff,
+    FolderKey,
     KeyRound,
     LockKeyhole,
     MoreHorizontal,
@@ -42,6 +43,7 @@ interface TwoFactorPageProps {
     onSignIn: () => void;
     onNotify: (message: string) => void;
     standalone?: boolean;
+    standaloneNotice?: string;
 }
 
 export function TwoFactorPage(props: Readonly<TwoFactorPageProps>) {
@@ -54,6 +56,7 @@ function TwoFactorPageSession({
     onBack,
     onNotify,
     standalone,
+    standaloneNotice,
 }: Readonly<TwoFactorPageProps>) {
     const isZh = language === 'zh';
     const [anonymousOwnerId] = useState(getAnonymousTwoFactorOwnerId);
@@ -362,12 +365,19 @@ function TwoFactorPageSession({
         >
             {standalone && (
                 <div className="standalone-tool-heading">
-                    <h1>{isZh ? '快速获取动态码' : 'Get your verification code'}</h1>
-                    <p>
-                        {isZh
-                            ? '粘贴 2FA 密钥，获取实时验证码。'
-                            : 'Paste your 2FA secret to generate a live code.'}
-                    </p>
+                    <div>
+                        <h1>{isZh ? '动态码工作台' : 'Authenticator'}</h1>
+                        <p>
+                            {isZh
+                                ? '在此设备上生成验证码，也可以保存常用账号。'
+                                : 'Generate verification codes on this device and keep your accounts together.'}
+                        </p>
+                        {standaloneNotice && <p role="status">{standaloneNotice}</p>}
+                    </div>
+                    <div className="two-factor-period">
+                        <span>{isZh ? '更新周期' : 'Interval'}</span>
+                        <strong>30 s</strong>
+                    </div>
                 </div>
             )}
             <div
@@ -431,7 +441,7 @@ function TwoFactorPageSession({
                                 autoComplete="off"
                                 spellCheck={false}
                                 value={quickInput}
-                                placeholder={copy.secretPlaceholder}
+                                placeholder={standalone ? 'Base32' : copy.secretPlaceholder}
                                 onChange={event => {
                                     setQuickInput(event.target.value);
                                     setQuickSecret(null);
@@ -846,6 +856,7 @@ function TwoFactorPageSession({
 
                             {!accounts.length ? (
                                 <div className="two-factor-empty mt-5 grid place-items-center py-6 text-center">
+                                    {standalone && <FolderKey aria-hidden="true" />}
                                     <div>
                                         <strong className="mt-3 block text-[var(--text)]">
                                             {copy.emptyTitle}

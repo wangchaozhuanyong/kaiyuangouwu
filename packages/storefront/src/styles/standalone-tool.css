@@ -134,55 +134,7 @@
     }
 }
 
-.standalone-tool-page .two-factor-workspace {
-    max-width: 1168px;
-    margin-inline: auto;
-}
-.standalone-tool-page .two-factor-query > .two-factor-intro {
-    display: none;
-}
-.standalone-tool-page .two-factor-quick-form > button[type='submit'] {
-    min-height: 48px;
-}
-.standalone-tool-page .two-factor-vault {
-    padding: var(--space-16);
-    border-radius: var(--skin-control-radius);
-    background: var(--accent-soft);
-}
-.standalone-tool-page .two-factor-vault > p {
-    font-size: var(--type-helper-size);
-    line-height: var(--type-helper-leading);
-}
-.standalone-tool-page .two-factor-empty {
-    padding: var(--space-48) var(--space-16);
-}
-@media (min-width: 1024px) {
-    .standalone-tool-page .two-factor-workspace {
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        align-items: stretch;
-        gap: 0;
-        padding-top: 0;
-    }
-    .standalone-tool-page .two-factor-workspace > .two-factor-query {
-        border-radius: var(--skin-card-radius) 0 0 var(--skin-card-radius);
-        padding: var(--space-32);
-    }
-    .standalone-tool-page .two-factor-workspace > .two-factor-accounts {
-        border-left: 1px solid var(--line-subtle);
-        border-radius: 0 var(--skin-card-radius) var(--skin-card-radius) 0;
-        padding: var(--space-32);
-    }
-    .standalone-tool-page .two-factor-privacy {
-        padding-top: var(--space-24);
-    }
-}
 @media (max-width: 767px) {
-    .standalone-tool-page .two-factor-query > h2 {
-        display: none;
-    }
-    .standalone-tool-page .two-factor-quick-form {
-        margin-top: 0;
-    }
     .two-factor-query-result {
         padding: var(--space-16);
     }
@@ -190,16 +142,24 @@
 
 /* The independent entry keeps the same query lifecycle and result owners. */
 .mail-query-page.standalone-tool-page {
+    --mail-query-content-max: 720px;
+
     max-width: none;
     margin: 0;
 }
-.mail-query-page.standalone-tool-page .mail-query-layout {
+.mail-query-page.standalone-tool-page[data-mail-view='results'] {
+    --mail-query-content-max: 1328px;
+}
+.mail-query-page.standalone-tool-page > :is(.subpage-header, .mail-query-layout) {
     width: 100%;
-    max-width: 720px;
+    max-width: var(--mail-query-content-max);
+    padding-inline: var(--space-16);
+}
+.mail-query-page.standalone-tool-page .mail-query-layout {
     margin: 0 auto;
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-24);
-    padding: 0 var(--space-16);
+    padding-block: 0;
 }
 .mail-query-page.standalone-tool-page .mail-query-controls {
     grid-template-columns: minmax(0, 1fr);
@@ -241,7 +201,6 @@
     color: var(--text);
 }
 .standalone-tool-page[data-mail-view='results'] .mail-query-layout {
-    max-width: 1328px;
     margin-top: var(--space-24);
 }
 .mail-query-page.standalone-tool-page .result-summary-card {
