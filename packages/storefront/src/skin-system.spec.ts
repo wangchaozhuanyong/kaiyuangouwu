@@ -712,7 +712,7 @@ describe('storefront skin system', () => {
         );
         const sharedHeader = stylesheet('./styles/subpage-content.css');
         expect(sharedHeader).toMatch(
-            /\.desktop-store-layout \.page\.subpage > \.subpage-header\s*\{[^}]*margin:\s*0;[^}]*padding:\s*var\(--space-8\) 0;/,
+            /\.desktop-store-layout \.page\.subpage > \.subpage-header\s*\{[^}]*margin:\s*0;[^}]*padding:\s*var\(--header-padding,\s*var\(--space-8\) 0\);/,
         );
         expect(stylesheet('./tailwind/checkout-page-styles.ts')).not.toContain('[&>.subpage-header]');
         expect(stylesheet('./styles/home-showcase.css')).not.toMatch(
