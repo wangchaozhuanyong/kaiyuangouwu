@@ -210,12 +210,15 @@ function ToolEntryPlugin({
         );
     }
     if (name === 'two-factor' || name === 'mail-query' || name === 'environment-monitor') {
+        // The static environment card can be used before React owns the service page.
+        const entryHasReturnMarker = name === 'environment-monitor';
+        const languageQuery = language === 'en' ? '?lang=en' : '';
         return (
             <a
                 className={`${entryClass}${suffix}`}
-                href={`${customerToolOrigins[name]}/${language === 'en' ? '?lang=en' : ''}`}
+                href={`${customerToolOrigins[name]}/${languageQuery}${entryHasReturnMarker ? '#back' : ''}`}
                 referrerPolicy="no-referrer"
-                onClick={openStandaloneTool}
+                onClick={entryHasReturnMarker ? undefined : openStandaloneTool}
                 onMouseEnter={warmStandaloneTool}
                 onFocus={warmStandaloneTool}
                 onTouchStart={warmStandaloneTool}
