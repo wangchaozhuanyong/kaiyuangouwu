@@ -80,7 +80,7 @@ describe('MDAC channel publication policy', () => {
         }
     });
 
-    it('strips a previously published entry after permission is removed and overwrites untrusted host settings', async () => {
+    it('strips a previously published entry after permission is removed and overwrites untrusted runtime settings', async () => {
         const previous = process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN;
         process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN = 'damatong.net';
         const block = () =>
@@ -91,7 +91,11 @@ describe('MDAC channel publication policy', () => {
                 items: [
                     {
                         enabled: true,
-                        settings: { pluginCode: 'mdac-entry', allowedHost: 'other.example' },
+                        settings: {
+                            pluginCode: 'mdac-entry',
+                            allowedHost: 'other.example',
+                            flightLookupEnabled: 'untrusted',
+                        },
                         translations: [{ languageCode: LanguageCode.zh_Hans, label: '入境卡' }],
                     },
                 ] as never,
@@ -108,18 +112,81 @@ describe('MDAC channel publication policy', () => {
             {} as never,
         );
         vi.spyOn(service as any, 'translateBlock').mockImplementation((value: unknown) => value);
+        vi.stubEnv('STOREFRONT_MDAC_OAG_SUBSCRIPTION_KEY', 'fixture-only');
+        vi.stubEnv('STOREFRONT_MDAC_FLIGHT_LOOKUP_ENABLED', undefined);
         try {
-            const allowed = await service.findPublished({
+            const context = {
                 channelId: 'owner',
                 languageCode: LanguageCode.zh_Hans,
-            } as never);
-            expect(allowed[0].items[0].settings.allowedHost).toBe('damatong.net');
+            } as never;
+            const allowed = await service.findPublished(context);
+            expect(allowed[0].items[0].settings?.allowedHost).toBe('damatong.net');
+            expect(allowed[0].items[0].settings?.flightLookupEnabled).toBe(false);
+            vi.stubEnv('STOREFRONT_MDAC_FLIGHT_LOOKUP_ENABLED', 'true');
+            const activated = await service.findPublished(context);
+            expect(activated[0].items[0].settings?.flightLookupEnabled).toBe(true);
             findOne.mockResolvedValue(null);
             const denied = await service.findPublished({
                 channelId: 'owner',
                 languageCode: LanguageCode.zh_Hans,
             } as never);
             expect(denied.flatMap(item => item.items)).toHaveLength(0);
+        } finally {
+            vi.unstubAllEnvs();
+            if (previous === undefined) delete process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN;
+            else process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN = previous;
+        }
+    });
+
+    it('authorizes flight lookups only on the active shop host with a currently published MDAC entry', async () => {
+        const previous = process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN;
+        process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN = 'damatong.net';
+        const domain = vi.fn().mockResolvedValue({ domain: 'damatong.net' });
+        const block = {
+            enabled: true,
+            type: 'CLIENT_PLUGINS',
+            translations: [{ languageCode: LanguageCode.zh_Hans, title: '插件' }],
+            items: [
+                {
+                    enabled: true,
+                    translations: [{ languageCode: LanguageCode.zh_Hans, label: '入境卡' }],
+                    settings: { pluginCode: 'mdac-entry' },
+                },
+            ],
+        };
+        const publication = vi.fn().mockResolvedValue(block);
+        const service = new StorefrontContentService(
+            {
+                rawConnection: { hasMetadata: () => true },
+                getRepository: (_ctx: unknown, entity: unknown) => ({
+                    findOne: entity === 'StoreDomain' ? domain : publication,
+                }),
+            } as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+        const context = {
+            channelId: 'owner',
+            languageCode: LanguageCode.zh_Hans,
+            req: { headers: { host: 'damatong.net' } },
+        };
+        try {
+            expect(await service.canLookupMdacFlights(context as never)).toBe(true);
+            expect(
+                await service.canLookupMdacFlights({
+                    ...context,
+                    req: {
+                        headers: { host: 'other.example', 'x-forwarded-host': 'damatong.net' },
+                        hostname: 'damatong.net',
+                    },
+                } as never),
+            ).toBe(false);
+            block.items[0].enabled = false;
+            expect(await service.canLookupMdacFlights(context as never)).toBe(false);
+            block.items[0].enabled = true;
+            domain.mockResolvedValue(null);
+            expect(await service.canLookupMdacFlights(context as never)).toBe(false);
         } finally {
             if (previous === undefined) delete process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN;
             else process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN = previous;

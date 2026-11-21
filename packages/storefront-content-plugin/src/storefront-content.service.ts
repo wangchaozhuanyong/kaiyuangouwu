@@ -55,6 +55,7 @@ import { StorefrontContentItemTranslation } from './entities/storefront-content-
 import { StorefrontContentItem } from './entities/storefront-content-item.entity';
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
 import { imageReplacements } from './image-replacement-policy';
+import { isMdacFlightLookupConfigured } from './mdac-flight-lookup.service';
 import { mobileHeroTextFields } from './shared/hero-image';
 import { StorefrontContentChangedEvent } from './storefront-content-changed.event';
 import { StorefrontExternalImageService } from './storefront-external-image.service';
@@ -134,7 +135,11 @@ export class StorefrontContentService {
                 for (const item of block.items) {
                     if (item.settings?.pluginCode === 'mdac-entry') {
                         // Operational restriction comes from deployment policy, never merchant UI defaults.
-                        item.settings = { ...item.settings, allowedHost: this.mdacDomain() ?? '' };
+                        item.settings = {
+                            ...item.settings,
+                            allowedHost: this.mdacDomain() ?? '',
+                            flightLookupEnabled: isMdacFlightLookupConfigured(),
+                        };
                     }
                 }
             }
@@ -1164,6 +1169,29 @@ export class StorefrontContentService {
     private mdacDomain(): string | undefined {
         const domain = process.env.STOREFRONT_MDAC_ALLOWED_DOMAIN?.trim().toLowerCase();
         return domain && /^[a-z0-9]+(?:[.-][a-z0-9]+)+$/.test(domain) ? domain : undefined;
+    }
+
+    async canLookupMdacFlights(ctx: RequestContext): Promise<boolean> {
+        const domain = this.mdacDomain();
+        // The storefront proxy sets Host explicitly. Express hostname can honor a forwarded host.
+        const host = ctx.req?.headers.host?.toLowerCase().replace(/:\d+$/, '');
+        if (!domain || host !== domain || !(await this.isMdacChannel(ctx))) {
+            return false;
+        }
+        const block = await this.connection.getRepository(ctx, StorefrontContentBlock).findOne({
+            where: {
+                channelId: ctx.channelId,
+                code: STOREFRONT_CLIENT_PLUGINS_CODE,
+                enabled: true,
+                type: 'CLIENT_PLUGINS',
+            },
+            relations: { items: { translations: true }, translations: true },
+        });
+        return Boolean(
+            block &&
+            contentPublicationStatus(block, Date.now(), ctx.languageCode) === 'PUBLISHED' &&
+            publishedContentItems(block).some(item => item.settings?.pluginCode === 'mdac-entry'),
+        );
     }
 
     async availableClientPluginCodes(ctx: RequestContext): Promise<string[]> {

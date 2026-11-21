@@ -123,10 +123,47 @@ const commonTypes = gql`
 export const shopApiExtensions = gql`
     ${commonTypes}
 
+    enum MdacFlightLookupStatus {
+        MATCHED
+        NO_MATCH
+        UNAVAILABLE
+        NOT_CONFIGURED
+        INVALID_INPUT
+    }
+
+    enum MdacFlightStatus {
+        SCHEDULED
+        CANCELLED
+        ARRIVAL_CHANGED
+        DIVERTED
+    }
+
+    type MdacFlight {
+        flightNumber: String!
+        operatingFlightNumber: String
+        departureAirport: String!
+        arrivalAirport: String!
+        scheduledArrivalDate: String!
+        scheduledArrivalTime: String!
+        effectiveArrivalDate: String!
+        effectiveArrivalTime: String!
+        status: MdacFlightStatus!
+    }
+
+    type MdacFlightLookupResult {
+        status: MdacFlightLookupStatus!
+        flights: [MdacFlight!]!
+    }
+
     extend type Query {
         storefrontVisualPreset: StorefrontVisualPreset!
         storefrontContent: [StorefrontContentBlock!]!
         storefrontContentSettings: StorefrontContentSettings!
+        mdacFlightLookup(
+            arrivalDate: String!
+            arrivalAirport: String!
+            flightNumber: String!
+        ): MdacFlightLookupResult!
     }
 `;
 

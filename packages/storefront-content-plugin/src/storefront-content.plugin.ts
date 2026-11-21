@@ -8,6 +8,8 @@ import { StorefrontContentBlock } from './entities/storefront-content-block.enti
 import { StorefrontContentItemTranslation } from './entities/storefront-content-item-translation.entity';
 import { StorefrontContentItem } from './entities/storefront-content-item.entity';
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
+import { MdacFlightLookupShopResolver } from './mdac-flight-lookup.resolver';
+import { MdacFlightLookupService } from './mdac-flight-lookup.service';
 import { accountRecommendationSettingsError } from './shared/account-recommendation-settings';
 import {
     STOREFRONT_ACCOUNT_SETTINGS_NAMESPACE,
@@ -43,6 +45,7 @@ import { StorefrontVisualPresetService } from './storefront-visual-preset.servic
         StorefrontVisualPresetService,
         StorefrontAuthSettingsService,
         StorefrontAccountSettingsService,
+        MdacFlightLookupService,
     ],
     configuration: config => {
         config.authOptions.customPermissions.push(storefrontContentPermission);
@@ -134,7 +137,11 @@ import { StorefrontVisualPresetService } from './storefront-visual-preset.servic
     },
     shopApiExtensions: {
         schema: shopApiExtensions,
-        resolvers: [StorefrontContentShopResolver, StorefrontVisualPresetShopResolver],
+        resolvers: [
+            StorefrontContentShopResolver,
+            StorefrontVisualPresetShopResolver,
+            MdacFlightLookupShopResolver,
+        ],
     },
     compatibility: '^3.7.0',
 })

@@ -1,6 +1,8 @@
 import { lazyRouteComponent, useRouter } from '@tanstack/react-router';
 
+import { requestMdacFlights } from '../client-plugins/mdac/flight-lookup';
 import { usePageRouteCommit } from '../page-readiness';
+import { storefrontQueryKeys } from '../query-client';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { AsyncRouteStatePage } from '../storefront-ui/page-shell';
 
@@ -12,19 +14,21 @@ export function MdacRoutePage() {
     usePageRouteCommit();
     const runtime = useRuntime();
     const router = useRouter({ warn: false });
-    const enabled = runtime.contentBlocks.some(
-        block =>
-            block.enabled &&
-            block.code === 'storefront-client-plugins' &&
-            block.type === 'CLIENT_PLUGINS' &&
-            block.items.some(
-                item =>
-                    item.enabled &&
-                    item.settings?.pluginCode === 'mdac-entry' &&
-                    typeof window !== 'undefined' &&
-                    item.settings.allowedHost === window.location.hostname,
-            ),
-    );
+    const plugin = runtime.contentBlocks
+        .filter(
+            block =>
+                block.enabled &&
+                block.code === 'storefront-client-plugins' &&
+                block.type === 'CLIENT_PLUGINS',
+        )
+        .flatMap(block => block.items)
+        .find(
+            item =>
+                item.enabled &&
+                item.settings?.pluginCode === 'mdac-entry' &&
+                typeof window !== 'undefined' &&
+                item.settings.allowedHost === window.location.hostname,
+        );
     if (runtime.contentQuery.data === undefined)
         return (
             <AsyncRouteStatePage
@@ -40,7 +44,7 @@ export function MdacRoutePage() {
                 onRetry={() => void runtime.contentQuery.refetch({ cancelRefetch: false })}
             />
         );
-    if (!enabled)
+    if (!plugin)
         return (
             <AsyncRouteStatePage
                 routeName="mdac"
@@ -60,6 +64,14 @@ export function MdacRoutePage() {
             language={runtime.language}
             storeName={runtime.storefrontName}
             onBack={router?.history.canGoBack() ? runtime.goBack : undefined}
+            flightService={
+                plugin.settings?.flightLookupEnabled === true
+                    ? {
+                          marketKey: storefrontQueryKeys.market(runtime.market),
+                          lookup: (input, signal) => requestMdacFlights(runtime.api, input, signal),
+                      }
+                    : undefined
+            }
         />
     );
 }
