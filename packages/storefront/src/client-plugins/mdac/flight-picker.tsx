@@ -8,6 +8,7 @@ import { type StorefrontLanguage } from '../../types';
 
 import {
     isTicketFlightNumber,
+    matchesScheduledArrival,
     type MdacFlight,
     type MdacFlightLookup,
     type MdacFlightSearch,
@@ -88,6 +89,12 @@ export function MdacFlightPicker({
         refetchOnReconnect: false,
     });
     const result = active && !query.isFetching && !query.isError ? query.data : undefined;
+    const flights =
+        result?.status === 'MATCHED'
+            ? result.flights.filter(
+                  flight => flight.status !== 'SCHEDULED' || matchesScheduledArrival(flight, input),
+              )
+            : [];
     function check() {
         onSelect(null);
         if (active) void query.refetch({ cancelRefetch: false });
@@ -105,7 +112,7 @@ export function MdacFlightPicker({
             '暂时无法核验航班，可保留草稿后重试。',
             'Flight verification is temporarily unavailable. Save your draft and try again.',
         );
-    } else if (result?.status === 'NO_MATCH') {
+    } else if (result?.status === 'NO_MATCH' || (result?.status === 'MATCHED' && !flights.length)) {
         message = t(
             '所选日期和机场未找到该航班，请核对机票。',
             'No match for this arrival date and airport. Check your ticket.',
@@ -203,9 +210,9 @@ export function MdacFlightPicker({
                     </span>
                 </p>
             )}
-            {!selected && result?.status === 'MATCHED' && (
+            {!selected && flights.length > 0 && (
                 <ul className="mdac-flight-results">
-                    {result.flights.map(flight => {
+                    {flights.map(flight => {
                         const details = `${flight.departureAirport} → ${flight.arrivalAirport} · ${flight.effectiveArrivalDate} ${flight.effectiveArrivalTime}`;
                         const key = `${flight.operatingFlightNumber}-${flight.departureAirport}-${flight.scheduledArrivalDate}-${flight.scheduledArrivalTime}`;
                         const state =
