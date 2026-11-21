@@ -2,7 +2,8 @@
 import { act, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
-import type { MdacFlightService } from '../client-plugins/mdac/flight-picker';
+
+import { type MdacFlightService } from '../client-plugins/mdac/flight-picker';
 
 import { MdacRoutePage } from './mdac-route-page';
 

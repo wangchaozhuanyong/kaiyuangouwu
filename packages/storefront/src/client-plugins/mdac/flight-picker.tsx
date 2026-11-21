@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { Check, Search } from 'lucide-react';
 import { useId, useState } from 'react';
-import type { StorefrontLanguage } from '../../types';
 
 import { storefrontQueryKeys } from '../../query-client';
+import { type StorefrontLanguage } from '../../types';
 
 import {
     isTicketFlightNumber,
