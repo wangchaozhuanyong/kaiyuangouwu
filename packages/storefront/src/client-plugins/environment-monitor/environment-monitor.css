@@ -1,25 +1,20 @@
-/* The environment tool has a light palette across storefront presets. */
 .page.subpage.environment-monitor {
     color-scheme: light;
     --bg: #faf9f1;
     --surface: #fffef9;
     --text: #343622;
     --muted: #655f4b;
-    --line: #dedbc8;
-    --line-subtle: #e7e2d1;
+    --line-subtle: #dedbc8;
     --soft: #f1ecd9;
     --accent: #785819;
     --accent-hover: #61450e;
     --accent-foreground: #fff;
     --selection: var(--accent);
     --selection-hover: var(--accent-hover);
-    --focus: #866316;
     --control-surface: #f5f1df;
     --interaction-hover: var(--control-surface);
     --interaction-ink: var(--accent-hover);
-    --skin-tool-security-foreground: var(--accent);
     --skin-tool-mail-foreground: #59735e;
-    --skin-tool-coupon-foreground: #936423;
     --coupon-gold-surface: #fbf0c9;
     --warning: #936423;
     --warning-text: #754a16;
@@ -49,7 +44,7 @@
     cursor: default;
 }
 .environment-monitor :is(button, select, summary, a):focus-visible {
-    outline: var(--experience-focus-width) solid var(--focus);
+    outline: var(--experience-focus-width) solid var(--accent);
     outline-offset: var(--experience-focus-offset);
 }
 .environment-color-icon {
@@ -63,13 +58,13 @@
     height: 18px;
 }
 .environment-color-icon:is(.tone-globe, .tone-browser, .tone-network) {
-    color: var(--skin-tool-security-foreground, var(--coupon-blue-ink));
+    color: var(--accent);
 }
 .environment-color-icon:is(.tone-language, .tone-typeface, .tone-shield) {
     color: var(--skin-tool-mail-foreground, var(--success));
 }
 .environment-color-icon:is(.tone-clock, .tone-sparkle, .tone-device) {
-    color: var(--skin-tool-coupon-foreground, var(--warning));
+    color: var(--warning);
 }
 .environment-color-icon.tone-location {
     color: var(--danger);
@@ -166,8 +161,10 @@
     align-items: center;
     gap: var(--space-12);
     min-height: 38px;
-    padding-block: var(--space-4);
-    border-bottom: 1px solid var(--line-subtle);
+    padding: var(--space-4);
+}
+.environment-network-row:nth-child(even) {
+    background: color-mix(in srgb, var(--soft) 46%, var(--surface));
 }
 .environment-network-row dt {
     display: flex;
@@ -361,7 +358,7 @@
     gap: var(--space-16) var(--space-24);
     min-width: 0;
     padding: var(--space-card);
-    border: 1px solid var(--line);
+    border: 1px solid var(--line-subtle);
     border-radius: var(--skin-hero-radius);
     background: color-mix(in srgb, var(--coupon-gold-surface) 16%, var(--surface));
 }
@@ -371,7 +368,7 @@
     overflow: hidden;
     min-width: 0;
     margin: 0;
-    border: 1px solid var(--line);
+    border: 1px solid var(--line-subtle);
     border-radius: var(--skin-card-radius);
     background:
         radial-gradient(ellipse at 62% 24%, var(--surface), transparent 70%), var(--coupon-gold-surface);
@@ -392,7 +389,6 @@
     justify-content: space-between;
     gap: var(--space-4) var(--space-8);
     padding: var(--space-4) var(--space-12);
-    border-top: 1px solid var(--line-subtle);
     background: color-mix(in srgb, var(--surface) 68%, transparent);
     color: var(--muted);
 }
@@ -464,10 +460,10 @@
 }
 .environment-scan .environment-gauge,
 .environment-monitor .is-signal {
-    color: var(--skin-tool-security-foreground, var(--coupon-blue-ink));
+    color: var(--accent);
 }
 .environment-gauge.is-running {
-    color: var(--skin-tool-security-foreground, var(--coupon-blue-ink));
+    color: var(--accent);
 }
 .environment-gauge.is-running .environment-gauge-fill {
     animation: environment-gauge-pulse 1.8s ease-in-out infinite;
@@ -666,7 +662,7 @@
     min-width: 0;
     min-height: var(--experience-control-min);
     padding: var(--space-4) var(--space-12);
-    border: 1px solid var(--line);
+    border: 1px solid var(--line-subtle);
     border-radius: var(--skin-control-radius);
     color: var(--text);
     background: var(--surface);
