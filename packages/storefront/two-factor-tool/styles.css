@@ -86,3 +86,217 @@ button:disabled {
         margin-inline: auto;
     }
 }
+
+/* Only the top-level authenticator uses this palette. The embedded vault inherits its host skin. */
+:root[data-standalone-tool='customer'] body {
+    --bg: #f4f8fc;
+    --surface: #ffffff;
+    --text: #1e354a;
+    --muted: #51687b;
+    --accent: #236ca3;
+    --accent-hover: #195886;
+    --accent-ink: var(--accent);
+    --accent-soft: #e9f4fc;
+    --soft: var(--accent-soft);
+    --accent-foreground: #ffffff;
+    --control-surface: var(--accent-soft);
+    --control-surface-hover: #c4e3f9;
+    --control-border: #91aec4;
+    --focus: var(--accent);
+    --line-subtle: var(--control-border);
+    --skin-divider: var(--line-subtle);
+    --skin-control-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+}
+
+.two-factor-page.standalone-tool-page {
+    --tool-inset: clamp(16px, 4vw, 48px);
+    --tool-width: 1120px;
+    --tool-edge: max(var(--tool-inset), calc((100% - var(--tool-width)) / 2));
+    padding-bottom: var(--space-48);
+}
+
+/* Paint the header to both viewport edges. The grid, intro and panels share the same inset. */
+.two-factor-page.standalone-tool-page > .subpage-header {
+    width: 100%;
+    max-width: none;
+    min-height: 68px;
+    margin: 0;
+    padding: 10px var(--tool-edge);
+    gap: 10px;
+    color: var(--text);
+    background: #e2effa;
+}
+.two-factor-page.standalone-tool-page .subpage-title-icon {
+    width: 36px;
+    height: 36px;
+    background: var(--control-surface-hover);
+    color: var(--accent);
+}
+.two-factor-page.standalone-tool-page .subpage-title-icon svg {
+    width: 20px;
+    height: 20px;
+}
+.two-factor-page.standalone-tool-page .subpage-header > .page-back-button,
+.two-factor-page.standalone-tool-page .subpage-header .subpage-header-actions > button {
+    color: inherit;
+    background: var(--surface);
+    white-space: nowrap;
+}
+.two-factor-page.standalone-tool-page .subpage-header button:hover {
+    background: var(--control-surface-hover);
+}
+.two-factor-page.standalone-tool-page .subpage-header button:focus-visible {
+    outline-color: var(--focus);
+}
+
+.two-factor-page.standalone-tool-page > :is(.standalone-tool-heading, .two-factor-workspace) {
+    width: auto;
+    max-width: none;
+    margin-inline: var(--tool-edge);
+    padding-inline: 0;
+}
+.two-factor-page.standalone-tool-page > .standalone-tool-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-24);
+    margin-block: clamp(24px, 4vw, 52px) var(--space-32);
+    text-align: left;
+}
+.two-factor-page .standalone-tool-heading h1 {
+    font-size: var(--type-display-size);
+    line-height: var(--type-display-leading);
+}
+.two-factor-page .standalone-tool-heading p {
+    margin-top: var(--space-8);
+}
+.two-factor-page .standalone-tool-heading [role='status'] {
+    color: var(--accent-ink);
+}
+.two-factor-period {
+    position: relative;
+    flex: none;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    width: 94px;
+    text-align: center;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: #d6ecfa;
+    color: var(--accent-ink);
+}
+.two-factor-period::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    background: repeating-conic-gradient(currentColor 0deg 1.5deg, transparent 1.5deg 12deg);
+    mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+}
+.two-factor-period span {
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+}
+.two-factor-period strong {
+    font-family: var(--font-code);
+    font-size: var(--type-code-size);
+    line-height: var(--type-code-leading);
+}
+
+.two-factor-page.standalone-tool-page .two-factor-workspace {
+    gap: var(--space-16);
+    padding-block: 0;
+    align-items: start;
+}
+.two-factor-page.standalone-tool-page .two-factor-workspace > :is(.two-factor-query, .two-factor-accounts) {
+    padding: clamp(20px, 2.5vw, 32px);
+    border-radius: 20px;
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--control-border) 27%, transparent),
+        0 5px 16px color-mix(in srgb, var(--text) 4%, transparent);
+}
+.two-factor-page.standalone-tool-page .two-factor-query > .two-factor-intro {
+    display: none;
+}
+.two-factor-page.standalone-tool-page .two-factor-quick-form > button[type='submit'] {
+    min-height: 48px;
+}
+.two-factor-page.standalone-tool-page .two-factor-quick-form > button[type='submit']:disabled {
+    background: #dce9f3;
+    color: var(--muted);
+    opacity: 1;
+}
+.two-factor-page.standalone-tool-page .two-factor-secret-field input::placeholder {
+    color: var(--muted);
+}
+.two-factor-page.standalone-tool-page .two-factor-vault {
+    margin-block: var(--space-16);
+    padding: var(--space-16);
+    border-radius: 12px;
+    background: #eef6fc;
+}
+.two-factor-page.standalone-tool-page .two-factor-vault > p {
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+.two-factor-page.standalone-tool-page .two-factor-vault > button {
+    color: var(--accent-ink);
+    background: var(--surface);
+}
+.two-factor-page.standalone-tool-page .two-factor-empty:has(> svg) {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    justify-items: start;
+    gap: var(--space-12);
+    padding: var(--space-16) 0 0;
+    text-align: left;
+}
+.two-factor-page.standalone-tool-page .two-factor-empty > svg {
+    width: 44px;
+    height: 44px;
+    padding: 11px;
+    border-radius: 12px;
+    background: #e8f4f4;
+    color: #316c75;
+}
+.two-factor-page.standalone-tool-page .two-factor-empty strong {
+    margin: 0;
+}
+.two-factor-page.standalone-tool-page .two-factor-privacy {
+    padding: var(--space-12) var(--space-16);
+    border-radius: 14px;
+    background: #e9f0f6;
+}
+.two-factor-page.standalone-tool-page .two-factor-privacy > button {
+    padding-inline: var(--space-8);
+}
+@media (min-width: 1024px) {
+    .two-factor-page.standalone-tool-page .two-factor-workspace {
+        grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+        gap: var(--space-24);
+    }
+    .two-factor-page.standalone-tool-page .two-factor-query > h2 {
+        font-size: var(--type-page-size);
+        line-height: var(--type-page-leading);
+    }
+}
+@media (max-width: 767px) {
+    .two-factor-page.standalone-tool-page > .subpage-header {
+        min-height: 60px;
+        padding-block: var(--space-8);
+        gap: var(--space-8);
+    }
+    .two-factor-page.standalone-tool-page > .standalone-tool-heading {
+        gap: var(--space-12);
+        margin-block: var(--space-24);
+    }
+    .two-factor-period {
+        width: 84px;
+    }
+    .two-factor-page.standalone-tool-page .two-factor-workspace {
+        gap: var(--space-12);
+    }
+}

@@ -27,21 +27,15 @@ if (navigation) {
 function StandaloneVault() {
     const [notice, setNotice] = useState('');
     return (
-        <>
-            {notice && (
-                <p role="status" className="p-3 type-body">
-                    {notice}
-                </p>
-            )}
-            <TwoFactorPage
-                customer={null}
-                language={navigation?.language ?? 'zh'}
-                onBack={navigation?.onBack}
-                onSignIn={() => undefined}
-                onNotify={setNotice}
-                standalone
-            />
-        </>
+        <TwoFactorPage
+            customer={null}
+            language={navigation?.language ?? 'zh'}
+            onBack={navigation?.onBack}
+            onSignIn={() => undefined}
+            onNotify={setNotice}
+            standaloneNotice={notice}
+            standalone
+        />
     );
 }
 
