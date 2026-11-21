@@ -37,7 +37,12 @@ describe('environment monitor storefront registration', () => {
         const plugins = resolveClientPlugins(block, 'BUSINESS_SERVICES_MAIN');
         expect(plugins).toHaveLength(1);
         const Entry = plugins[0].Component;
-        expect(renderToStaticMarkup(<Entry language="zh" onNavigate={vi.fn()} />)).toContain('环境检测');
+        const chineseEntry = renderToStaticMarkup(<Entry language="zh" onNavigate={vi.fn()} />);
+        expect(chineseEntry).toContain('环境检测');
+        expect(chineseEntry).toContain('href="https://check.moyaoai.com/"');
+        expect(renderToStaticMarkup(<Entry language="en" onNavigate={vi.fn()} />)).toContain(
+            'href="https://check.moyaoai.com/?lang=en"',
+        );
         expect(resolveClientPlugins({ ...block, enabled: false }, 'BUSINESS_SERVICES_MAIN')).toEqual([]);
         expect(
             resolveClientPlugins(

@@ -19,12 +19,12 @@ import { preserveFrontendAssets } from '../frontend-asset-compatibility.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const source = readFileSync(path.join(repo, 'deploy/nginx/damatong.conf'), 'utf8');
-test('environment monitor allows only the two fixed browser IP observation origins on storefront HTML', () => {
+test('environment monitor allows only the two fixed browser IP observation origins', () => {
     const policies = [...source.matchAll(/add_header Content-Security-Policy "([^"]+)" always;/g)].map(
         match => match[1],
     );
     const monitoringPolicies = policies.filter(policy => policy.includes('api.ipify.org'));
-    assert.equal(monitoringPolicies.length, 4);
+    assert.equal(monitoringPolicies.length, 5);
     for (const policy of monitoringPolicies) {
         const connect = policy.split(';').find(directive => directive.trim().startsWith('connect-src'));
         assert.ok(connect.includes('https://api.ipify.org'));
@@ -81,6 +81,24 @@ function toolVhost(host, directory, productionRoot) {
         .replace(/^ +if \(\$trusted_cloudflare_origin.*\n/mu, '')
         .replace(`root ${productionRoot};`, `root /fixtures/www/${directory};`);
 }
+const environmentHost = 'check.moyaoai.com';
+test('environment checker requires its dedicated TLS certificate and trusted Cloudflare origin', () => {
+    const server = block(
+        'server',
+        source.lastIndexOf('server {', source.indexOf('server_name ' + environmentHost)),
+    );
+    const tls = '/etc/letsencrypt/live/' + environmentHost + '/';
+    assert.ok(server.includes('ssl_certificate ' + tls + 'fullchain.pem;'));
+    assert.ok(server.includes('ssl_certificate_key ' + tls + 'privkey.pem;'));
+    assert.ok(server.includes('if ($trusted_cloudflare_origin = 0) { return 444; }'));
+});
+const environmentVhost = toolVhost(
+    environmentHost,
+    '.environment-monitor-tool',
+    '/var/www/kaiyuangouwu-storefront-current/.environment-monitor-tool',
+)
+    .replaceAll('/var/www/kaiyuangouwu-storefront-current', '/fixtures/www')
+    .replace('proxy_pass http://vendure_backend/shop-api;', 'proxy_pass http://127.0.0.1:8082/shop-api;');
 const addressVhost = block(
     'server',
     source.lastIndexOf('server {', source.indexOf(`server_name ${addressHost};`)),
@@ -119,7 +137,7 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
     chmodSync(fixture, 0o755);
     mkdirSync(path.join(fixture, 'www'));
     mkdirSync(path.join(fixture, 'www/.address-tool/assets'), { recursive: true });
-    for (const directory of ['.mail-tool', '.two-factor']) {
+    for (const directory of ['.mail-tool', '.two-factor', '.environment-monitor-tool']) {
         mkdirSync(path.join(fixture, 'www', directory, 'assets'), { recursive: true });
         writeFileSync(path.join(fixture, 'www', directory, 'index.html'), `<main>${directory}</main>`);
         writeFileSync(
@@ -140,6 +158,32 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         '<main>Application shell with recovery navigation</main>',
     );
     writeFileSync(path.join(fixture, 'www/style.css'), 'body { color: black; }');
+    writeFileSync(path.join(fixture, 'www/frontend-release.json'), '{"releaseId":"fixture"}');
+    writeFileSync(path.join(fixture, 'www/.environment-monitor-tool/favicon.svg'), '<svg/>');
+    mkdirSync(path.join(fixture, 'www/tools/claude-proxy'), { recursive: true });
+    for (const extension of ['ps1', 'sh'])
+        writeFileSync(
+            path.join(fixture, 'www/tools/claude-proxy', 'clean-claude-proxy.' + extension),
+            extension,
+        );
+    // Echo the HTTP request from the proxy so tests exercise Nginx's real body generation.
+    writeFileSync(
+        path.join(fixture, 'echo-request.sh'),
+        [
+            '#!/bin/sh',
+            'while IFS= read -r line; do',
+            '    line=$(printf "%s" "$line" | tr -d "\\r")',
+            '    [ -z "$line" ] && break',
+            '    case "$line" in "Content-Length: "*) length=$(printf "%s" "$line" | cut -d " " -f 2);; esac',
+            '    headers="$headers$line\\n"',
+            'done',
+            'printf "%s\\r\\n" "HTTP/1.1 200 OK" "Set-Cookie: upstream=fixture" "Access-Control-Allow-Origin: *"',
+            'printf "%s\\r\\n" "vendure-auth-token: upstream" "Connection: close" ""',
+            'printf "%b\\n" "$headers"',
+            'dd bs=1 count="$length" 2>/dev/null',
+        ].join('\n'),
+        { mode: 0o755 },
+    );
     mkdirSync(path.join(fixture, 'www/mdac-ocr'));
     writeFileSync(path.join(fixture, 'www/mdac-ocr/worker.min.js'), 'self.onmessage = () => undefined;');
     writeFileSync(path.join(fixture, 'www/mdac-ocr/ocrb_int.traineddata.gz'), 'synthetic model');
@@ -167,6 +211,8 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         fallbackMap,
         coopMap,
         block('map $http_cookie $address_tool_cookie'),
+        block('map $http_x_environment_observed_ipv4 $environment_monitor_ipv4'),
+        block('map $http_x_environment_observed_ipv6 $environment_monitor_ipv6'),
         block('map "$http_authorization|$http_cookie" $storefront_public_coupon_guest'),
         block('map "$status|$uri" $build_asset_cache_control'),
         'map "$host|$http_x_storefront_original_uri" $environment_fixture_shell {',
@@ -219,6 +265,7 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         addressVhost,
         toolVhost('mail.moyaoai.com', '.mail-tool', '/var/www/kaiyuangouwu-storefront-current/.mail-tool'),
         toolVhost('2fa.moyaoai.com', '.two-factor', '/var/www/kaiyuangouwu-two-factor-current'),
+        environmentVhost,
         '}',
     ].join('\n');
     writeFileSync(path.join(fixture, 'nginx.conf'), config);
@@ -250,6 +297,9 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         '-v',
         path.join(fixture, 'proxy_params') + ':/etc/nginx/proxy_params:ro',
         image,
+        '/bin/sh',
+        '-c',
+        'nc -lk -p 8082 -e /fixtures/echo-request.sh & exec nginx -g "daemon off;"',
     );
     t.after(() => docker('stop', '--time', '1', id));
     const port = docker('port', id, '8080/tcp').split(':').at(-1);
@@ -389,6 +439,124 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         assert.equal((await fetch(origin + '/.mail-tool/index.html')).status, 404);
         assert.equal((await toolRequest('console.fixture', '/standalone-mail/query', 'POST')).status, 404);
     });
+    await t.test(
+        'environment host isolates the static tool and proxies only one anonymous network read',
+        async () => {
+            const ask = (pathname, { method = 'GET', headers = {}, body } = {}) =>
+                new Promise((resolve, reject) => {
+                    const req = request(
+                        origin + pathname,
+                        {
+                            method,
+                            headers: {
+                                host: environmentHost,
+                                ...(body ? { 'content-length': Buffer.byteLength(body) } : {}),
+                                ...headers,
+                            },
+                        },
+                        res => {
+                            res.setEncoding('utf8');
+                            let payload = '';
+                            res.on('data', chunk => (payload += chunk));
+                            res.on('end', () =>
+                                resolve(
+                                    new Response(payload, { status: res.statusCode, headers: res.headers }),
+                                ),
+                            );
+                            res.on('error', reject);
+                        },
+                    );
+                    req.on('error', reject);
+                    req.end(body);
+                });
+
+            const html = await ask('/');
+            assert.equal(await html.text(), '<main>.environment-monitor-tool</main>');
+            assert.match(html.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+            assert.match(html.headers.get('cache-control'), /no-store/);
+            assert.deepEqual(await (await ask('/frontend-release.json')).json(), { releaseId: 'fixture' });
+            assert.equal((await ask('/favicon.svg')).status, 200);
+            const asset = await ask('/assets/tool-A1234567.js');
+            assert.equal(asset.status, 200);
+            assert.match(asset.headers.get('cache-control'), /public, max-age=31536000, immutable/);
+            for (const extension of ['ps1', 'sh'])
+                assert.equal(
+                    await (await ask('/tools/claude-proxy/clean-claude-proxy.' + extension)).text(),
+                    extension,
+                );
+            for (const pathname of [
+                '/services',
+                '/zh',
+                '/shop-api',
+                '/admin-api',
+                '/.environment-monitor-tool/index.html',
+                '/tools/claude-proxy/other.sh',
+                '/assets/missing-A1234567.css',
+            ]) {
+                assert.equal((await ask(pathname)).status, 404, pathname);
+            }
+            assert.equal((await fetch(origin + '/.environment-monitor-tool/index.html')).status, 404);
+            const api = '/api/environment/network';
+            assert.equal((await ask(api)).status, 405);
+            assert.equal(
+                (await ask(api, { method: 'POST', headers: { origin: 'https://evil.test' } })).status,
+                403,
+            );
+            const post = (pathname, headers = {}, body) =>
+                ask(pathname, {
+                    method: 'POST',
+                    body,
+                    headers: { origin: 'https://' + environmentHost, ...headers },
+                });
+            assert.equal((await post(api + '?query=other')).status, 400);
+            assert.equal((await post(api, { 'x-environment-observed-ipv4': '1.2.3.4"}' })).status, 400);
+            assert.equal((await post(api, { 'x-environment-observed-ipv6': 'abcd::1%' })).status, 400);
+            assert.equal((await post(api, {}, 'x'.repeat(1025))).status, 413);
+            const result = await post(
+                api,
+                {
+                    'x-environment-observed-ipv4': '8.8.8.8',
+                    'x-environment-observed-ipv6': '2001:4860:4860::8888',
+                    cookie: 'session=synthetic',
+                    authorization: 'Bearer synthetic',
+                    'vendure-token': 'synthetic',
+                    'x-forwarded-for': '1.2.3.4',
+                    'x-forwarded-host': 'untrusted.test',
+                },
+                '{"query":"mutation BlockedClientInput { logout { success } }"}',
+            );
+            assert.equal(result.status, 200);
+            const [upstreamHeaders, upstreamBody] = (await result.text()).split('\n\n');
+            assert.match(upstreamHeaders, /^POST \/shop-api HTTP\/1\.1/m);
+            assert.match(upstreamHeaders, /^Host: moyaoai\.com$/im);
+            assert.match(upstreamHeaders, /^Content-Type: application\/json$/im);
+            assert.match(upstreamHeaders, /^X-Forwarded-Proto: https$/im);
+            assert.doesNotMatch(upstreamHeaders, /synthetic|1[.]2[.]3[.]4|untrusted[.]test/);
+            for (const forbidden of ['set-cookie', 'vendure-auth-token', 'access-control-allow-origin'])
+                assert.equal(result.headers.has(forbidden), false, forbidden);
+            assert.match(result.headers.get('cache-control'), /no-store/);
+            const upstream = JSON.parse(upstreamBody);
+            assert.deepEqual(Object.keys(upstream).sort(), ['query', 'variables']);
+            assert.equal(
+                upstream.query,
+                [
+                    'query EnvironmentNetworkReport($observedIpv4: String, $observedIpv6: String) {',
+                    'environmentNetworkReport(observedIpv4: $observedIpv4, observedIpv6: $observedIpv6) {',
+                    'checkedAt provider ip ipv4 ipv6 addressSource maskedIp cached lookupIssue country countryCode region city',
+                    'postalCode latitude longitude geoProvider timezone isp asn connectionType fraudScore proxy vpn tor } }',
+                ].join(' '),
+            );
+            assert.deepEqual(upstream.variables, {
+                observedIpv4: '8.8.8.8',
+                observedIpv6: '2001:4860:4860::8888',
+            });
+            const withoutObservations = await post(api);
+            assert.deepEqual(JSON.parse((await withoutObservations.text()).split('\n\n')[1]).variables, {
+                observedIpv4: null,
+                observedIpv6: null,
+            });
+        },
+    );
     await t.test('serves MDAC documents and keeps OCR permissions and archives scoped', async () => {
         for (const pathname of ['/mdac', '/zh/mdac', '/en/mdac']) {
             const document = await fetch(origin + pathname);
