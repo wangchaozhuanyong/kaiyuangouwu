@@ -1,0 +1,57 @@
+@import 'tailwindcss' source(none);
+@import '../src/styles/experience-foundations.css';
+@import '../src/styles/subpage-content.css';
+@source '../src/client-plugins/environment-monitor';
+@source '../src/storefront-ui/page-shell.tsx';
+@source './main.tsx';
+
+@layer base {
+    *,
+    ::before,
+    ::after,
+    ::backdrop {
+        border-color: var(--line-subtle);
+    }
+}
+
+.environment-monitor .subpage-header {
+    display: flex;
+    align-items: center;
+    width: min(100%, var(--experience-content-max));
+    margin-inline: auto;
+}
+
+.environment-monitor .subpage-header > strong {
+    flex: 1;
+    margin-inline-end: var(--space-8);
+    text-align: start;
+}
+
+.environment-monitor .subpage-header > .page-back-button {
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+}
+
+.environment-language-select {
+    min-height: var(--experience-control-min);
+    padding-inline: var(--space-8);
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    color: var(--text);
+    background: var(--surface);
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
+    cursor: pointer;
+}
+
+.environment-monitor .environment-body {
+    margin-inline: auto;
+    padding-block-end: var(--space-24);
+}
+
+@media (min-width: 1024px) {
+    .environment-monitor .environment-body {
+        width: min(calc(100% - 2 * var(--experience-page-gutter-desktop)), var(--experience-content-max));
+        padding-block-start: var(--space-16);
+    }
+}

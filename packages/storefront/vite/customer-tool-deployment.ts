@@ -2,4 +2,5 @@
 export const customerToolOrigins = {
     'two-factor': 'https://2fa.moyaoai.com',
     'mail-query': 'https://mail.moyaoai.com',
+    'environment-monitor': 'https://check.moyaoai.com',
 } as const;

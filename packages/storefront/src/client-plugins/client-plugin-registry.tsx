@@ -209,7 +209,7 @@ function ToolEntryPlugin({
             </a>
         );
     }
-    if (name === 'two-factor' || name === 'mail-query') {
+    if (name === 'two-factor' || name === 'mail-query' || name === 'environment-monitor') {
         return (
             <a
                 className={`${entryClass}${suffix}`}

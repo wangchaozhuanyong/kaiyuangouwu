@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react';
 import { build, defineConfig } from 'vite';
 
+import environmentMonitorTool from './vite.environment-monitor.config';
 import mailTool from './vite.mail-query.config';
 import addressTool from './vite.tax-free-address.config';
 
@@ -10,6 +11,7 @@ const compileStandaloneTools = {
     async closeBundle() {
         await build({ ...addressTool, configFile: false });
         await build({ ...mailTool, configFile: false });
+        await build({ ...environmentMonitorTool, configFile: false });
     },
 };
 

@@ -3,6 +3,14 @@ import type { ShopApi } from '../api';
 
 import { readBrowserNetworkAddresses, type BrowserNetworkAddresses } from './browser-network-addresses';
 
+export const environmentNetworkReportOperation = `query EnvironmentNetworkReport($observedIpv4: String, $observedIpv6: String) {
+                environmentNetworkReport(observedIpv4: $observedIpv4, observedIpv6: $observedIpv6) {
+                    checkedAt provider ip ipv4 ipv6 addressSource maskedIp cached lookupIssue country countryCode region city
+                    postalCode latitude longitude geoProvider timezone isp asn connectionType
+                    fraudScore proxy vpn tor
+                }
+            }`;
+
 const networkIssueCodes = ['DAILY_LIMIT', 'RATE_LIMIT', 'ADDRESS_UNAVAILABLE'] as const;
 
 export function environmentNetworkIssue(error: unknown) {
@@ -22,13 +30,7 @@ export async function requestEnvironmentNetworkReport(
             ? { observedIpv4: addresses.ipv4, observedIpv6: addresses.ipv6 }
             : undefined;
     const result = await api.request<{ environmentNetworkReport: EnvironmentNetworkReport }>(
-        `query EnvironmentNetworkReport($observedIpv4: String, $observedIpv6: String) {
-                environmentNetworkReport(observedIpv4: $observedIpv4, observedIpv6: $observedIpv6) {
-                    checkedAt provider ip ipv4 ipv6 addressSource maskedIp cached lookupIssue country countryCode region city
-                    postalCode latitude longitude geoProvider timezone isp asn connectionType
-                    fraudScore proxy vpn tor
-                }
-            }`,
+        environmentNetworkReportOperation,
         variables,
         signal,
     );

@@ -19,6 +19,8 @@
         "tax-free-address-tool",
         "vite.tax-free-address.config.ts",
         "mail-query-tool",
-        "vite.mail-query.config.ts"
+        "vite.mail-query.config.ts",
+        "environment-monitor-tool",
+        "vite.environment-monitor.config.ts"
     ]
 }

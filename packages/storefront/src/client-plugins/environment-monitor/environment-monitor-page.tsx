@@ -19,7 +19,7 @@ import {
     ScanLine,
     TriangleAlert,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 
 import {
     type BrowserNetworkAddresses,
@@ -181,12 +181,14 @@ export function EnvironmentMonitorPage({
     collect = collectBrowserReport,
     observeNetwork = readBrowserNetworkAddresses,
     localeSettings,
+    standaloneLanguageControl,
 }: {
     api: Pick<ShopApi, 'request'>;
     marketScope: string;
     customerId?: string;
     language: StorefrontLanguage;
-    onBack: () => void;
+    onBack?: () => void;
+    standaloneLanguageControl?: ReactNode;
     collect?: (options?: CollectOptions) => Promise<BrowserReport>;
     observeNetwork?: (signal?: AbortSignal) => Promise<BrowserNetworkAddresses>;
     localeSettings?: {
@@ -618,6 +620,21 @@ export function EnvironmentMonitorPage({
             local: true,
         },
     ];
+    function revealReportSection(event: MouseEvent<HTMLAnchorElement>) {
+        if (event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        const section = document.getElementById(event.currentTarget.hash.slice(1));
+        if (!section) return;
+        if (section instanceof HTMLDetailsElement) section.open = true;
+        const focusTarget =
+            section instanceof HTMLDetailsElement ? section.querySelector('summary') : section;
+        focusTarget?.focus({ preventScroll: true });
+        if (standaloneLanguageControl) {
+            // Internal report navigation must keep the previous document as the next browser Back target.
+            event.preventDefault();
+            section.scrollIntoView({ block: 'start' });
+        }
+    }
+
     return (
         <OverlayHost ownerKey="environment-monitor">
             <main
@@ -628,16 +645,18 @@ export function EnvironmentMonitorPage({
                     title={t('环境检测', 'Environment check')}
                     language={language}
                     onBack={onBack}
+                    back={onBack ? undefined : false}
                     backLabel={t('返回上一层', 'Back')}
                     action={
-                        localeSettings ? (
+                        standaloneLanguageControl ??
+                        (localeSettings ? (
                             <LocalePreferencesTrigger
                                 language={language}
                                 currencyCode={localeSettings.currencyCode}
                                 expanded={preferencesOpen}
                                 onClick={() => setPreferencesOpen(true)}
                             />
-                        ) : undefined
+                        ) : undefined)
                     }
                 />
                 <SubpageBody className="environment-body">
@@ -898,11 +917,7 @@ export function EnvironmentMonitorPage({
                                 <a
                                     className="environment-external-check type-action"
                                     href="#environment-method-title"
-                                    onClick={() =>
-                                        document
-                                            .getElementById('environment-method-title')
-                                            ?.focus({ preventScroll: true })
-                                    }
+                                    onClick={revealReportSection}
                                 >
                                     <CircleAlert aria-hidden="true" />
                                     <span>{t('评分说明与常见问题', 'Scoring and FAQ')}</span>
@@ -1239,10 +1254,7 @@ export function EnvironmentMonitorPage({
                             <a
                                 className="environment-detail-help type-label"
                                 href="#environment-usage-guidance"
-                                onClick={() => {
-                                    const guidance = document.getElementById('environment-usage-guidance');
-                                    if (guidance instanceof HTMLDetailsElement) guidance.open = true;
-                                }}
+                                onClick={revealReportSection}
                             >
                                 {t(
                                     '使用 Claude 前，如何检查环境？',
