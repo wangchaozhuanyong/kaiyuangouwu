@@ -11,6 +11,7 @@ import {
 } from '../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import { MdacPage } from '../../src/client-plugins/mdac/mdac-page';
 import { DesktopLayoutContext, useDesktopViewport } from '../../src/desktop-layout';
+import { StorefrontPageFrame } from '../../src/storefront-page-frame';
 import '../../src/storefront-styles';
 import '../../src/commerce-styles';
 
@@ -50,13 +51,16 @@ for (const [key, value] of Object.entries({
 const client = new QueryClient();
 function Fixture() {
     const desktop = useDesktopViewport();
+    const storeName = language === 'zh' ? '大马通' : 'Damatong';
     return (
         <QueryClientProvider client={client}>
             <DesktopLayoutContext.Provider value={desktop}>
-                <div
-                    className={desktop ? 'storefront-app desktop-store-layout' : 'storefront-app'}
-                    data-route="mdac"
-                    style={{ maxWidth: 1344, margin: 'auto' }}
+                <StorefrontPageFrame
+                    routeName="mdac"
+                    language={language}
+                    desktop={desktop}
+                    storefrontName={storeName}
+                    logoUrl={null}
                 >
                     {demoFlights && (
                         <p className="mdac-message type-label">
@@ -67,7 +71,7 @@ function Fixture() {
                     )}
                     <MdacPage
                         language={language}
-                        storeName={language === 'zh' ? '大马通' : 'Damatong'}
+                        storeName={storeName}
                         flightService={
                             demoFlights
                                 ? {
@@ -78,7 +82,7 @@ function Fixture() {
                         }
                     />
                     <p className="type-helper">本地实际组件预览 · 请使用虚构资料 · 未发布</p>
-                </div>
+                </StorefrontPageFrame>
             </DesktopLayoutContext.Provider>
         </QueryClientProvider>
     );
