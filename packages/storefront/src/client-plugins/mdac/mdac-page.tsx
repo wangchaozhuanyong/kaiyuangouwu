@@ -32,6 +32,9 @@ import {
     emptyDraft,
     exportConfig,
     HOTEL_STAY,
+    invalidPersonalField,
+    invalidTripDate,
+    isIsoDate,
     lodgingFields,
     malaysiaToday,
     normalizeFlightNumber,
@@ -43,14 +46,18 @@ import {
     STORAGE_KEY,
     suggestedDepartureDate,
     travelFields,
-    validateDates,
-    validPersonalFields,
     type Draft,
     type Field,
     type Fields,
 } from './model';
 
 const lodgingAddressFields = lodgingFields.slice(1);
+
+interface ValidationIssue {
+    key: string;
+    text: [zh: string, en: string];
+    traveler?: number;
+}
 
 function hasLodgingDetails(fields: Fields): boolean {
     return lodgingAddressFields.some(field => Boolean(fields[field.key]?.trim()));
@@ -91,6 +98,7 @@ export function MdacPage({
     const [step, setStep] = useState(0);
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState('');
+    const [validationIssue, setValidationIssue] = useState<ValidationIssue>();
     const [departureIsSuggested, setDepartureIsSuggested] = useState(false);
     const [checkDeparture, setCheckDeparture] = useState(false);
     const [flightReviewed, setFlightReviewed] = useState(false);
@@ -121,16 +129,15 @@ export function MdacPage({
     const editField = useRef<string | null>(null);
     const previousStep = useRef(step);
     useEffect(() => {
-        if (step !== previousStep.current) {
+        if (step !== previousStep.current || validationIssue) {
             previousStep.current = step;
-            const target = editField.current
-                ? document.getElementById(fieldId + '-' + editField.current)
-                : heading.current;
+            const key = validationIssue?.key ?? editField.current;
+            const target = key ? document.getElementById(fieldId + '-' + key) : heading.current;
             editField.current = null;
             target?.focus({ preventScroll: true });
             target?.scrollIntoView?.({ block: 'start' });
         }
-    }, [step, fieldId]);
+    }, [step, fieldId, validationIssue]);
     const byAir = draft.shared.trvlMode === AIR_TRAVEL;
     const flight = normalizeFlightNumber(draft.shared.vesselNm ?? '');
     const flightLookup = byAir ? flightService : undefined;
@@ -195,6 +202,12 @@ export function MdacPage({
         return true;
     }
     function update(field: Field, value: string, personal: boolean) {
+        if (
+            field.key === validationIssue?.key ||
+            (validationIssue?.key === 'depDt' && field.key === 'arrDt')
+        ) {
+            setValidationIssue(undefined);
+        }
         const editingLodging = !personal && lodgingFields.includes(field);
         if (editingLodging) {
             setRestoredLodging(false);
@@ -264,6 +277,7 @@ export function MdacPage({
         setFlightReviewed(true);
     }
     async function scan(file: File) {
+        setValidationIssue(undefined);
         const current = ++generation.current;
         const controller = new AbortController();
         scanController.current = controller;
@@ -330,7 +344,62 @@ export function MdacPage({
     function advance(event: FormEvent) {
         event.preventDefault();
         setMessage('');
+        setValidationIssue(undefined);
+        const today = malaysiaToday();
+        if (step === 0) {
+            for (const [index, person] of draft.travelers.entries()) {
+                const field = invalidPersonalField(person, today);
+                if (!field) continue;
+                const number = index + 1;
+                setTraveler(index);
+                setValidationIssue({
+                    key: field.key,
+                    traveler: index,
+                    text: [
+                        `请核对旅客 ${number} 的${field.zh}。`,
+                        `Check the ${field.en.toLowerCase()} for Traveler ${number}.`,
+                    ],
+                });
+                return;
+            }
+        }
         if (step === 1) {
+            const { arrDt, depDt } = draft.shared;
+            const dateIssue = invalidTripDate(draft.shared, today);
+            if (dateIssue === 'arrDt') {
+                setValidationIssue({
+                    key: dateIssue,
+                    text: isIsoDate(arrDt)
+                        ? [
+                              '抵达日期已过，请填写马来西亚当地的实际抵达日期。',
+                              'The arrival date has passed. Enter your actual arrival date in Malaysia.',
+                          ]
+                        : ['请填写有效的抵达日期。', 'Enter a valid arrival date.'],
+                });
+                return;
+            }
+            if (dateIssue === 'depDt') {
+                setValidationIssue({
+                    key: dateIssue,
+                    text: isIsoDate(depDt)
+                        ? ['离境日期不能早于抵达日期。', 'The departure date cannot be before arrival.']
+                        : ['请填写有效的离境日期。', 'Enter a valid departure date.'],
+                });
+                return;
+            }
+            const expiredTraveler = draft.travelers.findIndex(person => person.passExpDte <= arrDt);
+            if (expiredTraveler >= 0) {
+                const number = expiredTraveler + 1;
+                setValidationIssue({
+                    key: 'arrDt',
+                    traveler: expiredTraveler,
+                    text: [
+                        `旅客 ${number} 的护照到期日必须晚于抵达日期。请核对这两个日期。`,
+                        `Traveler ${number}'s passport must expire after arrival. Check both dates.`,
+                    ],
+                });
+                return;
+            }
             if (byAir && !flight) {
                 setMessage(
                     t(
@@ -356,24 +425,9 @@ export function MdacPage({
                 );
                 return;
             }
-            const today = malaysiaToday();
-            const missing = draft.travelers.findIndex(
-                person => !validPersonalFields(person) || !validateDates(person, draft.shared, today),
-            );
-            if (missing >= 0) {
-                setMessage(
-                    t(
-                        '请补齐所有旅客资料，并核对生日、护照到期日和入离境日期。',
-                        'Complete all travelers and check birth, expiry and travel dates.',
-                    ),
-                );
-                setTraveler(missing);
-                setStep(0);
-                return;
-            }
             normalizeFlight();
             setConfirmedTrip(false);
-            const delta = (Date.parse(draft.shared.arrDt) - Date.parse(today)) / 86400000;
+            const delta = (Date.parse(arrDt) - Date.parse(today)) / 86400000;
             if (delta > 2) {
                 setMessage(
                     t(
@@ -420,6 +474,7 @@ export function MdacPage({
         setEditingLodgingManually(false);
         setRestoredLodging(false);
         setConfirmedTrip(false);
+        setValidationIssue(undefined);
         if (imageInput.current) imageInput.current.value = '';
         save(emptyDraft(), false);
         const cleared = disableDraftSaving();
@@ -466,7 +521,10 @@ export function MdacPage({
                 <button
                     type="button"
                     className="secondary-action type-action"
-                    onClick={() => setStep(step - 1)}
+                    onClick={() => {
+                        setValidationIssue(undefined);
+                        setStep(step - 1);
+                    }}
                 >
                     {t('上一步', 'Back')}
                 </button>
@@ -533,6 +591,12 @@ export function MdacPage({
                     const id = `${fieldId}-${field.key}`;
                     const label = t(field.zh, field.en);
                     const help = fieldHelp[field.key];
+                    const issue =
+                        validationIssue?.key === field.key &&
+                        (!personal || validationIssue.traveler === traveler)
+                            ? validationIssue
+                            : undefined;
+                    const passportEdit = !personal ? issue?.traveler : undefined;
                     const advisory =
                         field.key === 'depDt' && checkDeparture
                             ? t(
@@ -546,8 +610,9 @@ export function MdacPage({
                                 )
                               : '';
                     const description =
-                        [help && id + '-help', advisory && id + '-advisory'].filter(Boolean).join(' ') ||
-                        undefined;
+                        [help && id + '-help', advisory && id + '-advisory', issue && id + '-error']
+                            .filter(Boolean)
+                            .join(' ') || undefined;
                     return (
                         <div className="mdac-field" key={field.key} data-field={field.key}>
                             <div className="mdac-field-heading">
@@ -570,6 +635,7 @@ export function MdacPage({
                                     title={label}
                                     language={language}
                                     describedBy={description}
+                                    invalid={Boolean(issue)}
                                     placeholder={t('请选择', 'Select')}
                                     options={field.options.map(([value, option]) => [
                                         value,
@@ -584,6 +650,7 @@ export function MdacPage({
                                 <input
                                     id={id}
                                     aria-describedby={description}
+                                    aria-invalid={issue ? true : undefined}
                                     value={values[field.key] ?? ''}
                                     required={!field.optional}
                                     disabled={busy}
@@ -618,9 +685,30 @@ export function MdacPage({
                                     {advisory}
                                 </p>
                             )}
+                            {issue && (
+                                <p id={id + '-error'} className="type-helper mdac-field-error" role="alert">
+                                    {t(...issue.text)}
+                                </p>
+                            )}
+                            {passportEdit !== undefined && (
+                                <button
+                                    type="button"
+                                    className="mdac-link type-action"
+                                    onClick={() => {
+                                        setTraveler(passportEdit);
+                                        editStep(0, 'passExpDte');
+                                    }}
+                                >
+                                    {t(
+                                        `修改旅客 ${passportEdit + 1} 的护照到期日`,
+                                        `Edit passport expiry for Traveler ${passportEdit + 1}`,
+                                    )}
+                                </button>
+                            )}
                         </div>
                     );
                 })}
+                {personal && stepActions}
             </div>
         );
     }
@@ -659,6 +747,7 @@ export function MdacPage({
     const flightNumberFields = travelFields.filter(field => field.key === 'vesselNm');
     function editStep(index: number, key: string) {
         setMessage('');
+        setValidationIssue(undefined);
         setConfirmedTrip(false);
         editField.current = key;
         setStep(index);
@@ -754,7 +843,10 @@ export function MdacPage({
                                                         name={fieldId + '-traveler'}
                                                         checked={traveler === index}
                                                         disabled={busy}
-                                                        onChange={() => setTraveler(index)}
+                                                        onChange={() => {
+                                                            setValidationIssue(undefined);
+                                                            setTraveler(index);
+                                                        }}
                                                     />
                                                     <span className="type-label">
                                                         <Check size={16} aria-hidden="true" />
@@ -775,7 +867,10 @@ export function MdacPage({
                                                 ])}
                                                 value={String(traveler)}
                                                 disabled={busy}
-                                                onChange={value => setTraveler(Number(value))}
+                                                onChange={value => {
+                                                    setValidationIssue(undefined);
+                                                    setTraveler(Number(value));
+                                                }}
                                             />
                                         </div>
                                     )}
@@ -786,6 +881,7 @@ export function MdacPage({
                                             disabled={busy || draft.travelers.length >= 20}
                                             onClick={() => {
                                                 save({ ...draft, travelers: [...draft.travelers, {}] });
+                                                setValidationIssue(undefined);
                                                 setTraveler(draft.travelers.length);
                                             }}
                                         >
@@ -804,6 +900,7 @@ export function MdacPage({
                                                             (_, index) => index !== traveler,
                                                         ),
                                                     });
+                                                    setValidationIssue(undefined);
                                                     setTraveler(0);
                                                 }}
                                             >
@@ -1172,7 +1269,7 @@ export function MdacPage({
                             {draftSettings}
                         </>
                     )}
-                    {stepActions}
+                    {step > 0 && stepActions}
                 </form>
                 {privacyOpen && (
                     <Sheet

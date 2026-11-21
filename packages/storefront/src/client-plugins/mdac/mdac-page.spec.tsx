@@ -34,6 +34,7 @@ beforeEach(() => {
 afterEach(() => {
     act(() => root.unmount());
     host.remove();
+    vi.useRealTimers();
     vi.restoreAllMocks();
 });
 function button(name: string) {
@@ -91,6 +92,84 @@ function replaceInput(input: HTMLInputElement | null, value: string) {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
 }
+
+function tripDraft() {
+    const draft = emptyDraft();
+    draft.travelers[0] = { ...sampleTraveler };
+    Object.assign(draft.shared, {
+        email: 'sample@example.com',
+        mobile: '1234567890',
+        arrDt: '2026-11-22',
+        depDt: '2026-11-26',
+        vesselNm: 'MH123',
+        accommodationAddress1: sampleHotel.address,
+        accommodationState: sampleHotel.state,
+        accommodationCity: sampleHotel.city,
+        accommodationPostcode: sampleHotel.postcode,
+    });
+    vi.setSystemTime(new Date('2026-11-21T03:00:00Z'));
+    return draft;
+}
+
+it.each([
+    ['arrDt', '2026-11-20', '2026-11-22', '抵达日期已过'],
+    ['depDt', '2026-11-21', '2026-11-26', '离境日期不能早于抵达日期'],
+])('keeps an invalid %s on the trip step and advances after correction', (key, invalid, correct, text) => {
+    const draft = tripDraft();
+    draft.shared[key] = invalid;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    render();
+    act(() => button('下一步').click());
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('行程与联系');
+    const input = host.querySelector<HTMLInputElement>(`[data-field="${key}"] input`);
+    expect(document.activeElement).toBe(input);
+    expect(input?.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain(text);
+
+    act(() => replaceInput(input, correct));
+    expect(input?.hasAttribute('aria-invalid')).toBe(false);
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('核对资料');
+});
+
+it('checks a missing passport field for another traveler before leaving the first step', () => {
+    const draft = tripDraft();
+    draft.travelers.push({ ...sampleTraveler, name: 'SECOND TRAVELER', passNo: '' });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    render();
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('护照资料');
+    const input = host.querySelector<HTMLInputElement>('[data-field="passNo"] input');
+    expect(input?.value).toBe('');
+    expect(document.activeElement).toBe(input);
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('旅客 2 的护照号码');
+    act(() => replaceInput(input, 'E00000002'));
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('行程与联系');
+    expect(readDraft()?.travelers[0].passNo).toBe(sampleTraveler.passNo);
+    expect(readDraft()?.travelers[1].passNo).toBe('E00000002');
+});
+
+it('keeps a passport expiry conflict on the trip step and opens the specific passport field on request', () => {
+    const draft = tripDraft();
+    draft.travelers[0].passExpDte = draft.shared.arrDt;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    render();
+    act(() => button('下一步').click());
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('行程与联系');
+    expect(document.activeElement).toBe(host.querySelector('[data-field="arrDt"] input'));
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('护照到期日必须晚于抵达日期');
+    act(() => button('修改旅客 1 的护照到期日').click());
+    expect(host.querySelector('h1')?.textContent).toBe('护照资料');
+    const expiry = host.querySelector<HTMLInputElement>('[data-field="passExpDte"] input');
+    expect(document.activeElement).toBe(expiry);
+    act(() => replaceInput(expiry, sampleTraveler.passExpDte));
+    act(() => button('下一步').click());
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('核对资料');
+});
 
 it('fills a hotel when an existing draft has blank lodging fields and keeps the suggestion when returning', async () => {
     const draft = emptyDraft();

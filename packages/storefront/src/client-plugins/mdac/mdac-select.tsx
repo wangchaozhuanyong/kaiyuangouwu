@@ -17,6 +17,7 @@ interface MdacSelectProps {
     onChange: (value: string) => void;
     placeholder?: string;
     describedBy?: string;
+    invalid?: boolean;
     required?: boolean;
     disabled?: boolean;
     customOption?: (query: string) => string | undefined;
@@ -32,6 +33,7 @@ export function MdacSelect({
     onChange,
     placeholder,
     describedBy,
+    invalid: reportedInvalid,
     required,
     disabled,
     customOption,
@@ -75,6 +77,7 @@ export function MdacSelect({
             <select
                 id={desktop ? id : undefined}
                 aria-describedby={desktop ? describedBy : undefined}
+                aria-invalid={desktop && reportedInvalid ? true : undefined}
                 hidden={!desktop}
                 tabIndex={desktop ? undefined : -1}
                 value={value}
@@ -109,7 +112,7 @@ export function MdacSelect({
                     aria-describedby={describedBy}
                     aria-haspopup="dialog"
                     aria-expanded={showSheet}
-                    aria-invalid={invalid && !selected ? true : undefined}
+                    aria-invalid={reportedInvalid || (invalid && !selected) ? true : undefined}
                     disabled={disabled}
                     onClick={openSheet}
                 >

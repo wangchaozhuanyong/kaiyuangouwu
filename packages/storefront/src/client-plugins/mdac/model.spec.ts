@@ -5,6 +5,7 @@ import {
     disableDraftSaving,
     emptyDraft,
     exportConfig,
+    invalidTripDate,
     isIsoDate,
     malaysiaToday,
     normalizeFlightNumber,
@@ -12,7 +13,6 @@ import {
     readDraft,
     STORAGE_KEY,
     suggestedDepartureDate,
-    validateDates,
 } from './model';
 import { passportFields } from './ocr';
 
@@ -92,9 +92,10 @@ describe('MDAC local data and export', () => {
         expect(isIsoDate('2026-02-30')).toBe(false);
         expect(isIsoDate('2024-02-29')).toBe(true);
         expect(malaysiaToday(new Date('2026-11-16T16:01:00Z'))).toBe('2026-11-17');
-        const person = { dob: '1990-01-01', passExpDte: '2030-01-01' };
-        expect(validateDates(person, { arrDt: '2026-11-17', depDt: '2026-11-20' }, '2026-11-16')).toBe(true);
-        expect(validateDates(person, { arrDt: '2026-11-17', depDt: '2026-11-16' }, '2026-11-16')).toBe(false);
+        const today = '2026-11-16';
+        expect(invalidTripDate({ arrDt: '2026-11-17', depDt: '2026-11-20' }, today)).toBeUndefined();
+        expect(invalidTripDate({ arrDt: '2026-11-15', depDt: '2026-11-20' }, today)).toBe('arrDt');
+        expect(invalidTripDate({ arrDt: '2026-11-17', depDt: '2026-11-16' }, today)).toBe('depDt');
     });
     it('defaults a fresh trip and counts arrival as the first of 30 calendar days', () => {
         expect(emptyDraft().shared).toEqual({
