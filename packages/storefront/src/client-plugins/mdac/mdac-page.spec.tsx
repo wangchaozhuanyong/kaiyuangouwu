@@ -5,8 +5,14 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
+import { DesktopLayoutContext } from '../../desktop-layout';
+import { storefrontQueryKeys } from '../../query-client';
+
+import { type MdacFlight, type MdacFlightLookup, type MdacFlightResult } from './flight-lookup';
+import { type MdacFlightService } from './flight-picker';
 import { MdacPage } from './mdac-page';
 import {
+    AIR_TRAVEL,
     disableDraftSaving,
     draftSavingPreference,
     emptyDraft,
@@ -53,11 +59,13 @@ let queryClient: QueryClient;
 beforeEach(() => {
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });
-const render = (language: 'zh' | 'en' = 'zh') =>
+const render = (language: 'zh' | 'en' = 'zh', desktop = false, flightService?: MdacFlightService) =>
     act(() =>
         root.render(
             <QueryClientProvider client={queryClient}>
-                <MdacPage language={language} onBack={() => undefined} />
+                <DesktopLayoutContext.Provider value={desktop}>
+                    <MdacPage language={language} onBack={() => undefined} flightService={flightService} />
+                </DesktopLayoutContext.Provider>
             </QueryClientProvider>,
         ),
     );
@@ -81,6 +89,36 @@ const sampleHotel = {
 };
 const directoryKey = ['mdac-hotel-directory', 1];
 
+it('keeps the traveler selected from More visible and removes that traveler when requested', () => {
+    const draft = emptyDraft();
+    draft.travelers = Array.from({ length: 6 }, (_, index) => ({
+        ...sampleTraveler,
+        passNo: 'E0000000' + (index + 1),
+    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    render('zh', true);
+
+    const visibleTravelers = () => [...host.querySelectorAll('.mdac-traveler-choice')];
+    const more = host.querySelector<HTMLSelectElement>('.mdac-traveler-overflow select');
+    assert.ok(more);
+    expect(visibleTravelers()).toHaveLength(3);
+    expect([...more.options].map(option => option.value)).toEqual(['', '3', '4', '5']);
+
+    act(() => {
+        more.value = '5';
+        more.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(visibleTravelers()[2].querySelector<HTMLInputElement>('input')?.checked).toBe(true);
+    expect(visibleTravelers()[2].textContent).toContain('旅客 6');
+    expect(host.querySelector<HTMLInputElement>('[data-field="passNo"] input')?.value).toBe('E00000006');
+    expect([...more.options].map(option => option.value)).toEqual(['', '2', '3', '4']);
+    expect(readDraft()).toEqual(draft);
+
+    act(() => button('移除此旅客').click());
+    expect(readDraft()?.travelers).toEqual(draft.travelers.slice(0, 5));
+    expect(visibleTravelers()[0].querySelector<HTMLInputElement>('input')?.checked).toBe(true);
+});
+
 function lodgingValue(key: string) {
     return host.querySelector<HTMLInputElement | HTMLSelectElement>(
         `[data-field="${key}"] input, [data-field="${key}"] select`,
@@ -93,7 +131,7 @@ function replaceInput(input: HTMLInputElement | null, value: string) {
     input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-function tripDraft() {
+function tripDraft(travelMode = '2') {
     const draft = emptyDraft();
     draft.travelers[0] = { ...sampleTraveler };
     Object.assign(draft.shared, {
@@ -102,6 +140,7 @@ function tripDraft() {
         arrDt: '2026-11-22',
         depDt: '2026-11-26',
         vesselNm: 'MH123',
+        trvlMode: travelMode,
         accommodationAddress1: sampleHotel.address,
         accommodationState: sampleHotel.state,
         accommodationCity: sampleHotel.city,
@@ -110,6 +149,215 @@ function tripDraft() {
     vi.setSystemTime(new Date('2026-11-21T03:00:00Z'));
     return draft;
 }
+
+it('reviews and edits the selected passport when travelers share the same name', () => {
+    const draft = tripDraft();
+    draft.travelers.push({ ...sampleTraveler, passNo: 'E00000002' });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    render('zh', true);
+    const next = () => act(() => button('下一步').click());
+    next();
+    next();
+
+    const tabs = host.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+    expect(tabs).toHaveLength(2);
+    act(() => tabs[1].click());
+    const passport = () =>
+        host.querySelector('[role="tabpanel"] [data-review-field="passNo"] dd')?.textContent;
+    expect(passport()).toBe('E00000002');
+    act(() => button('修改旅客资料').click());
+    expect(document.activeElement).toBe(host.querySelector('[data-field="name"] input'));
+    const number = host.querySelector<HTMLInputElement>('[data-field="passNo"] input');
+    act(() => replaceInput(number, 'E00000003'));
+    next();
+    next();
+    expect(passport()).toBe('E00000003');
+    expect(readDraft()?.travelers[0].passNo).toBe('E00000001');
+});
+
+it('keeps an air traveler on the trip step when flight verification is not configured', () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tripDraft(AIR_TRAVEL)));
+    render();
+    act(() => button('下一步').click());
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('行程与联系');
+    expect(host.querySelector('.mdac-message, [role="alert"]')?.textContent).toMatch(/航班.*核验|核验.*航班/);
+});
+
+const sampleFlight: MdacFlight = {
+    flightNumber: 'MH123',
+    operatingFlightNumber: null,
+    departureAirport: 'SIN',
+    arrivalAirport: 'KUL',
+    scheduledArrivalDate: '2026-11-22',
+    scheduledArrivalTime: '12:00',
+    effectiveArrivalDate: '2026-11-22',
+    effectiveArrivalTime: '12:00',
+    status: 'SCHEDULED',
+};
+
+function openAirTrip(result: MdacFlightResult, flightNumber = sampleFlight.flightNumber) {
+    const draft = tripDraft(AIR_TRAVEL);
+    draft.shared.vesselNm = flightNumber;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    const lookup = vi.fn<MdacFlightLookup>().mockResolvedValue(result);
+    render('zh', true, { marketKey: 'flight-fixture', lookup });
+    act(() => button('下一步').click());
+    act(() => replaceInput(host.querySelector<HTMLInputElement>('.mdac-flight-picker input[list]'), 'KUL'));
+    return lookup;
+}
+
+async function searchAirTrip(flightNumber = sampleFlight.flightNumber) {
+    act(() => button('查找航班').click());
+    const key = storefrontQueryKeys.mdacFlights('flight-fixture', 'zh', {
+        arrivalDate: sampleFlight.effectiveArrivalDate,
+        arrivalAirport: 'KUL',
+        flightNumber,
+    });
+    await act(async () => {
+        await vi.waitFor(() => expect(queryClient.getQueryState(key)?.status).toBe('success'));
+    });
+}
+
+function selectFlightResult() {
+    const result = host.querySelector<HTMLButtonElement>('.mdac-flight-results button');
+    assert.ok(result);
+    expect(result.textContent).toContain(sampleFlight.flightNumber);
+    act(() => result.click());
+}
+
+it('requires a flight identifier in ticket format before advancing an air trip', () => {
+    const lookup = openAirTrip({ status: 'MATCHED', flights: [sampleFlight] }, 'INVALID');
+    expect(button('查找航班').disabled).toBe(true);
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('行程与联系');
+    expect(host.querySelector('.mdac-message, [role="alert"]')?.textContent).toContain('航班号');
+    expect(lookup).not.toHaveBeenCalled();
+});
+
+it('rejects an unverified flight and advances only after a matching result is selected', async () => {
+    const lookup = openAirTrip({ status: 'MATCHED', flights: [sampleFlight] });
+    await searchAirTrip();
+    expect(lookup).toHaveBeenCalledWith(
+        { arrivalDate: sampleFlight.effectiveArrivalDate, arrivalAirport: 'KUL', flightNumber: 'MH123' },
+        expect.any(AbortSignal),
+    );
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('行程与联系');
+    selectFlightResult();
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('核对资料');
+    expect(host.textContent).toContain('已核验抵达航班');
+});
+
+it('keeps an air trip with no matching result on the trip step', async () => {
+    openAirTrip({ status: 'NO_MATCH', flights: [] }, 'MH321');
+    await searchAirTrip('MH321');
+    expect(host.querySelector('.mdac-flight-picker [role="status"]')?.textContent).toContain('未找到该航班');
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('行程与联系');
+});
+
+it('offers the official registration link without permitting a trip with unavailable flight data', async () => {
+    openAirTrip({ status: 'UNAVAILABLE', flights: [] });
+    await searchAirTrip();
+    const picker = host.querySelector('.mdac-flight-picker');
+    expect(picker?.querySelector('[role="status"]')?.textContent).toContain('暂时无法核验');
+    expect(picker?.querySelector('a')?.href).toBe('https://imigresen-online.imi.gov.my/mdac/register');
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('行程与联系');
+});
+
+it.each([
+    { status: 'CANCELLED' },
+    { effectiveArrivalDate: '2026-11-23' },
+    { arrivalAirport: 'PEN' },
+    { flightNumber: 'MH321' },
+] satisfies Array<Partial<MdacFlight>>)('rejects an unusable flight result with %o', async invalid => {
+    openAirTrip({ status: 'MATCHED', flights: [{ ...sampleFlight, ...invalid }] });
+    await searchAirTrip();
+    const result = host.querySelector<HTMLButtonElement>('.mdac-flight-results button:not(:disabled)');
+    expect(result).toBeNull();
+    expect(host.querySelector('.mdac-flight-confirmed')).toBeNull();
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('行程与联系');
+});
+
+it.each([
+    ['[data-field="arrDt"] input', '2026-11-23'],
+    ['.mdac-flight-picker input[list]', 'PEN'],
+    ['[data-field="vesselNm"] input', 'MH321'],
+])('invalidates a selected flight when %s changes', async (selector, value) => {
+    openAirTrip({ status: 'MATCHED', flights: [sampleFlight] });
+    await searchAirTrip();
+    selectFlightResult();
+    expect(host.querySelector('.mdac-flight-confirmed')).not.toBeNull();
+    act(() => replaceInput(host.querySelector<HTMLInputElement>(selector), value));
+    expect(host.querySelector('.mdac-flight-confirmed')).toBeNull();
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('行程与联系');
+});
+
+it.each(['2', '3'])('allows non-air travel mode %s to reach review without a flight lookup', travelMode => {
+    const draft = tripDraft(travelMode);
+    draft.shared.vesselNm = 'LAND TRANSPORT';
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    render();
+    act(() => button('下一步').click());
+    act(() => button('下一步').click());
+    expect(host.querySelector('h1')?.textContent).toBe('核对资料');
+    expect(readDraft()?.shared.vesselNm).toBe('LAND TRANSPORT');
+});
+
+it('updates the calculated departure date from an older draft and after reopening a new draft', () => {
+    const draft = tripDraft();
+    Object.assign(draft.shared, { arrDt: '2026-10-02', depDt: '2026-10-31' });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    const arrival = () => host.querySelector<HTMLInputElement>('[data-field="arrDt"] input');
+    const departure = () => host.querySelector<HTMLInputElement>('[data-field="depDt"] input');
+
+    render();
+    act(() => button('下一步').click());
+    act(() => replaceInput(arrival(), '2026-12-20'));
+    expect(departure()?.value).toBe('2027-01-18');
+    expect(readDraft()).toMatchObject({ departureSource: 'suggested' });
+
+    act(() => root.unmount());
+    root = createRoot(host);
+    render();
+    act(() => button('下一步').click());
+    act(() => replaceInput(arrival(), '2026-12-21'));
+    expect(departure()?.value).toBe('2027-01-19');
+    expect(readDraft()?.shared.depDt).toBe('2027-01-19');
+});
+
+it('fills the missing departure date for a restored arrival date', () => {
+    const draft = tripDraft();
+    delete draft.shared.depDt;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    render();
+    act(() => button('下一步').click());
+    expect(host.querySelector<HTMLInputElement>('[data-field="depDt"] input')?.value).toBe('2026-12-21');
+    expect(readDraft()).toEqual(draft);
+});
+
+it('preserves a departure entered manually even when it equals the old suggestion', () => {
+    const draft = tripDraft();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    const departure = () => host.querySelector<HTMLInputElement>('[data-field="depDt"] input');
+    render();
+    act(() => button('下一步').click());
+    act(() => replaceInput(departure(), '2026-12-21'));
+    expect(readDraft()).toMatchObject({ departureSource: 'manual' });
+
+    act(() => root.unmount());
+    root = createRoot(host);
+    render();
+    act(() => button('下一步').click());
+    act(() => replaceInput(host.querySelector('[data-field="arrDt"] input'), '2026-11-23'));
+    expect(departure()?.value).toBe('2026-12-21');
+    expect(host.querySelector('[data-field="depDt"] [role="status"]')?.textContent).toContain('请重新核对');
+});
 
 it.each([
     ['arrDt', '2026-11-20', '2026-11-22', '抵达日期已过'],

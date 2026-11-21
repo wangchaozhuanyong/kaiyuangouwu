@@ -1,6 +1,7 @@
 // organize-imports-ignore -- Keep ESLint type import grouping.
 import type { StorefrontLanguage } from '../../types';
 import {
+    ArrowUpRight,
     BookUser,
     Camera,
     Check,
@@ -11,6 +12,7 @@ import {
     PenLine,
     Plus,
     ShieldCheck,
+    UserMinus,
     UserRound,
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
@@ -20,7 +22,7 @@ import { Sheet, Subpage, SubpageBody } from '../../storefront-ui/page-shell';
 
 import './mdac.css';
 import { MdacFieldHelp } from './field-help';
-import { isTicketFlightNumber, type MdacFlight } from './flight-lookup';
+import { isTicketFlightNumber, matchesScheduledArrival, type MdacFlight } from './flight-lookup';
 import { MdacFlightPicker, type MdacFlightService } from './flight-picker';
 import { MdacHotelPicker, type MdacHotel } from './hotel-picker';
 import { MdacSelect } from './mdac-select';
@@ -50,8 +52,31 @@ import {
     type Field,
     type Fields,
 } from './model';
+import { MdacReviewBoard } from './review-board';
 
 const lodgingAddressFields = lodgingFields.slice(1);
+const stateNamesZh: Record<string, string> = {
+    '01': '柔佛',
+    '02': '吉打',
+    '03': '吉兰丹',
+    '04': '马六甲',
+    '05': '森美兰',
+    '06': '彭亨',
+    '07': '槟城',
+    '08': '霹雳',
+    '09': '玻璃市',
+    '10': '雪兰莪',
+    '11': '登嘉楼',
+    '12': '沙巴',
+    '13': '砂拉越',
+    '14': '吉隆坡联邦直辖区',
+    '15': '纳闽联邦直辖区',
+    '16': '布城联邦直辖区',
+};
+const flightUnavailable: [string, string] = [
+    '当前店铺暂时无法核验航班。可稍后重试，或前往移民局官网自行登记。',
+    'Flight verification is unavailable in this store. Try again later or register directly on the official site.',
+];
 
 interface ValidationIssue {
     key: string;
@@ -88,7 +113,12 @@ export function MdacPage({
     const language = chosenLanguage ?? initialLanguage;
     const desktop = useDesktopLayout();
     const t = (zh: string, en: string) => (language === 'zh' ? zh : en);
-    const [draft, setDraft] = useState<Draft>(() => readDraft() ?? emptyDraft());
+    const [draft, setDraft] = useState<Draft>(() => {
+        const initial = readDraft() ?? emptyDraft();
+        const suggested = suggestedDepartureDate(initial.shared.arrDt ?? '');
+        if (initial.shared.depDt || !suggested) return initial;
+        return { ...initial, shared: { ...initial.shared, depDt: suggested }, departureSource: 'suggested' };
+    });
     const [preference] = useState(draftSavingPreference);
     const [remember, setRemember] = useState(preference === true);
     const [saved, setSaved] = useState(() => Boolean(readDraft()));
@@ -99,12 +129,12 @@ export function MdacPage({
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState('');
     const [validationIssue, setValidationIssue] = useState<ValidationIssue>();
-    const [departureIsSuggested, setDepartureIsSuggested] = useState(false);
     const [checkDeparture, setCheckDeparture] = useState(false);
     const [flightReviewed, setFlightReviewed] = useState(false);
     const [arrivalAirport, setArrivalAirport] = useState('');
     const [selectedFlight, setSelectedFlight] = useState<MdacFlight | null>(null);
     const [suggestedHotel, setSuggestedHotel] = useState<MdacHotel | null>(null);
+    const [selectedHotelName, setSelectedHotelName] = useState('');
     const [editingLodgingManually, setEditingLodgingManually] = useState(false);
     const [restoredLodging, setRestoredLodging] = useState(() => hasLodgingDetails(draft.shared));
     const [confirmedTrip, setConfirmedTrip] = useState(false);
@@ -135,15 +165,15 @@ export function MdacPage({
             const target = key ? document.getElementById(fieldId + '-' + key) : heading.current;
             editField.current = null;
             target?.focus({ preventScroll: true });
-            target?.scrollIntoView?.({ block: 'start' });
+            const scrollTarget = step === 2 && !key ? target?.closest('.mdac-page') : target;
+            scrollTarget?.scrollIntoView?.({ block: 'start' });
         }
     }, [step, fieldId, validationIssue]);
     const byAir = draft.shared.trvlMode === AIR_TRAVEL;
     const flight = normalizeFlightNumber(draft.shared.vesselNm ?? '');
     const flightLookup = byAir ? flightService : undefined;
-    const validFlight = flightLookup
-        ? isTicketFlightNumber(flight)
-        : /^[A-Z0-9]{2,3}[0-9]{1,4}[A-Z]?$/u.test(flight);
+    const flightSearch = { arrivalDate: draft.shared.arrDt ?? '', arrivalAirport, flightNumber: flight };
+    const validFlight = isTicketFlightNumber(flight);
     const showFlightHint = byAir && flightReviewed && flight && !validFlight;
     const generation = useRef(0);
     const imageInput = useRef<HTMLInputElement>(null);
@@ -204,7 +234,8 @@ export function MdacPage({
     function update(field: Field, value: string, personal: boolean) {
         if (
             field.key === validationIssue?.key ||
-            (validationIssue?.key === 'depDt' && field.key === 'arrDt')
+            (validationIssue?.key === 'depDt' && field.key === 'arrDt') ||
+            (validationIssue?.key === 'vesselNm' && ['arrDt', 'trvlMode'].includes(field.key))
         ) {
             setValidationIssue(undefined);
         }
@@ -212,6 +243,7 @@ export function MdacPage({
         if (editingLodging) {
             setRestoredLodging(false);
             setEditingLodgingManually(field.key !== 'accommodationStay');
+            setSelectedHotelName('');
             setSuggestedHotel(null);
         }
         const next = personal
@@ -231,16 +263,20 @@ export function MdacPage({
             next.shared.accommodationAddress2 = '';
         }
         if (!personal && field.key === 'arrDt' && value !== draft.shared.arrDt) {
-            if (departureIsSuggested || !draft.shared.depDt) {
+            const { arrDt, depDt } = draft.shared;
+            // Drafts saved before the source was tracked stored only the calculated date.
+            const legacySuggestion =
+                draft.departureSource === undefined && depDt === suggestedDepartureDate(arrDt);
+            if (!depDt || draft.departureSource === 'suggested' || legacySuggestion) {
                 next.shared.depDt = suggestedDepartureDate(value);
-                setDepartureIsSuggested(Boolean(next.shared.depDt));
+                next.departureSource = 'suggested';
                 setCheckDeparture(false);
             } else {
                 setCheckDeparture(true);
             }
         }
         if (!personal && field.key === 'depDt') {
-            setDepartureIsSuggested(false);
+            next.departureSource = 'manual';
             setCheckDeparture(false);
         }
         if (!personal && field.key === 'vesselNm') {
@@ -257,6 +293,7 @@ export function MdacPage({
         save(next);
     }
     function selectHotel(hotel: MdacHotel) {
+        setSelectedHotelName(hotel.name);
         setSuggestedHotel(null);
         setRestoredLodging(false);
         save({ ...draft, shared: { ...draft.shared, ...hotelAddressFields(hotel) } });
@@ -343,6 +380,7 @@ export function MdacPage({
     }
     function advance(event: FormEvent) {
         event.preventDefault();
+        if (step === 2) return;
         setMessage('');
         setValidationIssue(undefined);
         const today = malaysiaToday();
@@ -400,30 +438,31 @@ export function MdacPage({
                 });
                 return;
             }
-            if (byAir && !flight) {
-                setMessage(
-                    t(
-                        '请填写抵达马来西亚的航班号。',
-                        'Enter the flight number for your arrival in Malaysia.',
-                    ),
-                );
-                return;
-            }
-            if (
-                flightLookup &&
-                (!selectedFlight ||
-                    selectedFlight.status !== 'SCHEDULED' ||
-                    selectedFlight.flightNumber !== flight ||
-                    selectedFlight.effectiveArrivalDate !== draft.shared.arrDt ||
-                    selectedFlight.arrivalAirport !== arrivalAirport)
-            ) {
-                setMessage(
-                    t(
-                        '请查找并选择与机票一致的抵达航班。',
-                        'Find and select the arrival flight on your ticket.',
-                    ),
-                );
-                return;
+            if (byAir) {
+                if (!validFlight) {
+                    setValidationIssue({
+                        key: 'vesselNm',
+                        text: [
+                            '请填写机票上的有效航班号，例如 MH123。',
+                            'Enter a valid flight number from your ticket, for example MH123.',
+                        ],
+                    });
+                    return;
+                }
+                if (!flightLookup) {
+                    setValidationIssue({ key: 'vesselNm', text: flightUnavailable });
+                    return;
+                }
+                if (!matchesScheduledArrival(selectedFlight, flightSearch)) {
+                    setValidationIssue({
+                        key: 'vesselNm',
+                        text: [
+                            '请查找并选择与抵达日期、机场和机票航班号一致的航班。',
+                            'Find and select a flight matching your arrival date, airport and ticket number.',
+                        ],
+                    });
+                    return;
+                }
             }
             normalizeFlight();
             setConfirmedTrip(false);
@@ -465,12 +504,12 @@ export function MdacPage({
         setPrivacyOpen(false);
         setTraveler(0);
         setStep(0);
-        setDepartureIsSuggested(false);
         setCheckDeparture(false);
         setFlightReviewed(false);
         setArrivalAirport('');
         setSelectedFlight(null);
         setSuggestedHotel(null);
+        setSelectedHotelName('');
         setEditingLodgingManually(false);
         setRestoredLodging(false);
         setConfirmedTrip(false);
@@ -515,6 +554,18 @@ export function MdacPage({
         const number = t('旅客', 'Traveler') + ' ' + (index + 1);
         return person.name?.trim() ? number + ' · ' + person.name.trim() : number;
     });
+    const visibleTravelers = travelerLabels.slice(0, 3).map((_, index) => index);
+    if (traveler >= 3) visibleTravelers[2] = traveler;
+    const moreTravelers = travelerLabels.flatMap((label, index) =>
+        visibleTravelers.includes(index) ? [] : [[String(index), label] as const],
+    );
+    const travelerTitle = t('当前旅客', 'Current traveler');
+    const addTravelerTitle = t('添加旅客', 'Add traveler');
+    const removeTravelerTitle = t('移除此旅客', 'Remove traveler');
+    function selectTraveler(index: number) {
+        setValidationIssue(undefined);
+        setTraveler(index);
+    }
     const stepActions = (
         <div className="mdac-actions mdac-navigation">
             {step > 0 && (
@@ -570,7 +621,12 @@ export function MdacPage({
     function optionLabel(field: string, value: string, label: string) {
         if (field === 'region' && value === '60') return t('马来西亚 +60', 'Malaysia +60');
         if (field === 'region' && value === '86') return t('中国 +86', 'China +86');
-        if (field === 'trvlMode' && value === AIR_TRAVEL) return t('飞机', 'Air');
+        if (field === 'trvlMode') {
+            if (value === AIR_TRAVEL) return t('飞机', 'Air');
+            if (value === '2') return t('陆路', 'Land');
+            if (value === '3') return t('海路', 'Sea');
+        }
+        if (field === 'accommodationState' && language === 'zh') return stateNamesZh[value] ?? label;
         if (field === 'embark' && value === 'CHN') return t('中国', 'China');
         if (field === 'accommodationStay') {
             if (value === HOTEL_STAY) return t('酒店', 'Hotel');
@@ -597,18 +653,21 @@ export function MdacPage({
                             ? validationIssue
                             : undefined;
                     const passportEdit = !personal ? issue?.traveler : undefined;
+                    const verificationUnavailable = field.key === 'vesselNm' && byAir && !flightLookup;
                     const advisory =
                         field.key === 'depDt' && checkDeparture
                             ? t(
                                   '抵达日期已更改，请重新核对实际离境日期。',
                                   'Arrival has changed. Review your actual departure date.',
                               )
-                            : field.key === 'vesselNm' && showFlightHint
-                              ? t(
-                                    '请核对航班号是否与订单一致，例如 MH123。',
-                                    'Check the flight number against your booking, for example MH123.',
-                                )
-                              : '';
+                            : verificationUnavailable && !issue
+                              ? t(...flightUnavailable)
+                              : field.key === 'vesselNm' && showFlightHint && !issue
+                                ? t(
+                                      '请核对航班号是否与订单一致，例如 MH123。',
+                                      'Check the flight number against your booking, for example MH123.',
+                                  )
+                                : '';
                     const description =
                         [help && id + '-help', advisory && id + '-advisory', issue && id + '-error']
                             .filter(Boolean)
@@ -690,6 +749,16 @@ export function MdacPage({
                                     {t(...issue.text)}
                                 </p>
                             )}
+                            {verificationUnavailable && (
+                                <a
+                                    className="mdac-link type-action"
+                                    href={OFFICIAL_URL}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    {t('打开移民局官方登记页', 'Open official registration')}
+                                </a>
+                            )}
                             {passportEdit !== undefined && (
                                 <button
                                     type="button"
@@ -718,6 +787,16 @@ export function MdacPage({
         t('核对资料', 'Review details'),
     ];
     const progressLabels = language === 'en' ? ['Passport', 'Trip', 'Review'] : steps;
+    const progress = (
+        <ol className="mdac-steps" aria-label={t('填写进度', 'Progress')}>
+            {progressLabels.map((label, index) => (
+                <li key={index} className="type-meta" aria-current={index === step ? 'step' : undefined}>
+                    <span aria-hidden="true">{index < step ? <Check size={14} /> : index + 1}</span>
+                    {label}
+                </li>
+            ))}
+        </ol>
+    );
     const storageStatus = storageFailed
         ? t('本机存储不可用', 'Local storage unavailable')
         : remember
@@ -725,6 +804,12 @@ export function MdacPage({
               ? t('本机草稿已保存', 'Draft saved on this device')
               : t('本机草稿已开启', 'Local draft saving is on')
           : t('本机草稿已关闭', 'Local draft saving is off');
+    const draftSettingsButton = (
+        <button type="button" className="mdac-link type-action" onClick={() => setPrivacyOpen(true)}>
+            {t('草稿设置', 'Draft settings')}
+            <ChevronRight size={16} />
+        </button>
+    );
     const draftSettings = (
         <div className="mdac-draft-bar">
             <div>
@@ -733,10 +818,7 @@ export function MdacPage({
                 </strong>
                 <p className="type-helper">{storageStatus}</p>
             </div>
-            <button type="button" className="mdac-link type-action" onClick={() => setPrivacyOpen(true)}>
-                {t('草稿设置', 'Draft settings')}
-                <ChevronRight size={16} />
-            </button>
+            {draftSettingsButton}
         </div>
     );
     const groups = [
@@ -752,6 +834,16 @@ export function MdacPage({
         editField.current = key;
         setStep(index);
     }
+    const languageButton = (
+        <button
+            className="mdac-language type-action"
+            type="button"
+            aria-label={t('切换为英文', 'Switch to Chinese')}
+            onClick={() => setChosenLanguage(language === 'zh' ? 'en' : 'zh')}
+        >
+            {t('EN', '中文')}
+        </button>
+    );
     const feedback = message && (
         <p className="mdac-message type-helper" role="status">
             {message}
@@ -759,7 +851,7 @@ export function MdacPage({
     );
     return (
         <Subpage
-            className="mdac-page"
+            className={step === 2 ? 'mdac-page mdac-review-page' : 'mdac-page'}
             title={t('马来西亚入境卡', 'Malaysia arrival card')}
             language={language}
             onBack={onBack}
@@ -771,19 +863,20 @@ export function MdacPage({
                 </>
             }
             action={
-                <button
-                    className="mdac-language type-action"
-                    type="button"
-                    aria-label={t('切换为英文', 'Switch to Chinese')}
-                    onClick={() => setChosenLanguage(language === 'zh' ? 'en' : 'zh')}
-                >
-                    {t('EN', '中文')}
-                </button>
+                step === 2 ? (
+                    <span className="mdac-review-header-actions">
+                        <span className="mdac-review-progress-desktop">{progress}</span>
+                        {languageButton}
+                    </span>
+                ) : (
+                    languageButton
+                )
             }
         >
             <SubpageBody className="mdac-body" lang={language}>
                 <header className="mdac-heading">
-                    <div>
+                    {step === 2 && <div className="mdac-review-progress-mobile">{progress}</div>}
+                    <div className={step === 2 ? 'mdac-review-intro' : undefined}>
                         <h1 tabIndex={-1} ref={heading}>
                             {steps[step]}
                         </h1>
@@ -799,34 +892,24 @@ export function MdacPage({
                                         'Use your actual tickets and accommodation booking.',
                                     ),
                                     t(
-                                        '逐位核对旅客资料，再到移民局官网完成登记。',
-                                        'Review each traveler before registering on the official site.',
+                                        '逐位核对护照，再确认共用行程。',
+                                        'Check each passport and the shared trip details.',
                                     ),
                                 ][step]
                             }
                         </p>
                     </div>
-                    <ol className="mdac-steps" aria-label={t('填写进度', 'Progress')}>
-                        {progressLabels.map((label, index) => (
-                            <li
-                                key={index}
-                                className="type-meta"
-                                aria-current={index === step ? 'step' : undefined}
-                            >
-                                <span aria-hidden="true">
-                                    {index < step ? <Check size={14} /> : index + 1}
-                                </span>
-                                {label}
-                            </li>
-                        ))}
-                    </ol>
+                    {step !== 2 && progress}
                 </header>
                 <form onSubmit={advance} aria-busy={busy} autoComplete="off">
                     {step === 0 && (
                         <>
                             <section className="mdac-travelers" aria-labelledby={fieldId + '-traveler-label'}>
-                                <span className="type-label" id={fieldId + '-traveler-label'}>
-                                    {t('当前旅客', 'Current traveler')}
+                                <span
+                                    className="mdac-traveler-label type-label"
+                                    id={fieldId + '-traveler-label'}
+                                >
+                                    {travelerTitle}
                                 </span>
                                 <div className="mdac-traveler-toolbar">
                                     {desktop ? (
@@ -835,7 +918,7 @@ export function MdacPage({
                                             role="radiogroup"
                                             aria-labelledby={fieldId + '-traveler-label'}
                                         >
-                                            {travelerLabels.map((label, index) => (
+                                            {visibleTravelers.map(index => (
                                                 <label key={index} className="mdac-traveler-choice">
                                                     <input
                                                         className="visually-hidden"
@@ -843,14 +926,13 @@ export function MdacPage({
                                                         name={fieldId + '-traveler'}
                                                         checked={traveler === index}
                                                         disabled={busy}
-                                                        onChange={() => {
-                                                            setValidationIssue(undefined);
-                                                            setTraveler(index);
-                                                        }}
+                                                        onChange={() => selectTraveler(index)}
                                                     />
                                                     <span className="type-label">
                                                         <Check size={16} aria-hidden="true" />
-                                                        {label}
+                                                        <span title={travelerLabels[index]}>
+                                                            {travelerLabels[index]}
+                                                        </span>
                                                     </span>
                                                 </label>
                                             ))}
@@ -859,7 +941,7 @@ export function MdacPage({
                                         <div className="mdac-traveler-mobile">
                                             <MdacSelect
                                                 id={fieldId + '-traveler'}
-                                                title={t('当前旅客', 'Current traveler')}
+                                                title={travelerTitle}
                                                 language={language}
                                                 options={travelerLabels.map((label, index) => [
                                                     String(index),
@@ -867,31 +949,29 @@ export function MdacPage({
                                                 ])}
                                                 value={String(traveler)}
                                                 disabled={busy}
-                                                onChange={value => {
-                                                    setValidationIssue(undefined);
-                                                    setTraveler(Number(value));
-                                                }}
+                                                onChange={value => selectTraveler(Number(value))}
                                             />
                                         </div>
                                     )}
-                                    <div className="mdac-actions">
+                                    <div className="mdac-actions mdac-traveler-actions">
                                         <button
                                             className="mdac-link type-action"
                                             type="button"
+                                            aria-label={addTravelerTitle}
                                             disabled={busy || draft.travelers.length >= 20}
                                             onClick={() => {
                                                 save({ ...draft, travelers: [...draft.travelers, {}] });
-                                                setValidationIssue(undefined);
-                                                setTraveler(draft.travelers.length);
+                                                selectTraveler(draft.travelers.length);
                                             }}
                                         >
                                             <Plus size={15} aria-hidden="true" />
-                                            {t('添加旅客', 'Add traveler')}
+                                            <span>{addTravelerTitle}</span>
                                         </button>
                                         {draft.travelers.length > 1 && (
                                             <button
                                                 className="mdac-link type-action"
                                                 type="button"
+                                                aria-label={removeTravelerTitle}
                                                 disabled={busy}
                                                 onClick={() => {
                                                     save({
@@ -900,14 +980,36 @@ export function MdacPage({
                                                             (_, index) => index !== traveler,
                                                         ),
                                                     });
-                                                    setValidationIssue(undefined);
-                                                    setTraveler(0);
+                                                    selectTraveler(0);
                                                 }}
                                             >
-                                                {t('移除此旅客', 'Remove traveler')}
+                                                <UserMinus size={16} aria-hidden="true" />
+                                                <span>{removeTravelerTitle}</span>
                                             </button>
                                         )}
                                     </div>
+                                    {desktop && moreTravelers.length > 0 && (
+                                        <div className="mdac-traveler-overflow">
+                                            <label
+                                                className="visually-hidden"
+                                                htmlFor={fieldId + '-more-travelers'}
+                                            >
+                                                {t('更多旅客', 'More travelers')}
+                                            </label>
+                                            <MdacSelect
+                                                id={fieldId + '-more-travelers'}
+                                                title={t('更多旅客', 'More travelers')}
+                                                language={language}
+                                                options={moreTravelers}
+                                                placeholder={t('更多', 'More')}
+                                                value=""
+                                                disabled={busy}
+                                                onChange={value => {
+                                                    if (value) selectTraveler(Number(value));
+                                                }}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </section>
                             <section className="mdac-upload">
@@ -1041,11 +1143,7 @@ export function MdacPage({
                                                 <MdacFlightPicker
                                                     language={language}
                                                     service={flightLookup}
-                                                    input={{
-                                                        arrivalDate: draft.shared.arrDt ?? '',
-                                                        arrivalAirport,
-                                                        flightNumber: flight,
-                                                    }}
+                                                    input={flightSearch}
                                                     onAirportChange={value => {
                                                         setArrivalAirport(value);
                                                         setSelectedFlight(null);
@@ -1053,6 +1151,8 @@ export function MdacPage({
                                                     selected={selectedFlight}
                                                     onSelect={value => {
                                                         setSelectedFlight(value);
+                                                        if (validationIssue?.key === 'vesselNm')
+                                                            setValidationIssue(undefined);
                                                         setMessage('');
                                                     }}
                                                     numberField={fields(
@@ -1120,156 +1220,99 @@ export function MdacPage({
                     {step === 2 && (
                         <>
                             {feedback}
-                            <section className="mdac-block">
-                                <h2 className="type-section">{t('逐位核对旅客', 'Review each traveler')}</h2>
-                                {draft.travelers.map((person, index) => (
-                                    <details key={index} open={index === 0} className="mdac-person-review">
-                                        <summary className="type-card">{person.name}</summary>
-                                        <dl className="mdac-review">
-                                            {personalFields.map(field => (
-                                                <div key={field.key}>
-                                                    <dt className="type-helper">{t(field.zh, field.en)}</dt>
-                                                    <dd>
-                                                        {field.options?.find(
-                                                            ([code]) => code === person[field.key],
-                                                        )?.[1] ?? person[field.key]}
-                                                    </dd>
-                                                </div>
-                                            ))}
-                                        </dl>
-                                        <button
-                                            type="button"
-                                            className="mdac-link type-action"
-                                            onClick={() => {
-                                                setTraveler(index);
-                                                editStep(0, 'name');
-                                            }}
-                                        >
-                                            {t('修改旅客资料', 'Edit traveler')}
-                                        </button>
-                                    </details>
-                                ))}
-                            </section>
-                            <section className="mdac-block">
-                                <h2 className="type-section">{t('本次行程', 'This trip')}</h2>
-                                {groups.map(group => (
-                                    <section className="mdac-summary" key={group.items[0].key}>
-                                        <div className="mdac-summary-heading">
-                                            <h3 className="type-card">{group.title}</h3>
-                                            <button
-                                                type="button"
-                                                className="mdac-link type-action"
-                                                aria-label={t('修改', 'Edit ') + group.title}
-                                                onClick={() => editStep(1, group.items[0].key)}
-                                            >
-                                                {t('修改', 'Edit')}
-                                            </button>
-                                        </div>
-                                        <dl className="mdac-review">
-                                            {group.items.map(field => (
-                                                <div key={field.key}>
-                                                    <dt className="type-helper">{t(field.zh, field.en)}</dt>
-                                                    <dd>{reviewField(field)}</dd>
-                                                </div>
-                                            ))}
-                                            {group.items === travelFields &&
-                                                flightLookup &&
-                                                selectedFlight && (
-                                                    <div>
-                                                        <dt className="type-helper">
-                                                            {t('已核验抵达航班', 'Verified arrival flight')}
-                                                        </dt>
-                                                        <dd>
-                                                            {selectedFlight.departureAirport} →{' '}
-                                                            {selectedFlight.arrivalAirport}
-                                                            {' · '}
-                                                            {selectedFlight.effectiveArrivalDate}{' '}
-                                                            {selectedFlight.effectiveArrivalTime}
-                                                        </dd>
-                                                    </div>
-                                                )}
-                                        </dl>
-                                        {group.items === lodgingFields && suggestedHotel && (
-                                            <p className="type-helper">
-                                                {t(
-                                                    '酒店地址为自动带入，请核对是否为实际住宿。',
-                                                    'A hotel address was suggested. Check that it is where you will stay.',
-                                                )}
-                                            </p>
-                                        )}
-                                    </section>
-                                ))}
-                            </section>
-                            <section className="mdac-handoff">
-                                <h2 className="type-section">
-                                    {t('在移民局官网登记', 'Register with Malaysian Immigration')}
-                                </h2>
-                                <p className="type-helper">
-                                    {t(
-                                        '请在移民局官网逐位完成验证并提交。可保留此页，对照填写。',
-                                        'Verify and submit each traveler on the official site. Keep this page open to refer to their details.',
-                                    )}
-                                </p>
-                                <label className="mdac-check type-label">
-                                    <input
-                                        type="checkbox"
-                                        checked={confirmedTrip}
-                                        onChange={event => {
-                                            const checked = event.target.checked;
-                                            setConfirmedTrip(checked);
-                                            if (checked && suggestedHotel) {
-                                                save({ ...draft, shared: tripValues });
-                                                setSuggestedHotel(null);
-                                            }
-                                        }}
-                                    />
-                                    {t(
-                                        '我已核对实际离境日期和住宿地址。',
-                                        'I have checked my actual departure date and accommodation address.',
-                                    )}
-                                </label>
-                                <div className="mdac-actions">
-                                    <a
-                                        className="mdac-primary type-action"
-                                        href={OFFICIAL_URL}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                    >
-                                        {t('打开官方登记页', 'Open official registration')}
-                                    </a>
-                                </div>
-                                <details className="mdac-export-options">
-                                    <summary className="type-label">
-                                        {t('电脑辅助填表', 'Desktop form-filling tools')}
-                                    </summary>
+                            <MdacReviewBoard
+                                language={language}
+                                travelers={draft.travelers}
+                                traveler={traveler}
+                                onTravelerChange={selectTraveler}
+                                onEditTraveler={() => editStep(0, 'name')}
+                                trip={tripValues}
+                                reviewField={reviewField}
+                                suggestedHotel={suggestedHotel}
+                                hotelName={suggestedHotel?.name ?? selectedHotelName}
+                                verifiedFlight={
+                                    flightLookup && matchesScheduledArrival(selectedFlight, flightSearch)
+                                        ? selectedFlight
+                                        : null
+                                }
+                                onEditTrip={key => editStep(1, key)}
+                            />
+                            <section className="mdac-handoff mdac-review-handoff">
+                                <div>
+                                    <h2 className="type-section">
+                                        {t('在移民局官网登记', 'Register with Malaysian Immigration')}
+                                    </h2>
                                     <p className="type-helper">
                                         {t(
-                                            '在支持油猴扩展的电脑浏览器中安装脚本，导入资料文件后选中旅客，即可辅助填写官网表单。',
-                                            'In a compatible desktop browser, install the userscript, import the file and select a traveler to fill the official form.',
+                                            '请在移民局官网逐位完成验证并提交。可保留此页，对照填写。',
+                                            'Verify and submit each traveler on the official site. Keep this page open to refer to their details.',
                                         )}
                                     </p>
-                                    <div className="mdac-actions">
-                                        <a
-                                            href="/mdac/mdac-autofill.user.js"
-                                            className="secondary-action type-action"
-                                        >
-                                            {t('安装填表脚本', 'Install userscript')}
-                                        </a>
-                                        <button
-                                            type="button"
-                                            className="secondary-action type-action"
-                                            disabled={!confirmedTrip}
-                                            onClick={download}
-                                        >
-                                            {t('导出填表资料', 'Export details')}
-                                        </button>
-                                    </div>
-                                </details>
+                                    <label className="mdac-check type-label">
+                                        <input
+                                            type="checkbox"
+                                            checked={confirmedTrip}
+                                            onChange={event => {
+                                                const checked = event.target.checked;
+                                                setConfirmedTrip(checked);
+                                                if (checked && suggestedHotel) {
+                                                    selectHotel(suggestedHotel);
+                                                }
+                                            }}
+                                        />
+                                        {t(
+                                            '我已核对实际离境日期和住宿地址。',
+                                            'I have checked my actual departure date and accommodation address.',
+                                        )}
+                                    </label>
+                                </div>
+                                <a
+                                    className="mdac-primary type-action"
+                                    href={OFFICIAL_URL}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    {t('打开官方登记页', 'Open official registration')}
+                                    <ArrowUpRight size={17} aria-hidden="true" />
+                                </a>
                             </section>
-                            {draftSettings}
+                            <details className="mdac-export-options">
+                                <summary className="type-label">
+                                    {t('电脑辅助填表', 'Desktop form-filling tools')}
+                                </summary>
+                                <p className="type-helper">
+                                    {t(
+                                        '在支持油猴扩展的电脑浏览器中安装脚本，导入资料文件后选中旅客，即可辅助填写官网表单。',
+                                        'In a compatible desktop browser, install the userscript, import the file and select a traveler to fill the official form.',
+                                    )}
+                                </p>
+                                <div className="mdac-actions">
+                                    <a
+                                        href="/mdac/mdac-autofill.user.js"
+                                        className="secondary-action type-action"
+                                    >
+                                        {t('安装填表脚本', 'Install userscript')}
+                                    </a>
+                                    <button
+                                        type="button"
+                                        className="secondary-action type-action"
+                                        disabled={!confirmedTrip}
+                                        onClick={download}
+                                    >
+                                        {t('导出填表资料', 'Export details')}
+                                    </button>
+                                </div>
+                            </details>
+                            <footer className="mdac-review-footer">
+                                {stepActions}
+                                <div className="mdac-review-draft">
+                                    <p className="type-helper">{storageStatus}</p>
+                                    {draftSettingsButton}
+                                </div>
+                            </footer>
                         </>
                     )}
-                    {step > 0 && stepActions}
+                    {step === 1 && stepActions}
                 </form>
                 {privacyOpen && (
                     <Sheet

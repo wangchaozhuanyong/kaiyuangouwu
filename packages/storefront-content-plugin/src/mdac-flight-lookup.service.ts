@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
+import { MdacFlightByteLookup } from './mdac-flightbyte';
+
 const oagEndpoint = 'https://api.oag.com/flight-instances/';
 const dayMs = 86_400_000;
 const minuteMs = 60_000;
@@ -13,13 +15,13 @@ const passengerServiceTypes = 'J,S,G,B,C,Q,R,L';
 type LookupStatus = 'MATCHED' | 'NO_MATCH' | 'UNAVAILABLE' | 'NOT_CONFIGURED' | 'INVALID_INPUT';
 type FlightStatus = 'SCHEDULED' | 'CANCELLED' | 'ARRIVAL_CHANGED' | 'DIVERTED';
 
-interface FlightLookupInput {
+export interface FlightLookupInput {
     arrivalDate: string;
     arrivalAirport: string;
     flightNumber: string;
 }
 
-interface MdacFlight {
+export interface MdacFlight {
     flightNumber: string;
     operatingFlightNumber: string | null;
     departureAirport: string;
@@ -80,13 +82,16 @@ interface OagPage {
     paging: { totalCount?: number; totalPages?: number; next?: string | null };
 }
 
-function subscriptionKey() {
+function flightLookupCredentials() {
     if (process.env.STOREFRONT_MDAC_FLIGHT_LOOKUP_ENABLED !== 'true') return;
-    return process.env.STOREFRONT_MDAC_OAG_SUBSCRIPTION_KEY?.trim();
+    const flightByteKey = process.env.STOREFRONT_MDAC_FLIGHTBYTE_API_KEY?.trim();
+    if (flightByteKey) return { provider: 'flightbyte', key: flightByteKey } as const;
+    const oagKey = process.env.STOREFRONT_MDAC_OAG_SUBSCRIPTION_KEY?.trim();
+    if (oagKey) return { provider: 'oag', key: oagKey } as const;
 }
 
 export function isMdacFlightLookupConfigured(): boolean {
-    return Boolean(subscriptionKey());
+    return Boolean(flightLookupCredentials());
 }
 
 function dayLabel(time: number) {
@@ -200,6 +205,7 @@ function parseFlight(
 
 @Injectable()
 export class MdacFlightLookupService {
+    private readonly flightByte = new MdacFlightByteLookup();
     private requestMinute = -1;
     private lookupCount = 0;
     private lookupsByIp = new Map<string, number>();
@@ -209,8 +215,8 @@ export class MdacFlightLookupService {
     private providerRequestCount = 0;
 
     async lookup(input: FlightLookupInput, clientIp: string): Promise<MdacFlightLookupResult> {
-        const key = subscriptionKey();
-        if (!key) return { status: 'NOT_CONFIGURED', flights: [] };
+        const credentials = flightLookupCredentials();
+        if (!credentials) return { status: 'NOT_CONFIGURED', flights: [] };
         const today = dayLabel(Date.now() + malaysiaOffset);
         const arrivalMidnight = Date.parse(input.arrivalDate);
         const designator =
@@ -232,7 +238,10 @@ export class MdacFlightLookupService {
         if (!this.reserveLookup(clientIp)) return { status: 'UNAVAILABLE', flights: [] };
         this.inFlightLookups++;
         try {
-            return await this.lookupOag(input, arrivalMidnight, designator, key);
+            const { provider, key } = credentials;
+            return provider === 'flightbyte'
+                ? await this.flightByte.lookup(input, arrivalMidnight, today, designator, key)
+                : await this.lookupOag(input, arrivalMidnight, designator, key);
         } catch {
             // Provider errors can contain account metadata. Never return or log raw bodies.
             return { status: 'UNAVAILABLE', flights: [] };
