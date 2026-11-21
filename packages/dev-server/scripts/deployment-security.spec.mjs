@@ -724,17 +724,20 @@ void test('every production ingress uses credential-safe access logs, including 
     assert.ok(config.includes('~*^/image-generation/private(?:/|$) /image-generation/private/[redacted];'));
 
     const servers = config.split(/^server \{/mu).slice(1);
-    assert.equal(servers.length, 10);
-    for (const name of ['address', '2fa', 'mail', 'recharge']) {
+    assert.equal(servers.length, 11);
+    for (const name of ['address', '2fa', 'mail', 'recharge', 'check']) {
         assert.equal(
             servers.filter(server => server.includes(`\n    server_name ${name}.moyaoai.com;`)).length,
             1,
         );
     }
     for (const server of servers) {
-        const recharge = /^    server_name recharge\.moyaoai\.com;$/mu.test(server);
-        assert.match(server, recharge ? /^    access_log off;$/mu : /^    access_log \S+ vendure_access;$/mu);
-        if (!recharge) assert.doesNotMatch(server, /^    access_log off;$/mu);
+        const sensitiveTool = /^    server_name (?:recharge|check)\.moyaoai\.com;$/mu.test(server);
+        assert.match(
+            server,
+            sensitiveTool ? /^    access_log off;$/mu : /^    access_log \S+ vendure_access;$/mu,
+        );
+        if (!sensitiveTool) assert.doesNotMatch(server, /^    access_log off;$/mu);
     }
     for (const directive of config.matchAll(/^\s*access_log (.+);$/gmu)) {
         assert.match(directive[1], /^(?:off|\S+ vendure_(?:access|realtime))$/u);
@@ -782,7 +785,7 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.match(trustedOriginGeo.groups.body, /^\s+127\.0\.0\.0\/8 1;$/mu);
     assert.match(trustedOriginGeo.groups.body, /^\s+::1\/128 1;$/mu);
     const httpsServers = config.split(/^server \{/mu).filter(server => /^    listen 443 ssl /mu.test(server));
-    assert.equal(httpsServers.length, 8);
+    assert.equal(httpsServers.length, 9);
     for (const server of httpsServers) {
         assert.match(server, /^    if \(\$trusted_cloudflare_origin = 0\) \{ return 444; \}$/mu);
     }
@@ -815,6 +818,22 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
         assert.ok(tool.includes(`\n    root ${root};`));
         assert.doesNotMatch(tool, /\/shop-api|\/admin-api|\/dashboard\//u);
     }
+    const environmentServer = httpsServers.find(server =>
+        /^    server_name check\.moyaoai\.com;$/mu.test(server),
+    );
+    assert.ok(environmentServer);
+    assert.match(
+        environmentServer,
+        /ssl_certificate \/etc\/letsencrypt\/live\/check\.moyaoai\.com\/fullchain\.pem;/u,
+    );
+    assert.match(
+        environmentServer,
+        /root \/var\/www\/kaiyuangouwu-storefront-current\/\.environment-monitor-tool;/u,
+    );
+    assert.match(environmentServer, /location = \/api\/environment\/network \{/u);
+    assert.match(environmentServer, /proxy_pass_request_headers off;/u);
+    assert.match(environmentServer, /proxy_pass_request_body off;/u);
+    assert.doesNotMatch(environmentServer, /location .*\/(?:shop-api|admin-api|dashboard)/u);
     const rechargeServer = httpsServers.find(server =>
         /^    server_name recharge\.moyaoai\.com;$/mu.test(server),
     );
