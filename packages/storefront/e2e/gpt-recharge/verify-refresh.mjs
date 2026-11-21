@@ -19,7 +19,7 @@ try {
         [390, 'neo-minimalist', 'en'],
     ]) {
         const page = await browser.newPage({
-            viewport: { width, height: 1000 },
+            viewport: { width, height: width === 390 ? 844 : 1000 },
             reducedMotion: language === 'en' ? 'reduce' : 'no-preference',
         });
         const errors = [];
@@ -65,6 +65,79 @@ try {
             await expect(page.locator('.gpt-recharge-verify')).toBeEnabled();
             await expect(page.locator('#gpt-code')).toHaveValue('draft-before-availability');
             await expect(page.locator('.gpt-recharge-submit')).toBeDisabled();
+            if (phase === 'cold') {
+                const header = page.locator('.gpt-recharge-hero h1');
+                await expect(header).toHaveText(language === 'en' ? 'ChatGPT Recharge' : 'ChatGPT 自助充值');
+                if (width === 390) {
+                    const textCenter = await header.evaluate(node => {
+                        const range = document.createRange();
+                        range.selectNodeContents(node);
+                        const bounds = range.getBoundingClientRect();
+                        return bounds.left + bounds.width / 2;
+                    });
+                    assert(Math.abs(textCenter - width / 2) < 3, 'The mobile title should be centered');
+                    const plans = page.locator('.gpt-recharge-plan-panel');
+                    await expect(plans.getByText('Pro500', { exact: true })).toBeVisible();
+                    await expect(plans.getByRole('listitem')).toHaveText([
+                        'Plus',
+                        'Pro100',
+                        'Pro200',
+                        'Pro500',
+                    ]);
+                    const plansBottom = await plans.evaluate(
+                        node => node.getBoundingClientRect().bottom + scrollY,
+                    );
+                    assert(
+                        plansBottom <= 844,
+                        'The plan specifications should fit on the first mobile screen',
+                    );
+                } else {
+                    const frame = await page.evaluate(() => {
+                        const rect = selector => document.querySelector(selector).getBoundingClientRect();
+                        const pageHeading = document.querySelector('.subpage-header > strong');
+                        const background = selector =>
+                            getComputedStyle(document.querySelector(selector)).backgroundColor;
+                        return {
+                            brandLeft: rect('.proto-header-inner > :first-child').left,
+                            headerRight: rect('.proto-header-inner > :last-child').right,
+                            backLeft: rect('.gpt-recharge-page .page-back-button').left,
+                            headingTop: rect('.subpage-header').top,
+                            headingBottom: rect('.subpage-header').bottom,
+                            headingFits: pageHeading.scrollWidth <= pageHeading.clientWidth,
+                            heroTop: rect('.gpt-recharge-hero').top,
+                            navigationTop: rect('.gpt-recharge-tabs').top,
+                            railLeft: rect('.gpt-recharge-tabs').left,
+                            heroRight: rect('.gpt-recharge-hero').right,
+                            workspaceRight: rect('.gpt-recharge-workspace').right,
+                            canvas: [
+                                'html',
+                                '.storefront-app',
+                                '.desktop-shell-frame',
+                                '.gpt-recharge-page',
+                            ].map(background),
+                        };
+                    });
+                    assert(frame.headingFits, 'The recharge center title should fit in the navigation rail');
+                    assert(Math.abs(frame.headingTop - frame.heroTop) <= 1, 'Start both columns together');
+                    assert(
+                        Math.abs(frame.navigationTop - frame.headingBottom) <= 1,
+                        'Place navigation directly below the return control',
+                    );
+                    for (const left of [frame.backLeft, frame.railLeft]) {
+                        assert(Math.abs(left - frame.brandLeft) <= 1, 'Align with the storefront brand');
+                    }
+                    for (const right of [frame.heroRight, frame.workspaceRight]) {
+                        assert(Math.abs(right - frame.headerRight) <= 1, 'Align with the last header action');
+                    }
+                    assert.equal(new Set(frame.canvas).size, 1, 'The page and both gutters share a canvas');
+                    const navigation = await page.locator('.gpt-recharge-tabs').boundingBox();
+                    const work = await page.locator('.gpt-recharge-workspace').boundingBox();
+                    assert(
+                        navigation && work && navigation.x + navigation.width <= work.x,
+                        'Desktop navigation should sit beside the workspace',
+                    );
+                }
+            }
             const frames = await page.evaluate(() => window.refreshFrames);
             assert(
                 frames.some(frame => frame.disabled),
@@ -103,9 +176,54 @@ try {
             .click();
         await expect(page.locator('#gpt-code')).toHaveValue('draft-before-availability');
         await expect(page.locator('.gpt-recharge-verify')).toBeEnabled();
+        if (width === 390) {
+            const more = page.getByRole('button', { name: language === 'en' ? 'More' : '更多', exact: true });
+            const support = language === 'en' ? 'Contact support' : '联系客服';
+            await expect(page.getByRole('button', { name: support, exact: true })).toHaveCount(0);
+            await more.click();
+            const actions = page.getByRole('dialog', {
+                name: language === 'en' ? 'More actions' : '更多操作',
+            });
+            await expect(actions.getByRole('button', { name: support, exact: true })).toBeVisible();
+            await page.keyboard.press('Escape');
+            await expect(actions).toHaveCount(0);
+            await expect(more).toBeFocused();
+            await more.click();
+            await actions.getByRole('button', { name: support, exact: true }).click();
+            await expect(page.locator('.gpt-preview-caption')).toContainText(
+                language === 'en' ? 'support' : '客服',
+            );
+            await expect(actions).toHaveCount(0);
+        }
         assert.deepEqual(errors, []);
         await page.close();
     }
+    const direct = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await direct.goto(origin + '/e2e/gpt-recharge/');
+    await direct.getByRole('button', { name: '填入演示资料' }).click();
+    const activeStep = direct.locator('.gpt-recharge-stages [aria-current="step"]');
+    await expect(activeStep).toContainText('验证兑换码');
+    await direct.locator('#gpt-code').fill('DEMO-500');
+    await direct.getByRole('button', { name: '验证兑换码', exact: true }).click();
+    await expect(direct.locator('.gpt-recharge-plan-list [aria-current]')).toHaveText('Pro500');
+    await expect(activeStep).toContainText('确认账号');
+    await expect(direct.locator('.gpt-recharge-plan-list button')).toHaveCount(0);
+    await direct.getByRole('checkbox').check();
+    await direct.getByRole('button', { name: '充值提交', exact: true }).click();
+    const taskPlan = direct.locator('.gpt-recharge-task-details').getByText('Pro500', { exact: true });
+    await expect(taskPlan).toBeVisible();
+    await expect(activeStep).toContainText('查看进度');
+    await direct.getByLabel('结果演示').selectOption('succeeded');
+    await direct.getByRole('button', { name: '兑换码查询', exact: true }).click();
+    await expect(direct.locator('.gpt-recharge-stages')).toHaveCount(0);
+    await direct.locator('#gpt-query').fill('DEMO-500');
+    await direct.getByRole('button', { name: '查询进度', exact: true }).click();
+    await expect(direct.getByRole('heading', { name: '充值成功', exact: true })).toBeVisible();
+    await expect(taskPlan).toBeVisible();
+    await expect(direct.locator('[data-demo-submit-calls]')).toHaveAttribute('data-demo-submit-calls', '1');
+    results.push({ scenario: 'pro500-direct', plan: 'Pro500', submitCalls: 1, queriedStatus: 'succeeded' });
+    await direct.close();
+
     const slow = await browser.newPage({ viewport: { width: 390, height: 1000 }, reducedMotion: 'reduce' });
     await slow.goto(`${origin}/e2e/gpt-recharge/?config-delay=11500&presentation=1`);
     await expect(slow.locator('.gpt-recharge-verify')).toHaveText('验证兑换码');

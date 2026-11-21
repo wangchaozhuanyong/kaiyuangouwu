@@ -20,9 +20,14 @@ try {
         const create = page.getByRole('button', { name: '生成授权链接', exact: true });
         await expect(create).toBeDisabled();
         await page.getByRole('button', { name: '验证兑换码', exact: true }).click();
+        await expect(page.locator('.gpt-recharge-plan-list [aria-current]')).toHaveText('Pro500');
         await expect(create).toBeEnabled();
         await create.click();
         await expect(page.getByRole('heading', { name: '等待账号授权', exact: true })).toBeVisible();
+        await expect(page.locator('.gpt-recharge-stages [aria-current="step"]')).toContainText('确认账号');
+        await expect(
+            page.locator('.gpt-recharge-task-details').getByText('Pro500', { exact: true }),
+        ).toBeVisible();
         const link = page.getByRole('link', { name: '前往 ID 系统授权' });
         await expect(link).toHaveAttribute('href', 'https://id.example.test/recharge/authorize#fixture');
         await expect(link).toHaveAttribute('target', '_blank');

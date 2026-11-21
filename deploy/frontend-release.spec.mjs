@@ -34,8 +34,10 @@ import {
     assertStaticBackendRuntime,
     assertTwoFactorRouting,
     frontendReleases,
+    validateRechargeCandidate,
     validateTwoFactorCandidate,
     verifyFrontend,
+    verifyRecharge,
     verifyTwoFactor,
 } from './frontend-release.mjs';
 import { frontendDeployCommand } from './frontend-ssm.mjs';
@@ -204,6 +206,10 @@ test('missing frontend artifacts build their prerequisites without rebuilding re
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const command = `set -Eeuo pipefail
 node() {
+    if [[ "$1" == packages/storefront/scripts/build-standalone-recharge.mjs && "$2" == --release ]]; then
+        printf 'build:recharge-tool\\n' >> "$BUILD_EVENTS"
+        return
+    fi
     printf '%s:%s\\n' "$2" "$3" >> "$BUILD_EVENTS"
     if [[ "$2" == restore ]]; then
         case ",$RESTORED_APPS," in
@@ -227,6 +233,7 @@ ${script.replaceAll(/^                  /gmu, '')}`;
                 'stage:next-admin',
                 'restore:storefront',
                 'bun run --cwd packages/storefront build',
+                'build:recharge-tool',
                 'stage:storefront',
             ],
         },
@@ -242,6 +249,7 @@ ${script.replaceAll(/^                  /gmu, '')}`;
                 'restore:storefront',
                 'bun install --frozen-lockfile --linker=hoisted',
                 'bun run --cwd packages/storefront build',
+                'build:recharge-tool',
                 'stage:storefront',
             ],
         },
@@ -255,6 +263,7 @@ ${script.replaceAll(/^                  /gmu, '')}`;
                 'bun run --cwd packages/next-admin build',
                 'stage:next-admin',
                 'bun run --cwd packages/storefront build',
+                'build:recharge-tool',
                 'stage:storefront',
             ],
         },
@@ -380,6 +389,14 @@ test('the deployment transaction includes exactly the frontends changed since th
     );
 });
 
+function rechargeFixture(storefront) {
+    const tool = join(storefront, '.recharge-tool');
+    mkdirSync(join(tool, 'assets'), { recursive: true });
+    writeFileSync(join(tool, 'index.html'), '<script src="/assets/recharge-A1234567.js"></script>');
+    writeFileSync(join(tool, 'assets/recharge-A1234567.js'), 'export {};');
+    return tool;
+}
+
 function vaultFixture(root, origin = null) {
     const tool = join(root, 'packages/storefront/dist-two-factor');
     mkdirSync(join(tool, 'assets'), { recursive: true });
@@ -431,6 +448,9 @@ test('static artifact round trip carries the isolated tool and rejects missing o
     );
     assert.equal(existsSync(payload), false);
     rendererFixture(main);
+    assert.throws(() => stageFrontend('storefront', payload, root), /[.]recharge-tool.*index.html/u);
+    assert.equal(existsSync(payload), false);
+    rechargeFixture(main);
     stageFrontend('storefront', payload, root);
     const archive = join(root, 'frontend.tar.gz');
     const restored = join(root, 'restored');
@@ -438,6 +458,7 @@ test('static artifact round trip carries the isolated tool and rejects missing o
     execFileSync('python3', ['-c', safeExtractPython, archive, restored]);
     assert.equal(readFileSync(join(restored, 'storefront/assets/main.js'), 'utf8'), 'export {};');
     assert.doesNotThrow(() => assertStorefrontRenderer(join(restored, 'storefront')));
+    assert.doesNotThrow(() => validateRechargeCandidate(join(restored, 'storefront')));
     assert.equal(
         readFileSync(join(restored, 'storefront/.two-factor/assets/vault.js'), 'utf8'),
         'export {};',
@@ -517,6 +538,49 @@ test('isolated acceptance verifies its own origin, manifest and asset type witho
     assert.throws(() => validateTwoFactorCandidate(tool), /ENOENT/u);
 });
 
+test('recharge verifies the companion while dormant and verifies public scope when DNS is enabled', async t => {
+    const { releases } = fixture(t);
+    const storefront = releases[0].candidate;
+    const tool = rechargeFixture(storefront);
+    writeFileSync(
+        join(storefront, 'frontend-release.json'),
+        JSON.stringify({ sourceSha: 'a'.repeat(40), backendSha: 'b'.repeat(40), component: 'storefront' }),
+    );
+    const dormant = await verifyRecharge(storefront, 'run', {
+        lookupHost: async () => {
+            throw Object.assign(new Error('fixture: no DNS'), { code: 'ENOTFOUND' });
+        },
+        fetcher: () => assert.fail('No public fetch for an unprovisioned host'),
+    });
+    assert.equal(dormant.public, false);
+    const lookupHost = async () => ({ address: '192.0.2.17', family: 4 });
+    const fetcher = async (url, init) => {
+        assert.equal(url.origin, 'https://recharge.moyaoai.com');
+        if (url.pathname === '/api/recharge/config') {
+            assert.equal(init.method, 'POST');
+            assert.deepEqual(JSON.parse(init.body), { invalidField: true });
+            return Response.json({ errors: [{ message: 'Invalid recharge request' }] }, { status: 400 });
+        }
+        if (url.pathname === '/shop-api') return new Response(null, { status: 404 });
+        if (url.pathname === '/frontend-release.json')
+            return new Response(readFileSync(join(storefront, 'frontend-release.json')));
+        return new Response(readFileSync(join(tool, url.pathname === '/' ? 'index.html' : url.pathname)), {
+            headers: {
+                'content-type': url.pathname.endsWith('.js') ? 'application/javascript' : 'text/html',
+            },
+        });
+    };
+    assert.equal((await verifyRecharge(storefront, 'run', { lookupHost, fetcher })).public, true);
+    await assert.rejects(
+        verifyRecharge(storefront, 'run', {
+            lookupHost,
+            fetcher: (url, init) =>
+                url.pathname === '/shop-api' ? new Response('exposed') : fetcher(url, init),
+        }),
+        /must not expose/u,
+    );
+});
+
 test('storefront and isolated pointer advance together and restore together on acceptance failure', async t => {
     const { root, releases } = fixture(t);
     const tool = vaultFixture(root);
@@ -525,6 +589,7 @@ test('storefront and isolated pointer advance together and restore together on a
     execFileSync('cp', ['-R', tool + '/.', join(directory, 'storefront/.two-factor')]);
     writeFileSync(join(directory, 'storefront/index.html'), '<script src="/assets/main.js"></script>');
     rendererFixture(join(directory, 'storefront'));
+    rechargeFixture(join(directory, 'storefront'));
     writeFileSync(
         join(directory, 'storefront/frontend-release.json'),
         JSON.stringify({ sourceSha: 'a'.repeat(40), backendSha: 'b'.repeat(40), component: 'storefront' }),

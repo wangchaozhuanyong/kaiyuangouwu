@@ -4,15 +4,17 @@ import {
     ArrowUpRight,
     BookOpen,
     CheckCircle2,
+    ChevronDown,
     ChevronRight,
     CircleAlert,
     ClipboardPaste,
     Clock3,
     Headphones,
-    LockKeyhole,
+    Languages,
     Search,
     ShieldCheck,
     ShoppingBag,
+    Ticket,
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 
@@ -26,7 +28,7 @@ import { usePageLoadingState, usePageReadiness } from '../../page-readiness';
 import { storefrontQueryKeys } from '../../query-client';
 import { shopAbuseFailure } from '../../shop-abuse-failure';
 import { StorefrontDisplayError, storefrontErrorCode, storefrontErrorMessage } from '../../storefront-errors';
-import { SubHeader, SubpageBody } from '../../storefront-ui/page-shell';
+import { Sheet, SubHeader, SubpageBody } from '../../storefront-ui/page-shell';
 import { type CollectionSummary, type StorefrontContentBlock, type StorefrontLanguage } from '../../types';
 
 import {
@@ -39,7 +41,7 @@ import {
     type RechargeTask,
 } from './contracts';
 import { rechargeCopy } from './copy';
-import { CHATGPT_SESSION_URL, GptRechargeGuide } from './gpt-recharge-guide';
+import { CHATGPT_SESSION_URL, GptRechargeGuide, PartnerRechargeGuide } from './gpt-recharge-guide';
 import { resolveGptRechargeProductsCollection } from './gpt-recharge-navigation';
 import './gpt-recharge.css';
 import { RechargeProgressPanel, RechargeTaskDetails } from './recharge-progress-panel';
@@ -63,6 +65,8 @@ const redemptionCodeMaxLength = 190;
 export function GptRechargePage({
     client,
     language = 'zh',
+    standalone = false,
+    onToggleLanguage,
     onBack,
     initialTab = 'recharge',
     marketKey,
@@ -79,7 +83,9 @@ export function GptRechargePage({
     activeTab?: RechargeTab;
     onTabChange?: (tab: RechargeTab) => void;
     language?: StorefrontLanguage;
-    onBack: () => void;
+    standalone?: boolean;
+    onToggleLanguage?: () => void;
+    onBack?: () => void;
     initialTab?: RechargeTab;
     localePreferences?: RechargeLocalePreferences;
     onViewProducts?: (collectionId: string) => void;
@@ -94,6 +100,7 @@ export function GptRechargePage({
     const productsCollection = resolveGptRechargeProductsCollection(productCollections, productContentBlocks);
     const canViewProducts = Boolean(productsCollection && onViewProducts);
     const [preferencesOpen, setPreferencesOpen] = useState(false);
+    const [moreOpen, setMoreOpen] = useState(false);
     const [localTab, setLocalTab] = useState(initialTab);
     const tab = activeTab ?? localTab;
     const [progressTab, setProgressTab] = useState(initialTab === 'query' ? 'query' : 'recharge');
@@ -432,14 +439,15 @@ export function GptRechargePage({
             if (!mounted.current || version !== requestVersion.current) return;
             setVerified(result);
             if (result.status !== 'available') {
-                setQueryCode(code);
-                queryChallenge.reset();
+                const submittedCode = code.trim();
+                changeLookupCode(submittedCode);
+                setQueriedCode(submittedCode);
                 setQueryResult(result.reason === 'manual_review_required' ? result : null);
                 setTab('query');
                 operationScope.current = 'query';
                 if (result.reason === 'manual_review_required') return;
-                const current = await queryChallenge.execute('RECHARGE_CODE', code.trim(), proof =>
-                    client.query(code.trim(), ...(proof ? ([proof] as const) : [])),
+                const current = await queryChallenge.execute('RECHARGE_CODE', submittedCode, proof =>
+                    client.query(submittedCode, ...(proof ? ([proof] as const) : [])),
                 );
                 if (mounted.current && current.executed) {
                     if (current.value.task) updateExistingTask(current.value.task);
@@ -449,7 +457,10 @@ export function GptRechargePage({
         });
     }
     async function submit() {
+        const submitAccount = client.submit?.bind(client);
         if (
+            standalone ||
+            !submitAccount ||
             !verified ||
             verified.status !== 'available' ||
             !account ||
@@ -463,7 +474,7 @@ export function GptRechargePage({
         await run('submit', async () => {
             try {
                 const accepted = await submitChallenge.execute('RECHARGE_SUBMIT', code.trim(), proof =>
-                    client.submit(code.trim(), session, ...(proof ? ([proof] as const) : [])),
+                    submitAccount(code.trim(), session, ...(proof ? ([proof] as const) : [])),
                 );
                 if (!accepted.executed) return;
                 const next = {
@@ -511,18 +522,39 @@ export function GptRechargePage({
             }
         });
     }
-    async function startAuthorization() {
+    async function startAuthorization(submittedCode: string) {
         const authorize = client.authorize?.bind(client);
-        if (!partnerCode || !authorize || verified?.status !== 'available' || !canStartRecharge) return;
+        if (!isPartnerRechargeCode(submittedCode) || !authorize || !canStartRecharge || operation.current)
+            return;
         authorizationKey.current ??= crypto.randomUUID();
         const key = authorizationKey.current;
         await run('submit', async () => {
-            const response = await submitChallenge.execute('RECHARGE_SUBMIT', code.trim(), proof =>
-                authorize(code.trim(), key, proof),
-            );
-            if (!mounted.current || !response.executed) return;
-            setTask(response.value.task);
-            setAuthorizationUrl(response.value.authorizationUrl ?? undefined);
+            try {
+                const response = await submitChallenge.execute('RECHARGE_SUBMIT', submittedCode, proof =>
+                    authorize(submittedCode, key, proof),
+                );
+                if (!mounted.current || !response.executed) return;
+                const { task: authorizedTask, authorizationUrl: url } = response.value;
+                if (authorizedTask.status === 'awaiting_authorization' && !url)
+                    throw new Error('Authorization link was not returned');
+                updateExistingTask(authorizedTask);
+                setTask(authorizedTask);
+                setAuthorizationUrl(url ?? undefined);
+            } catch (reason) {
+                if (!mounted.current) return;
+                if (shopAbuseFailure(reason)) {
+                    setError({ scope: 'submit', text: storefrontErrorMessage(reason, language) });
+                    return;
+                }
+                setUncertain(true);
+                setError({
+                    scope: 'submit',
+                    text: t(
+                        '暂时无法确认授权链接是否生成，请使用原兑换码查询。',
+                        'Could not confirm that the authorization link was created. Look up your original code.',
+                    ),
+                });
+            }
         });
     }
     const query = () => {
@@ -571,96 +603,279 @@ export function GptRechargePage({
                         'Check the account and plan, then select the confirmation checkbox.',
                     )
                   : '';
-    return (
-        <main className="page subpage gpt-recharge-page">
-            <SubHeader
-                title={t('ChatGPT自助充值', 'ChatGPT Recharge')}
-                language={language}
-                onBack={onBack}
-                actionVisibility="mobile"
-                action={
-                    localePreferences && (
-                        <LocalePreferencesTrigger
-                            language={language}
-                            currencyCode={localePreferences.currencyCode}
-                            expanded={preferencesOpen}
-                            onClick={() => setPreferencesOpen(true)}
-                        />
-                    )
+    const openCodeQuery = (value: string) => {
+        changeLookupCode(value);
+        setError(null);
+        setFeedbackAttempt(null);
+        focusLookup.current = true;
+        setTab('query');
+    };
+    const openOriginalQuery = () => {
+        if (uncertain || (code && code.trim() !== queriedCode)) {
+            setQueryResult(null);
+            setQueriedCode('');
+        }
+        openCodeQuery(code.trim() || queryCode);
+    };
+    const resetRecharge = (value: string, keepAuthorizationKey = false) => {
+        const key = keepAuthorizationKey && code.trim() === value ? authorizationKey.current : undefined;
+        changeCode(value);
+        authorizationKey.current = key;
+        setSession('');
+        setTask(null);
+        setQueryResult(null);
+        setQueriedCode('');
+        setUncertain(false);
+        focusVerify.current = true;
+        setTab('recharge');
+    };
+    const freshLookup = Boolean(selectedTab === 'query' && queriedCode && queryCode.trim() === queriedCode);
+    const canResumeAuthorization =
+        !busy && !pastingQuery && canStartRecharge && typeof client.authorize === 'function';
+    const resumeAuthorization =
+        freshLookup &&
+        canResumeAuthorization &&
+        isPartnerRechargeCode(queriedCode) &&
+        currentTask?.status === 'awaiting_authorization'
+            ? () => {
+                  // A confirmed pending lookup may point to a newer link than the last local request.
+                  resetRecharge(queriedCode);
+                  setVerified(queryResult);
+                  void startAuthorization(queriedCode);
+              }
+            : undefined;
+    const retryCode = freshLookup ? queriedCode : selectedTab === 'recharge' ? code.trim() : '';
+    const restartAuthorization =
+        currentTask?.status === 'expired' && canResumeAuthorization && isPartnerRechargeCode(retryCode);
+    const retryFailedRecharge =
+        freshLookup &&
+        queryResult?.reason === 'verified_retry_available' &&
+        currentTask?.status === 'failed' &&
+        (!standalone || isPartnerRechargeCode(queriedCode)) &&
+        canStartRecharge &&
+        !busy &&
+        !pastingQuery;
+    const restartAfterUncertainAuthorization =
+        freshLookup &&
+        canResumeAuthorization &&
+        isPartnerRechargeCode(queriedCode) &&
+        uncertain &&
+        !currentTask &&
+        queryResult?.status === 'available'
+            ? () => resetRecharge(queriedCode, true)
+            : undefined;
+    const needsPartnerAuthorization = currentTask?.status === 'awaiting_authorization' && authorizationUrl;
+    const trackingRequest = uncertain || (currentTask && !needsPartnerAuthorization);
+    const canAuthorizeVerifiedCode =
+        partnerCode &&
+        (verified?.status === 'available' || verified?.task?.status === 'awaiting_authorization');
+    const authorizeVerifiedCode = () => {
+        if (canAuthorizeVerifiedCode) void startAuthorization(code.trim());
+    };
+    const codeReady = canAuthorizeVerifiedCode || (verified?.status === 'available' && !standalone);
+    const stage = trackingRequest ? 2 : needsPartnerAuthorization || codeReady ? 1 : 0;
+    const showSteps = tab === 'recharge' && !showServiceStatus;
+    const rechargeSteps = [
+        {
+            label: t('验证兑换码', 'Verify code'),
+            hint: standalone
+                ? t(
+                      '输入合作方发放的 RA 兑换码，查看绑定套餐。',
+                      'Enter the RA code from your provider to check its plan.',
+                  )
+                : t('输入兑换码，查看绑定的充值套餐。', 'Enter your code to see its recharge plan.'),
+        },
+        {
+            label: t('确认账号', 'Confirm account'),
+            hint:
+                standalone || partnerCode
+                    ? t(
+                          '通过 ID 授权链接确认目标账号。',
+                          'Confirm your account through the ID authorization link.',
+                      )
+                    : t(
+                          '核对目标账号与兑换码绑定的套餐。',
+                          'Check the account and the plan linked to your code.',
+                      ),
+        },
+        {
+            label: t('查看进度', 'Track progress'),
+            hint: t('用原兑换码查看本次提交的进度。', 'Track this request with your original code.'),
+        },
+    ];
+    const hero = {
+        recharge: {
+            title: t('ChatGPT 自助充值', 'ChatGPT Recharge'),
+            description: showSteps ? rechargeSteps[stage].hint : undefined,
+        },
+        query: {
+            title: t('兑换码查询', 'Code lookup'),
+            description: t(
+                '使用原兑换码查看套餐与任务进度。',
+                'Check your plan and progress with the original code.',
+            ),
+        },
+        guide: {
+            title: t('充值使用说明', 'Recharge guide'),
+            description: t(
+                '从验证兑换码到确认订阅，按步骤完成充值。',
+                'Follow the steps from code verification to subscription confirmation.',
+            ),
+        },
+    }[tab];
+    const quickLinks = !standalone && (
+        <div className="gpt-recharge-quick-links">
+            <button
+                type="button"
+                onClick={() => {
+                    setMoreOpen(false);
+                    if (productsCollection) onViewProducts?.(productsCollection.id);
+                }}
+                disabled={!canViewProducts}
+                title={
+                    canViewProducts
+                        ? undefined
+                        : t('商品分类暂不可用，请稍后重试', 'Product category is temporarily unavailable')
                 }
-            />
-            <SubpageBody>
-                <div className="gpt-recharge-intro">
-                    <ul className="gpt-recharge-trust" aria-label={t('服务特点', 'Service features')}>
-                        {[
-                            { Icon: ShieldCheck, label: t('安全加密', 'Encrypted') },
-                            { Icon: CheckCircle2, label: t('自动处理', 'Automated') },
-                            { Icon: Clock3, label: t('进度可查', 'Track progress') },
-                            { Icon: LockKeyhole, label: t('套餐锁定', 'Plan protected') },
-                        ].map(({ Icon, label }) => (
-                            <li key={label}>
-                                <Icon size={16} aria-hidden="true" />
-                                <span>{label}</span>
-                            </li>
-                        ))}
-                    </ul>
-                    <div className="gpt-recharge-quick-links">
-                        <button
-                            type="button"
-                            className="gpt-recharge-text-button"
-                            onClick={() => productsCollection && onViewProducts?.(productsCollection.id)}
-                            disabled={!canViewProducts}
-                            title={
-                                canViewProducts
-                                    ? undefined
-                                    : t(
-                                          '商品分类暂不可用，请稍后重试',
-                                          'Product category is temporarily unavailable',
-                                      )
-                            }
-                        >
-                            <ShoppingBag size={17} aria-hidden="true" />
-                            {t('查看商品', 'View products')}
-                        </button>
-                        <button
-                            type="button"
-                            className="gpt-recharge-text-button"
-                            onClick={onContactSupport}
-                            disabled={!onContactSupport}
-                        >
-                            <Headphones size={17} aria-hidden="true" />
-                            {t('联系客服', 'Contact support')}
-                        </button>
+            >
+                <ShoppingBag size={17} aria-hidden="true" />
+                {t('查看商品', 'View products')}
+            </button>
+            <button
+                type="button"
+                onClick={() => {
+                    setMoreOpen(false);
+                    onContactSupport?.();
+                }}
+                disabled={!onContactSupport}
+            >
+                <Headphones size={17} aria-hidden="true" />
+                {t('联系客服', 'Contact support')}
+            </button>
+        </div>
+    );
+    const sections = (
+        <nav className="gpt-recharge-tabs" aria-label={t('充值功能', 'Recharge sections')}>
+            {(
+                [
+                    ['recharge', t('自助充值', 'Recharge'), Ticket],
+                    ['query', t('兑换码查询', 'Code lookup'), Search],
+                    ['guide', t('使用说明', 'Guide'), BookOpen],
+                ] as const
+            ).map(([key, label, Icon]) => (
+                <button
+                    key={key}
+                    type="button"
+                    aria-current={tab === key ? 'page' : undefined}
+                    onClick={() => {
+                        setTab(key);
+                        setError(null);
+                        setFeedbackAttempt(null);
+                    }}
+                >
+                    <Icon size={17} aria-hidden="true" />
+                    {label}
+                </button>
+            ))}
+        </nav>
+    );
+    return (
+        <main className="page subpage gpt-recharge-page" data-standalone={standalone || undefined}>
+            {standalone ? (
+                <header className="gpt-recharge-portal-header">
+                    <div className="gpt-recharge-portal-identity">
+                        <span className="gpt-recharge-portal-mark" aria-hidden="true" />
+                        <div>
+                            <strong>{t('兑换服务中心', 'Redemption center')}</strong>
+                            <span>{t('第三方订阅充值服务', 'Independent subscription service')}</span>
+                        </div>
                     </div>
-                </div>
-                <section className="gpt-recharge-surface">
-                    <div className="gpt-recharge-workspace">
-                        <div className="gpt-recharge-left">
-                            <nav
-                                className="gpt-recharge-tabs"
-                                aria-label={t('充值功能', 'Recharge sections')}
+                    {sections}
+                    {onToggleLanguage && (
+                        <button
+                            className="gpt-recharge-portal-language"
+                            onClick={onToggleLanguage}
+                            type="button"
+                            lang={language === 'zh' ? 'en' : 'zh'}
+                        >
+                            <Languages size={17} aria-hidden="true" />
+                            {t('English', '中文')}
+                        </button>
+                    )}
+                </header>
+            ) : (
+                <>
+                    <SubHeader
+                        title={t('充值中心', 'Recharge center')}
+                        language={language}
+                        onBack={onBack}
+                        actionVisibility="mobile"
+                        action={
+                            localePreferences && (
+                                <LocalePreferencesTrigger
+                                    language={language}
+                                    currencyCode={localePreferences.currencyCode}
+                                    expanded={preferencesOpen}
+                                    onClick={() => setPreferencesOpen(true)}
+                                />
+                            )
+                        }
+                    />
+                    <div className="gpt-recharge-intro">
+                        {sections}
+                        <button
+                            type="button"
+                            className="gpt-recharge-more"
+                            aria-haspopup="dialog"
+                            aria-expanded={moreOpen}
+                            onClick={() => setMoreOpen(true)}
+                        >
+                            {t('更多', 'More')}
+                            <ChevronDown size={14} aria-hidden="true" />
+                        </button>
+                        {moreOpen ? (
+                            <Sheet
+                                title={t('更多操作', 'More actions')}
+                                language={language}
+                                onClose={() => setMoreOpen(false)}
+                                className="gpt-recharge-actions-sheet"
+                                initialFocus="dialog"
                             >
-                                {(['recharge', 'query', 'guide'] as const).map((key, index) => (
-                                    <button
-                                        key={key}
-                                        type="button"
-                                        aria-current={tab === key ? 'page' : undefined}
-                                        onClick={() => {
-                                            setTab(key);
-                                            setError(null);
-                                            setFeedbackAttempt(null);
-                                        }}
-                                    >
-                                        {
-                                            [
-                                                t('自助充值', 'Recharge'),
-                                                t('兑换码查询', 'Code lookup'),
-                                                t('使用说明', 'How it works'),
-                                            ][index]
-                                        }
-                                    </button>
+                                {quickLinks}
+                            </Sheet>
+                        ) : (
+                            quickLinks
+                        )}
+                    </div>
+                </>
+            )}
+            <SubpageBody className="gpt-recharge-shell">
+                <section className="gpt-recharge-surface">
+                    <header className="gpt-recharge-hero" data-with-steps={showSteps || undefined}>
+                        <div className="gpt-recharge-hero-lead">
+                            <span className="gpt-recharge-pass" aria-hidden="true">
+                                <span className="gpt-recharge-pass-face" />
+                            </span>
+                            <div className="gpt-recharge-hero-copy">
+                                <h1>{hero.title}</h1>
+                                {hero.description && <p>{hero.description}</p>}
+                            </div>
+                        </div>
+                        {showSteps && (
+                            <ol className="gpt-recharge-stages" aria-label={t('充值流程', 'Recharge steps')}>
+                                {rechargeSteps.map(({ label }, index) => (
+                                    <li key={label} aria-current={index === stage ? 'step' : undefined}>
+                                        <span className="gpt-recharge-stage-number" aria-hidden="true">
+                                            {index + 1}
+                                        </span>
+                                        {label}
+                                    </li>
                                 ))}
-                            </nav>
+                            </ol>
+                        )}
+                    </header>
+                    <div className="gpt-recharge-workspace" data-stage={stage}>
+                        <div className="gpt-recharge-left">
                             {tab === 'recharge' && showServiceStatus && (
                                 <div className="gpt-recharge-result">
                                     <Clock3 size={36} aria-hidden="true" />
@@ -675,13 +890,7 @@ export function GptRechargePage({
                                         <button
                                             className="primary-action"
                                             type="button"
-                                            onClick={() => {
-                                                if (!queryCode && code) changeLookupCode(code);
-                                                setError(null);
-                                                setFeedbackAttempt(null);
-                                                focusLookup.current = true;
-                                                setTab('query');
-                                            }}
+                                            onClick={openOriginalQuery}
                                         >
                                             {t('查询已有任务', 'Look up an existing task')}
                                         </button>
@@ -724,11 +933,29 @@ export function GptRechargePage({
                                                     <ArrowUpRight size={18} />
                                                 </a>
                                             )}
+                                        {(currentTask.status === 'succeeded' ||
+                                            currentTask.status === 'failed') && (
+                                            <button
+                                                className="secondary-action gpt-recharge-submit"
+                                                type="button"
+                                                disabled={Boolean(busy)}
+                                                onClick={() => {
+                                                    changeLookupCode('');
+                                                    resetRecharge('');
+                                                }}
+                                            >
+                                                {t('兑换下一单', 'Redeem another code')}
+                                            </button>
+                                        )}
                                     </div>
                                 ) : uncertain ? (
                                     <div className="gpt-recharge-result">
                                         <Clock3 size={36} />
-                                        <h2>{t('正在确认提交结果', 'Confirming your submission')}</h2>
+                                        <h2>
+                                            {partnerCode
+                                                ? t('授权请求待确认', 'Authorization request unconfirmed')
+                                                : t('正在确认提交结果', 'Confirming your submission')}
+                                        </h2>
                                         <p>
                                             {t(
                                                 '请查询原兑换码，我们不会自动再次提交充值。',
@@ -740,10 +967,8 @@ export function GptRechargePage({
                                         )}
                                         <button
                                             className="primary-action"
-                                            onClick={() => {
-                                                changeLookupCode(code);
-                                                setTab('query');
-                                            }}
+                                            type="button"
+                                            onClick={openOriginalQuery}
                                         >
                                             {t('查询原任务', 'Look up original task')}
                                         </button>
@@ -755,8 +980,15 @@ export function GptRechargePage({
                                     >
                                         <section className="gpt-recharge-code-section">
                                             <div className="gpt-recharge-section-title">
+                                                <Ticket size={19} aria-hidden="true" />
                                                 <h2>{t('验证兑换码', 'Verify your code')}</h2>
                                             </div>
+                                            <p className="gpt-recharge-form-intro">
+                                                {t(
+                                                    '套餐由兑换码自动匹配。',
+                                                    'Your code determines the recharge plan.',
+                                                )}
+                                            </p>
                                             <form
                                                 noValidate
                                                 aria-busy={busy === 'verify'}
@@ -765,6 +997,9 @@ export function GptRechargePage({
                                                     if (!busy && !task && !uncertain) void verify();
                                                 }}
                                             >
+                                                <label className="gpt-recharge-code-label" htmlFor="gpt-code">
+                                                    {t('兑换码', 'Redemption code')}
+                                                </label>
                                                 <div className="gpt-recharge-code-row">
                                                     <input
                                                         id="gpt-code"
@@ -786,10 +1021,17 @@ export function GptRechargePage({
                                                                 ? 'gpt-code-error'
                                                                 : undefined
                                                         }
-                                                        placeholder={t(
-                                                            '输入购买后收到的兑换码',
-                                                            'Enter your redemption code',
-                                                        )}
+                                                        placeholder={
+                                                            standalone
+                                                                ? t(
+                                                                      '输入发码方提供的兑换码',
+                                                                      'Enter the code from your provider',
+                                                                  )
+                                                                : t(
+                                                                      '输入购买后收到的兑换码',
+                                                                      'Enter your redemption code',
+                                                                  )
+                                                        }
                                                     />
                                                     <button
                                                         type="button"
@@ -840,57 +1082,84 @@ export function GptRechargePage({
                                                           : t('验证兑换码', 'Verify code')}
                                                 </button>
                                             </form>
-                                            <section
-                                                className="gpt-recharge-plan-panel"
-                                                aria-labelledby="gpt-recharge-plan-title"
+                                            <button
+                                                type="button"
+                                                className="gpt-recharge-text-button gpt-recharge-guide-link"
+                                                onClick={() => setTab('guide')}
                                             >
-                                                <div className="gpt-recharge-plan-heading">
-                                                    <h3 id="gpt-recharge-plan-title">
-                                                        {t('充值套餐', 'Recharge plan')}
-                                                    </h3>
-                                                    <span className="gpt-recharge-plan-status" role="status">
-                                                        {verified
-                                                            ? t('已匹配', 'Matched') +
-                                                              ' ' +
-                                                              rechargePlanLabel(verified.plan)
-                                                            : busy === 'verify'
-                                                              ? t('正在验证…', 'Checking…')
-                                                              : t(
-                                                                    '验码后自动匹配',
-                                                                    'Matched after verification',
-                                                                )}
-                                                    </span>
-                                                </div>
-                                                <ul
-                                                    className="gpt-recharge-plan-list"
-                                                    aria-label={t('套餐类型', 'Plan types')}
-                                                >
-                                                    {rechargePlans.map(({ key, label }) => (
-                                                        <li
-                                                            key={key}
-                                                            ref={
-                                                                verified?.plan === key
-                                                                    ? matchedPlanCard
-                                                                    : undefined
-                                                            }
-                                                            aria-current={
-                                                                verified?.plan === key ? 'true' : undefined
-                                                            }
-                                                        >
-                                                            <span>{label}</span>
-                                                            {verified?.plan === key && (
-                                                                <CheckCircle2 size={16} aria-hidden="true" />
-                                                            )}
-                                                        </li>
-                                                    ))}
-                                                    <li className="gpt-recharge-plan-unavailable">
-                                                        <span>Pro500</span>
-                                                        <small>{t('暂未开放', 'Coming soon')}</small>
-                                                    </li>
-                                                </ul>
-                                            </section>
+                                                <BookOpen size={16} aria-hidden="true" />
+                                                {t('查看使用说明', 'View instructions')}
+                                                <ChevronRight size={16} aria-hidden="true" />
+                                            </button>
                                         </section>
-                                        {partnerCode ? (
+                                        <section
+                                            className="gpt-recharge-plan-panel"
+                                            aria-labelledby="gpt-recharge-plan-title"
+                                        >
+                                            <div className="gpt-recharge-plan-heading">
+                                                <h3 id="gpt-recharge-plan-title">
+                                                    {t('充值套餐', 'Recharge plan')}
+                                                </h3>
+                                                <span className="gpt-recharge-plan-status" role="status">
+                                                    {verified
+                                                        ? t('已匹配', 'Matched') +
+                                                          ' ' +
+                                                          rechargePlanLabel(verified.plan)
+                                                        : busy === 'verify'
+                                                          ? t('正在验证…', 'Checking…')
+                                                          : t('验码后自动匹配', 'Matched after verification')}
+                                                </span>
+                                            </div>
+                                            <ul
+                                                className="gpt-recharge-plan-list"
+                                                aria-label={t('套餐类型', 'Plan types')}
+                                            >
+                                                {rechargePlans.map(({ key, label }) => (
+                                                    <li
+                                                        key={key}
+                                                        ref={
+                                                            verified?.plan === key
+                                                                ? matchedPlanCard
+                                                                : undefined
+                                                        }
+                                                        aria-current={
+                                                            verified?.plan === key ? 'true' : undefined
+                                                        }
+                                                    >
+                                                        <span>{label}</span>
+                                                        {verified?.plan === key && (
+                                                            <CheckCircle2 size={16} aria-hidden="true" />
+                                                        )}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </section>
+                                        {standalone && !codeReady ? (
+                                            !partnerCode &&
+                                            verified?.status === 'available' && (
+                                                <section
+                                                    className="gpt-recharge-account-section gpt-recharge-provider-note"
+                                                    role="status"
+                                                >
+                                                    <h2>
+                                                        {t('请联系发码方办理', 'Contact your code provider')}
+                                                    </h2>
+                                                    <p>
+                                                        {t(
+                                                            '此兑换码为普通码。新充值请联系发码方，已提交的任务可用原码查询。',
+                                                            'This is a standard code. Contact its issuer for a new recharge, or look up an existing task here.',
+                                                        )}
+                                                    </p>
+                                                    <button
+                                                        type="button"
+                                                        className="secondary-action"
+                                                        onClick={() => openCodeQuery(code)}
+                                                    >
+                                                        {t('查询已有任务', 'Look up an existing task')}
+                                                    </button>
+                                                </section>
+                                            )
+                                        ) : partnerCode ? (
                                             <section className="gpt-recharge-account-section">
                                                 <h2>
                                                     {t('在 ID 系统完成授权', 'Authorize on the ID system')}
@@ -903,7 +1172,7 @@ export function GptRechargePage({
                                                             '生成授权链接',
                                                             'Create authorization link',
                                                         )}
-                                                        onSubmit={() => void startAuthorization()}
+                                                        onSubmit={authorizeVerifiedCode}
                                                     />
                                                 </div>
                                                 {error?.scope === 'submit' && (
@@ -917,12 +1186,12 @@ export function GptRechargePage({
                                                     type="button"
                                                     disabled={
                                                         !client.authorize ||
-                                                        verified?.status !== 'available' ||
+                                                        !canAuthorizeVerifiedCode ||
                                                         Boolean(busy) ||
                                                         !canStartRecharge ||
                                                         submitChallenge.state?.loading
                                                     }
-                                                    onClick={() => void startAuthorization()}
+                                                    onClick={authorizeVerifiedCode}
                                                 >
                                                     {busy === 'submit'
                                                         ? t('生成中…', 'Creating…')
@@ -1091,7 +1360,7 @@ export function GptRechargePage({
                                     <div className="gpt-recharge-query-input">
                                         <h2 className="gpt-recharge-query-title">
                                             <Search size={20} aria-hidden="true" />
-                                            {t('兑换码查询', 'Code lookup')}
+                                            {t('查询原兑换码', 'Look up your code')}
                                         </h2>
                                         <p>
                                             {t(
@@ -1187,13 +1456,20 @@ export function GptRechargePage({
                                     )}
                                 </div>
                             )}
-                            {tab === 'guide' && (
-                                <GptRechargeGuide
-                                    language={language}
-                                    onRecharge={() => setTab('recharge')}
-                                    onQuery={() => setTab('query')}
-                                />
-                            )}
+                            {tab === 'guide' &&
+                                (standalone ? (
+                                    <PartnerRechargeGuide
+                                        language={language}
+                                        onRecharge={() => setTab('recharge')}
+                                        onQuery={() => setTab('query')}
+                                    />
+                                ) : (
+                                    <GptRechargeGuide
+                                        language={language}
+                                        onRecharge={() => setTab('recharge')}
+                                        onQuery={() => setTab('query')}
+                                    />
+                                ))}
                         </div>
                         <aside
                             className="gpt-recharge-progress-rail"
@@ -1212,60 +1488,26 @@ export function GptRechargePage({
                                 language={language}
                                 sync={taskSync}
                                 manual={manual}
+                                standalone={standalone}
                                 onRefresh={() => void refreshTask()}
-                                onContactSupport={onContactSupport}
+                                onLookup={
+                                    tab === 'query' || showServiceStatus ? undefined : openOriginalQuery
+                                }
+                                onContactSupport={standalone ? undefined : onContactSupport}
                                 code={selectedTab === 'query' ? queryResult : null}
+                                onContinueAuthorization={resumeAuthorization}
+                                onStartRecharge={restartAfterUncertainAuthorization}
                                 onRetry={
-                                    currentTask?.status === 'expired'
-                                        ? () => {
-                                              setTask(null);
-                                              setQueryResult(null);
-                                              setVerified(null);
-                                              setAuthorizationUrl(undefined);
-                                              authorizationKey.current = undefined;
-                                              setTab('recharge');
-                                          }
-                                        : selectedTab === 'query' &&
-                                            queryResult?.reason === 'verified_retry_available' &&
-                                            currentTask?.status === 'failed' &&
-                                            canStartRecharge &&
-                                            !busy
-                                          ? () => {
-                                                changeCode(queriedCode);
-                                                setSession('');
-                                                setTask(null);
-                                                setQueryResult(null);
-                                                setUncertain(false);
-                                                focusVerify.current = true;
-                                                setTab('recharge');
-                                            }
-                                          : undefined
+                                    restartAuthorization || retryFailedRecharge
+                                        ? () => resetRecharge(retryCode)
+                                        : undefined
                                 }
                             />
                         </aside>
                     </div>
                 </section>
-                {tab === 'recharge' && !showServiceStatus && (
-                    <div className="gpt-recharge-help-links">
-                        <button className="gpt-recharge-text-button" onClick={() => setTab('guide')}>
-                            <BookOpen size={16} />
-                            {t('查看使用说明', 'View instructions')}
-                            <ChevronRight size={16} />
-                        </button>
-                        <button
-                            className="gpt-recharge-text-button"
-                            onClick={() => {
-                                changeLookupCode(code);
-                                setTab('query');
-                            }}
-                        >
-                            {t('已有任务？查询进度', 'Already submitted? Check status')}
-                            <ChevronRight size={16} />
-                        </button>
-                    </div>
-                )}
             </SubpageBody>
-            {preferencesOpen && localePreferences && (
+            {!standalone && preferencesOpen && localePreferences && (
                 <LocalePreferencesSheet
                     storefrontLabel={localePreferences.storefrontName}
                     language={language}

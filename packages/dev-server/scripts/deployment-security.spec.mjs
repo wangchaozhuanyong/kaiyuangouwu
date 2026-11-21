@@ -582,6 +582,7 @@ def validate_command(command, **kwargs):
     assert '/var/log/nginx/' not in rendered and 'syslog:server=' not in rendered
     assert 'include /etc/nginx/proxy_params;' in rendered
     assert '/etc/nginx/customer-vault-frames/' not in rendered
+    assert '/etc/nginx/recharge-partners.d/' not in rendered
     return subprocess.CompletedProcess(command, 0)
 with patch.object(m,'live_metadata',return_value={'directory':(33,0,448,1)}), patch.object(m.subprocess,'run',side_effect=validate_command):
     assert m.validate_candidate(source)['productionTempDirectoriesUnchanged']
@@ -611,6 +612,25 @@ with tempfile.TemporaryDirectory() as directory:
         try:m.candidate_config(source,root,root)
         except ValueError:pass
         else:raise AssertionError('Unreviewed frame map directives must be rejected')
+    mapping.write_text('shop.example.com "https://vault.example.net";')
+    recharge = root/'recharge'
+    recharge.mkdir()
+    partners = recharge/'partners.map'
+    partners.write_text('verified-partner storefront.example.net;')
+    rendered=m.candidate_config(source,root,root,recharge)
+    assert 'verified-partner storefront.example.net;' in rendered
+    assert '/etc/nginx/recharge-partners.d/' not in rendered
+    for unsafe in [
+        'default storefront.example.net;',
+        'hostnames storefront.example.net;',
+        'bad1 1.2.3.4:80;',
+        'bad2 storefront.example.net; include /tmp/unreviewed;',
+        'verified-partner storefront.example.net;\\nverified-partner other.example.net;',
+    ]:
+        partners.write_text(unsafe)
+        try:m.candidate_config(source,root,root,recharge)
+        except ValueError:pass
+        else:raise AssertionError('Unreviewed recharge map directives must be rejected')
 print('candidate isolation passed')
 `;
     const result = spawnSync(
@@ -704,18 +724,20 @@ void test('every production ingress uses credential-safe access logs, including 
     assert.ok(config.includes('~*^/image-generation/private(?:/|$) /image-generation/private/[redacted];'));
 
     const servers = config.split(/^server \{/mu).slice(1);
-    assert.equal(servers.length, 9);
-    for (const name of ['address', '2fa', 'mail']) {
+    assert.equal(servers.length, 10);
+    for (const name of ['address', '2fa', 'mail', 'recharge']) {
         assert.equal(
             servers.filter(server => server.includes(`\n    server_name ${name}.moyaoai.com;`)).length,
             1,
         );
     }
     for (const server of servers) {
-        assert.match(server, /^    access_log \S+ vendure_access;$/mu);
+        const recharge = /^    server_name recharge\.moyaoai\.com;$/mu.test(server);
+        assert.match(server, recharge ? /^    access_log off;$/mu : /^    access_log \S+ vendure_access;$/mu);
+        if (!recharge) assert.doesNotMatch(server, /^    access_log off;$/mu);
     }
     for (const directive of config.matchAll(/^\s*access_log (.+);$/gmu)) {
-        assert.match(directive[1], / vendure_(?:access|realtime)$/u);
+        assert.match(directive[1], /^(?:off|\S+ vendure_(?:access|realtime))$/u);
     }
 });
 
@@ -760,7 +782,7 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.match(trustedOriginGeo.groups.body, /^\s+127\.0\.0\.0\/8 1;$/mu);
     assert.match(trustedOriginGeo.groups.body, /^\s+::1\/128 1;$/mu);
     const httpsServers = config.split(/^server \{/mu).filter(server => /^    listen 443 ssl /mu.test(server));
-    assert.equal(httpsServers.length, 7);
+    assert.equal(httpsServers.length, 8);
     for (const server of httpsServers) {
         assert.match(server, /^    if \(\$trusted_cloudflare_origin = 0\) \{ return 444; \}$/mu);
     }
@@ -793,6 +815,18 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
         assert.ok(tool.includes(`\n    root ${root};`));
         assert.doesNotMatch(tool, /\/shop-api|\/admin-api|\/dashboard\//u);
     }
+    const rechargeServer = httpsServers.find(server =>
+        /^    server_name recharge\.moyaoai\.com;$/mu.test(server),
+    );
+    assert.ok(rechargeServer);
+    assert.match(rechargeServer, /root \/var\/www\/kaiyuangouwu-storefront-current\/\.recharge-tool;/u);
+    assert.match(rechargeServer, /ssl_certificate \$recharge_tls_directory\/fullchain\.pem;/u);
+    assert.match(
+        config,
+        /map \$ssl_server_name \$recharge_tls_directory \{\s+default \/etc\/nginx\/recharge-tls\/recharge\.moyaoai\.com;\s+\}/u,
+    );
+    assert.match(rechargeServer, /proxy_pass_request_headers off;/u);
+    assert.doesNotMatch(rechargeServer, /\/shop-api|\/admin-api|\/dashboard\//u);
     const storefrontServer = httpsServers.find(server =>
         /^    listen 443 ssl http2 default_server;$/mu.test(server),
     );

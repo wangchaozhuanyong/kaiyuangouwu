@@ -90,3 +90,30 @@ test('rejects collisions, symlinks and copying non-build files', t => {
     preserveFrontendAssets(old, next);
     assert(!existsSync(resolve(next, 'assets/private.txt')));
 });
+
+test('the immutable recharge assets travel with storefront activation and rollback', t => {
+    const [old, next] = fixture(t);
+    for (const [root, name] of [
+        [old, 'recharge-old-12345678.js'],
+        [next, 'recharge-new-12345678.js'],
+    ]) {
+        mkdirSync(resolve(root, '.recharge-tool/assets'), { recursive: true });
+        writeFileSync(resolve(root, '.recharge-tool/index.html'), name);
+        writeFileSync(resolve(root, '.recharge-tool/assets', name), name);
+    }
+    preserveFrontendAssets(old, next, 100);
+    preserveFrontendAssets(next, old, 100);
+    assert.equal(
+        readFileSync(resolve(next, '.recharge-tool/.compat-assets/assets/recharge-old-12345678.js'), 'utf8'),
+        'recharge-old-12345678.js',
+    );
+    assert.equal(
+        readFileSync(resolve(old, '.recharge-tool/.compat-assets/assets/recharge-new-12345678.js'), 'utf8'),
+        'recharge-new-12345678.js',
+    );
+    assert.equal(
+        readFileSync(resolve(next, '.recharge-tool/index.html'), 'utf8'),
+        'recharge-new-12345678.js',
+    );
+    assert.equal(readFileSync(resolve(old, '.recharge-tool/index.html'), 'utf8'), 'recharge-old-12345678.js');
+});

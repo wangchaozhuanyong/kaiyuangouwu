@@ -260,6 +260,9 @@ jobs:
                   DB_SYNCHRONIZE: 'false'
               run: |
                   node scripts/ci-run.mjs build
+                  if [[ -s packages/storefront/dist/index.html ]]; then
+                      node packages/storefront/scripts/build-standalone-recharge.mjs --release
+                  fi
                   node deploy/build-artifact.mjs pack "$RUNNER_TEMP/compiled-artifact"
     unit-tests:
         name: affected unit tests
@@ -743,7 +746,11 @@ jobs:
             - name: Validate frontend output
               env:
                   NODE_ENV: production
-              run: node deploy/frontend-artifact.mjs pack "$COMPONENT" "$RUNNER_TEMP/frontend-artifact"
+              run: |
+                  if [[ "$COMPONENT" == storefront ]]; then
+                      node packages/storefront/scripts/build-standalone-recharge.mjs --release
+                  fi
+                  node deploy/frontend-artifact.mjs pack "$COMPONENT" "$RUNNER_TEMP/frontend-artifact"
     all-passed:
         name: all-passed
         runs-on: ${{ vars.VENDURE_RELEASE_RUNNER_LABEL || 'ubuntu-latest' }}

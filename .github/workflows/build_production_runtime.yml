@@ -373,6 +373,14 @@ jobs:
               # Bound compiler memory on the local runner while keeping every build target.
               run: bun run build ${{ runner.environment == 'self-hosted' && '--concurrency=1' || '' }}
 
+            - name: Build the standalone recharge companion when absent from verified compiled inputs
+              env:
+                  NODE_ENV: production
+              run: |
+                  if [[ ! -s packages/storefront/dist/.recharge-tool/index.html ]]; then
+                      node packages/storefront/scripts/build-standalone-recharge.mjs --release
+                  fi
+
             - name: Validate prompt Skill release
               run: bun run --cwd packages/image-generation-plugin test:skill
 

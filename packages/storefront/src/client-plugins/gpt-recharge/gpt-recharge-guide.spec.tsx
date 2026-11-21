@@ -46,7 +46,7 @@ describe('GPT recharge guide', () => {
         writeText.mockResolvedValue(undefined);
         await render();
         await act(async () => {
-            button('复制页面地址').click();
+            button('复制地址').click();
             await Promise.resolve();
         });
         expect(writeText).toHaveBeenCalledExactlyOnceWith('https://chatgpt.com/api/auth/session');
@@ -64,14 +64,14 @@ describe('GPT recharge guide', () => {
         writeText.mockRejectedValue(new Error('Synthetic browser clipboard permission rejection'));
         await render();
         await act(async () => {
-            button('复制页面地址').click();
+            button('复制地址').click();
             await Promise.resolve();
         });
         const input = container.querySelector<HTMLInputElement>('input[type="url"]');
         expect(input?.readOnly).toBe(true);
         expect(input?.value).toBe('https://chatgpt.com/api/auth/session');
         expect(container.querySelector('[role="status"]')?.textContent).toContain('手动复制');
-        expect(button('复制页面地址').disabled).toBe(false);
+        expect(button('复制地址').disabled).toBe(false);
     });
     it('uses the selected language, retains FAQ and routes back through the supplied callbacks', async () => {
         await render('en');

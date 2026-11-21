@@ -1,4 +1,4 @@
-import { ArrowUpRight, Check, Copy, LockKeyhole, ShieldCheck, UserRound } from 'lucide-react';
+import { ArrowUpRight, Check, Copy, LockKeyhole, LogIn, ShieldCheck, UserRound } from 'lucide-react';
 import { useId, useState } from 'react';
 
 import { type StorefrontLanguage } from '../../types';
@@ -108,6 +108,76 @@ function BrowserIllustration({
     );
 }
 
+/** Instructions for partner-issued codes on the independent redemption site. */
+export function PartnerRechargeGuide({
+    language,
+    onRecharge,
+    onQuery,
+}: {
+    language: StorefrontLanguage;
+    onRecharge: () => void;
+    onQuery: () => void;
+}) {
+    const t = rechargeCopy(language);
+    const steps = [
+        [
+            t('核对兑换套餐', 'Check the plan'),
+            t(
+                '在自助充值页输入发码方提供的 RA 兑换码，核对显示的套餐。',
+                'Enter the RA code from your provider on the recharge page and check the plan shown.',
+            ),
+        ],
+        [
+            t('授权目标账号', 'Authorize the account'),
+            t(
+                '生成授权链接，在打开的授权页确认要充值的账号，然后返回这里。',
+                'Create an authorization link, follow it to confirm the target account, then return here.',
+            ),
+        ],
+        [
+            t('用原码查进度', 'Track the original request'),
+            t(
+                '打开兑换码查询，输入同一个兑换码查看进度。已受理的任务无需再次提交。',
+                'Open Code lookup and enter the same code to check its progress. An accepted request only needs to be submitted once.',
+            ),
+        ],
+    ];
+    return (
+        <article className="gpt-recharge-guide-content">
+            <header className="gpt-guide-intro">
+                <h2>{t('使用合作方兑换码', 'Redeeming a partner code')}</h2>
+                <p>
+                    {t(
+                        '新充值使用 RA 兑换码。普通码请联系发码方办理，已有任务也可在这里查询。',
+                        'Use an RA code for a new recharge. For a standard code, contact its issuer or look up an existing task here.',
+                    )}
+                </p>
+            </header>
+            <ol className="gpt-guide-recharge-steps">
+                {steps.map(([title, body], index) => (
+                    <li key={title}>
+                        <span className="gpt-guide-step-number" aria-hidden="true">
+                            {index + 1}
+                        </span>
+                        <div>
+                            <h3>{title}</h3>
+                            <p>{body}</p>
+                        </div>
+                    </li>
+                ))}
+            </ol>
+            <div className="gpt-recharge-partner-guide-actions">
+                <button type="button" className="primary-action" onClick={onRecharge}>
+                    {t('开始充值', 'Start recharge')}
+                </button>
+                <button type="button" className="secondary-action" onClick={onQuery}>
+                    {t('查询进度', 'Check progress')}
+                </button>
+            </div>
+        </article>
+    );
+}
+
 export function GptRechargeGuide({
     language,
     onRecharge,
@@ -127,17 +197,17 @@ export function GptRechargeGuide({
             t('输入购买的兑换码，确认绑定的套餐。', 'Enter your purchased code and check its plan.'),
         ],
         [
-            t('获取账号资料', 'Get account data'),
+            t('确认账号', 'Confirm your account'),
             t(
-                '登录目标账号，按下方教程复制完整 JSON。',
-                'Sign in to the target account and copy its complete JSON below.',
+                '普通码按提示填写账号资料；合作方兑换码通过 ID 系统的授权链接继续。',
+                'For a standard code, follow the account data instructions below. For a partner code, use the ID system authorization link.',
             ),
         ],
         [
             t('核对并提交', 'Check and submit'),
             t(
-                '粘贴资料，核对完整邮箱和套餐，勾选确认后提交。',
-                'Paste the data, check the full email address and plan, then confirm and submit.',
+                '在对应页面核对目标账号与绑定套餐，再确认提交。',
+                'Check the target account and the plan bound to the code before confirming.',
             ),
         ],
         [
@@ -191,7 +261,7 @@ export function GptRechargeGuide({
     return (
         <article className="gpt-recharge-guide-content" aria-labelledby={titleId}>
             <header className="gpt-guide-intro">
-                <h2 id={titleId}>{t('充值使用说明', 'Recharge instructions')}</h2>
+                <h2 id={titleId}>{t('如何完成充值', 'How to recharge')}</h2>
                 <p>
                     {t(
                         '准备好兑换码和目标账号，按下面的步骤操作。',
@@ -199,61 +269,87 @@ export function GptRechargeGuide({
                     )}
                 </p>
             </header>
-            <section className="gpt-guide-section" aria-label={t('充值四步', 'Four steps to recharge')}>
-                <ol className="gpt-guide-recharge-steps">
-                    {rechargeSteps.map(([title, body], index) => (
-                        <li key={title}>
-                            <span className="gpt-guide-step-number">{index + 1}</span>
-                            <div>
-                                <h3>{title}</h3>
-                                <p>{body}</p>
-                            </div>
-                        </li>
+            <div className="gpt-guide-overview">
+                <section className="gpt-guide-section" aria-label={t('充值四步', 'Four steps to recharge')}>
+                    <ol className="gpt-guide-recharge-steps">
+                        {rechargeSteps.map(([title, body], index) => (
+                            <li key={title}>
+                                <span className="gpt-guide-step-number">{index + 1}</span>
+                                <div>
+                                    <h3>{title}</h3>
+                                    <p>{body}</p>
+                                </div>
+                            </li>
+                        ))}
+                    </ol>
+                </section>
+                <section className="gpt-guide-section gpt-guide-faq">
+                    <h2>{t('常见问题', 'Common questions')}</h2>
+                    {rechargeFaq(language).map(([title, body], index) => (
+                        <details key={title}>
+                            <summary>{title}</summary>
+                            <p>
+                                {index === 0 && <code>{'{}'} </code>}
+                                {body}
+                                {index === 0 &&
+                                    t(
+                                        ' 若仍为空，请确认登录未失效后重新获取，不要提交空对象。',
+                                        ' If it is still empty, check that you are still signed in and get fresh data. Do not submit an empty object.',
+                                    )}
+                            </p>
+                        </details>
                     ))}
-                </ol>
-            </section>
+                </section>
+            </div>
             <section className="gpt-guide-section">
                 <div className="gpt-guide-session-heading">
                     <div className="gpt-guide-section-heading">
                         <h2>{t('如何获取账号资料', 'How to get your session JSON')}</h2>
                         <p>
                             {t(
-                                '先登录，再打开资料页；这两个页面要在同一浏览器中。',
-                                'Sign in first, then open the session page in the same browser.',
+                                '在同一浏览器登录 ChatGPT，再打开账号资料页。',
+                                'Sign in to ChatGPT, then open your session page in the same browser.',
                             )}
                         </p>
                     </div>
                     <div className="gpt-guide-links">
                         <a
-                            className="secondary-action"
                             href={CHATGPT_URL}
                             target="_blank"
                             rel="noreferrer noopener"
+                            aria-label={t('登录账号（ChatGPT）', 'Sign in to ChatGPT')}
                         >
-                            {t('登录 ChatGPT', 'Sign in to ChatGPT')}
-                            <ArrowUpRight size={16} />
+                            <LogIn size={17} aria-hidden="true" />
+                            {t('登录账号', 'Sign in')}
                         </a>
                         <a
-                            className="secondary-action"
+                            className="gpt-guide-open-session"
+                            aria-label={t(
+                                '打开资料页，查看账号资料',
+                                'Open page for your ChatGPT session data',
+                            )}
                             href={CHATGPT_SESSION_URL}
                             target="_blank"
                             rel="noreferrer noopener"
                         >
-                            {t('打开账号资料页', 'Open session page')}
-                            <ArrowUpRight size={16} />
+                            <ArrowUpRight size={17} aria-hidden="true" />
+                            {t('打开资料页', 'Open page')}
                         </a>
                         <button
-                            className="secondary-action"
                             type="button"
                             onClick={() => void copySessionUrl()}
                             disabled={copyState === 'copying'}
                         >
-                            {copyState === 'copied' ? <Check size={16} /> : <Copy size={16} />}
+                            {copyState === 'copied' ? (
+                                <Check size={17} aria-hidden="true" />
+                            ) : (
+                                <Copy size={17} aria-hidden="true" />
+                            )}
                             {copyState === 'copied'
-                                ? t('地址已复制', 'URL copied')
+                                ? t('已复制', 'Copied')
                                 : copyState === 'copying'
                                   ? t('复制中…', 'Copying…')
-                                  : t('复制页面地址', 'Copy page URL')}
+                                  : t('复制地址', 'Copy URL')}
                         </button>
                     </div>
                 </div>
@@ -357,23 +453,6 @@ export function GptRechargeGuide({
                     </p>
                 </div>
             </aside>
-            <section className="gpt-guide-section gpt-guide-faq">
-                <h2>{t('常见问题', 'Common questions')}</h2>
-                {rechargeFaq(language).map(([title, body], index) => (
-                    <details key={title}>
-                        <summary>{title}</summary>
-                        <p>
-                            {index === 0 && <code>{'{}'} </code>}
-                            {body}
-                            {index === 0 &&
-                                t(
-                                    ' 若仍为空，请确认登录未失效后重新获取，不要提交空对象。',
-                                    ' If it is still empty, check that you are still signed in and get fresh data. Do not submit an empty object.',
-                                )}
-                        </p>
-                    </details>
-                ))}
-            </section>
             <footer className="gpt-guide-footer">
                 <div>
                     <h3>{t('充值后在哪里确认订阅？', 'Where can I confirm my subscription?')}</h3>
