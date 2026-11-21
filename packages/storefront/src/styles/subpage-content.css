@@ -33,7 +33,10 @@
             var(--experience-control-min),
             auto
         );
-    padding: var(--space-4) var(--page-section-inset, var(--experience-page-gutter-mobile));
+    padding: var(
+        --header-padding,
+        var(--space-4) var(--page-section-inset, var(--experience-page-gutter-mobile))
+    );
     gap: var(--space-8);
 }
 
@@ -385,7 +388,7 @@
         height: auto;
         min-height: var(--experience-control-min);
         margin: 0;
-        padding: var(--space-8) 0;
+        padding: var(--header-padding, var(--space-8) 0);
         gap: var(--space-12);
         border: 0;
         background: transparent;

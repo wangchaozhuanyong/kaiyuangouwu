@@ -93,7 +93,7 @@ it('pins the exact prepaint script in the production CSP without allowing arbitr
     expect(worker.match(/script-src[^;]+;/gu)).toEqual(["script-src 'self' 'wasm-unsafe-eval';"]);
     const hash = createHash('sha256').update(source).digest('base64');
     const hosts = policy.replace(worker, '').split(/^server \{/mu);
-    const toolHosts = ['2fa', 'mail', 'address'].map(name => {
+    const toolHosts = ['2fa', 'mail', 'address', 'recharge'].map(name => {
         const matches = hosts.filter(host =>
             host.split('\n').includes(`    server_name ${name}.moyaoai.com;`),
         );
