@@ -5,6 +5,7 @@ import { useId, useRef, useState } from 'react';
 import { getAdminQueryScope } from '../../apollo';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { useAdminLazyQuery } from '../../hooks/use-admin-query';
 
@@ -118,8 +119,15 @@ export function GptRechargeSubmissionReview({ scope }: { scope: string }) {
     return (
         <section aria-labelledby={titleId} className="recharge-settings-sheet space-y-4 p-5 sm:p-6">
             <header className="space-y-1">
-                <h2 id={titleId} className="text-base font-semibold text-slate-900">
+                <h2
+                    id={titleId}
+                    className="flex flex-wrap items-center gap-2 text-base font-semibold text-slate-900"
+                >
                     普通码待核对恢复
+                    <FeatureHelpButton
+                        title="普通码待核对恢复"
+                        description="先输入当前店铺的普通兑换码并核对提交状态。只有确认上游未受理时才恢复提交资格。合作方兑换码请在 ID 系统复核。"
+                    />
                 </h2>
                 <p className="text-sm leading-6 text-slate-500">
                     核对当前店铺未受理的普通兑换码。合作方兑换码请在 ID 系统复核。
