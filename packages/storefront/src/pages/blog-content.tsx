@@ -180,12 +180,14 @@ export function BlogContent({
     language = 'zh',
     onNavigate,
     onReturn,
+    backToSource,
 }: {
     page: BlogPublicPage;
     input?: BlogListInput;
     language?: StorefrontLanguage;
     onNavigate?: (url: string) => void;
     onReturn?: (target: RouteState) => void;
+    backToSource?: boolean;
 }) {
     const t = blogLabels[language];
     const locale = language === 'zh' ? 'zh-CN' : 'en-US';
@@ -215,7 +217,7 @@ export function BlogContent({
         const backRoute = article
             ? blogArticleBackRoute(input, language, article.category)
             : blogListBackRoute(language);
-        const backLabel = article ? t.backToBlog : t.backToServices;
+        const backLabel = article ? t.backToBlog : backToSource ? t.back : t.backToServices;
         return (
             <main
                 className={article ? 'page subpage blog-page blog-detail-page' : 'page subpage blog-page'}

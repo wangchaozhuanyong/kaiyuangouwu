@@ -1,6 +1,7 @@
-/* The arrival card has its own route palette, including its portaled privacy sheet. */
+/* The arrival card has its own route palette, including its portaled sheets. */
 .mdac-page,
-.mdac-privacy {
+.mdac-privacy,
+.mdac-select-sheet {
     --mdac-paper: #fffaf0;
     --mdac-ink: #193c2d;
     --mdac-green: #134f39;
@@ -158,11 +159,11 @@
 }
 .mdac-heading p,
 .mdac-page .type-helper,
-.mdac-privacy .type-helper {
+:is(.mdac-privacy, .mdac-select-sheet) .type-helper {
     color: var(--mdac-muted);
 }
 .mdac-page button,
-.mdac-privacy button {
+:is(.mdac-privacy, .mdac-select-sheet) button {
     cursor: pointer;
 }
 .mdac-page button:disabled {
@@ -170,7 +171,7 @@
     cursor: default;
 }
 .mdac-page :is(a, button, select, input, summary):focus-visible,
-.mdac-privacy :focus-visible {
+:is(.mdac-privacy, .mdac-select-sheet) :focus-visible {
     outline: 3px solid #35725a;
     outline-offset: 3px;
 }
@@ -247,7 +248,8 @@
     cursor: default;
 }
 .mdac-traveler-mobile {
-    display: none;
+    flex: 0 0 100%;
+    min-width: 0;
 }
 .mdac-page .mdac-link,
 .mdac-clear {
@@ -432,8 +434,10 @@
     gap: 4px;
     min-height: 28px;
 }
-.mdac-page .mdac-field :is(input, select),
-.mdac-hotel-picker input {
+.mdac-page .mdac-field :is(input, select, .mdac-select-trigger),
+.mdac-hotel-picker input,
+.mdac-traveler-mobile .mdac-select-trigger,
+.mdac-select-search input {
     width: 100%;
     min-width: 0;
     height: 44px;
@@ -446,6 +450,33 @@
     font-size: var(--type-input-size);
     line-height: var(--type-input-leading);
     scroll-margin-block: 20px;
+}
+.mdac-page select[hidden] {
+    display: none;
+}
+.mdac-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    text-align: start;
+}
+.mdac-traveler-mobile .mdac-select-trigger {
+    min-height: 52px;
+    padding-inline: 14px;
+}
+.mdac-select-trigger > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mdac-select-trigger > svg,
+.mdac-select-options button > svg {
+    flex: none;
+    color: var(--mdac-green);
+}
+.mdac-page .mdac-select-trigger[aria-invalid='true'] {
+    border-color: #90452c;
 }
 .mdac-help-button {
     display: grid;
@@ -487,9 +518,35 @@
 .mdac-trip [data-field^='accommodationAddress'] {
     grid-column: 1/-1;
 }
+@media (min-width: 1024px) {
+    .mdac-lodging [data-field='accommodationStay'] {
+        grid-column: 1/-1;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        column-gap: 16px;
+    }
+    .mdac-lodging .mdac-fields:has(> [data-field='accommodationPostcode']) {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(6rem, 0.6fr);
+    }
+}
+@media (max-width: 1023px) {
+    .mdac-lodging [data-field='accommodationPostcode'] {
+        grid-column: 1/-1;
+    }
+}
 .mdac-hotel-box {
     padding: 15px;
     margin: 14px 0;
+}
+.mdac-hotel-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 10px;
+}
+.mdac-hotel-heading p {
+    margin-inline-start: auto;
+    text-align: end;
 }
 .mdac-map {
     height: 76px;
@@ -504,6 +561,12 @@
 }
 .mdac-flight-picker > .mdac-fields > .mdac-fields {
     grid-template-columns: minmax(0, 1fr);
+    margin-block: 0;
+}
+@media (min-width: 601px) {
+    .mdac-flight-picker .mdac-field-heading {
+        min-height: 44px;
+    }
 }
 .mdac-flight-search {
     display: inline-flex;
@@ -628,6 +691,49 @@
     align-items: center;
     gap: 8px;
 }
+.mdac-select-sheet {
+    scroll-padding-block-start: 52px;
+}
+.mdac-select-sheet:has(.mdac-select-search) {
+    scroll-padding-block-start: 112px;
+}
+.mdac-select-search {
+    position: sticky;
+    z-index: 1;
+    inset-block-start: 52px;
+    padding: 4px 16px 12px;
+    background: var(--surface);
+}
+.mdac-select-options {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 4px 16px;
+    list-style: none;
+}
+.mdac-select-options button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 48px;
+    padding: 8px 12px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm, 8px);
+    background: transparent;
+    color: var(--mdac-ink);
+    text-align: start;
+    overflow-wrap: anywhere;
+}
+.mdac-select-options button:is(:hover, :focus-visible, [aria-pressed='true']) {
+    border-color: var(--mdac-line);
+    background: #e9eee3;
+}
+.mdac-select-empty {
+    margin: 0;
+    padding: 12px 16px 20px;
+}
 .mdac-sheet-body {
     padding: 0 18px 10px;
 }
@@ -676,36 +782,6 @@
     }
 }
 @media (max-width: 600px) {
-    .mdac-traveler-list {
-        display: none;
-    }
-    .mdac-traveler-mobile {
-        display: block;
-        position: relative;
-        flex: 0 0 100%;
-        min-width: 0;
-    }
-    .page.subpage.mdac-page .mdac-traveler-mobile select {
-        appearance: none;
-        display: block;
-        width: 100%;
-        min-width: 0;
-        min-height: 52px;
-        padding: 10px 44px 10px 14px;
-        border: 1px solid var(--mdac-line);
-        border-radius: var(--radius-sm, 8px);
-        background: var(--surface);
-        color: var(--mdac-ink);
-        text-overflow: ellipsis;
-    }
-    .mdac-traveler-mobile svg {
-        position: absolute;
-        inset-inline-end: 15px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: var(--mdac-green);
-        pointer-events: none;
-    }
     .page.subpage.mdac-page {
         --mdac-content-gutter: 16px;
     }

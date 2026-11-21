@@ -1,7 +1,7 @@
 // organize-imports-ignore -- Keep ESLint type import grouping.
 import type { StorefrontLanguage } from '../../types';
 import { useQuery } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 import { createRequestSignal, SHOP_API_QUERY_TIMEOUT_MS } from '../../api/helpers';
 
@@ -19,9 +19,13 @@ export interface MdacHotel {
 
 export function MdacHotelPicker({
     language,
+    suggestedName,
+    onSuggest,
     onSelect,
 }: {
     language: StorefrontLanguage;
+    suggestedName?: string;
+    onSuggest?: (hotel: MdacHotel) => void;
     onSelect: (hotel: MdacHotel) => void;
 }) {
     const t = (zh: string, en: string) => (language === 'zh' ? zh : en);
@@ -30,11 +34,12 @@ export function MdacHotelPicker({
     const [selected, setSelected] = useState('');
     const search = query.trim().toLowerCase();
     const ready = search.length >= 2;
+    const needsDirectory = ready || Boolean(onSuggest);
 
     const directoryQuery = useQuery({
         // The shipped bilingual directory is identical across shops and has no traveler data.
         queryKey: ['mdac-hotel-directory', 1],
-        enabled: ready,
+        enabled: needsDirectory,
         queryFn: async ({ signal }) => {
             const request = createRequestSignal(signal, SHOP_API_QUERY_TIMEOUT_MS);
             try {
@@ -49,6 +54,11 @@ export function MdacHotelPicker({
         },
     });
     const directory = directoryQuery.data;
+    useEffect(() => {
+        if (onSuggest && !query && directory?.length) {
+            onSuggest(directory[Math.floor(Math.random() * directory.length)]);
+        }
+    }, [directory, onSuggest, query]);
 
     const matches = ready
         ? directory
@@ -62,9 +72,14 @@ export function MdacHotelPicker({
 
     return (
         <div className="mdac-hotel-picker">
-            <label htmlFor={id} className="type-label">
-                {t('查找已预订的酒店', 'Find your booked hotel')}
-            </label>
+            <div className="mdac-hotel-heading">
+                <label htmlFor={id} className="type-label">
+                    {t('查找已预订的酒店', 'Find your booked hotel')}
+                </label>
+                <p className="type-helper">
+                    {t('可直接手填实际住宿地址。', 'Or enter your address manually.')}
+                </p>
+            </div>
             <input
                 id={id}
                 type="search"
@@ -84,9 +99,15 @@ export function MdacHotelPicker({
                     {t('已填入', 'Filled from')} {selected}
                 </p>
             )}
-            {ready &&
+            {suggestedName && (
+                <p className="type-helper" role="status">
+                    {t('自动带入的参考酒店', 'Suggested hotel')} · {suggestedName}
+                </p>
+            )}
+            {needsDirectory &&
                 !selected &&
-                (directoryQuery.isError && !directory ? (
+                !directory &&
+                (directoryQuery.isError ? (
                     <div className="mdac-hotel-status">
                         <p className="type-helper" role="status">
                             {t(
@@ -102,14 +123,19 @@ export function MdacHotelPicker({
                             {t('重试', 'Retry')}
                         </button>
                     </div>
-                ) : matches === undefined || matches.length === 0 ? (
+                ) : (
                     <p className="type-helper" role="status">
-                        {matches === undefined
-                            ? t('正在加载酒店目录…', 'Loading hotel directory…')
-                            : t(
-                                  '未找到酒店，可手填实际住宿地址。',
-                                  'No hotel found. Enter your accommodation address manually.',
-                              )}
+                        {t('正在加载酒店目录…', 'Loading hotel directory…')}
+                    </p>
+                ))}
+            {matches &&
+                !selected &&
+                (matches.length === 0 ? (
+                    <p className="type-helper" role="status">
+                        {t(
+                            '未找到酒店，可手填实际住宿地址。',
+                            'No hotel found. Enter your accommodation address manually.',
+                        )}
                     </p>
                 ) : (
                     <ul className="mdac-hotel-results">

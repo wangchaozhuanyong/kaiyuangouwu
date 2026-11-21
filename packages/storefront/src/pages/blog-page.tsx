@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from '@tanstack/react-router';
 
 import { type BlogPublicPage } from '../../../storefront-content-plugin/src/shared/news-blog';
 import {
@@ -15,6 +16,7 @@ import {
     storefrontQueryKeys,
     storefrontQueryRetry,
 } from '../query-client';
+import { hasStorefrontBackSource } from '../storefront-navigation-history';
 import { fetchPublicPage, publicSeoQueryKey } from '../storefront-page-data';
 import { routeFromRouterLocation, routeHref } from '../storefront-router';
 import { AsyncRouteStatePage, Subpage } from '../storefront-ui/page-shell';
@@ -24,6 +26,7 @@ import { BlogContent, blogArticleBackRoute, blogListBackRoute } from './blog-con
 import { blogLabels } from './blog-labels';
 export function BlogPage({ slug }: { slug?: string }) {
     usePageRouteCommit();
+    const router = useRouter({ warn: false });
     const client = useQueryClient();
     const runtime = useStorefront();
     const { market } = runtime;
@@ -95,6 +98,9 @@ export function BlogPage({ slug }: { slug?: string }) {
     const state = storefrontQueryPresentation(query);
     const error = storefrontInitialQueryError(query, language);
     const returnRoute = slug ? blogArticleBackRoute(input, language) : blogListBackRoute(language);
+    const backToSource = !slug && router && hasStorefrontBackSource(router);
+    const onReturn = (target: typeof returnRoute) =>
+        backToSource ? runtime.goBack() : runtime.returnToRoute(target);
     if (slug && query.isSuccess && !query.data?.article) {
         const labels = blogLabels[language];
         const list = routeHref(returnRoute);
@@ -121,7 +127,8 @@ export function BlogPage({ slug }: { slug?: string }) {
                 language={language}
                 page={query.data}
                 input={input}
-                onReturn={runtime.returnToRoute}
+                onReturn={onReturn}
+                backToSource={backToSource}
                 onNavigate={target => {
                     const url = new URL(target, window.location.origin);
                     runtime.navigate(
@@ -136,7 +143,7 @@ export function BlogPage({ slug }: { slug?: string }) {
             language={language}
             state={error || !state.initialLoading ? 'error' : 'loading'}
             error={error ?? ''}
-            onBack={() => runtime.returnToRoute(returnRoute)}
+            onBack={() => onReturn(returnRoute)}
             onRetry={() => void query.refetch({ cancelRefetch: false })}
         />
     );
