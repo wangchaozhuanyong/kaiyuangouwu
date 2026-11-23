@@ -957,33 +957,35 @@ export function MailQueryPage({
                                             </span>
                                         )}
                                     </div>
-                                    {standalone && (
+                                    <div className="summary-actions">
+                                        {standalone && (
+                                            <button
+                                                type="button"
+                                                className="mail-change-query"
+                                                onClick={handleBackToQueryForm}
+                                            >
+                                                {isZh ? '更换查询码' : 'Change query code'}
+                                            </button>
+                                        )}
                                         <button
                                             type="button"
-                                            className="mail-change-query"
-                                            onClick={handleBackToQueryForm}
+                                            className="refresh-now-btn"
+                                            id="refreshNowBtn"
+                                            disabled={refreshing}
+                                            onClick={() => {
+                                                void handleRefresh().catch(() => undefined);
+                                            }}
                                         >
-                                            {isZh ? '更换查询码' : 'Change query code'}
+                                            <RefreshCw aria-hidden="true" />{' '}
+                                            {refreshing
+                                                ? isZh
+                                                    ? '正在刷新...'
+                                                    : 'Refreshing...'
+                                                : isZh
+                                                  ? '刷新收件结果'
+                                                  : 'Refresh results'}
                                         </button>
-                                    )}
-                                    <button
-                                        type="button"
-                                        className="refresh-now-btn"
-                                        id="refreshNowBtn"
-                                        disabled={refreshing}
-                                        onClick={() => {
-                                            void handleRefresh().catch(() => undefined);
-                                        }}
-                                    >
-                                        <RefreshCw aria-hidden="true" />{' '}
-                                        {refreshing
-                                            ? isZh
-                                                ? '正在刷新...'
-                                                : 'Refreshing...'
-                                            : isZh
-                                              ? '刷新收件结果'
-                                              : 'Refresh results'}
-                                    </button>
+                                    </div>
                                 </div>
                                 <div className="summary-stats">
                                     <div className="summary-stat-item">

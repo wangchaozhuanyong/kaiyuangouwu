@@ -7,6 +7,16 @@ import { type StorefrontLanguage } from '../../types';
 
 import { createMailPreview } from './mail-preview';
 
+function cleanSenderDisplay(fromName?: string, fromAddress?: string): string {
+    const raw = (fromName || fromAddress || '').trim();
+    if (!raw) return '';
+    const match = raw.match(/^"?([^"<]+)"?\s*<.*>$/);
+    if (match && match[1].trim()) {
+        return match[1].trim();
+    }
+    return raw.replace(/^"|"$/g, '');
+}
+
 export function MailBody({
     mail,
     language,
@@ -151,11 +161,19 @@ export function MailReader({
                         }}
                     >
                         <span className="mail-reader-list-meta">
-                            <strong>{mail.fromName || mail.fromAddress}</strong>
+                            <strong>
+                                {cleanSenderDisplay(mail.fromName, mail.fromAddress) || mail.fromAddress}
+                            </strong>
                             <time>{formatTime(mail.receivedAt)}</time>
                         </span>
-                        <span>{mail.subject || (isZh ? '无主题' : 'No subject')}</span>
-                        {mail.extractedCode && <span className="mail-list-code">{mail.extractedCode}</span>}
+                        <span className="mail-reader-list-preview">
+                            <span className="mail-reader-list-subject">
+                                {mail.subject || (isZh ? '无主题' : 'No subject')}
+                            </span>
+                            {mail.extractedCode && (
+                                <span className="mail-list-code">{mail.extractedCode}</span>
+                            )}
+                        </span>
                     </button>
                 ))}
             </div>
