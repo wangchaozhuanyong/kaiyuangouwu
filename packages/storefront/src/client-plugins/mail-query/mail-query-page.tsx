@@ -988,50 +988,51 @@ export function MailQueryPage({
                                     </div>
                                 </div>
                                 <div className="summary-stats">
-                                    <div className="summary-stat-item">
-                                        <span>📧</span>
-                                        <span id="totalMailCount">
-                                            {result.targetType === 'PRIMARY'
-                                                ? isZh
-                                                    ? `共 ${result.totalEmails || 0} 封邮件`
-                                                    : `Total ${result.totalEmails || 0} mails`
-                                                : isZh
-                                                  ? `最近 ${result.totalEmails || 0} 封邮件，最多显示 5 封`
-                                                  : `Recent ${result.totalEmails || 0} mails (up to 5)`}
-                                        </span>
-                                    </div>
-                                    {mails.length > 0 ? (
+                                    <div className="summary-stat-group">
                                         <div className="summary-stat-item">
-                                            <Clock3 size={14} aria-hidden="true" />
-                                            <span>
-                                                {isZh ? '最新收件：' : 'Latest received: '}
-                                                {formatTime(
-                                                    mails.reduce(
-                                                        (latest, mail) =>
-                                                            new Date(mail.receivedAt) > new Date(latest)
-                                                                ? mail.receivedAt
-                                                                : latest,
-                                                        mails[0].receivedAt,
-                                                    ),
-                                                    isZh,
-                                                )}
+                                            <span>📧</span>
+                                            <span id="totalMailCount">
+                                                {result.targetType === 'PRIMARY'
+                                                    ? isZh
+                                                        ? `共 ${result.totalEmails || 0} 封邮件`
+                                                        : `Total ${result.totalEmails || 0} mails`
+                                                    : isZh
+                                                      ? `最近 ${result.totalEmails || 0} 封邮件，最多显示 5 封`
+                                                      : `Recent ${result.totalEmails || 0} mails (up to 5)`}
                                             </span>
                                         </div>
-                                    ) : null}
-                                    {result.remainingDays != null ? (
-                                        <div className="summary-stat-item" id="remainingDaysBox">
-                                            <span>⏳</span>
-                                            <span id="remainingDaysText">
-                                                {isZh
-                                                    ? `有效期剩余 ${result.remainingDays} 天`
-                                                    : `${result.remainingDays} days remaining`}
-                                            </span>
-                                        </div>
-                                    ) : null}
+                                        {mails.length > 0 ? (
+                                            <div className="summary-stat-item">
+                                                <Clock3 size={14} aria-hidden="true" />
+                                                <span>
+                                                    {isZh ? '最新收件：' : 'Latest received: '}
+                                                    {formatTime(
+                                                        mails.reduce(
+                                                            (latest, mail) =>
+                                                                new Date(mail.receivedAt) > new Date(latest)
+                                                                    ? mail.receivedAt
+                                                                    : latest,
+                                                            mails[0].receivedAt,
+                                                        ),
+                                                        isZh,
+                                                    )}
+                                                </span>
+                                            </div>
+                                        ) : null}
+                                        {result.remainingDays != null ? (
+                                            <div className="summary-stat-item" id="remainingDaysBox">
+                                                <span>⏳</span>
+                                                <span id="remainingDaysText">
+                                                    {isZh
+                                                        ? `有效期剩余 ${result.remainingDays} 天`
+                                                        : `${result.remainingDays} days remaining`}
+                                                </span>
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                    {standalone && liveControls}
                                 </div>
                             </div>
-
-                            {standalone && <div className="mail-inbox-live">{liveControls}</div>}
 
                             {/* Refresh Error Banner */}
                             {refreshError ? (

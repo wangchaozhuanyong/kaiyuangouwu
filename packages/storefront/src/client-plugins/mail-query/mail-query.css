@@ -659,6 +659,13 @@
     padding-top: 12px;
 }
 
+.mail-query-page .summary-stat-group {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
 .mail-query-page .summary-stat-item {
     display: flex;
     align-items: center;
