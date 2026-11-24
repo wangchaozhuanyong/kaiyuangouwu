@@ -210,6 +210,12 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         'map $host $customer_vault_frame_origin { default "\'self\'"; }',
         fallbackMap,
         coopMap,
+        block(
+            'map "$cookie_storefront_public_language$cookie_storefront_public_currency" $storefront_public_pref_cookie',
+        ),
+        block(
+            'map "$request_method|$sent_http_content_type|$status|$storefront_public_pref_cookie|$storefront_html_coop" $storefront_html_cache_control',
+        ),
         block('map $http_cookie $address_tool_cookie'),
         block('map $http_x_environment_observed_ipv4 $environment_monitor_ipv4'),
         block('map $http_x_environment_observed_ipv6 $environment_monitor_ipv6'),
@@ -765,10 +771,24 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
                         response.headers.get('content-security-policy'),
                         /accounts\.google\.com\/gsi\//,
                     );
-                    assert.match(response.headers.get('cache-control'), /no-store/);
+                    // Only a cookieless public document for a UA outside the COOP exception
+                    // may enter a shared cache; every other response stays no-store.
+                    const sharedCacheable = route === '/zh/' && !affected.includes(userAgent);
+                    assert.match(
+                        response.headers.get('cache-control'),
+                        sharedCacheable ? /s-maxage=300/u : /no-store/u,
+                        `${method} ${route}: ${userAgent}`,
+                    );
                 }
             }
         }
+        await t.test('keeps visitor preferences out of shared caches', async () => {
+            for (const cookie of ['storefront_public_language=en', 'storefront_public_currency=MYR']) {
+                const response = await fetch(origin + '/zh/', { headers: { cookie } });
+                assert.equal(response.status, 200);
+                assert.match(response.headers.get('cache-control'), /no-store/u);
+            }
+        });
         const css = await fetch(origin + '/style.css', {
             headers: { 'User-Agent': affected[1] },
         });

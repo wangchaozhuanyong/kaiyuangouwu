@@ -15,6 +15,7 @@ import { defaultStorefrontSeoSettings } from './storefront-seo.contract';
 import {
     normalizedPublicRedirectPath,
     publicRedirectTracking,
+    publicSlugTarget,
     StorefrontSeoController,
 } from './storefront-seo.controller';
 
@@ -77,6 +78,9 @@ function fixture() {
         prepare: vi.fn().mockResolvedValue(prepared),
         enrich: vi.fn().mockResolvedValue(page),
         assertOutput: vi.fn().mockResolvedValue(undefined),
+        sitemap: vi.fn().mockResolvedValue('<urlset/>'),
+        productIdBySlug: vi.fn().mockResolvedValue(null),
+        collectionIdBySlug: vi.fn().mockResolvedValue(null),
     };
     const html = { render: vi.fn().mockResolvedValue('<html>synthetic public body</html>') };
     const configuration = { payload: settings, version: 1, publishedAt: new Date(0) };
@@ -121,12 +125,72 @@ function fixture() {
 }
 
 describe('StorefrontSeoController public document and legacy redirects', () => {
+    it.each([
+        ['/zh/p/codex-go-1month', { kind: 'product', slug: 'codex-go-1month' }],
+        ['/en/c/claude-subscription?utm_source=x', { kind: 'collection', slug: 'claude-subscription' }],
+        ['/p/codex-go-1month', { kind: 'product', slug: 'codex-go-1month' }],
+        ['/zh/p/%E4%B8%AD%E8%BD%AC', { kind: 'product', slug: '中转' }],
+        ['/zh/c/', null],
+        ['/zh/product?id=1', null],
+        ['/zh/blog/2026-11-02', null],
+        ['//p/x', null],
+    ])('reads a canonical slug target from %s', (path, expected) => {
+        expect(publicSlugTarget(path)).toEqual(expected);
+    });
     const errorLog = vi.fn<(message: string, context?: string, trace?: string) => void>();
     beforeEach(() => {
         errorLog.mockClear();
         vi.spyOn(Logger, 'error').mockImplementation(errorLog);
     });
     afterEach(() => vi.restoreAllMocks());
+    it('renders a canonical slug URL from the resolved identity', async () => {
+        const f = fixture();
+        f.publicSeo.productIdBySlug.mockResolvedValue('product-1');
+        const response = responseMock();
+        await f.controller.document(f.req('/zh/p/codex-go-1month'), response as unknown as Response);
+        expect(f.publicSeo.productIdBySlug).toHaveBeenCalledWith(expect.anything(), 'codex-go-1month');
+        expect(response.status).toHaveBeenCalledWith(200);
+        expect(response.send).toHaveBeenCalledWith('<html>synthetic public body</html>');
+    });
+    it('answers 404 for a slug that is not the public identity', async () => {
+        const f = fixture();
+        const response = responseMock();
+        await f.controller.document(f.req('/zh/p/missing-product'), response as unknown as Response);
+        expect(f.publicSeo.productIdBySlug).toHaveBeenCalledOnce();
+        expect(response.status).toHaveBeenCalledWith(404);
+    });
+    it('resolves a canonical collection slug', async () => {
+        const f = fixture();
+        f.publicSeo.collectionIdBySlug.mockResolvedValue('collection-1');
+        const response = responseMock();
+        await f.controller.document(f.req('/en/c/claude-subscription'), response as unknown as Response);
+        expect(f.publicSeo.collectionIdBySlug).toHaveBeenCalledWith(expect.anything(), 'claude-subscription');
+        expect(response.status).toHaveBeenCalledWith(200);
+    });
+    it('reuses a generated sitemap for repeat crawler requests and caches per shard', async () => {
+        const f = fixture();
+        const request = (query: Record<string, string>) =>
+            ({
+                ...(f.req('/zh/') as unknown as Record<string, unknown>),
+                query,
+            }) as unknown as Request;
+        const first = responseMock();
+        const second = responseMock();
+        await f.controller.sitemap(request({ kind: 'products', shard: '1' }), first as unknown as Response);
+        await f.controller.sitemap(request({ kind: 'products', shard: '1' }), second as unknown as Response);
+        expect(f.publicSeo.sitemap).toHaveBeenCalledOnce();
+        expect(first.setHeader).toHaveBeenCalledWith(
+            'Cache-Control',
+            expect.stringContaining('s-maxage=600'),
+        );
+        expect(first.send).toHaveBeenCalledWith('<urlset/>');
+        expect(second.send).toHaveBeenCalledWith('<urlset/>');
+        await f.controller.sitemap(
+            request({ kind: 'products', shard: '2' }),
+            responseMock() as unknown as Response,
+        );
+        expect(f.publicSeo.sitemap).toHaveBeenCalledTimes(2);
+    });
     it('appends request-local subphases and cache outcomes while preserving the response', async () => {
         const first = fixture();
         const second = fixture();

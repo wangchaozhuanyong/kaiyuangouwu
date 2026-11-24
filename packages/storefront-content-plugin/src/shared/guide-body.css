@@ -1,0 +1,82 @@
+/* Published guide body. Type roles and colours come from the shared storefront tokens. */
+.guide-body {
+    display: grid;
+    gap: 0.9rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.guide-body > :first-child {
+    margin-block-start: 0;
+}
+
+.guide-body h2 {
+    font-size: var(--type-section-size);
+    line-height: var(--type-section-leading);
+    font-weight: var(--font-weight-semibold);
+    margin-block: 1.4rem 0;
+}
+
+.guide-body h3 {
+    font-size: var(--type-section-compact-size);
+    line-height: var(--type-section-compact-leading);
+    font-weight: var(--font-weight-semibold);
+    margin-block: 1.1rem 0;
+}
+
+.guide-body p,
+.guide-body li {
+    font-size: var(--type-reading-size);
+    line-height: var(--type-reading-leading);
+    white-space: pre-wrap;
+}
+
+.guide-body ul,
+.guide-body ol {
+    display: grid;
+    gap: 0.4rem;
+    padding-inline-start: 1.35em;
+}
+
+.guide-body ul {
+    list-style: disc;
+}
+
+.guide-body ol {
+    list-style: decimal;
+}
+
+.guide-body a {
+    color: var(--accent, currentColor);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.guide-body hr {
+    border: 0;
+    border-top: 1px solid var(--line-subtle, var(--line, #e2e8f0));
+}
+
+.guide-body-table {
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+.guide-body table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+}
+
+.guide-body :is(th, td) {
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--line-subtle, var(--line, #e2e8f0));
+    text-align: start;
+    vertical-align: top;
+}
+
+.guide-body th {
+    font-weight: var(--font-weight-semibold);
+    background: var(--soft, transparent);
+}

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
+import { GuideBody } from '../../../storefront-content-plugin/src/shared/guide-body';
 import {
     publicLocalizedHref,
     publicPageRequestKey,
@@ -30,7 +30,7 @@ export function GuideContent({
             <article className="legal-managed-content">
                 <h1>{content.title}</h1>
                 {content.summary && <p>{content.summary}</p>}
-                <ContentText>{content.body}</ContentText>
+                <GuideBody body={content.body} />
                 <p className="type-helper">
                     {content.authorName && (
                         <span>
@@ -50,6 +50,25 @@ export function GuideContent({
                                 <li key={source.url}>
                                     <a href={source.url} rel="noopener noreferrer">
                                         {source.label || source.url}
+                                    </a>
+                                </li>
+                            ))}
+                        </ul>
+                    </section>
+                )}
+                {content.relatedGuides && content.relatedGuides.length > 0 && (
+                    <section aria-label={isZh ? '相关指南' : 'Related guides'}>
+                        <h2>{isZh ? '相关指南' : 'Related guides'}</h2>
+                        <ul>
+                            {content.relatedGuides.map(guide => (
+                                <li key={guide.id}>
+                                    <a
+                                        href={publicLocalizedHref(
+                                            publicPageRouteHref({ kind: 'article', id: guide.id }),
+                                            languageCodeFor(language),
+                                        )}
+                                    >
+                                        {guide.title}
                                     </a>
                                 </li>
                             ))}

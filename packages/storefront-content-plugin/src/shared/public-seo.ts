@@ -33,6 +33,8 @@ export interface PublicGuideContent {
     publishedAt: string;
     sources: Array<{ label: string; url: string; accessedAt: string | null }>;
     relatedProducts: Array<{ id: string; name: string }>;
+    /** Other published guides in the same language; absent on older deployments. */
+    relatedGuides?: Array<{ id: string; title: string }>;
 }
 
 export function escapePublicHtml(value: string): string {
