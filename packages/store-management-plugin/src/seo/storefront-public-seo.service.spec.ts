@@ -446,7 +446,7 @@ describe('request-local public SEO preparation', () => {
             canonical: `https://${test.host}/en/blog/release-notes`,
             description: 'What changed in the release.',
         });
-        expect(seo.alternates.map(link => link.language)).toEqual(['en', 'zh-CN']);
+        expect(seo.alternates.map(link => link.language)).toEqual(['en', 'zh-CN', 'x-default']);
         expect(seo.structuredData).toContainEqual(
             expect.objectContaining({
                 '@type': 'BlogPosting',
@@ -460,7 +460,7 @@ describe('request-local public SEO preparation', () => {
             (await test.service.enrich(test.ctx, test.host, test.page)).seo?.alternates.map(
                 link => link.language,
             ),
-        ).toEqual(['en']);
+        ).toEqual(['en', 'x-default']);
     });
 
     it('does not index an English Skill list without a published edition', async () => {

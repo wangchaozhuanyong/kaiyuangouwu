@@ -396,7 +396,7 @@ export class StorefrontPublicSeoService {
         } else if (request.kind === 'blog') {
             const blog = page.blog;
             if (!blog) throw new NotFoundException('Published blog not found');
-            completeLanguages = ['zh_Hans'];
+            completeLanguages = blog.availableLanguages ?? [code];
             title = blog.article?.title ?? blog.title;
             description = blog.article?.seoDescription || blog.article?.summary || blog.description;
             // Category artwork is rendered in HTML. Sharing uses the merchant's configured image.
@@ -405,6 +405,7 @@ export class StorefrontPublicSeoService {
                 structuredData.push({
                     '@context': 'https://schema.org',
                     '@type': 'BlogPosting',
+                    inLanguage: code === 'zh_Hans' ? 'zh-CN' : 'en',
                     headline: title,
                     description,
                     datePublished: blog.article.publishedAt,
@@ -568,7 +569,7 @@ export class StorefrontPublicSeoService {
                     { '@type': 'ListItem', position: 2, name: title, item: seo.canonical },
                 ],
             });
-        if (request.kind === 'blog' && request.input.term) {
+        if (request.kind === 'blog' && !request.id && request.input.term) {
             seo.indexable = false;
             seo.robots = 'noindex, follow';
             seo.alternates = [];
