@@ -783,13 +783,11 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
                 }
             }
         }
-        await t.test('keeps visitor preferences out of shared caches', async () => {
-            for (const cookie of ['storefront_public_language=en', 'storefront_public_currency=MYR']) {
-                const response = await fetch(origin + '/zh/', { headers: { cookie } });
-                assert.equal(response.status, 200);
-                assert.match(response.headers.get('cache-control'), /no-store/u);
-            }
-        });
+        for (const cookie of ['storefront_public_language=en', 'storefront_public_currency=MYR']) {
+            const response = await fetch(origin + '/zh/', { headers: { cookie } });
+            assert.equal(response.status, 200);
+            assert.match(response.headers.get('cache-control'), /no-store/u);
+        }
         const css = await fetch(origin + '/style.css', {
             headers: { 'User-Agent': affected[1] },
         });
