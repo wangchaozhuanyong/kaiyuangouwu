@@ -381,7 +381,7 @@ export class StorefrontPublicSeoService {
                         '@context': 'https://schema.org',
                         '@type': 'FAQPage',
                         inLanguage: code === 'zh_Hans' ? 'zh-CN' : 'en',
-                        mainEntity: faq.map(item => ({
+                        mainEntity: faq.map((item: { question: string; answer: string }) => ({
                             '@type': 'Question',
                             name: item.question,
                             acceptedAnswer: { '@type': 'Answer', text: item.answer },
