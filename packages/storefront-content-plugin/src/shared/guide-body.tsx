@@ -168,7 +168,10 @@ export function GuideBody({ body }: { body: string }) {
                         <h2 key={key}>{inlineNodes(block.text, key)}</h2>
                     );
                 if (block.kind === 'paragraph') return <p key={key}>{inlineNodes(block.text, key)}</p>;
-                if (block.kind === 'rule') return <hr key={key} />;
+                if (block.kind === 'rule')
+                    return (
+                        <div key={key} className="guide-body-divider" role="separator" aria-hidden="true" />
+                    );
                 if (block.kind === 'list') {
                     const items = block.items.map((item, itemIndex) => (
                         <li key={`${key}-${itemIndex}`}>{inlineNodes(item, `${key}-${itemIndex}`)}</li>

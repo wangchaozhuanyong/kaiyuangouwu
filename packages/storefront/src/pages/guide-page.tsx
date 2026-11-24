@@ -4,6 +4,7 @@ import { GuideBody } from '../../../storefront-content-plugin/src/shared/guide-b
 import {
     publicLocalizedHref,
     publicPageRequestKey,
+    publicPageRouteHref,
 } from '../../../storefront-content-plugin/src/shared/public-page-data';
 import { type PublicGuideContent } from '../../../storefront-content-plugin/src/shared/public-seo';
 import { languageCodeFor } from '../i18n';

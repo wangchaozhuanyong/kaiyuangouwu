@@ -52,9 +52,9 @@
     text-underline-offset: 2px;
 }
 
-.guide-body hr {
-    border: 0;
-    border-top: 1px solid var(--line-subtle, var(--line, #e2e8f0));
+.guide-body-divider {
+    height: 0;
+    margin-block: 0.5rem;
 }
 
 .guide-body-table {
