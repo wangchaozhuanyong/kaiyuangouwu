@@ -16,6 +16,7 @@ import {
 import { StoreDomain } from '@vendure/store-domain-plugin';
 import {
     BLOG_READER,
+    parseCollectionDescription,
     publicPageRequestKey,
     resolveManagedLegalDocument,
     StorefrontContentService,
@@ -89,6 +90,40 @@ function identity(request: PublicPageRequest, code: StorefrontSeoLanguage): Stor
     return { targetType: 'COLLECTION', targetId: request.input.collectionId ?? 'all', languageCode: code };
 }
 
+/** The single rule that turns an entity slug into the crawlable keyword path. */
+export function entityCanonicalPath(
+    kind: 'product' | 'collection',
+    slug: string | null | undefined,
+): string | undefined {
+    const value = typeof slug === 'string' ? slug.trim() : '';
+    if (!value) return undefined;
+    return `/${kind === 'product' ? 'p' : 'c'}/${encodeURIComponent(value)}`;
+}
+
+export interface PublishedGuideLinkSource {
+    targetId: string;
+    languageCode: string;
+    payload: { title: string; article?: { body?: string; reviewedAt?: string | null } | null };
+}
+
+/** Other published guides in the same language, used as a topical exit on every guide page. */
+export function relatedGuideLinks(
+    items: readonly PublishedGuideLinkSource[],
+    { currentId, languageCode, limit = 3 }: { currentId: string; languageCode: string; limit?: number },
+): Array<{ id: string; title: string }> {
+    return items
+        .filter(
+            item =>
+                item.targetId !== currentId &&
+                item.languageCode === languageCode &&
+                String(item.payload.title ?? '').trim() &&
+                item.payload.article?.body?.trim() &&
+                item.payload.article.reviewedAt,
+        )
+        .slice(0, limit)
+        .map(item => ({ id: item.targetId, title: item.payload.title }));
+}
+
 @Injectable()
 export class StorefrontPublicSeoService {
     constructor(
@@ -125,6 +160,37 @@ export class StorefrontPublicSeoService {
         if (!entity || !entity.channels.some(channel => String(channel.id) === String(ctx.channelId)))
             return null;
         return entity;
+    }
+
+    /** Resolves a canonical `/p/{slug}` URL to the product identity used by every reader. */
+    async productIdBySlug(ctx: RequestContext, slug: string): Promise<string | null> {
+        if (!slug || slug.length > 100) return null;
+        const row = await this.connection
+            .getRepository(ctx, Product)
+            .createQueryBuilder('product')
+            .innerJoin('product.channels', 'channel', 'channel.id = :channelId', {
+                channelId: ctx.channelId,
+            })
+            .where('product.slug = :slug', { slug })
+            .andWhere('product.enabled = :enabled', { enabled: true })
+            .andWhere('product.deletedAt IS NULL')
+            .getOne();
+        return row ? String(row.id) : null;
+    }
+
+    /** Resolves a canonical `/c/{slug}` URL to the collection identity used by every reader. */
+    async collectionIdBySlug(ctx: RequestContext, slug: string): Promise<string | null> {
+        if (!slug || slug.length > 100) return null;
+        const row = await this.connection
+            .getRepository(ctx, Collection)
+            .createQueryBuilder('collection')
+            .innerJoin('collection.channels', 'channel', 'channel.id = :channelId', {
+                channelId: ctx.channelId,
+            })
+            .where('collection.slug = :slug', { slug })
+            .andWhere('collection.isPrivate = :private', { private: false })
+            .getOne();
+        return row ? String(row.id) : null;
     }
 
     /** Request-local reads may overlap page loading; final output authority is always read again. */
@@ -190,6 +256,7 @@ export class StorefrontPublicSeoService {
         let image = config.logoUrl ?? null;
         let contentImage: string | null = null;
         let completeLanguages: StorefrontSeoLanguage[] = [];
+        let canonicalPath: string | undefined;
         const storeLanguages = (['zh_Hans', 'en'] as const).filter(
             candidate =>
                 plain(candidate === 'zh_Hans' ? names.storefrontNameZh : names.storefrontNameEn) &&
@@ -230,6 +297,7 @@ export class StorefrontPublicSeoService {
             const entity = await this.product(ctx, request.id);
             const product = page.product as PublicProductDetail | null;
             if (!entity || !product) throw new NotFoundException('Public product not found');
+            if (entity.slug) canonicalPath = entityCanonicalPath('product', entity.slug);
             completeLanguages = (['zh_Hans', 'en'] as const).filter(candidate =>
                 entity.translations.some(
                     translation =>
@@ -266,7 +334,9 @@ export class StorefrontPublicSeoService {
                           price: ((flashSaleItem?.salePrice ?? lowest.priceWithTax) / 100).toFixed(2),
                           priceCurrency: lowest.currencyCode,
                           availability: this.availability(lowest),
-                          url: `${origin}/${code === 'zh_Hans' ? 'zh' : 'en'}/product?id=${encodeURIComponent(request.id)}`,
+                          url: `${origin}/${code === 'zh_Hans' ? 'zh' : 'en'}${
+                              canonicalPath ?? `/product?id=${encodeURIComponent(request.id)}`
+                          }`,
                       }
                     : undefined;
             const reviews = await this.productReviews(ctx, request.id);
@@ -278,6 +348,8 @@ export class StorefrontPublicSeoService {
                     '@type': 'Product',
                     name: title,
                     description,
+                    inLanguage: code === 'zh_Hans' ? 'zh-CN' : 'en',
+                    ...(storeName ? { brand: { '@type': 'Brand', name: storeName } } : {}),
                     ...(image ? { image: [new URL(image, origin).href] } : {}),
                     ...(sku ? { sku } : {}),
                     ...(offers ? { offers } : {}),
@@ -288,6 +360,7 @@ export class StorefrontPublicSeoService {
             if (request.input.collectionId) {
                 const entity = await this.collection(ctx, request.input.collectionId);
                 if (!entity) throw new NotFoundException('Public category not found');
+                if (entity.slug) canonicalPath = entityCanonicalPath('collection', entity.slug);
                 completeLanguages = (['zh_Hans', 'en'] as const).filter(candidate =>
                     entity.translations.some(
                         translation =>
@@ -300,7 +373,20 @@ export class StorefrontPublicSeoService {
                     item => item.languageCode === (code as LanguageCode),
                 );
                 title = matchingTranslation?.name ?? '';
+                const faq = parseCollectionDescription(matchingTranslation?.description).faq;
                 description = plain(matchingTranslation?.description);
+                // Visible FAQ list and FAQPage share the same parse, so they cannot disagree.
+                if (faq.length)
+                    structuredData.push({
+                        '@context': 'https://schema.org',
+                        '@type': 'FAQPage',
+                        inLanguage: code === 'zh_Hans' ? 'zh-CN' : 'en',
+                        mainEntity: faq.map((item: { question: string; answer: string }) => ({
+                            '@type': 'Question',
+                            name: item.question,
+                            acceptedAnswer: { '@type': 'Answer', text: item.answer },
+                        })),
+                    });
             } else {
                 completeLanguages = storeLanguages;
                 title = code === 'zh_Hans' ? '商品' : 'Products';
@@ -339,9 +425,8 @@ export class StorefrontPublicSeoService {
                 !document.article.reviewedAt
             )
                 throw new NotFoundException('Published guide not found');
-            const published = (await this.seo.listPublished(ctx, ['ARTICLE'])).filter(
-                item => item.targetId === request.id,
-            );
+            const allGuides = await this.seo.listPublished(ctx, ['ARTICLE']);
+            const published = allGuides.filter(item => item.targetId === request.id);
             completeLanguages = published
                 .filter(
                     item =>
@@ -357,6 +442,8 @@ export class StorefrontPublicSeoService {
                         .byId(ctx, id),
                 ),
             );
+            // Other guides in the same language give each page a topical exit besides products.
+            const relatedGuides = relatedGuideLinks(allGuides, { currentId: request.id, languageCode: code });
             page = {
                 ...page,
                 publicContent: {
@@ -372,6 +459,7 @@ export class StorefrontPublicSeoService {
                     relatedProducts: related
                         .filter(item => item !== null)
                         .map(item => ({ id: item.id, name: item.name })),
+                    relatedGuides,
                 },
             };
             title = document.title;
@@ -453,6 +541,7 @@ export class StorefrontPublicSeoService {
                 shareTitle: request.kind === 'home' ? sharing?.title : undefined,
                 shareDescription: request.kind === 'home' ? sharing?.description : undefined,
                 completeLanguages,
+                canonicalPath,
                 structuredData,
             },
             settings,
@@ -681,16 +770,17 @@ export class StorefrontPublicSeoService {
             } catch {
                 /* Optional plugin. */
             }
+            const blogPaths = blogReader
+                ? await blogReader.sitemap(ctx.copy({ languageCode: LanguageCode.zh_Hans }))
+                : [];
+            if (blogPaths.length)
+                requests.push(
+                    { kind: 'blog', input: {} },
+                    ...blogPaths.map(item => ({ kind: 'blog' as const, input: {}, id: item.slug })),
+                );
             for (const code of settings.enabledLanguages) {
                 const localizedCtx = ctx.copy({ languageCode: code as LanguageCode });
-                const blogPaths = blogReader ? await blogReader.sitemap(localizedCtx) : [];
-                const localizedRequests: PublicPageRequest[] = [...requests];
-                if (blogPaths.length)
-                    localizedRequests.push(
-                        { kind: 'blog', input: {} },
-                        ...blogPaths.map(item => ({ kind: 'blog' as const, input: {}, id: item.slug })),
-                    );
-                for (const request of localizedRequests) {
+                for (const request of requests) {
                     try {
                         const page = await this.enrich(
                             localizedCtx,
@@ -771,7 +861,10 @@ export class StorefrontPublicSeoService {
                     )
                         continue;
                     entries.push({
-                        url: `https://${primary}/${code === 'zh_Hans' ? 'zh' : 'en'}/product?id=${encodeURIComponent(entity.id)}`,
+                        url: `https://${primary}/${code === 'zh_Hans' ? 'zh' : 'en'}${
+                            entityCanonicalPath('product', entity.slug) ??
+                            `/product?id=${encodeURIComponent(entity.id)}`
+                        }`,
                         lastmod: entity.updatedAt.toISOString(),
                     });
                 }
@@ -835,7 +928,10 @@ export class StorefrontPublicSeoService {
                 )
                     continue;
                 entries.push({
-                    url: `https://${primary}/${code === 'zh_Hans' ? 'zh' : 'en'}/category?collectionId=${encodeURIComponent(entity.id)}`,
+                    url: `https://${primary}/${code === 'zh_Hans' ? 'zh' : 'en'}${
+                        entityCanonicalPath('collection', entity.slug) ??
+                        `/category?collectionId=${encodeURIComponent(entity.id)}`
+                    }`,
                     lastmod: entity.updatedAt.toISOString(),
                 });
             }

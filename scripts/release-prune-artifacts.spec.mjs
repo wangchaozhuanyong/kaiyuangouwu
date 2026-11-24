@@ -137,6 +137,20 @@ test('retains the original build after a successful deployment rerun and uses ea
     assert.deepEqual(plan.retained, [...live, retriedFrontend, ...oldBuild]);
 });
 
+test('retains reused frontend artifact from earlier attempt when rerun deployment did not rebuild it', () => {
+    const live = runtime(1);
+    const reusedFrontend = row(archive(2, 20, 1, 'frontends'));
+    const versions = [...live, reusedFrontend];
+    const plan = planReleasePruning({ Versions: versions }, keys(live), run => {
+        if (run.runId === 20) {
+            return [successfulJob(run, frontendJob, 2), successfulJob(run, completion, 2)];
+        }
+        return accepted(run, runtimeJob);
+    });
+    assert.deepEqual(plan.remove, []);
+    assert.deepEqual(plan.retained, [...live, reusedFrontend]);
+});
+
 test('fails closed on partial inventory, missing or hidden accepted artifacts, and out-of-scope data', () => {
     const live = runtime(1);
     const plan = inventory =>

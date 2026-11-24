@@ -39,6 +39,21 @@ const facts = (host = 'store-a.test'): PublicSeoFacts => ({
 });
 
 describe('one public SEO policy', () => {
+    it('prefers the keyword URL of the entity over the identity route', () => {
+        const page = buildPublicSeoDocument(
+            { kind: 'product', id: '123' },
+            { ...facts(), canonicalPath: '/p/codex-go-1month' },
+            settings(),
+            null,
+            4,
+        );
+        expect(page.canonical).toBe('https://store-a.test/en/p/codex-go-1month');
+        expect(page.alternates).toEqual([
+            { language: 'en', href: 'https://store-a.test/en/p/codex-go-1month' },
+            { language: 'zh-CN', href: 'https://store-a.test/zh/p/codex-go-1month' },
+            { language: 'x-default', href: 'https://store-a.test/zh/p/codex-go-1month' },
+        ]);
+    });
     it('reuses only an immutable shell while preserving large snapshots, literal slots and stylesheet order', () => {
         const template = preparePublicHtmlTemplate(
             '<html><head><title>Old title</title>' +
@@ -320,6 +335,7 @@ describe('one public SEO policy', () => {
         expect(page.alternates).toEqual([
             { language: 'en', href: `https://${host}/en/product?id=123` },
             { language: 'zh-CN', href: `https://${host}/zh/product?id=123` },
+            { language: 'x-default', href: `https://${host}/zh/product?id=123` },
         ]);
         expect(page.version).toBe(4);
     });

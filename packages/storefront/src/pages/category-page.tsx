@@ -37,6 +37,7 @@ import { storefrontQueryKeys } from '../query-client';
 import { catalogCardImageSizes, STOREFRONT_IMAGE_SIZES } from '../responsive-image';
 import { CategoryPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
+import { CategoryIntro } from '../storefront-ui/category-intro';
 import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
 import { collectionImage, SafeImage } from '../storefront-ui/product-display';
 import {
@@ -789,6 +790,14 @@ export function CategoryPage() {
                             {isZh ? '筛选' : 'Filter'} <SlidersHorizontal aria-hidden="true" />
                         </button>
                     </nav>
+
+                    <CategoryIntro
+                        description={
+                            children.find(child => child.id === activeChildId)?.description ||
+                            primary?.description
+                        }
+                        language={language}
+                    />
 
                     <CategoryClientPluginSlot
                         block={clientPluginBlock}

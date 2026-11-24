@@ -665,7 +665,7 @@ describe('public SEO with real isolated SQL publication and catalog membership',
             canonical: 'https://store-1.test/en/product?id=10',
             indexable: true,
         });
-        expect(first.seo?.alternates.map(item => item.language)).toEqual(['zh-CN', 'en']);
+        expect(first.seo?.alternates.map(item => item.language)).toEqual(['zh-CN', 'en', 'x-default']);
         expect(JSON.stringify(first)).not.toMatch(
             /private-platform-note|private-unpublished-title|platformBindings|aiCitations/,
         );
@@ -890,7 +890,7 @@ describe('public SEO with real isolated SQL publication and catalog membership',
             page(context(1, 'zh_Hans')),
         );
         expect(chinese.seo?.indexable).toBe(true);
-        expect(chinese.seo?.alternates.map(item => item.language)).toEqual(['zh-CN']);
+        expect(chinese.seo?.alternates.map(item => item.language)).toEqual(['zh-CN', 'x-default']);
         mode = 'PREVIEW';
         const preview = await publicSeo.enrich(
             context(1, 'zh_Hans'),

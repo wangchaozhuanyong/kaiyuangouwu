@@ -27,6 +27,8 @@ export interface PublicSeoFacts {
     shareTitle?: string;
     shareDescription?: string;
     completeLanguages: StorefrontSeoLanguage[];
+    /** Keyword URL (`/p/{slug}`, `/c/{slug}`) when the entity has one; otherwise the id route. */
+    canonicalPath?: string;
     structuredData: Array<Record<string, unknown>>;
 }
 
@@ -66,7 +68,7 @@ export function buildPublicSeoDocument(
         ((request.input.take ?? 12) !== 12 || (request.input.skip ?? 0) % 12 !== 0)
     )
         reasons.push('NONSTANDARD_PAGINATION');
-    const path = publicPageRouteHref(request);
+    const path = facts.canonicalPath ?? publicPageRouteHref(request);
     const baseHost = facts.primaryHost ?? facts.host;
     const canonical = `https://${baseHost}${localized(path, facts.languageCode)}`;
     const titleTemplate = settings?.titleTemplates[facts.languageCode] ?? '{title} | {store}';
@@ -86,6 +88,23 @@ export function buildPublicSeoDocument(
         '';
     const indexable = reasons.length === 0;
     const image = document?.shareImageUrl || facts.contentImage || settings?.shareImageUrl || facts.image;
+    // x-default names the page search engines may serve when no language matches the user.
+    const alternates: Array<{ language: 'zh-CN' | 'en' | 'x-default'; href: string }> = indexable
+        ? facts.completeLanguages
+              .filter(language => settings?.enabledLanguages.includes(language))
+              .map(language => ({
+                  language: language === 'zh_Hans' ? ('zh-CN' as const) : ('en' as const),
+                  href: `https://${baseHost}${localized(path, language)}`,
+              }))
+        : [];
+    if (alternates.length)
+        alternates.push({
+            language: 'x-default',
+            href: `https://${baseHost}${localized(
+                path,
+                alternates.some(alternate => alternate.language === 'zh-CN') ? 'zh_Hans' : facts.languageCode,
+            )}`,
+        });
     return {
         schemaVersion: 1,
         published: settings !== null,
@@ -102,14 +121,7 @@ export function buildPublicSeoDocument(
         shareDescription: document?.shareDescription.trim() || facts.shareDescription || description,
         robots: indexable ? 'index, follow, max-image-preview:large' : 'noindex, follow',
         image: image ? new URL(image, `https://${baseHost}`).href : null,
-        alternates: indexable
-            ? facts.completeLanguages
-                  .filter(language => settings?.enabledLanguages.includes(language))
-                  .map(language => ({
-                      language: language === 'zh_Hans' ? ('zh-CN' as const) : ('en' as const),
-                      href: `https://${baseHost}${localized(path, language)}`,
-                  }))
-            : [],
+        alternates,
         structuredData: facts.structuredData,
         reasons,
         version,

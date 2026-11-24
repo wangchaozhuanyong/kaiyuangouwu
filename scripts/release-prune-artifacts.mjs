@@ -37,10 +37,21 @@ function parseArtifact(key) {
     return { sha, kind, runId, runAttempt };
 }
 
-function archiveKeys({ sha, runId, runAttempt }, kind) {
+function archiveKeys({ sha, runId, runAttempt }, kind, current) {
     const stem = kind === 'runtime' ? '' : kind + '-';
     const platform = kind === 'runtime' ? '-linux-x64' : '';
-    const key = `${prefix}${sha}/${stem}${sha}-${runId}-${runAttempt}${platform}.tar.gz`;
+    const makeKey = attempt => `${prefix}${sha}/${stem}${sha}-${runId}-${attempt}${platform}.tar.gz`;
+
+    let resolvedAttempt = runAttempt;
+    if (current && !current.has(makeKey(resolvedAttempt))) {
+        for (let a = runAttempt - 1; a >= 1; a--) {
+            if (current.has(makeKey(a))) {
+                resolvedAttempt = a;
+                break;
+            }
+        }
+    }
+    const key = makeKey(resolvedAttempt);
     return kind === 'runtime' ? [key, key + '.sha256'] : [key];
 }
 
@@ -121,7 +132,7 @@ function versionInventory(inventory) {
     return { versions, markers, current };
 }
 
-function acceptedKeys({ sha, runId }, jobs) {
+function acceptedKeys({ sha, runId }, jobs, current) {
     const releaseJobs = jobs
         .filter(
             job => job.head_sha === sha && job.run_id === runId && releaseWorkflows.has(job.workflow_name),
@@ -145,7 +156,7 @@ function acceptedKeys({ sha, runId }, jobs) {
                   )
                 : deployment;
         assert.equal(build?.conclusion, 'success', 'Accepted deployment has no verified build');
-        keys.push(...archiveKeys({ sha, runId, runAttempt: build.run_attempt }, kind));
+        keys.push(...archiveKeys({ sha, runId, runAttempt: build.run_attempt }, kind, current));
     }
     return keys;
 }
@@ -169,7 +180,7 @@ export function planReleasePruning(inventory, activeKeys, readRunJobs) {
     const accepted = new Set();
     for (const release of ordered) {
         if (accepted.has(release.sha) || (revisions.size === limit && !revisions.has(release.sha))) continue;
-        const keys = acceptedKeys(release, readRunJobs(release));
+        const keys = acceptedKeys(release, readRunJobs(release), current);
         if (!keys.length) continue;
         for (const key of keys) {
             assert.ok(current.has(key), `Accepted release artifact unavailable: ${key}`);

@@ -11,6 +11,7 @@ import {
     initialLoadingBrandForSnapshot,
 } from './brand-loading-bootstrap';
 import { startPublicPageBootstrap } from './public-page-transport';
+import { slugUrlTarget } from './public-slug-url';
 
 // This entry intentionally has no React/router/API imports. It runs while those chunks download.
 function bootstrapPublicPage() {
@@ -25,7 +26,6 @@ function bootstrapPublicPage() {
     // Only an actual adoption/handoff signal retires this one-time bootstrap.
     if (root?.dataset.publicAdopted === '1' || bootStage?.getAttribute('aria-hidden') === 'true') return;
     try {
-        const request = publicPageRequestFromUrl(location.pathname + location.search);
         {
             const cookie = (name: string) =>
                 document.cookie
@@ -41,6 +41,12 @@ function bootstrapPublicPage() {
             const snapshot = JSON.parse(
                 document.getElementById(STOREFRONT_PAGE_DATA_ELEMENT_ID)?.textContent ?? 'null',
             );
+            // A canonical slug URL has no client route of its own: adopt the id route the
+            // snapshot was rendered from before the router reads the location.
+            const adoptedHref = slugUrlTarget(location.pathname, snapshot);
+            if (adoptedHref)
+                history.replaceState(history.state, '', `${adoptedHref}${location.search}${location.hash}`);
+            const request = publicPageRequestFromUrl(location.pathname + location.search);
             const scope = {
                 host: location.host,
                 languageCode: language,

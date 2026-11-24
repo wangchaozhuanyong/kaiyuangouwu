@@ -43,6 +43,8 @@ export { StorefrontContentChangedEvent } from './storefront-content-changed.even
 export { StorefrontContentPlugin } from './storefront-content.plugin';
 export { StorefrontContentService } from './storefront-content.service';
 
+export { parseCollectionDescription } from './shared/collection-faq';
+export type { CollectionFaqItem } from './shared/collection-faq';
 export {
     STOREFRONT_BOOT_DATA_ELEMENT_ID,
     STOREFRONT_PAGE_DATA_ELEMENT_ID,

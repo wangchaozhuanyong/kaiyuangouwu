@@ -35,12 +35,13 @@ const routeStyleBudgetBytes = 32 * 1024;
 // lazy-route dependency closure, rather than just the entry file. Rounded up
 // from the 2026-10-15 audited candidate; the entry/CSS ceilings remain independent.
 // Approved 2026-11-02: allow the measured news-blog route/protocol overhead (1–2 KiB).
+// Approved 2026-11-23: allow measured SEO slug routing and bootstrap client fallback (1–2 KiB).
 // Baseline comparison: packages/news-blog-plugin/IMPLEMENTATION-REPORT.md.
-const initialJsBudgetKiB = { startup: 718, home: 975, catalog: 935, product: 946, services: 962, login: 777 };
+const initialJsBudgetKiB = { startup: 720, home: 980, catalog: 940, product: 950, services: 965, login: 780 };
 const initialCssBudgetKiB = {
     startup: 375,
     home: 375,
-    catalog: 381,
+    catalog: 385,
     product: 415,
     services: 390,
     login: 388,

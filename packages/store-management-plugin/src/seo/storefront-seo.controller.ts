@@ -91,6 +91,20 @@ export function normalizedPublicRedirectPath(raw: string): string | null {
     return url.pathname + url.search;
 }
 
+/** Crawlable keyword shapes: /{lang}/p/{slug} and /{lang}/c/{slug}. */
+export function publicSlugTarget(rawPath: string): { kind: 'product' | 'collection'; slug: string } | null {
+    const pathname = rawPath.split(/[?#]/u, 1)[0];
+    const match = /^\/(?:zh\/|en\/)?(p|c)\/([^/?#]{1,100})\/?$/u.exec(pathname);
+    if (!match) return null;
+    let slug: string;
+    try {
+        slug = decodeURIComponent(match[2]);
+    } catch {
+        return null;
+    }
+    return { kind: match[1] === 'p' ? 'product' : 'collection', slug };
+}
+
 export function publicRedirectTracking(destination: string, original: string): string {
     const url = new URL(destination, 'https://storefront.invalid');
     const source = new URL(original, 'https://storefront.invalid');
@@ -105,6 +119,12 @@ export function publicRedirectTracking(destination: string, original: string): s
 @Controller('storefront')
 @UseFilters(StorefrontClosedHttpFilter)
 export class StorefrontSeoController {
+    // Sitemap generation reads the whole catalog. Crawlers request every shard at once,
+    // so one short-lived per-process copy keeps that burst off the database.
+    private static readonly sitemapCacheTtlMs = 5 * 60 * 1000;
+    private static readonly sitemapCacheLimit = 64;
+    private readonly sitemapCache = new Map<string, { storedAt: number; xml: string }>();
+
     constructor(
         private readonly access: StorefrontPromotionAccessService,
         private readonly contexts: RequestContextService,
@@ -166,11 +186,29 @@ export class StorefrontSeoController {
             return;
         }
         let request: ReturnType<typeof publicPageRequestFromUrl>;
-        try {
-            request = publicPageRequestFromUrl(rawPath);
-        } catch {
-            res.status(400).end();
-            return;
+        const slugTarget = publicSlugTarget(rawPath);
+        if (slugTarget) {
+            const id = await measure('slug', () =>
+                slugTarget.kind === 'product'
+                    ? this.publicSeo.productIdBySlug(verified.ctx, slugTarget.slug)
+                    : this.publicSeo.collectionIdBySlug(verified.ctx, slugTarget.slug),
+            );
+            if (!id) {
+                res.status(404).end();
+                return;
+            }
+            request = publicPageRequestFromUrl(
+                slugTarget.kind === 'product'
+                    ? `/product?id=${encodeURIComponent(id)}`
+                    : `/category?collectionId=${encodeURIComponent(id)}`,
+            );
+        } else {
+            try {
+                request = publicPageRequestFromUrl(rawPath);
+            } catch {
+                res.status(400).end();
+                return;
+            }
         }
         if (!request) {
             res.status(404).end();
@@ -351,20 +389,37 @@ export class StorefrontSeoController {
             res.status(404).end();
             return;
         }
-        const kind = req.query.kind ?? 'index';
-        if (!['index', 'pages', 'products', 'collections'].includes(kind as string)) {
+        const rawKind = typeof req.query.kind === 'string' ? req.query.kind : 'index';
+        if (!['index', 'pages', 'products', 'collections'].includes(rawKind)) {
             res.status(404).end();
             return;
         }
-        res.setHeader('Cache-Control', 'no-store');
-        res.type('application/xml').send(
-            await this.publicSeo.sitemap(
-                verified.ctx,
-                verified.host,
-                kind as 'index' | 'pages' | 'products' | 'collections',
-                Number(req.query.shard ?? 0),
-            ),
-        );
+        const kind = rawKind as 'index' | 'pages' | 'products' | 'collections';
+        const shard = Number(req.query.shard ?? 0);
+        const cacheKey = `${String(verified.ctx.channelId)}|${verified.host}|${kind}|${shard}`;
+        const cached = this.cachedSitemap(cacheKey);
+        const xml = cached ?? (await this.publicSeo.sitemap(verified.ctx, verified.host, kind, shard));
+        if (cached === null) this.storeSitemap(cacheKey, xml);
+        res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=3600');
+        res.type('application/xml').send(xml);
+    }
+
+    private cachedSitemap(key: string): string | null {
+        const entry = this.sitemapCache.get(key);
+        if (!entry) return null;
+        if (Date.now() - entry.storedAt > StorefrontSeoController.sitemapCacheTtlMs) {
+            this.sitemapCache.delete(key);
+            return null;
+        }
+        return entry.xml;
+    }
+
+    private storeSitemap(key: string, xml: string): void {
+        if (this.sitemapCache.size >= StorefrontSeoController.sitemapCacheLimit) {
+            const oldest = this.sitemapCache.keys().next();
+            if (!oldest.done) this.sitemapCache.delete(oldest.value);
+        }
+        this.sitemapCache.set(key, { storedAt: Date.now(), xml });
     }
 
     @Get('llms')
