@@ -25,6 +25,7 @@
     "devDependencies": {
         "@types/mailparser": "^3.4.6",
         "@types/sanitize-html": "^2.16.1",
+        "@vendure/storefront-content-plugin": "0.1.0",
         "@vendure/testing": "3.7.2",
         "typescript": "5.9.3",
         "vitest": "^4.1.11",
