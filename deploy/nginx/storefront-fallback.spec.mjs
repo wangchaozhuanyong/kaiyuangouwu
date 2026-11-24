@@ -258,7 +258,8 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         block('location ~ ^/mdac-ocr/(?:eng|ocrb_int)[.]traineddata[.]gz$'),
         block('location ~* \\.(env|pem|key|crt|pfx|p12|sql|sqlite|db|log|bak|zip|tar|gz|7z|rar)$'),
         block(
-            'location ~ ^/(?:((?:zh|en)(?:/|$)))?(?:home|product|category|search|services|support|legal|blog(?:/[A-Za-z0-9_-]+)?|guides/[A-Za-z0-9_-]+)?/?$',
+            'location ~ ^/(?:((?:zh|en)(?:/|$)))?(?:home|product|category|search|services|support|legal|' +
+                'blog(?:/[A-Za-z0-9_-]+)?|guides/[A-Za-z0-9_-]+|p/[^/?#]+|c/[^/?#]+)?/?$',
         ),
         block('location /', source.indexOf('location = /index.html')),
         block('location @storefront_legacy_redirect'),
