@@ -100,6 +100,20 @@ export function entityCanonicalPath(
     return `/${kind === 'product' ? 'p' : 'c'}/${encodeURIComponent(value)}`;
 }
 
+/** Resolves the canonical slug from entity translations, preferring the requested language. */
+export function entitySlug(
+    entity: { translations?: Array<{ languageCode: LanguageCode; slug?: string }> } | null | undefined,
+    languageCode?: LanguageCode,
+): string | undefined {
+    if (!entity?.translations?.length) return undefined;
+    if (languageCode) {
+        const match = entity.translations.find(t => t.languageCode === languageCode);
+        if (match?.slug?.trim()) return match.slug.trim();
+    }
+    const fallback = entity.translations.find(t => t.slug?.trim());
+    return fallback?.slug?.trim();
+}
+
 export interface PublishedGuideLinkSource {
     targetId: string;
     languageCode: string;
@@ -171,8 +185,8 @@ export class StorefrontPublicSeoService {
             .innerJoin('product.channels', 'channel', 'channel.id = :channelId', {
                 channelId: ctx.channelId,
             })
-            .where('product.slug = :slug', { slug })
-            .andWhere('product.enabled = :enabled', { enabled: true })
+            .innerJoin('product.translations', 'translation', 'translation.slug = :slug', { slug })
+            .where('product.enabled = :enabled', { enabled: true })
             .andWhere('product.deletedAt IS NULL')
             .getOne();
         return row ? String(row.id) : null;
@@ -187,8 +201,8 @@ export class StorefrontPublicSeoService {
             .innerJoin('collection.channels', 'channel', 'channel.id = :channelId', {
                 channelId: ctx.channelId,
             })
-            .where('collection.slug = :slug', { slug })
-            .andWhere('collection.isPrivate = :private', { private: false })
+            .innerJoin('collection.translations', 'translation', 'translation.slug = :slug', { slug })
+            .where('collection.isPrivate = :private', { private: false })
             .getOne();
         return row ? String(row.id) : null;
     }
@@ -297,7 +311,8 @@ export class StorefrontPublicSeoService {
             const entity = await this.product(ctx, request.id);
             const product = page.product as PublicProductDetail | null;
             if (!entity || !product) throw new NotFoundException('Public product not found');
-            if (entity.slug) canonicalPath = entityCanonicalPath('product', entity.slug);
+            const productSlug = entitySlug(entity, ctx.languageCode);
+            if (productSlug) canonicalPath = entityCanonicalPath('product', productSlug);
             completeLanguages = (['zh_Hans', 'en'] as const).filter(candidate =>
                 entity.translations.some(
                     translation =>
@@ -360,7 +375,8 @@ export class StorefrontPublicSeoService {
             if (request.input.collectionId) {
                 const entity = await this.collection(ctx, request.input.collectionId);
                 if (!entity) throw new NotFoundException('Public category not found');
-                if (entity.slug) canonicalPath = entityCanonicalPath('collection', entity.slug);
+                const collectionSlug = entitySlug(entity, ctx.languageCode);
+                if (collectionSlug) canonicalPath = entityCanonicalPath('collection', collectionSlug);
                 completeLanguages = (['zh_Hans', 'en'] as const).filter(candidate =>
                     entity.translations.some(
                         translation =>
@@ -862,7 +878,7 @@ export class StorefrontPublicSeoService {
                         continue;
                     entries.push({
                         url: `https://${primary}/${code === 'zh_Hans' ? 'zh' : 'en'}${
-                            entityCanonicalPath('product', entity.slug) ??
+                            entityCanonicalPath('product', entitySlug(entity, code as LanguageCode)) ??
                             `/product?id=${encodeURIComponent(entity.id)}`
                         }`,
                         lastmod: entity.updatedAt.toISOString(),
@@ -929,7 +945,7 @@ export class StorefrontPublicSeoService {
                     continue;
                 entries.push({
                     url: `https://${primary}/${code === 'zh_Hans' ? 'zh' : 'en'}${
-                        entityCanonicalPath('collection', entity.slug) ??
+                        entityCanonicalPath('collection', entitySlug(entity, code as LanguageCode)) ??
                         `/category?collectionId=${encodeURIComponent(entity.id)}`
                     }`,
                     lastmod: entity.updatedAt.toISOString(),
