@@ -39,6 +39,10 @@ export class ShopAbuseProtectionService {
         private readonly notifications: AdminNotificationService,
     ) {}
 
+    isConfigured(): boolean {
+        return this.store.hasEntities();
+    }
+
     private digest(...parts: string[]) {
         let secret = this.config.authOptions.cookieOptions?.secret;
         if (!secret || secret.length < 16) {

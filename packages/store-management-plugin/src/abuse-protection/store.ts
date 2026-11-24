@@ -30,6 +30,17 @@ function positiveInteger(value: number): void {
 export class ShopAbuseStore {
     constructor(private readonly connection: TransactionalConnection) {}
 
+    hasEntities(): boolean {
+        try {
+            return (
+                typeof (this.connection?.rawConnection as any)?.hasMetadata === 'function' &&
+                this.connection.rawConnection.hasMetadata(ShopAbuseBucket)
+            );
+        } catch {
+            return false;
+        }
+    }
+
     private get buckets() {
         return this.connection.rawConnection.getRepository(ShopAbuseBucket);
     }
