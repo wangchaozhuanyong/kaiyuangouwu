@@ -1,6 +1,7 @@
+import { LanguageCode } from '@vendure/core';
 import { describe, expect, it } from 'vitest';
 
-import { entityCanonicalPath } from './storefront-public-seo.service';
+import { entityCanonicalPath, entitySlug } from './storefront-public-seo.service';
 
 describe('entity canonical path', () => {
     it('maps each entity kind onto its keyword prefix', () => {
@@ -18,5 +19,19 @@ describe('entity canonical path', () => {
         expect(entityCanonicalPath('product', '   ')).toBeUndefined();
         expect(entityCanonicalPath('product', null)).toBeUndefined();
         expect(entityCanonicalPath('collection', undefined)).toBeUndefined();
+    });
+
+    it('extracts slug from entity translations with language preference', () => {
+        const entity = {
+            translations: [
+                { languageCode: LanguageCode.zh_Hans, slug: 'zh-slug' },
+                { languageCode: LanguageCode.en, slug: 'en-slug' },
+            ],
+        };
+        expect(entitySlug(entity, LanguageCode.zh_Hans)).toBe('zh-slug');
+        expect(entitySlug(entity, LanguageCode.en)).toBe('en-slug');
+        expect(entitySlug(entity)).toBe('zh-slug');
+        expect(entitySlug(null)).toBeUndefined();
+        expect(entitySlug({ translations: [] })).toBeUndefined();
     });
 });
