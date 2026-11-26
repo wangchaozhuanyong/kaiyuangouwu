@@ -13,6 +13,7 @@ import {
 } from '../referral/storefront-visitor-identity';
 import { StorefrontPromotionPluginOptions } from '../types';
 
+import { forwardIdWebsiteVisit } from './id-website-visits';
 import {
     summarizeTraffic,
     TRAFFIC_TIMEZONE,
@@ -126,6 +127,9 @@ export class StorefrontTrafficService {
                 { ...eventWhere, visitorKeyHash, customerKeyHash: IsNull() },
                 { customerKeyHash, attributionKeyHash },
             );
+        }
+        if (input.pageView && clientIp) {
+            void forwardIdWebsiteVisit(ctx.req?.headers.host, clientIp, eventWhere.eventId);
         }
         return { recorded: true, setCookie: identity.setCookie };
     }
