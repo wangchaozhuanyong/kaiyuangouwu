@@ -25,11 +25,13 @@ it('sends only a stable site-scoped token with a verifiable, retry-safe signatur
         .mockImplementation(() => Promise.resolve(new Response(null, { status: 200 })));
     vi.stubGlobal('fetch', send);
 
+    vi.stubEnv('ID_WEBSITE_VISIT_HOSTS', 'damatong.net,moyaoai.com');
     await forwardIdWebsiteVisit('damatong.net', ip, randomUUID());
     vi.setSystemTime(new Date('2026-11-26T00:01:00Z'));
     await forwardIdWebsiteVisit('damatong.net', ip, randomUUID());
     await forwardIdWebsiteVisit('moyaoai.com', ip, randomUUID());
     await forwardIdWebsiteVisit('other.example', ip, randomUUID());
+    await forwardIdWebsiteVisit('localhost', ip, randomUUID());
     expect(send).toHaveBeenCalledTimes(4);
     expect(send.mock.calls[0][1]).toMatchObject({
         body: send.mock.calls[1][1]?.body,

@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 
-const storefronts = new Set(['damatong.net', 'moyaoai.com', 'shop.flashcast.com.my']);
 const ingestPath = '/api/id-business-v2/workspace-website-monitor/visits/ingest';
+const validHost = /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/u;
 let inFlight = 0;
 
 /** Reuse the consent-gated visit and share only a stable, site-scoped IP token. */
@@ -10,11 +10,16 @@ export async function forwardIdWebsiteVisit(
     ip: string,
     eventId: string,
 ): Promise<void> {
+    const normalizedHost = host?.trim().toLowerCase().split(':')[0];
+    const allowedHosts = process.env.ID_WEBSITE_VISIT_HOSTS?.split(',')
+        .map(item => item.trim().toLowerCase())
+        .filter(Boolean);
     const destination = process.env.ID_WEBSITE_VISIT_INGEST_URL;
     const secret = process.env.ID_WEBSITE_VISIT_SIGNING_KEY;
     if (
-        !host ||
-        !storefronts.has(host) ||
+        !normalizedHost ||
+        !validHost.test(normalizedHost) ||
+        (allowedHosts?.length && !allowedHosts.includes(normalizedHost)) ||
         !destination ||
         !secret ||
         !/^[a-f0-9]{64}$/u.test(secret) ||
@@ -35,12 +40,12 @@ export async function forwardIdWebsiteVisit(
 
     const key = Buffer.from(secret, 'hex');
     const ipToken = createHmac('sha256', key)
-        .update(JSON.stringify(['ip-v1', host, ip]))
+        .update(JSON.stringify(['ip-v1', normalizedHost, ip]))
         .digest('hex');
     const occurredAt = new Date().toISOString();
-    const body = JSON.stringify({ eventId, host, ipToken, occurredAt });
+    const body = JSON.stringify({ eventId, host: normalizedHost, ipToken, occurredAt });
     const signature = createHmac('sha256', key)
-        .update(JSON.stringify([eventId, host, ipToken, occurredAt]))
+        .update(JSON.stringify([eventId, normalizedHost, ipToken, occurredAt]))
         .digest('hex');
     inFlight++;
     try {
