@@ -855,7 +855,6 @@
 }
 .page.subpage.mdac-review-page > .topbar.subpage-header {
     background: var(--mdac-panel);
-    border-bottom: 1px solid var(--mdac-line);
 }
 .page.subpage.mdac-review-page > .topbar.subpage-header::before {
     content: none;
@@ -886,13 +885,6 @@
 .mdac-review-page .mdac-steps {
     gap: var(--space-8);
 }
-.mdac-review-page .mdac-steps li:not(:last-child)::after {
-    content: '';
-    width: clamp(10px, 1.75vw, 28px);
-    height: 1px;
-    margin-inline-start: var(--space-4);
-    background: var(--mdac-line);
-}
 .mdac-review-page .mdac-steps [aria-current] span,
 .mdac-review-page .mdac-review-handoff .mdac-primary {
     color: var(--mdac-action-ink);
@@ -915,7 +907,6 @@
     margin-bottom: var(--space-32);
     color: var(--mdac-ink);
     background: var(--mdac-hero);
-    border-bottom: 1px solid var(--mdac-line);
 }
 .mdac-review-page .mdac-heading::before {
     content: '';
@@ -953,8 +944,6 @@
     line-height: var(--type-page-leading);
 }
 .mdac-review-heading > span {
-    padding-inline-start: var(--space-12);
-    border-inline-start: 1px solid var(--mdac-line);
     color: var(--mdac-muted);
 }
 .mdac-review-panel {
@@ -973,7 +962,6 @@
 }
 .mdac-review-picker {
     margin-block-end: var(--space-16);
-    border-bottom: 1px solid var(--mdac-line);
 }
 .mdac-review-tabs {
     flex: 1;
@@ -988,14 +976,13 @@
     gap: var(--space-4);
     padding: var(--space-4) var(--space-8);
     border: 0;
-    border-bottom: 3px solid transparent;
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--mdac-muted);
 }
 .mdac-review-tab[aria-selected='true'] {
     color: var(--mdac-green);
-    border-bottom-color: currentColor;
+    background: var(--mdac-soft);
     font-weight: var(--font-weight-bold);
 }
 .mdac-review-tab-number {
@@ -1065,8 +1052,6 @@
     align-items: baseline;
     gap: var(--space-4) var(--space-12);
     margin-block-start: var(--space-12);
-    padding-block-start: var(--space-8);
-    border-top: 1px solid color-mix(in srgb, var(--mdac-passport-gold) 35%, transparent);
 }
 .mdac-review-passport div + div dd {
     font-family: var(--font-code);
@@ -1077,7 +1062,6 @@
     gap: var(--space-12);
     align-items: baseline;
     padding-block: var(--space-8);
-    border-bottom: 1px solid var(--mdac-line);
 }
 .mdac-review-person-fields dd {
     text-align: end;
@@ -1098,9 +1082,6 @@
 .mdac-review-group {
     padding-block: var(--space-12);
 }
-.mdac-review-group + .mdac-review-group {
-    border-top: 1px solid var(--mdac-line);
-}
 .mdac-review-group-heading {
     justify-content: space-between;
 }
@@ -1119,26 +1100,12 @@
     gap: var(--space-8) var(--space-12);
 }
 .mdac-review-page .mdac-review-dates {
-    position: relative;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: center;
     margin-bottom: var(--space-12);
     padding: var(--space-8) var(--space-12);
     border-radius: var(--space-4);
     background: var(--mdac-soft);
-}
-.mdac-review-dates > div:last-child {
-    grid-column: 3;
-}
-.mdac-review-dates::after {
-    content: '';
-    display: block;
-    width: 8px;
-    height: 8px;
-    grid-area: 1 / 2;
-    border-block-start: 1px solid var(--mdac-muted);
-    border-inline-end: 1px solid var(--mdac-muted);
-    transform: rotate(45deg);
 }
 .mdac-review-dates dd {
     font-size: var(--type-card-size);
@@ -1186,9 +1153,9 @@
     gap: var(--space-16);
     align-items: center;
     margin: var(--space-24) 0 0;
-    padding-block: var(--space-16);
-    border-block: 1px solid var(--mdac-line);
-    border-top: 2px solid var(--mdac-green);
+    padding: var(--space-16);
+    border-radius: var(--radius-md);
+    background: var(--mdac-soft);
 }
 .mdac-review-handoff p {
     margin-block: var(--space-4);
@@ -1215,7 +1182,6 @@
     flex-wrap: wrap;
     justify-content: space-between;
     margin-block-start: var(--space-8);
-    border-top: 1px solid var(--mdac-line);
 }
 .mdac-review-footer .mdac-navigation {
     margin: 0;
@@ -1243,9 +1209,6 @@
         flex-wrap: wrap;
         justify-content: flex-start;
         gap: var(--space-4) var(--space-8);
-    }
-    .mdac-review-page .mdac-steps li:not(:last-child)::after {
-        width: var(--space-12);
     }
     .mdac-review-page .mdac-heading {
         min-height: auto;
