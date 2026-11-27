@@ -1,5 +1,7 @@
+// organize-imports-ignore -- Keep ESLint type import grouping.
 import 'reflect-metadata';
 
+import type { StoreCommerceConfiguration } from '../types';
 import { ServiceUnavailableException } from '@nestjs/common';
 import {
     CurrencyCode,
@@ -11,7 +13,6 @@ import {
 import { StoreDomain } from '@vendure/store-domain-plugin';
 import type { PublicPageRequest, StorefrontPageData } from '@vendure/storefront-content-plugin';
 import { describe, expect, it, vi } from 'vitest';
-import type { StoreCommerceConfiguration } from '../types';
 
 import { StoreProfile } from '../entities/store-profile.entity';
 
