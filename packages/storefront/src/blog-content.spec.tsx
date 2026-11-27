@@ -108,7 +108,8 @@ describe('news blog server-renderable content', () => {
         };
         const listing = renderToStaticMarkup(<BlogContent language="en" page={data} />);
         expect(listing).toContain('href="/en/services"');
-        expect(listing).toContain('href="/en/blog/official-update?fromBlogList=en"');
+        expect(listing).toContain('href="/en/blog/official-update"');
+        expect(listing).not.toContain('fromBlogList=en');
         expect(listing).toContain('action="/en/blog"');
         expect(listing).toContain('aria-label="Article categories"');
         expect(listing).not.toContain('category=skills');
@@ -127,7 +128,8 @@ describe('news blog server-renderable content', () => {
         const input = { term: '合作', category: 'chatgpt', skip: 12 };
         const search = 'page=2&amp;term=%E5%90%88%E4%BD%9C&amp;category=chatgpt';
         const listing = renderToStaticMarkup(<BlogContent page={page} input={input} />);
-        expect(listing).toContain(`href="/zh/blog/official-update?${search}&amp;fromBlogList=zh"`);
+        expect(listing).toContain('href="/zh/blog/official-update"');
+        expect(listing).not.toContain('fromBlogList=zh');
         const ChineseDetail = renderToStaticMarkup(
             <BlogContent
                 input={{ ...input, fromBlogList: 'zh' }}
@@ -135,7 +137,8 @@ describe('news blog server-renderable content', () => {
             />,
         );
         expect(ChineseDetail).toContain(`href="/zh/blog?${search}"`);
-        expect(ChineseDetail).toContain(`href="/en/blog/official-update?${search}&amp;fromBlogList=zh"`);
+        expect(ChineseDetail).toContain('href="/en/blog/official-update"');
+        expect(ChineseDetail).not.toContain('fromBlogList=zh');
         const EnglishDetail = renderToStaticMarkup(
             <BlogContent
                 language="en"

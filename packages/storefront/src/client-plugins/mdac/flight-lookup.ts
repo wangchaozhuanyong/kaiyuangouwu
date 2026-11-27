@@ -30,6 +30,15 @@ export function isTicketFlightNumber(value: string) {
     return Boolean(match && Number(match[1]) > 0);
 }
 
+export function matchesScheduledArrival(flight: MdacFlight | null, input: MdacFlightSearch) {
+    return (
+        flight?.status === 'SCHEDULED' &&
+        flight.flightNumber === input.flightNumber &&
+        flight.effectiveArrivalDate === input.arrivalDate &&
+        flight.arrivalAirport === input.arrivalAirport
+    );
+}
+
 export async function requestMdacFlights(api: ShopApi, input: MdacFlightSearch, signal: AbortSignal) {
     const { mdacFlightLookup } = await api.request<{ mdacFlightLookup: MdacFlightResult }>(
         `query MdacFlightLookup($arrivalDate: String!, $arrivalAirport: String!, $flightNumber: String!) {

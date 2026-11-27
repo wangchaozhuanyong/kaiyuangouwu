@@ -8,12 +8,13 @@ import { type StorefrontLanguage } from '../../types';
 
 import {
     isTicketFlightNumber,
+    matchesScheduledArrival,
     type MdacFlight,
     type MdacFlightLookup,
     type MdacFlightSearch,
 } from './flight-lookup';
 import { MdacSelect } from './mdac-select';
-import { isIsoDate, malaysiaToday } from './model';
+import { isIsoDate, malaysiaToday, OFFICIAL_URL } from './model';
 
 export interface MdacFlightService {
     marketKey: string;
@@ -88,32 +89,36 @@ export function MdacFlightPicker({
         refetchOnReconnect: false,
     });
     const result = active && !query.isFetching && !query.isError ? query.data : undefined;
+    const flights =
+        result?.status === 'MATCHED'
+            ? result.flights.filter(
+                  flight => flight.status !== 'SCHEDULED' || matchesScheduledArrival(flight, input),
+              )
+            : [];
     function check() {
         onSelect(null);
         if (active) void query.refetch({ cancelRefetch: false });
         else setSubmitted(input);
     }
+    const unavailable =
+        (active && query.isError) || result?.status === 'UNAVAILABLE' || result?.status === 'NOT_CONFIGURED';
     let message = '';
     if (active && query.isFetching) {
         message = t('正在查询抵达航班…', 'Looking up arriving flights…');
-    } else if (
-        (active && query.isError) ||
-        result?.status === 'UNAVAILABLE' ||
-        result?.status === 'NOT_CONFIGURED'
-    ) {
+    } else if (unavailable) {
         message = t(
-            '暂时无法核验航班，可保留草稿后重试。',
-            'Flight verification is temporarily unavailable. Save your draft and try again.',
+            '暂时无法核验这个班次。可保留草稿，临近抵达时重试，或前往移民局官网登记。',
+            'This flight cannot be verified right now. Save your draft and try closer to arrival, or register on the official site.',
         );
-    } else if (result?.status === 'NO_MATCH') {
+    } else if (result?.status === 'NO_MATCH' || (result?.status === 'MATCHED' && !flights.length)) {
         message = t(
             '所选日期和机场未找到该航班，请核对机票。',
             'No match for this arrival date and airport. Check your ticket.',
         );
     } else if (result?.status === 'INVALID_INPUT') {
         message = t(
-            '请输入有效的机场和航班号。航班查询支持今天至未来 30 天。',
-            'Check the airport and flight number. Lookup is available today through the next 30 days.',
+            '请核对抵达日期、机场和机票上的航班号。较远日期的班次可能还未开放查询。',
+            'Check your arrival date, airport, and ticketed flight number. Flights further ahead may not be available yet.',
         );
     }
     return (
@@ -190,6 +195,16 @@ export function MdacFlightPicker({
                     {message}
                 </p>
             )}
+            {unavailable && !query.isFetching && (
+                <a
+                    className="mdac-link type-action"
+                    href={OFFICIAL_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    {t('打开移民局官方登记页', 'Open official registration')}
+                </a>
+            )}
             {selected && (
                 <p className="mdac-flight-confirmed type-label" role="status">
                     <Check size={16} aria-hidden="true" />
@@ -203,9 +218,9 @@ export function MdacFlightPicker({
                     </span>
                 </p>
             )}
-            {!selected && result?.status === 'MATCHED' && (
+            {!selected && flights.length > 0 && (
                 <ul className="mdac-flight-results">
-                    {result.flights.map(flight => {
+                    {flights.map(flight => {
                         const details = `${flight.departureAirport} → ${flight.arrivalAirport} · ${flight.effectiveArrivalDate} ${flight.effectiveArrivalTime}`;
                         const key = `${flight.operatingFlightNumber}-${flight.departureAirport}-${flight.scheduledArrivalDate}-${flight.scheduledArrivalTime}`;
                         const state =

@@ -212,6 +212,12 @@ export function BlogContent({
             ? (event: MouseEvent<HTMLAnchorElement>) => interceptContentNavigation(event, action)
             : undefined,
     });
+    // Keep crawler-visible hrefs canonical while preserving list return context on SPA navigation.
+    const articleLink = (slug: string, publicLanguage = language) =>
+        link(
+            routeHref({ name: 'blog-article', id: slug, publicLanguage }),
+            onNavigate && (() => onNavigate(routeHref(articleRoute(slug, publicLanguage)))),
+        );
     function renderPage(content: ReactNode) {
         const article = page.article;
         const backRoute = article
@@ -249,7 +255,7 @@ export function BlogContent({
     const card = (article: BlogPublishedArticle, isFeatured = false) => (
         <article className={isFeatured ? 'blog-feature' : 'blog-card'} key={article.id}>
             <a
-                {...link(routeHref(articleRoute(article.slug)))}
+                {...articleLink(article.slug)}
                 className="blog-cover"
                 data-image-kind={article.cover?.kind}
                 aria-label={t.readLabel + article.title}
@@ -259,9 +265,7 @@ export function BlogContent({
             <div className="blog-card-copy">
                 <ArticleLabels language={language} article={article} featured={isFeatured} />
                 <h2 className={isFeatured ? 'type-page' : 'type-section'}>
-                    <a {...link(routeHref(articleRoute(article.slug)))}>
-                        {article.skillProfile?.displayName ?? article.title}
-                    </a>
+                    <a {...articleLink(article.slug)}>{article.skillProfile?.displayName ?? article.title}</a>
                 </h2>
                 {article.skill && <p className="blog-skill-name type-meta">{article.skill.name}</p>}
                 <p className="blog-card-summary type-body">
@@ -285,10 +289,7 @@ export function BlogContent({
                 <div className={`blog-card-footer${article.skill ? ' blog-card-footer-skill' : ''}`}>
                     <DateLine language={language} article={article} />
                     <div className="blog-card-actions">
-                        <a
-                            className="blog-read-link type-action"
-                            {...link(routeHref(articleRoute(article.slug)))}
-                        >
+                        <a className="blog-read-link type-action" {...articleLink(article.slug)}>
                             {article.skill ? t.use : t.read} <ArrowRight aria-hidden="true" />
                         </a>
                         {article.skill && (
@@ -341,7 +342,7 @@ export function BlogContent({
                             {otherEdition && (
                                 <a
                                     className="blog-read-link type-label"
-                                    {...link(routeHref(articleRoute(article.slug, otherLanguage)))}
+                                    {...articleLink(article.slug, otherLanguage)}
                                     hrefLang={otherLanguage === 'zh' ? 'zh-CN' : 'en'}
                                     aria-label={t.switchEdition}
                                 >
