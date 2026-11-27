@@ -190,6 +190,125 @@ describe('public Product structured data', () => {
         expect(product).toHaveProperty('aggregateRating.reviewCount', 1);
         expect(product).not.toHaveProperty('offers');
     });
+
+    it('includes zero-cost instant shippingDetails and non-returnable policy for digital products', async () => {
+        const test = productFixture({ sku: 'AI-TOPUP-100' });
+        (test.page.product as any).variants[0].customFields = {
+            fulfillmentType: 'digital',
+            digitalDeliveryMode: 'auto_card',
+        };
+        (test.page.product as any).variants[0].autoCardAvailableStock = 5;
+
+        const { seo } = await test.service.enrich(test.ctx, test.host, test.page);
+        const product = seo?.structuredData.find(item => item['@type'] === 'Product');
+
+        expect(product).toMatchObject({
+            offers: {
+                '@type': 'Offer',
+                price: '125.00',
+                priceCurrency: 'MYR',
+                availability: 'https://schema.org/InStock',
+                shippingDetails: {
+                    '@type': 'OfferShippingDetails',
+                    shippingRate: {
+                        '@type': 'MonetaryAmount',
+                        value: '0.00',
+                        currency: 'MYR',
+                    },
+                    shippingDestination: {
+                        '@type': 'DefinedRegion',
+                        addressCountry: 'MY',
+                    },
+                    deliveryTime: {
+                        '@type': 'ShippingDeliveryTime',
+                        handlingTime: {
+                            '@type': 'QuantitativeValue',
+                            minValue: 0,
+                            maxValue: 0,
+                            unitCode: 'DAY',
+                        },
+                        transitTime: {
+                            '@type': 'QuantitativeValue',
+                            minValue: 0,
+                            maxValue: 0,
+                            unitCode: 'DAY',
+                        },
+                    },
+                },
+                hasMerchantReturnPolicy: {
+                    '@type': 'MerchantReturnPolicy',
+                    applicableCountry: 'MY',
+                    returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted',
+                },
+            },
+        });
+    });
+
+    it('uses configured commerceSettings country for DIGITAL_ONLY stores and shipping rates for physical products', async () => {
+        const commerceSettings = {
+            get: vi.fn().mockResolvedValue({
+                countryCode: 'CN',
+                shippingSourceCurrencyCode: CurrencyCode.MYR,
+                baseRate: 1500,
+                freeShippingThreshold: 20000,
+                estimateMinDays: 2,
+                estimateMaxDays: 5,
+            }),
+        };
+        const test = productFixture({ sku: 'DIGITAL-STORE' });
+        const service = new StorefrontPublicSeoService(
+            test.seo as never,
+            {
+                getRepository: vi.fn((_ctx: RequestContext, entity: unknown) => {
+                    if (entity === StoreDomain) return test.domains;
+                    if (entity === StoreProfile) return test.profiles;
+                    if (entity === Product)
+                        return {
+                            findOne: vi.fn().mockResolvedValue({
+                                channels: [{ id: test.ctx.channelId }],
+                                translations: [],
+                            }),
+                        };
+                    throw new Error('Unexpected repository');
+                }),
+            } as never,
+            test.pages as never,
+            test.content as never,
+            { get: () => test.reviews } as never,
+            test.sharing as never,
+            commerceSettings as never,
+        );
+        (test.ctx.channel as any).customFields = { commerceMode: 'DIGITAL_ONLY' };
+        const digitalResult = await service.enrich(test.ctx, test.host, test.page);
+        const digitalProduct = digitalResult.seo?.structuredData.find(item => item['@type'] === 'Product');
+        expect(digitalProduct).toMatchObject({
+            offers: {
+                shippingDetails: {
+                    shippingRate: { value: '0.00', currency: 'MYR' },
+                    shippingDestination: { addressCountry: 'CN' },
+                },
+                hasMerchantReturnPolicy: {
+                    applicableCountry: 'CN',
+                    returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted',
+                },
+            },
+        });
+
+        (test.page.product as any).variants[0].customFields = { fulfillmentType: 'physical' };
+        const physicalResult = await service.enrich(test.ctx, test.host, test.page);
+        const physicalProduct = physicalResult.seo?.structuredData.find(item => item['@type'] === 'Product');
+        expect(physicalProduct).toMatchObject({
+            offers: {
+                shippingDetails: {
+                    shippingRate: { value: '15.00', currency: 'MYR' },
+                    shippingDestination: { addressCountry: 'CN' },
+                    deliveryTime: {
+                        transitTime: { minValue: 2, maxValue: 5, unitCode: 'DAY' },
+                    },
+                },
+            },
+        });
+    });
 });
 
 describe('request-local public SEO preparation', () => {

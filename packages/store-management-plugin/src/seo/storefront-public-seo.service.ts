@@ -29,9 +29,10 @@ import { In, IsNull, Not } from 'typeorm';
 
 import { StoreProfile } from '../entities/store-profile.entity';
 import { StorefrontPromotionService } from '../promotion/storefront-promotion.service';
+import { StoreCommerceSettingsService } from '../store-commerce-settings.service';
 import { StorefrontClosedError } from '../storefront-activation.service';
 import { StorefrontPublicPageService } from '../storefront-public-page.service';
-import { type StoreFlashSaleView } from '../types';
+import { type StoreCommerceConfiguration, type StoreFlashSaleView } from '../types';
 
 import { productReviewStructuredData } from './storefront-product-review-schema';
 import { resolvePromotionSeo } from './storefront-promotion-seo';
@@ -77,6 +78,98 @@ function publicProductSku(sku: string | undefined): string | undefined {
     // Google maps Product.sku to the merchant item ID (1–50 characters).
     // Keep the real SKU intact for inventory and omit incompatible values from JSON-LD.
     return sku && Array.from(sku).length <= 50 && !/[^\p{L}\p{N}_-]/u.test(sku) ? sku : undefined;
+}
+
+const CURRENCY_COUNTRY_FALLBACK: Record<string, string> = {
+    MYR: 'MY',
+    CNY: 'CN',
+    SGD: 'SG',
+    HKD: 'HK',
+    TWD: 'TW',
+    JPY: 'JP',
+    GBP: 'GB',
+    KRW: 'KR',
+    THB: 'TH',
+    IDR: 'ID',
+    VND: 'VN',
+    PHP: 'PH',
+    AUD: 'AU',
+    CAD: 'CA',
+};
+
+function resolveMerchantCountry(commerce: StoreCommerceConfiguration | null, currencyCode: string): string {
+    const configured = commerce?.countryCode?.trim().toUpperCase();
+    if (configured && /^[A-Z]{2}$/u.test(configured)) {
+        return configured;
+    }
+    return CURRENCY_COUNTRY_FALLBACK[currencyCode.toUpperCase()] ?? 'US';
+}
+
+function digitalShippingDetails(currencyCode: string, countryCode: string) {
+    return {
+        '@type': 'OfferShippingDetails',
+        shippingRate: {
+            '@type': 'MonetaryAmount',
+            value: '0.00',
+            currency: currencyCode,
+        },
+        shippingDestination: {
+            '@type': 'DefinedRegion',
+            addressCountry: countryCode,
+        },
+        deliveryTime: {
+            '@type': 'ShippingDeliveryTime',
+            handlingTime: {
+                '@type': 'QuantitativeValue',
+                minValue: 0,
+                maxValue: 0,
+                unitCode: 'DAY',
+            },
+            transitTime: {
+                '@type': 'QuantitativeValue',
+                minValue: 0,
+                maxValue: 0,
+                unitCode: 'DAY',
+            },
+        },
+    };
+}
+
+function physicalShippingDetails(
+    commerce: StoreCommerceConfiguration,
+    currencyCode: string,
+    countryCode: string,
+    offerPriceMinor: number,
+) {
+    const freeShipping =
+        commerce.freeShippingThreshold > 0 && offerPriceMinor >= commerce.freeShippingThreshold;
+    const rateMinor = freeShipping ? 0 : commerce.baseRate;
+    if (rateMinor > 0 && String(commerce.shippingSourceCurrencyCode) !== currencyCode) {
+        return undefined;
+    }
+    const minDays = Math.max(0, Math.trunc(commerce.estimateMinDays));
+    const maxDays = Math.max(minDays, Math.trunc(commerce.estimateMaxDays));
+    return {
+        '@type': 'OfferShippingDetails',
+        shippingRate: {
+            '@type': 'MonetaryAmount',
+            value: (rateMinor / 100).toFixed(2),
+            currency: currencyCode,
+        },
+        shippingDestination: {
+            '@type': 'DefinedRegion',
+            addressCountry: countryCode,
+        },
+        deliveryTime: {
+            '@type': 'ShippingDeliveryTime',
+            transitTime: {
+                '@type': 'QuantitativeValue',
+                minValue: minDays,
+                maxValue: maxDays,
+                unitCode: 'DAY',
+            },
+        },
+    };
 }
 
 function identity(request: PublicPageRequest, code: StorefrontSeoLanguage): StorefrontSeoIdentity {
@@ -147,6 +240,7 @@ export class StorefrontPublicSeoService {
         private readonly content: StorefrontContentService,
         private readonly moduleRef: ModuleRef,
         @Optional() private readonly promotion?: StorefrontPromotionService,
+        @Optional() private readonly commerceSettings?: StoreCommerceSettingsService,
     ) {}
 
     async primaryHost(ctx: RequestContext): Promise<string | null> {
@@ -342,16 +436,18 @@ export class StorefrontPublicSeoService {
                         String(item.productVariantId) === String(lowest?.id) &&
                         item.currencyCode === lowest?.currencyCode,
                 );
+            const offerPriceMinor = flashSaleItem?.salePrice ?? lowest?.priceWithTax ?? 0;
             const offers =
                 !quoteOnly && lowest
                     ? {
                           '@type': 'Offer',
-                          price: ((flashSaleItem?.salePrice ?? lowest.priceWithTax) / 100).toFixed(2),
+                          price: (offerPriceMinor / 100).toFixed(2),
                           priceCurrency: lowest.currencyCode,
                           availability: this.availability(lowest),
                           url: `${origin}/${code === 'zh_Hans' ? 'zh' : 'en'}${
                               canonicalPath ?? `/product?id=${encodeURIComponent(request.id)}`
                           }`,
+                          ...(await this.offerMerchantMetadata(ctx, lowest, offerPriceMinor)),
                       }
                     : undefined;
             const reviews = await this.productReviews(ctx, request.id);
@@ -681,6 +777,47 @@ export class StorefrontPublicSeoService {
         return stock == null || stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
     }
 
+    private async offerMerchantMetadata(
+        ctx: RequestContext,
+        variant: PublicProductDetail['variants'][number],
+        offerPriceMinor: number,
+    ): Promise<Record<string, unknown>> {
+        let commerce: StoreCommerceConfiguration | null = null;
+        if (this.commerceSettings) {
+            try {
+                commerce = await this.commerceSettings.get(ctx);
+            } catch {
+                Logger.warn(
+                    'Store commerce configuration is unavailable for Offer structured data',
+                    'StorefrontPublicSeoService',
+                );
+            }
+        }
+        const countryCode = resolveMerchantCountry(commerce, variant.currencyCode);
+        const fulfillmentType = variant.customFields?.fulfillmentType;
+        const channelCommerceMode = (ctx.channel?.customFields as { commerceMode?: string } | undefined)
+            ?.commerceMode;
+        const isDigital =
+            fulfillmentType === 'digital' ||
+            (fulfillmentType !== 'physical' && channelCommerceMode === 'DIGITAL_ONLY');
+
+        if (isDigital) {
+            return {
+                shippingDetails: digitalShippingDetails(variant.currencyCode, countryCode),
+                hasMerchantReturnPolicy: {
+                    '@type': 'MerchantReturnPolicy',
+                    applicableCountry: countryCode,
+                    returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted',
+                },
+            };
+        }
+
+        const shippingDetails = commerce
+            ? physicalShippingDetails(commerce, variant.currencyCode, countryCode, offerPriceMinor)
+            : undefined;
+        return shippingDetails ? { shippingDetails } : {};
+    }
+
     async robots(ctx: RequestContext) {
         const [configuration, primary, mode] = await Promise.all([
             this.seo.publishedConfiguration(ctx),
@@ -786,17 +923,16 @@ export class StorefrontPublicSeoService {
             } catch {
                 /* Optional plugin. */
             }
-            const blogPaths = blogReader
-                ? await blogReader.sitemap(ctx.copy({ languageCode: LanguageCode.zh_Hans }))
-                : [];
-            if (blogPaths.length)
-                requests.push(
-                    { kind: 'blog', input: {} },
-                    ...blogPaths.map(item => ({ kind: 'blog' as const, input: {}, id: item.slug })),
-                );
             for (const code of settings.enabledLanguages) {
                 const localizedCtx = ctx.copy({ languageCode: code as LanguageCode });
-                for (const request of requests) {
+                const blogPaths = blogReader ? await blogReader.sitemap(localizedCtx) : [];
+                const localizedRequests: PublicPageRequest[] = [...requests];
+                if (blogPaths.length)
+                    localizedRequests.push(
+                        { kind: 'blog', input: {} },
+                        ...blogPaths.map(item => ({ kind: 'blog' as const, input: {}, id: item.slug })),
+                    );
+                for (const request of localizedRequests) {
                     try {
                         const page = await this.enrich(
                             localizedCtx,
