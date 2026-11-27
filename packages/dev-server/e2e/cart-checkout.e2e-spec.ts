@@ -59,7 +59,10 @@ const localPayment = new PaymentMethodHandler({
     settlePayment: () => ({ success: true }),
 });
 const config = mergeConfig(testConfig(), {
-    authOptions: { requireVerification: false },
+    authOptions: {
+        requireVerification: false,
+        cookieOptions: { secret: 'cart-qa-cookie-signing-secret-not-for-production' },
+    },
     paymentOptions: { paymentMethodHandlers: [localPayment] },
     customFields: {
         Order: [

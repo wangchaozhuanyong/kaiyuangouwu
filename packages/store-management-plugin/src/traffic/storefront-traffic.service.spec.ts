@@ -89,12 +89,31 @@ describe('storefront traffic persistence', () => {
     });
     afterEach(async () => {
         vi.useRealTimers();
+        vi.unstubAllEnvs();
+        vi.unstubAllGlobals();
         await db?.destroy();
         if (manager) {
             await manager.query(`DROP DATABASE \`${database}\``);
             await manager.destroy();
             manager = undefined;
         }
+    });
+
+    it('forwards a recorded public page view only with the existing analytics consent', async () => {
+        vi.stubEnv(
+            'ID_WEBSITE_VISIT_INGEST_URL',
+            'https://id.example/api/id-business-v2/workspace-website-monitor/visits/ingest',
+        );
+        vi.stubEnv('ID_WEBSITE_VISIT_SIGNING_KEY', 'a'.repeat(64));
+        const send = vi.fn(() => Promise.resolve(new Response(null, { status: 200 })));
+        vi.stubGlobal('fetch', send);
+        const headers = { ...browser, host: 'shop.flashcast.com.my' };
+        const input = page();
+        await service.record(ctx(1, undefined, '203.0.113.10', { ...headers, cookie: '' }), input);
+        expect(send).not.toHaveBeenCalled();
+        await service.record(ctx(1, undefined, '203.0.113.10', headers), input);
+        await service.record(ctx(1, 'customer-a', '203.0.113.10', headers), { ...input, pageView: false });
+        expect(send).toHaveBeenCalledTimes(1);
     });
 
     it('counts concurrent retries once using the database constraint', async () => {

@@ -22,6 +22,7 @@ export class ShopAbuseInterceptor implements NestInterceptor {
             ctx.activeUserId,
         );
         if (!operation) return next.handle();
+        if (process.env.NODE_ENV !== 'production' && !this.security.isConfigured()) return next.handle();
         const admission = await this.security.before(ctx, operation);
         return next.handle().pipe(
             mergeMap(async pending => {

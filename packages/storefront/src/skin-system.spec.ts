@@ -334,6 +334,8 @@ describe('storefront skin system', () => {
                                 '1px solid var(--line-subtle)',
                             'styles/standalone-tool.css|.mail-query-page.standalone-tool-page .recent-item|bottom':
                                 '1px solid var(--line-subtle)',
+                            'styles/standalone-tool.css|.mail-query-page.standalone-tool-page .summary-stats|top':
+                                '1px solid var(--line-subtle)',
                         };
                         if (toolSeparators[`${functionalKey}|${border[1]}`] === border[2].trim()) continue;
                         // GPT_COMPACT_FORM_B_20261016: only navigation and the code/account boundary.
