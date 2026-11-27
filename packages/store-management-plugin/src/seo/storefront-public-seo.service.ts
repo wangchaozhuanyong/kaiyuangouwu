@@ -80,32 +80,7 @@ function publicProductSku(sku: string | undefined): string | undefined {
     return sku && Array.from(sku).length <= 50 && !/[^\p{L}\p{N}_-]/u.test(sku) ? sku : undefined;
 }
 
-const CURRENCY_COUNTRY_FALLBACK: Record<string, string> = {
-    MYR: 'MY',
-    CNY: 'CN',
-    SGD: 'SG',
-    HKD: 'HK',
-    TWD: 'TW',
-    JPY: 'JP',
-    GBP: 'GB',
-    KRW: 'KR',
-    THB: 'TH',
-    IDR: 'ID',
-    VND: 'VN',
-    PHP: 'PH',
-    AUD: 'AU',
-    CAD: 'CA',
-};
-
-function resolveMerchantCountry(commerce: StoreCommerceConfiguration | null, currencyCode: string): string {
-    const configured = commerce?.countryCode?.trim().toUpperCase();
-    if (configured && /^[A-Z]{2}$/u.test(configured)) {
-        return configured;
-    }
-    return CURRENCY_COUNTRY_FALLBACK[currencyCode.toUpperCase()] ?? 'US';
-}
-
-function digitalShippingDetails(currencyCode: string, countryCode: string) {
+function digitalShippingDetails(currencyCode: string, countryCode: string, maxHandlingDays: number) {
     return {
         '@type': 'OfferShippingDetails',
         shippingRate: {
@@ -122,7 +97,7 @@ function digitalShippingDetails(currencyCode: string, countryCode: string) {
             handlingTime: {
                 '@type': 'QuantitativeValue',
                 minValue: 0,
-                maxValue: 0,
+                maxValue: maxHandlingDays,
                 unitCode: 'DAY',
             },
             transitTime: {
@@ -141,19 +116,27 @@ function physicalShippingDetails(
     countryCode: string,
     offerPriceMinor: number,
 ) {
+    if (
+        !commerce.ready ||
+        commerce.shippingMethodId == null ||
+        String(commerce.shippingSourceCurrencyCode) !== currencyCode ||
+        commerce.blockedPostalPrefixes.trim()
+    ) {
+        return undefined;
+    }
     const freeShipping =
         commerce.freeShippingThreshold > 0 && offerPriceMinor >= commerce.freeShippingThreshold;
     const rateMinor = freeShipping ? 0 : commerce.baseRate;
-    if (rateMinor > 0 && String(commerce.shippingSourceCurrencyCode) !== currencyCode) {
-        return undefined;
-    }
+    const rateWithTax = commerce.shippingPriceIncludesTax
+        ? rateMinor
+        : Math.round(rateMinor * (1 + commerce.shippingTaxRate / 100));
     const minDays = Math.max(0, Math.trunc(commerce.estimateMinDays));
     const maxDays = Math.max(minDays, Math.trunc(commerce.estimateMaxDays));
     return {
         '@type': 'OfferShippingDetails',
         shippingRate: {
             '@type': 'MonetaryAmount',
-            value: (rateMinor / 100).toFixed(2),
+            value: (rateWithTax / 100).toFixed(2),
             currency: currencyCode,
         },
         shippingDestination: {
@@ -170,6 +153,29 @@ function physicalShippingDetails(
             },
         },
     };
+}
+
+function merchantReturnPolicy(
+    policy: PublicProductDetail['customFields']['refundPolicy'] | undefined,
+    applicableCountry: string,
+) {
+    switch (policy) {
+        case 'NON_REFUNDABLE':
+            return {
+                '@type': 'MerchantReturnPolicy',
+                applicableCountry,
+                returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted',
+            };
+        case 'SEVEN_DAY_NO_REASON':
+            return {
+                '@type': 'MerchantReturnPolicy',
+                applicableCountry,
+                returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+                merchantReturnDays: 7,
+            };
+        default:
+            return undefined;
+    }
 }
 
 function identity(request: PublicPageRequest, code: StorefrontSeoLanguage): StorefrontSeoIdentity {
@@ -447,7 +453,7 @@ export class StorefrontPublicSeoService {
                           url: `${origin}/${code === 'zh_Hans' ? 'zh' : 'en'}${
                               canonicalPath ?? `/product?id=${encodeURIComponent(request.id)}`
                           }`,
-                          ...(await this.offerMerchantMetadata(ctx, lowest, offerPriceMinor)),
+                          ...(await this.offerMerchantMetadata(ctx, product, lowest, offerPriceMinor)),
                       }
                     : undefined;
             const reviews = await this.productReviews(ctx, request.id);
@@ -779,6 +785,7 @@ export class StorefrontPublicSeoService {
 
     private async offerMerchantMetadata(
         ctx: RequestContext,
+        product: PublicProductDetail,
         variant: PublicProductDetail['variants'][number],
         offerPriceMinor: number,
     ): Promise<Record<string, unknown>> {
@@ -793,29 +800,28 @@ export class StorefrontPublicSeoService {
                 );
             }
         }
-        const countryCode = resolveMerchantCountry(commerce, variant.currencyCode);
-        const fulfillmentType = variant.customFields?.fulfillmentType;
-        const channelCommerceMode = (ctx.channel?.customFields as { commerceMode?: string } | undefined)
-            ?.commerceMode;
-        const isDigital =
-            fulfillmentType === 'digital' ||
-            (fulfillmentType !== 'physical' && channelCommerceMode === 'DIGITAL_ONLY');
-
-        if (isDigital) {
-            return {
-                shippingDetails: digitalShippingDetails(variant.currencyCode, countryCode),
-                hasMerchantReturnPolicy: {
-                    '@type': 'MerchantReturnPolicy',
-                    applicableCountry: countryCode,
-                    returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted',
-                },
-            };
+        const countryCode = commerce?.countryCode?.trim().toUpperCase();
+        if (!commerce || !countryCode || !/^[A-Z]{2}$/u.test(countryCode)) {
+            return {};
         }
+        const deliveryMode = variant.customFields?.digitalDeliveryMode;
+        const automaticDelivery = deliveryMode === 'auto_card' || deliveryMode === 'file_download';
+        // Merchant listing handling times use whole days; round the manual SLA up.
+        const manualMinutes = Math.max(5, Math.trunc(product.customFields?.manualDeliverySlaMinutes ?? 1440));
+        const shippingDetails =
+            variant.customFields?.fulfillmentType === 'digital'
+                ? digitalShippingDetails(
+                      variant.currencyCode,
+                      countryCode,
+                      automaticDelivery ? 0 : Math.ceil(manualMinutes / 1440),
+                  )
+                : physicalShippingDetails(commerce, variant.currencyCode, countryCode, offerPriceMinor);
+        const returnPolicy = merchantReturnPolicy(product.customFields?.refundPolicy, countryCode);
 
-        const shippingDetails = commerce
-            ? physicalShippingDetails(commerce, variant.currencyCode, countryCode, offerPriceMinor)
-            : undefined;
-        return shippingDetails ? { shippingDetails } : {};
+        return {
+            ...(shippingDetails && { shippingDetails }),
+            ...(returnPolicy && { hasMerchantReturnPolicy: returnPolicy }),
+        };
     }
 
     async robots(ctx: RequestContext) {
@@ -923,16 +929,17 @@ export class StorefrontPublicSeoService {
             } catch {
                 /* Optional plugin. */
             }
+            const blogPaths = blogReader
+                ? await blogReader.sitemap(ctx.copy({ languageCode: LanguageCode.zh_Hans }))
+                : [];
+            if (blogPaths.length)
+                requests.push(
+                    { kind: 'blog', input: {} },
+                    ...blogPaths.map(item => ({ kind: 'blog' as const, input: {}, id: item.slug })),
+                );
             for (const code of settings.enabledLanguages) {
                 const localizedCtx = ctx.copy({ languageCode: code as LanguageCode });
-                const blogPaths = blogReader ? await blogReader.sitemap(localizedCtx) : [];
-                const localizedRequests: PublicPageRequest[] = [...requests];
-                if (blogPaths.length)
-                    localizedRequests.push(
-                        { kind: 'blog', input: {} },
-                        ...blogPaths.map(item => ({ kind: 'blog' as const, input: {}, id: item.slug })),
-                    );
-                for (const request of localizedRequests) {
+                for (const request of requests) {
                     try {
                         const page = await this.enrich(
                             localizedCtx,

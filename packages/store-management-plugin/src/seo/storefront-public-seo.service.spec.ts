@@ -1,17 +1,24 @@
 import 'reflect-metadata';
 
 import { ServiceUnavailableException } from '@nestjs/common';
-import { CurrencyCode, LanguageCode, Product, type RequestContext } from '@vendure/core';
+import {
+    CurrencyCode,
+    LanguageCode,
+    Product,
+    type PublicProductDetail,
+    type RequestContext,
+} from '@vendure/core';
 import { StoreDomain } from '@vendure/store-domain-plugin';
 import type { PublicPageRequest, StorefrontPageData } from '@vendure/storefront-content-plugin';
 import { describe, expect, it, vi } from 'vitest';
+import type { StoreCommerceConfiguration } from '../types';
 
 import { StoreProfile } from '../entities/store-profile.entity';
 
 import { StorefrontPublicSeoService, type StorefrontPublicSeoInitial } from './storefront-public-seo.service';
 import { defaultStorefrontSeoSettings, publicStorefrontSeoSettings } from './storefront-seo.contract';
 
-function fixture(languageCode = LanguageCode.en) {
+function fixture(languageCode = LanguageCode.en, commerce?: Partial<StoreCommerceConfiguration>) {
     const host = 'synthetic-store.invalid';
     const ctx = {
         channelId: 'synthetic-channel',
@@ -62,6 +69,7 @@ function fixture(languageCode = LanguageCode.en) {
         content as never,
         { get: () => reviews } as never,
         sharing as never,
+        commerce ? ({ get: vi.fn().mockResolvedValue(commerce) } as never) : undefined,
     );
     const page = {
         schemaVersion: 1,
@@ -107,27 +115,36 @@ function productFixture({
     sku = 'FC-BED_01',
     quoteOnly = false,
     currencyCode = CurrencyCode.MYR,
+    productFields = {},
+    variantFields = {},
+    autoCardAvailableStock,
+    commerce,
 }: {
     sku?: string;
     quoteOnly?: boolean;
     currencyCode?: CurrencyCode;
+    productFields?: Partial<PublicProductDetail['customFields']>;
+    variantFields?: Partial<PublicProductDetail['variants'][number]['customFields']>;
+    autoCardAvailableStock?: number;
+    commerce?: Partial<StoreCommerceConfiguration>;
 } = {}) {
-    const test = fixture();
+    const test = fixture(LanguageCode.en, commerce);
     test.page.request = { kind: 'product', id: 'fixture-bed' };
     test.page.product = {
         id: 'fixture-bed',
         name: 'Bed',
         description: 'Solid wood bed.',
         featuredAsset: { preview: '/assets/bed.webp' },
-        customFields: { pricingMode: quoteOnly ? 'QUOTE_ONLY' : null },
+        customFields: { pricingMode: quoteOnly ? 'QUOTE_ONLY' : null, ...productFields },
         variants: [
             {
                 id: 'fixture-variant',
                 sku,
                 priceWithTax: 12500,
                 currencyCode,
-                customFields: {},
+                customFields: variantFields,
                 saleableStockLevel: 2,
+                autoCardAvailableStock,
             },
         ],
     };
@@ -191,13 +208,14 @@ describe('public Product structured data', () => {
         expect(product).not.toHaveProperty('offers');
     });
 
-    it('includes zero-cost instant shippingDetails and non-returnable policy for digital products', async () => {
-        const test = productFixture({ sku: 'AI-TOPUP-100' });
-        (test.page.product as any).variants[0].customFields = {
-            fulfillmentType: 'digital',
-            digitalDeliveryMode: 'auto_card',
-        };
-        (test.page.product as any).variants[0].autoCardAvailableStock = 5;
+    it('uses immediate delivery and the configured non-refundable policy for an automatic digital product', async () => {
+        const test = productFixture({
+            sku: 'AI-TOPUP-100',
+            productFields: { refundPolicy: 'NON_REFUNDABLE' },
+            variantFields: { fulfillmentType: 'digital', digitalDeliveryMode: 'auto_card' },
+            autoCardAvailableStock: 5,
+            commerce: { countryCode: 'MY' },
+        });
 
         const { seo } = await test.service.enrich(test.ctx, test.host, test.page);
         const product = seo?.structuredData.find(item => item['@type'] === 'Product');
@@ -244,63 +262,53 @@ describe('public Product structured data', () => {
         });
     });
 
-    it('uses configured commerceSettings country for DIGITAL_ONLY stores and shipping rates for physical products', async () => {
-        const commerceSettings = {
-            get: vi.fn().mockResolvedValue({
-                countryCode: 'CN',
-                shippingSourceCurrencyCode: CurrencyCode.MYR,
-                baseRate: 1500,
-                freeShippingThreshold: 20000,
-                estimateMinDays: 2,
-                estimateMaxDays: 5,
-            }),
-        };
-        const test = productFixture({ sku: 'DIGITAL-STORE' });
-        const service = new StorefrontPublicSeoService(
-            test.seo as never,
-            {
-                getRepository: vi.fn((_ctx: RequestContext, entity: unknown) => {
-                    if (entity === StoreDomain) return test.domains;
-                    if (entity === StoreProfile) return test.profiles;
-                    if (entity === Product)
-                        return {
-                            findOne: vi.fn().mockResolvedValue({
-                                channels: [{ id: test.ctx.channelId }],
-                                translations: [],
-                            }),
-                        };
-                    throw new Error('Unexpected repository');
-                }),
-            } as never,
-            test.pages as never,
-            test.content as never,
-            { get: () => test.reviews } as never,
-            test.sharing as never,
-            commerceSettings as never,
-        );
-        (test.ctx.channel as any).customFields = { commerceMode: 'DIGITAL_ONLY' };
-        const digitalResult = await service.enrich(test.ctx, test.host, test.page);
-        const digitalProduct = digitalResult.seo?.structuredData.find(item => item['@type'] === 'Product');
-        expect(digitalProduct).toMatchObject({
+    it('uses the configured country, seven-day return window and manual service SLA', async () => {
+        const test = productFixture({
+            productFields: { refundPolicy: 'SEVEN_DAY_NO_REASON', manualDeliverySlaMinutes: 1441 },
+            variantFields: { fulfillmentType: 'digital', digitalDeliveryMode: 'manual_service' },
+            commerce: { countryCode: 'CN' },
+        });
+        const { seo } = await test.service.enrich(test.ctx, test.host, test.page);
+        expect(seo?.structuredData.find(item => item['@type'] === 'Product')).toMatchObject({
             offers: {
                 shippingDetails: {
                     shippingRate: { value: '0.00', currency: 'MYR' },
                     shippingDestination: { addressCountry: 'CN' },
+                    deliveryTime: { handlingTime: { minValue: 0, maxValue: 2, unitCode: 'DAY' } },
                 },
                 hasMerchantReturnPolicy: {
                     applicableCountry: 'CN',
-                    returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted',
+                    returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+                    merchantReturnDays: 7,
                 },
             },
         });
+    });
 
-        (test.page.product as any).variants[0].customFields = { fulfillmentType: 'physical' };
-        const physicalResult = await service.enrich(test.ctx, test.host, test.page);
-        const physicalProduct = physicalResult.seo?.structuredData.find(item => item['@type'] === 'Product');
+    it('uses the configured tax-inclusive shipping charge and omits fixed returns for merchant review', async () => {
+        const test = productFixture({
+            productFields: { refundPolicy: 'MERCHANT_REVIEW' },
+            variantFields: { fulfillmentType: 'physical' },
+            commerce: {
+                countryCode: 'CN',
+                ready: true,
+                shippingMethodId: 'standard',
+                shippingSourceCurrencyCode: CurrencyCode.MYR,
+                blockedPostalPrefixes: '',
+                baseRate: 1500,
+                freeShippingThreshold: 20000,
+                shippingPriceIncludesTax: false,
+                shippingTaxRate: 10,
+                estimateMinDays: 2,
+                estimateMaxDays: 5,
+            },
+        });
+        const { seo } = await test.service.enrich(test.ctx, test.host, test.page);
+        const physicalProduct = seo?.structuredData.find(item => item['@type'] === 'Product');
         expect(physicalProduct).toMatchObject({
             offers: {
                 shippingDetails: {
-                    shippingRate: { value: '15.00', currency: 'MYR' },
+                    shippingRate: { value: '16.50', currency: 'MYR' },
                     shippingDestination: { addressCountry: 'CN' },
                     deliveryTime: {
                         transitTime: { minValue: 2, maxValue: 5, unitCode: 'DAY' },
@@ -308,6 +316,43 @@ describe('public Product structured data', () => {
                 },
             },
         });
+        expect(physicalProduct).not.toHaveProperty('offers.hasMerchantReturnPolicy');
+    });
+
+    it.each([
+        { shippingSourceCurrencyCode: CurrencyCode.USD },
+        { blockedPostalPrefixes: '98' },
+        { shippingMethodId: null },
+    ])('omits a physical shipping claim when the checkout rate is unverified (%j)', async overrides => {
+        const test = productFixture({
+            variantFields: { fulfillmentType: 'physical' },
+            commerce: {
+                countryCode: 'MY',
+                ready: true,
+                shippingMethodId: 'standard',
+                shippingSourceCurrencyCode: CurrencyCode.MYR,
+                blockedPostalPrefixes: '',
+                baseRate: 1500,
+                freeShippingThreshold: 10000,
+                ...overrides,
+            },
+        });
+        const { seo } = await test.service.enrich(test.ctx, test.host, test.page);
+        expect(seo?.structuredData.find(item => item['@type'] === 'Product')).not.toHaveProperty(
+            'offers.shippingDetails',
+        );
+    });
+
+    it('keeps the price without inventing a country for shipping or returns', async () => {
+        const test = productFixture({
+            productFields: { refundPolicy: 'NON_REFUNDABLE' },
+            variantFields: { fulfillmentType: 'digital' },
+        });
+        const { seo } = await test.service.enrich(test.ctx, test.host, test.page);
+        const product = seo?.structuredData.find(item => item['@type'] === 'Product');
+        expect(product).toHaveProperty('offers.price', '125.00');
+        expect(product).not.toHaveProperty('offers.shippingDetails');
+        expect(product).not.toHaveProperty('offers.hasMerchantReturnPolicy');
     });
 });
 
