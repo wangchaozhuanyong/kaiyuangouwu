@@ -29,9 +29,10 @@ import { In, IsNull, Not } from 'typeorm';
 
 import { StoreProfile } from '../entities/store-profile.entity';
 import { StorefrontPromotionService } from '../promotion/storefront-promotion.service';
+import { StoreCommerceSettingsService } from '../store-commerce-settings.service';
 import { StorefrontClosedError } from '../storefront-activation.service';
 import { StorefrontPublicPageService } from '../storefront-public-page.service';
-import { type StoreFlashSaleView } from '../types';
+import { type StoreCommerceConfiguration, type StoreFlashSaleView } from '../types';
 
 import { productReviewStructuredData } from './storefront-product-review-schema';
 import { resolvePromotionSeo } from './storefront-promotion-seo';
@@ -77,6 +78,104 @@ function publicProductSku(sku: string | undefined): string | undefined {
     // Google maps Product.sku to the merchant item ID (1–50 characters).
     // Keep the real SKU intact for inventory and omit incompatible values from JSON-LD.
     return sku && Array.from(sku).length <= 50 && !/[^\p{L}\p{N}_-]/u.test(sku) ? sku : undefined;
+}
+
+function digitalShippingDetails(currencyCode: string, countryCode: string, maxHandlingDays: number) {
+    return {
+        '@type': 'OfferShippingDetails',
+        shippingRate: {
+            '@type': 'MonetaryAmount',
+            value: '0.00',
+            currency: currencyCode,
+        },
+        shippingDestination: {
+            '@type': 'DefinedRegion',
+            addressCountry: countryCode,
+        },
+        deliveryTime: {
+            '@type': 'ShippingDeliveryTime',
+            handlingTime: {
+                '@type': 'QuantitativeValue',
+                minValue: 0,
+                maxValue: maxHandlingDays,
+                unitCode: 'DAY',
+            },
+            transitTime: {
+                '@type': 'QuantitativeValue',
+                minValue: 0,
+                maxValue: 0,
+                unitCode: 'DAY',
+            },
+        },
+    };
+}
+
+function physicalShippingDetails(
+    commerce: StoreCommerceConfiguration,
+    currencyCode: string,
+    countryCode: string,
+    offerPriceMinor: number,
+) {
+    if (
+        !commerce.ready ||
+        commerce.shippingMethodId == null ||
+        String(commerce.shippingSourceCurrencyCode) !== currencyCode ||
+        commerce.blockedPostalPrefixes.trim()
+    ) {
+        return undefined;
+    }
+    const freeShipping =
+        commerce.freeShippingThreshold > 0 && offerPriceMinor >= commerce.freeShippingThreshold;
+    const rateMinor = freeShipping ? 0 : commerce.baseRate;
+    const rateWithTax = commerce.shippingPriceIncludesTax
+        ? rateMinor
+        : Math.round(rateMinor * (1 + commerce.shippingTaxRate / 100));
+    const minDays = Math.max(0, Math.trunc(commerce.estimateMinDays));
+    const maxDays = Math.max(minDays, Math.trunc(commerce.estimateMaxDays));
+    return {
+        '@type': 'OfferShippingDetails',
+        shippingRate: {
+            '@type': 'MonetaryAmount',
+            value: (rateWithTax / 100).toFixed(2),
+            currency: currencyCode,
+        },
+        shippingDestination: {
+            '@type': 'DefinedRegion',
+            addressCountry: countryCode,
+        },
+        deliveryTime: {
+            '@type': 'ShippingDeliveryTime',
+            transitTime: {
+                '@type': 'QuantitativeValue',
+                minValue: minDays,
+                maxValue: maxDays,
+                unitCode: 'DAY',
+            },
+        },
+    };
+}
+
+function merchantReturnPolicy(
+    policy: PublicProductDetail['customFields']['refundPolicy'] | undefined,
+    applicableCountry: string,
+) {
+    switch (policy) {
+        case 'NON_REFUNDABLE':
+            return {
+                '@type': 'MerchantReturnPolicy',
+                applicableCountry,
+                returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted',
+            };
+        case 'SEVEN_DAY_NO_REASON':
+            return {
+                '@type': 'MerchantReturnPolicy',
+                applicableCountry,
+                returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+                merchantReturnDays: 7,
+            };
+        default:
+            return undefined;
+    }
 }
 
 function identity(request: PublicPageRequest, code: StorefrontSeoLanguage): StorefrontSeoIdentity {
@@ -147,6 +246,7 @@ export class StorefrontPublicSeoService {
         private readonly content: StorefrontContentService,
         private readonly moduleRef: ModuleRef,
         @Optional() private readonly promotion?: StorefrontPromotionService,
+        @Optional() private readonly commerceSettings?: StoreCommerceSettingsService,
     ) {}
 
     async primaryHost(ctx: RequestContext): Promise<string | null> {
@@ -342,16 +442,18 @@ export class StorefrontPublicSeoService {
                         String(item.productVariantId) === String(lowest?.id) &&
                         item.currencyCode === lowest?.currencyCode,
                 );
+            const offerPriceMinor = flashSaleItem?.salePrice ?? lowest?.priceWithTax ?? 0;
             const offers =
                 !quoteOnly && lowest
                     ? {
                           '@type': 'Offer',
-                          price: ((flashSaleItem?.salePrice ?? lowest.priceWithTax) / 100).toFixed(2),
+                          price: (offerPriceMinor / 100).toFixed(2),
                           priceCurrency: lowest.currencyCode,
                           availability: this.availability(lowest),
                           url: `${origin}/${code === 'zh_Hans' ? 'zh' : 'en'}${
                               canonicalPath ?? `/product?id=${encodeURIComponent(request.id)}`
                           }`,
+                          ...(await this.offerMerchantMetadata(ctx, product, lowest, offerPriceMinor)),
                       }
                     : undefined;
             const reviews = await this.productReviews(ctx, request.id);
@@ -679,6 +781,47 @@ export class StorefrontPublicSeoService {
             variant.customFields.digitalDeliveryMode === 'auto_card';
         const stock = autoCard ? (variant.autoCardAvailableStock ?? 0) : variant.saleableStockLevel;
         return stock == null || stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
+    }
+
+    private async offerMerchantMetadata(
+        ctx: RequestContext,
+        product: PublicProductDetail,
+        variant: PublicProductDetail['variants'][number],
+        offerPriceMinor: number,
+    ): Promise<Record<string, unknown>> {
+        let commerce: StoreCommerceConfiguration | null = null;
+        if (this.commerceSettings) {
+            try {
+                commerce = await this.commerceSettings.get(ctx);
+            } catch {
+                Logger.warn(
+                    'Store commerce configuration is unavailable for Offer structured data',
+                    'StorefrontPublicSeoService',
+                );
+            }
+        }
+        const countryCode = commerce?.countryCode?.trim().toUpperCase();
+        if (!commerce || !countryCode || !/^[A-Z]{2}$/u.test(countryCode)) {
+            return {};
+        }
+        const deliveryMode = variant.customFields?.digitalDeliveryMode;
+        const automaticDelivery = deliveryMode === 'auto_card' || deliveryMode === 'file_download';
+        // Merchant listing handling times use whole days; round the manual SLA up.
+        const manualMinutes = Math.max(5, Math.trunc(product.customFields?.manualDeliverySlaMinutes ?? 1440));
+        const shippingDetails =
+            variant.customFields?.fulfillmentType === 'digital'
+                ? digitalShippingDetails(
+                      variant.currencyCode,
+                      countryCode,
+                      automaticDelivery ? 0 : Math.ceil(manualMinutes / 1440),
+                  )
+                : physicalShippingDetails(commerce, variant.currencyCode, countryCode, offerPriceMinor);
+        const returnPolicy = merchantReturnPolicy(product.customFields?.refundPolicy, countryCode);
+
+        return {
+            ...(shippingDetails && { shippingDetails }),
+            ...(returnPolicy && { hasMerchantReturnPolicy: returnPolicy }),
+        };
     }
 
     async robots(ctx: RequestContext) {
