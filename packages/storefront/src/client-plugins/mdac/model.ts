@@ -12,6 +12,7 @@ export interface Draft {
     version: 1;
     travelers: Fields[];
     shared: Fields;
+    departureSource?: 'suggested' | 'manual';
 }
 export const STORAGE_KEY = 'storefront-mdac:v1';
 // A single non-personal value replaces the entire draft atomically on opt-out.
@@ -116,7 +117,11 @@ export function emptyDraft(): Draft {
 export function validDraft(value: unknown): value is Draft {
     if (!value || typeof value !== 'object') return false;
     const draft = value as Draft;
-    if (Object.keys(draft).some(key => !['version', 'travelers', 'shared'].includes(key))) return false;
+    if (
+        Object.keys(draft).some(key => !['version', 'travelers', 'shared', 'departureSource'].includes(key))
+    ) {
+        return false;
+    }
     const validFields = (fields: unknown, allowed: Field[]) =>
         Boolean(
             fields &&
@@ -131,6 +136,9 @@ export function validDraft(value: unknown): value is Draft {
         );
     return (
         draft.version === 1 &&
+        (draft.departureSource === undefined ||
+            draft.departureSource === 'suggested' ||
+            draft.departureSource === 'manual') &&
         Array.isArray(draft.travelers) &&
         draft.travelers.length > 0 &&
         draft.travelers.length <= 20 &&

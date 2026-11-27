@@ -28,7 +28,7 @@ const provider = vi.fn<typeof fetch>();
 
 function requestUrl(call: number): URL {
     const url = provider.mock.calls[call][0];
-    if (typeof url !== 'string') throw new Error('Expected an OAG URL string');
+    if (typeof url !== 'string') throw new Error('Expected a provider URL string');
     return new URL(url);
 }
 
@@ -39,6 +39,7 @@ function page(data: unknown[], paging: { totalCount?: number; next?: string } = 
 beforeEach(() => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-12-01T16:15:00Z'));
     vi.stubEnv('STOREFRONT_MDAC_FLIGHT_LOOKUP_ENABLED', 'true');
+    vi.stubEnv('STOREFRONT_MDAC_FLIGHTBYTE_API_KEY', undefined);
     vi.stubEnv('STOREFRONT_MDAC_OAG_SUBSCRIPTION_KEY', 'fixture-only');
     vi.stubGlobal('fetch', provider);
     provider.mockReset();
@@ -257,5 +258,277 @@ describe('MDAC OAG lookup', () => {
             resolver.mdacFlightLookup({ req: { ip } } as never, input.arrivalDate, 'KUL', 'MH123'),
         ).rejects.toBeInstanceOf(ForbiddenError);
         expect(service.lookup).not.toHaveBeenCalled();
+    });
+});
+
+describe('MDAC FlightByte lookup', () => {
+    const missingFlight = () => Response.json({ statusCode: 404, error: 'Not Found' }, { status: 404 });
+    const snapshot = {
+        carrierCode: 'MH',
+        flightNumber: '123',
+        date: input.arrivalDate,
+        operatedBy: null,
+        codeshares: [],
+        departure: { airport: { iata: 'CAN', country: { code: 'CN' } } },
+        arrival: {
+            airport: { iata: 'KUL', country: { code: 'MY' } },
+            times: { scheduledGate: { local: '2026-12-02T20:40:00.000' } },
+        },
+        status: { phase: 'scheduled' },
+    };
+
+    beforeEach(() => vi.stubEnv('STOREFRONT_MDAC_FLIGHTBYTE_API_KEY', 'flightbyte-fixture-only'));
+
+    it('selects FlightByte with an explicitly enabled key and makes a bounded request for the selected airport', async () => {
+        provider.mockResolvedValueOnce(Response.json(snapshot));
+        expect(isMdacFlightLookupConfigured()).toBe(true);
+        expect(await new MdacFlightLookupService().lookup(input, ip)).toMatchObject({
+            status: 'MATCHED',
+            flights: [{ flightNumber: 'MH123', arrivalAirport: 'KUL', status: 'SCHEDULED' }],
+        });
+        expect(requestUrl(0).origin).toBe('https://api.flightbyte.dev');
+        expect(requestUrl(0).pathname).toBe('/v1/flights/MH/123/2026-12-02');
+        expect(requestUrl(0).searchParams.toString()).toBe('destination=KUL');
+        expect(provider.mock.calls[0][1]).toMatchObject({
+            redirect: 'error',
+            headers: { 'x-api-key': 'flightbyte-fixture-only' },
+        });
+        expect(provider).toHaveBeenCalledTimes(1);
+    });
+
+    it('accepts codeshare ticket numbers and retains the traveller’s number', async () => {
+        provider.mockResolvedValueOnce(
+            Response.json({
+                ...snapshot,
+                carrierCode: 'SQ',
+                flightNumber: '142',
+                codeshares: [{ carrier: 'MH', flightNumber: '123' }],
+                departure: { airport: { iata: 'SIN', country: { code: 'SG' } } },
+            }),
+        );
+        expect(
+            await new MdacFlightLookupService().lookup({ ...input, flightNumber: ' mh 0123 ' }, ip),
+        ).toMatchObject({
+            status: 'MATCHED',
+            flights: [{ flightNumber: 'MH0123', operatingFlightNumber: 'SQ142', departureAirport: 'SIN' }],
+        });
+    });
+
+    it('identifies the operating number on a matching marketing-flight snapshot', async () => {
+        provider.mockResolvedValueOnce(
+            Response.json({
+                ...snapshot,
+                operatedBy: 'Singapore Airlines',
+                codeshares: [{ carrier: 'SQ', flightNumber: '142', name: 'Singapore Airlines' }],
+            }),
+        );
+        expect(await new MdacFlightLookupService().lookup(input, ip)).toMatchObject({
+            status: 'MATCHED',
+            flights: [{ flightNumber: 'MH123', operatingFlightNumber: 'SQ142' }],
+        });
+    });
+
+    it('checks the previous departure day for a same-number overnight flight and accepts an actual arrival', async () => {
+        provider
+            .mockResolvedValueOnce(
+                Response.json({
+                    ...snapshot,
+                    arrival: {
+                        ...snapshot.arrival,
+                        times: { scheduledGate: { local: '2026-12-03T05:00:00.000' } },
+                    },
+                }),
+            )
+            .mockResolvedValueOnce(
+                Response.json({
+                    ...snapshot,
+                    date: '2026-12-01',
+                    arrival: {
+                        ...snapshot.arrival,
+                        times: {
+                            scheduledGate: { local: '2026-12-02T05:00:00.000' },
+                            actualRunway: { local: '2026-12-02T04:43:00.000' },
+                            actualGate: { local: '2026-12-02T04:57:00.000' },
+                        },
+                    },
+                    status: { phase: 'arrived' },
+                }),
+            );
+        expect(await new MdacFlightLookupService().lookup(input, ip)).toEqual({
+            status: 'MATCHED',
+            flights: [
+                {
+                    flightNumber: 'MH123',
+                    operatingFlightNumber: 'MH123',
+                    departureAirport: 'CAN',
+                    arrivalAirport: 'KUL',
+                    scheduledArrivalDate: '2026-12-02',
+                    scheduledArrivalTime: '05:00',
+                    effectiveArrivalDate: '2026-12-02',
+                    effectiveArrivalTime: '04:43',
+                    status: 'SCHEDULED',
+                },
+            ],
+        });
+        expect(requestUrl(1).pathname).toBe('/v1/flights/MH/123/2026-12-01');
+    });
+
+    it('keeps a real-format Kuala Lumpur arrival timestamp on the local day and expires it at local midnight', async () => {
+        const localInput = { arrivalDate: '2026-11-21', arrivalAirport: 'KUL', flightNumber: 'ID7262' };
+        vi.mocked(Date.now).mockReturnValue(Date.parse('2026-11-21T15:59:59.999Z'));
+        provider.mockResolvedValueOnce(
+            Response.json({
+                ...snapshot,
+                carrierCode: 'ID',
+                flightNumber: '7262',
+                date: '2026-11-21',
+                departure: { airport: { iata: 'KNO', country: { code: 'ID' } } },
+                arrival: {
+                    ...snapshot.arrival,
+                    times: {
+                        scheduledGate: { local: '2026-11-21T19:50:00.000' },
+                        actualRunway: { local: '2026-11-21T20:08:00.000', utc: '2026-11-21T12:08:00.000Z' },
+                    },
+                },
+                status: { phase: 'arrived' },
+            }),
+        );
+        const service = new MdacFlightLookupService();
+        expect(await service.lookup(localInput, ip)).toMatchObject({
+            status: 'MATCHED',
+            flights: [{ effectiveArrivalDate: '2026-11-21', effectiveArrivalTime: '20:08' }],
+        });
+        vi.mocked(Date.now).mockReturnValue(Date.parse('2026-11-21T16:00:00Z'));
+        expect(await service.lookup(localInput, ip)).toEqual({ status: 'INVALID_INPUT', flights: [] });
+        expect(provider).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        { arrival: { ...snapshot.arrival, airport: { iata: 'PEN', country: { code: 'MY' } } } },
+        { departure: { airport: { iata: 'PEN', country: { code: 'MY' } } } },
+        { carrierCode: 'SQ' },
+    ])('cannot verify a conflicting upstream snapshot %j', async changes => {
+        provider
+            .mockResolvedValueOnce(Response.json({ ...snapshot, ...changes }))
+            .mockResolvedValueOnce(missingFlight());
+        expect(await new MdacFlightLookupService().lookup(input, ip)).toEqual({
+            status: 'NO_MATCH',
+            flights: [],
+        });
+    });
+
+    it('reports ordinary 404s as no match within coverage but does not spend requests beyond the window', async () => {
+        provider.mockImplementation(() => Promise.resolve(missingFlight()));
+        const service = new MdacFlightLookupService();
+        expect(await service.lookup({ ...input, arrivalDate: '2026-12-05' }, ip)).toEqual({
+            status: 'UNAVAILABLE',
+            flights: [],
+        });
+        expect(provider).not.toHaveBeenCalled();
+        expect(await service.lookup(input, ip)).toEqual({ status: 'NO_MATCH', flights: [] });
+        expect(provider).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([
+        [{ status: { phase: 'cancelled' } }, 'CANCELLED', 'KUL'],
+        [{ status: { phase: 'diverted' }, diverted: { airport: { iata: 'PEN' } } }, 'DIVERTED', 'PEN'],
+    ])(
+        'reports operational disruptions without treating the flight as available',
+        async (changes, status, airport) => {
+            provider.mockResolvedValueOnce(Response.json({ ...snapshot, ...changes }));
+            expect(await new MdacFlightLookupService().lookup(input, ip)).toMatchObject({
+                status: 'MATCHED',
+                flights: [{ status, arrivalAirport: airport }],
+            });
+        },
+    );
+
+    it('reports an arrival shifted to another day after checking for an exact overnight match', async () => {
+        provider
+            .mockResolvedValueOnce(
+                Response.json({
+                    ...snapshot,
+                    arrival: {
+                        ...snapshot.arrival,
+                        times: {
+                            ...snapshot.arrival.times,
+                            estimatedRunway: { local: '2026-12-03T00:25:00.000' },
+                        },
+                    },
+                    status: { phase: 'en_route' },
+                }),
+            )
+            .mockResolvedValueOnce(missingFlight());
+        expect(await new MdacFlightLookupService().lookup(input, ip)).toMatchObject({
+            status: 'MATCHED',
+            flights: [{ status: 'ARRIVAL_CHANGED', effectiveArrivalDate: '2026-12-03' }],
+        });
+    });
+
+    it('deduplicates simultaneous and recent equivalent lookups without changing ticket formatting', async () => {
+        provider.mockResolvedValueOnce(Response.json(snapshot));
+        const service = new MdacFlightLookupService();
+        const [first, second] = await Promise.all([
+            service.lookup(input, ip),
+            service.lookup({ ...input, flightNumber: 'MH0123' }, '192.0.2.2'),
+        ]);
+        expect(first.flights[0]?.flightNumber).toBe('MH123');
+        expect(second.flights[0]?.flightNumber).toBe('MH0123');
+        expect(await service.lookup(input, ip)).toEqual(first);
+        expect(provider).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not query a second date or another route during the upstream quota cooldown', async () => {
+        provider
+            .mockResolvedValueOnce(new Response(null, { status: 429, headers: { 'Retry-After': '300' } }))
+            .mockResolvedValueOnce(Response.json(snapshot));
+        const service = new MdacFlightLookupService();
+        expect(await service.lookup(input, ip)).toEqual({ status: 'UNAVAILABLE', flights: [] });
+        expect(await service.lookup({ ...input, arrivalAirport: 'PEN' }, ip)).toEqual({
+            status: 'UNAVAILABLE',
+            flights: [],
+        });
+        expect(provider).toHaveBeenCalledTimes(1);
+        vi.mocked(Date.now).mockReturnValue(Date.parse('2026-12-01T16:20:01Z'));
+        expect((await service.lookup(input, ip)).status).toBe('MATCHED');
+        expect(provider).toHaveBeenCalledTimes(2);
+    });
+
+    it('serves a match on the final quota request and waits for the documented reset before looking up again', async () => {
+        const reset = Date.now() + 120_000;
+        provider
+            .mockResolvedValueOnce(
+                Response.json(snapshot, {
+                    headers: {
+                        'X-RateLimit-Remaining-Month': '0',
+                        'X-RateLimit-Reset-Month': String(reset / 1000),
+                    },
+                }),
+            )
+            .mockResolvedValueOnce(Response.json(snapshot));
+        const service = new MdacFlightLookupService();
+        expect((await service.lookup(input, ip)).status).toBe('MATCHED');
+        expect((await service.lookup(input, ip)).status).toBe('MATCHED');
+        expect((await service.lookup({ ...input, flightNumber: 'MH456' }, ip)).status).toBe('UNAVAILABLE');
+        expect(provider).toHaveBeenCalledTimes(1);
+        vi.mocked(Date.now).mockReturnValue(reset + 1);
+        expect((await service.lookup(input, ip)).status).toBe('MATCHED');
+        expect(provider).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([
+        () => new Response(null, { status: 401 }),
+        () => new Response('<h1>Not found</h1>', { status: 404 }),
+        () => Response.json({ statusCode: 502 }, { status: 404 }),
+        () => new Response(null, { status: 503 }),
+        () => Response.json({ ...snapshot, status: { phase: 'unknown' } }),
+        () => Response.json({ ...snapshot, arrival: { ...snapshot.arrival, times: {} } }),
+    ])('keeps provider errors or incomplete records unavailable', async upstream => {
+        provider.mockResolvedValueOnce(upstream());
+        expect(await new MdacFlightLookupService().lookup(input, ip)).toEqual({
+            status: 'UNAVAILABLE',
+            flights: [],
+        });
+        expect(provider).toHaveBeenCalledTimes(1);
     });
 });
