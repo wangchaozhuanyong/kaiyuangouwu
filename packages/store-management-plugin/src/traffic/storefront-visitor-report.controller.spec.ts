@@ -16,11 +16,13 @@ const channels = [
     ['moyaoai.com', 'moyao-ai', 15],
     ['shop.flashcast.com.my', 'flashcast-mall', 16],
 ] as const;
+const siteConfiguration = Object.fromEntries(channels.map(([site, code]) => [site, code]));
 
 beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(now);
     vi.stubEnv('ID_STOREFRONT_VISITOR_REPORT_TOKEN', token);
+    vi.stubEnv('ID_STOREFRONT_VISITOR_REPORT_SITES', JSON.stringify(siteConfiguration));
 });
 afterEach(() => {
     vi.useRealTimers();
@@ -70,6 +72,44 @@ it('only accepts a configured dedicated bearer on GET', async () => {
     expect(reply.status).toHaveBeenLastCalledWith(404);
     expect(reply.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
     expect(resolveRoute).not.toHaveBeenCalled();
+});
+
+it('keeps the report closed when the production site map is missing or invalid', async () => {
+    const { request, reply, resolveRoute } = fixture();
+    for (const configuration of [
+        undefined,
+        '',
+        '{',
+        'null',
+        '[]',
+        '{}',
+        JSON.stringify({ ...siteConfiguration, 'extra.example': 'extra-channel' }),
+        JSON.stringify({ 'MOYAOAI.COM': 'moyao-ai' }),
+        JSON.stringify({ 'moyaoai.com.': 'moyao-ai' }),
+        JSON.stringify({ 'moyaoai.com:443': 'moyao-ai' }),
+        JSON.stringify({ 'https://moyaoai.com': 'moyao-ai' }),
+        JSON.stringify({ '192.0.2.1': 'moyao-ai' }),
+        JSON.stringify({ 'moyaoai.com': 2 }),
+        JSON.stringify({ 'moyaoai.com': ' ' }),
+        JSON.stringify({ 'moyaoai.com': 'moyao-ai\n' }),
+        JSON.stringify({ 'moyaoai.com': 'moyao-ai', 'damatong.net': 'moyao-ai' }),
+    ]) {
+        vi.stubEnv('ID_STOREFRONT_VISITOR_REPORT_SITES', configuration);
+        await request(complete);
+        expect(reply.status).toHaveBeenLastCalledWith(404);
+        expect(reply.json).toHaveBeenLastCalledWith({ error: 'not_found' });
+    }
+    expect(resolveRoute).not.toHaveBeenCalled();
+});
+
+it('permits only the domains explicitly configured for this integration', async () => {
+    const { request, reply, resolveRoute } = fixture();
+    vi.stubEnv('ID_STOREFRONT_VISITOR_REPORT_SITES', JSON.stringify({ 'moyaoai.com': 'moyao-ai' }));
+    await request({ ...complete, site: 'damatong.net' });
+    expect(reply.status).toHaveBeenLastCalledWith(400);
+    expect(resolveRoute).not.toHaveBeenCalled();
+    await request(complete);
+    expect(reply.status).toHaveBeenLastCalledWith(200);
 });
 
 it.each(channels)('reads only the verified channel of %s', async (site, code, id) => {

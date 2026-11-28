@@ -117,9 +117,15 @@ Shop API 的共享安全预算使用应用的 `req.ip`。`location = /shop-api` 
 
 ### ID 系统的商城访客报表
 
-ID 系统通过 Console 的 HTTPS 入口 `GET /api/storefront/visitors` 读取商城访客计数。启用前，在现有 Vendure API 运行时的私有配置中设置 `ID_STOREFRONT_VISITOR_REPORT_TOKEN`，并将同一个独立的 64 位小写十六进制令牌配置到 ID 系统的商城访客报表。请求只有授权标头携带令牌，URL 仅包含 `site`、`from`、`to`。Nginx 用专用上游标头传递该凭据。未配置令牌时入口返回 404。
+ID 系统通过 Console 的 HTTPS 入口 `GET /api/storefront/visitors` 读取商城访客计数。启用前，在现有 Vendure API 运行时的私有配置中设置 `ID_STOREFRONT_VISITOR_REPORT_TOKEN`，并将同一个独立的 64 位小写十六进制令牌配置到 ID 系统的商城访客报表。请求只有授权标头携带令牌，URL 仅包含 `site`、`from`、`to`。Nginx 用专用上游标头传递该凭据。
 
-查询只接受三个正式商城域名，先核对当前启用的域名与店铺绑定。日期按 UTC 自然日最多查询 30 天，结束日期不能晚于当天。返回区间及每日访客计数，沿用已同意分析的商城流量及既有跨日访客标识。没有可用标识时返回 `null`，查询区间含缺少标识的历史浏览记录时标记 `hasUnidentifiedViews`。
+在同一份运行时配置中，用非机密变量 `ID_STOREFRONT_VISITOR_REPORT_SITES` 声明一至三个小写商城域名及预期的 Channel 代码。正式配置为：
+
+```sh
+ID_STOREFRONT_VISITOR_REPORT_SITES='{"damatong.net":"美宜佳","moyaoai.com":"moyao-ai","shop.flashcast.com.my":"flashcast-mall"}'
+```
+
+令牌或域名映射缺失、格式无效时入口返回 404。查询仅接受已配置域名，并核对其启用状态及店铺绑定。日期按 UTC 自然日最多查询 30 天，结束日期不能晚于当天。返回区间及每日访客计数，沿用已同意分析的商城流量及既有跨日访客标识。没有可用标识时返回 `null`，查询区间含缺少标识的历史浏览记录时标记 `hasUnidentifiedViews`。
 
 跟随现有运行时与 Nginx 发布流程核对 HTTPS 路由、未授权拒绝、三个店铺的只读结果和响应缓存头。
 

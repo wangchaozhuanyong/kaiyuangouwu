@@ -1,16 +1,11 @@
 import { Controller, Get, Inject, Req, Res } from '@nestjs/common';
 import { ChannelNotFoundError, ChannelService } from '@vendure/core';
-import { StoreDomainService } from '@vendure/store-domain-plugin';
+import { normalizeDomain, StoreDomainService } from '@vendure/store-domain-plugin';
 import type { Request, Response } from 'express';
 import { timingSafeEqual } from 'node:crypto';
 
 import { StorefrontTrafficService } from './storefront-traffic.service';
 
-const channelsBySite = new Map([
-    ['damatong.net', '美宜佳'],
-    ['moyaoai.com', 'moyao-ai'],
-    ['shop.flashcast.com.my', 'flashcast-mall'],
-]);
 const tokenPattern = /^[a-f0-9]{64}$/u;
 const dayMs = 86_400_000;
 
@@ -31,7 +26,8 @@ export class StorefrontVisitorReportController {
             return;
         }
         const configuredToken = process.env.ID_STOREFRONT_VISITOR_REPORT_TOKEN;
-        if (!configuredToken || !tokenPattern.test(configuredToken)) {
+        const channelsBySite = configuredSites(process.env.ID_STOREFRONT_VISITOR_REPORT_SITES);
+        if (!configuredToken || !tokenPattern.test(configuredToken) || !channelsBySite) {
             res.status(404).json({ error: 'not_found' });
             return;
         }
@@ -89,6 +85,37 @@ export class StorefrontVisitorReportController {
             }
             res.status(503).json({ error: 'report_unavailable' });
         }
+    }
+}
+
+function configuredSites(raw: string | undefined): Map<string, string> | undefined {
+    if (!raw || raw.length > 4096) return;
+    try {
+        const configured: unknown = JSON.parse(raw);
+        if (!configured || typeof configured !== 'object' || Array.isArray(configured)) return;
+        const entries = Object.entries(configured);
+        if (entries.length < 1 || entries.length > 3) return;
+
+        const sites = new Map<string, string>();
+        const codes = new Set<string>();
+        for (const [host, code] of entries) {
+            if (
+                normalizeDomain(host) !== host ||
+                typeof code !== 'string' ||
+                !code ||
+                code.length > 255 ||
+                code !== code.trim() ||
+                /\p{C}/u.test(code) ||
+                codes.has(code)
+            ) {
+                return;
+            }
+            sites.set(host, code);
+            codes.add(code);
+        }
+        return sites;
+    } catch {
+        return;
     }
 }
 
