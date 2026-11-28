@@ -155,6 +155,59 @@ export const shopApiExtensions = gql`
         flights: [MdacFlight!]!
     }
 
+    enum MdacSubmissionStatus {
+        QUEUED
+        RUNNING
+        DONE
+        FAILED
+        MANUAL
+    }
+
+    type MdacSubmission {
+        id: ID!
+        status: MdacSubmissionStatus!
+        referenceNo: String
+        pin: String
+        attempts: Int!
+        lastError: String
+        submittedAt: DateTime
+        receiptAvailable: Boolean!
+        waitingForWindow: Boolean!
+        travelerName: String!
+        arrivalDate: String!
+    }
+
+    type MdacSubmissionReceipt {
+        fileName: String!
+        mimeType: String!
+        base64: String!
+    }
+
+    input MdacSubmissionInput {
+        language: String
+        name: String!
+        passNo: String!
+        nationality: String!
+        pob: String!
+        dob: String!
+        sex: String!
+        passExpDte: String!
+        email: String!
+        region: String!
+        mobile: String!
+        arrDt: String!
+        depDt: String!
+        vesselNm: String!
+        trvlMode: String!
+        embark: String!
+        accommodationStay: String!
+        accommodationAddress1: String!
+        accommodationAddress2: String
+        accommodationState: String!
+        accommodationPostcode: String!
+        accommodationCity: String!
+    }
+
     extend type Query {
         storefrontVisualPreset: StorefrontVisualPreset!
         storefrontContent: [StorefrontContentBlock!]!
@@ -164,6 +217,12 @@ export const shopApiExtensions = gql`
             arrivalAirport: String!
             flightNumber: String!
         ): MdacFlightLookupResult!
+        mdacSubmission(id: ID!): MdacSubmission
+        mdacSubmissionReceipt(id: ID!): MdacSubmissionReceipt
+    }
+
+    extend type Mutation {
+        createMdacSubmission(input: MdacSubmissionInput!): MdacSubmission!
     }
 `;
 
@@ -173,6 +232,35 @@ export const adminApiExtensions = gql`
         titleZh: String!
         titleEn: String!
         limit: Int!
+    }
+
+    enum MdacAdminSubmissionStatus {
+        QUEUED
+        RUNNING
+        DONE
+        FAILED
+        MANUAL
+    }
+
+    type MdacAdminSubmission {
+        id: ID!
+        status: MdacAdminSubmissionStatus!
+        travelerName: String!
+        passportNo: String!
+        arrivalDate: String!
+        attempts: Int!
+        referenceNo: String
+        pin: String
+        lastError: String
+        submittedAt: DateTime
+        receiptAvailable: Boolean!
+        waitingForWindow: Boolean!
+        createdAt: DateTime!
+    }
+
+    type MdacAdminSubmissionList {
+        items: [MdacAdminSubmission!]!
+        totalItems: Int!
     }
 
     ${commonTypes}
@@ -334,6 +422,7 @@ export const adminApiExtensions = gql`
         storefrontContentBlock(id: ID!): StorefrontContentBlock
         storefrontContentSettings: StorefrontContentSettings!
         storefrontAuthConfiguration: StorefrontAuthConfiguration!
+        mdacSubmissions(status: MdacAdminSubmissionStatus, limit: Int): MdacAdminSubmissionList!
     }
 
     input UpdateStorefrontVisualPresetInput {
@@ -344,6 +433,8 @@ export const adminApiExtensions = gql`
     }
 
     extend type Mutation {
+        retryMdacSubmission(id: ID!): MdacAdminSubmission!
+        cancelMdacSubmission(id: ID!): MdacAdminSubmission!
         updateStorefrontPersonalDataExportEnabled(enabled: Boolean!): Boolean!
         updateStorefrontAccountRecommendations(
             input: UpdateStorefrontAccountRecommendationsInput!

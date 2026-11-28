@@ -15,7 +15,7 @@ import {
     UserMinus,
     UserRound,
 } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type ChangeEvent, type ComponentProps, type FormEvent } from 'react';
 
 import { useDesktopLayout } from '../../desktop-layout';
 import { Sheet, Subpage, SubpageBody } from '../../storefront-ui/page-shell';
@@ -53,6 +53,7 @@ import {
     type Fields,
 } from './model';
 import { MdacReviewBoard } from './review-board';
+import { MdacSubmitPanel } from './submit-panel';
 
 const lodgingAddressFields = lodgingFields.slice(1);
 const stateNamesZh: Record<string, string> = {
@@ -103,11 +104,13 @@ export function MdacPage({
     onBack,
     storeName,
     flightService,
+    submissionService,
 }: {
     language: StorefrontLanguage;
     onBack?: () => void;
     storeName?: string;
     flightService?: MdacFlightService;
+    submissionService?: ComponentProps<typeof MdacSubmitPanel>['service'];
 }) {
     const [chosenLanguage, setChosenLanguage] = useState<StorefrontLanguage>();
     const language = chosenLanguage ?? initialLanguage;
@@ -1244,8 +1247,8 @@ export function MdacPage({
                                     </h2>
                                     <p className="type-helper">
                                         {t(
-                                            '请在移民局官网逐位完成验证并提交。可保留此页，对照填写。',
-                                            'Verify and submit each traveler on the official site. Keep this page open to refer to their details.',
+                                            '核对完成后由本站服务逐位提交到移民局登记页，并把官方回执取回给你。也可自行打开官网填写。',
+                                            'After review, our service submits each traveler and returns the receipt. You can also fill it yourself.',
                                         )}
                                     </p>
                                     <label className="mdac-check type-label">
@@ -1267,14 +1270,24 @@ export function MdacPage({
                                     </label>
                                 </div>
                                 <a
-                                    className="mdac-primary type-action"
+                                    className="secondary-action type-action"
                                     href={OFFICIAL_URL}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                 >
-                                    {t('打开官方登记页', 'Open official registration')}
+                                    {t('打开官方登记页手动填写', 'Open the official form')}
                                     <ArrowUpRight size={17} aria-hidden="true" />
                                 </a>
+                            </section>
+                            <section className="mdac-block">
+                                <MdacSubmitPanel
+                                    language={language}
+                                    service={submissionService}
+                                    travelers={draft.travelers}
+                                    shared={tripValues}
+                                    scope={typeof window === 'undefined' ? 'mdac' : window.location.hostname}
+                                    disabled={!confirmedTrip}
+                                />
                             </section>
                             <details className="mdac-export-options">
                                 <summary className="type-label">

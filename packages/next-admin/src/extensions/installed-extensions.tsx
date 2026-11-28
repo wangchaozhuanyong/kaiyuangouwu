@@ -807,8 +807,7 @@ const TaxFreeAddressModule = lazy(() =>
     import('../pages/Plugins/TaxFreeAddressModule').then(module => ({
         default: module.TaxFreeAddressModule,
     })),
-);
-defineNextAdminExtension({
+);defineNextAdminExtension({
     id: 'tax-free-address-dashboard-plugin',
     routes: [
         {
@@ -818,6 +817,25 @@ defineNextAdminExtension({
             component: TaxFreeAddressModule,
             permissions: ['SuperAdmin'],
             navItem: { label: '免税地址管理', sectionId: 'plugins', order: 76 },
+        },
+    ],
+});
+
+const MdacSubmissionsModule = lazy(() =>
+    import('../pages/Plugins/MdacSubmissionsModule').then(module => ({
+        default: module.MdacSubmissionsModule,
+    })),
+);
+defineNextAdminExtension({
+    id: 'mdac-submissions-dashboard-plugin',
+    routes: [
+        {
+            id: 'mdac-submissions',
+            path: '/plugins/mdac-submissions',
+            title: '入境卡提交',
+            component: MdacSubmissionsModule,
+            permissions: ['SuperAdmin'],
+            navItem: { label: '入境卡提交', sectionId: 'plugins', order: 77 },
         },
     ],
 });

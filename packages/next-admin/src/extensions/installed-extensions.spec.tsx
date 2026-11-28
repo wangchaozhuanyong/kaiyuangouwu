@@ -47,6 +47,7 @@ describe('installed next-admin extensions', () => {
             'gpt-recharge-dashboard-plugin',
             'news-blog-dashboard-plugin',
             'tax-free-address-dashboard-plugin',
+            'mdac-submissions-dashboard-plugin',
         ]);
     });
 
@@ -68,7 +69,7 @@ describe('installed next-admin extensions', () => {
 
     it('provides unique routes plus the plugin navigation entries', () => {
         const routes = getNextAdminExtensionRoutes();
-        expect(routes).toHaveLength(36 + STANDALONE_ADMIN_PAGES.length);
+        expect(routes).toHaveLength(37 + STANDALONE_ADMIN_PAGES.length);
         expect(new Set(routes.map(route => route.id)).size).toBe(routes.length);
         expect(new Set(routes.map(route => route.path)).size).toBe(routes.length);
         expect(routes).toContainEqual(
@@ -109,6 +110,7 @@ describe('installed next-admin extensions', () => {
             '/plugins/gpt-recharge',
             '/plugins/news-blog',
             '/plugins/tax-free-address',
+            '/plugins/mdac-submissions',
             ...STANDALONE_ADMIN_PAGES.filter(page => page.section === 'plugins').map(page => page.path),
         ]);
         expect(getNextAdminExtensionNavItems('plugins')).toContainEqual(

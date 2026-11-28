@@ -10,6 +10,9 @@ import { StorefrontContentItem } from './entities/storefront-content-item.entity
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
 import { MdacFlightLookupShopResolver } from './mdac-flight-lookup.resolver';
 import { MdacFlightLookupService } from './mdac-flight-lookup.service';
+import { MdacSubmissionAdminResolver } from './mdac-submission/mdac-submission.admin-resolver';
+import { MdacSubmissionShopResolver } from './mdac-submission/mdac-submission.resolver';
+import { MdacSubmissionService } from './mdac-submission/mdac-submission.service';
 import { accountRecommendationSettingsError } from './shared/account-recommendation-settings';
 import {
     STOREFRONT_ACCOUNT_SETTINGS_NAMESPACE,
@@ -46,6 +49,7 @@ import { StorefrontVisualPresetService } from './storefront-visual-preset.servic
         StorefrontAuthSettingsService,
         StorefrontAccountSettingsService,
         MdacFlightLookupService,
+        MdacSubmissionService,
     ],
     configuration: config => {
         config.authOptions.customPermissions.push(storefrontContentPermission);
@@ -133,7 +137,7 @@ import { StorefrontVisualPresetService } from './storefront-visual-preset.servic
     },
     adminApiExtensions: {
         schema: adminApiExtensions,
-        resolvers: [StorefrontContentAdminResolver, StorefrontVisualPresetAdminResolver],
+        resolvers: [StorefrontContentAdminResolver, StorefrontVisualPresetAdminResolver, MdacSubmissionAdminResolver],
     },
     shopApiExtensions: {
         schema: shopApiExtensions,
@@ -141,6 +145,7 @@ import { StorefrontVisualPresetService } from './storefront-visual-preset.servic
             StorefrontContentShopResolver,
             StorefrontVisualPresetShopResolver,
             MdacFlightLookupShopResolver,
+            MdacSubmissionShopResolver,
         ],
     },
     compatibility: '^3.7.0',

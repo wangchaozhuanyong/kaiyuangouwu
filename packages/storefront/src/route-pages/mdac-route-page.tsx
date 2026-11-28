@@ -1,6 +1,11 @@
 import { lazyRouteComponent, useRouter } from '@tanstack/react-router';
 
 import { requestMdacFlights } from '../client-plugins/mdac/flight-lookup';
+import {
+    createMdacSubmission,
+    readMdacSubmission,
+    readMdacSubmissionReceipt,
+} from '../client-plugins/mdac/mdac-submission';
 import { usePageRouteCommit } from '../page-readiness';
 import { storefrontQueryKeys } from '../query-client';
 import { storefrontErrorMessage } from '../storefront-errors';
@@ -74,6 +79,13 @@ export function MdacRoutePage() {
                       }
                     : undefined
             }
+            submissionService={{
+                create: input => createMdacSubmission(runtime.api, input),
+                status: (id, signal) =>
+                    readMdacSubmission(runtime.api, id, signal ?? new AbortController().signal),
+                receipt: (id, signal) =>
+                    readMdacSubmissionReceipt(runtime.api, id, signal ?? new AbortController().signal),
+            }}
         />
     );
 }
