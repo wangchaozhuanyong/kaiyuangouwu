@@ -5,6 +5,7 @@ const { execFileSync, spawnSync } = require('node:child_process');
 const { createRequire } = require('node:module');
 const { readFileSync, mkdirSync, writeFileSync } = require('node:fs');
 const path = require('node:path');
+const { gzipSync } = require('node:zlib');
 
 function decodeRequest(raw) {
     assert.ok(Buffer.byteLength(raw, 'utf8') <= 45000, 'Editorial request too large');
@@ -36,6 +37,51 @@ async function importEditorial(writer, cache, ctx, payload) {
     await cache.invalidate(ctx.channelId);
     return receipt;
 }
+async function inspectSkillArticles(articleRepository, channelId) {
+    const rows = await articleRepository.find({
+        where: [
+            { channelId, publishedCategory: 'skills' },
+            { channelId, publishedCategory: '' },
+        ],
+        select: {
+            id: true,
+            slug: true,
+            version: true,
+            state: true,
+            publishedAt: true,
+            publishedJson: true,
+            draftJson: true,
+        },
+        order: { publishedAt: 'DESC', id: 'DESC' },
+    });
+    return rows.flatMap(row => {
+        // Withdrawal clears the public snapshot. The saved draft keeps its verified Skill identity.
+        const snapshot = JSON.parse(row.publishedJson ?? row.draftJson);
+        if (snapshot.category !== 'skills') return [];
+        const { name, identity, repository, repositoryId, directoryUrl, sourceCommit } = snapshot.skill;
+        return [
+            {
+                id: String(row.id),
+                slug: row.slug,
+                version: row.version,
+                state: row.state,
+                publishedAt: row.publishedAt?.toISOString() ?? null,
+                title: row.publishedJson ? snapshot.title : undefined,
+                skill: { name, identity, repository, repositoryId, directoryUrl, sourceCommit },
+                hasProfile: Boolean(snapshot.skillProfile),
+            },
+        ];
+    });
+}
+
+function encodeInspection(result) {
+    const data = gzipSync(JSON.stringify(result)).toString('base64');
+    // SSM truncates StandardOutputContent at 24,000 characters. Leave room for the receipt prefix.
+    const json = JSON.stringify({ encoding: 'gzip-base64', data });
+    assert.ok(json.length <= 23000, 'Skill inventory is too large for the SSM receipt');
+    return json;
+}
+
 async function worker(request) {
     // All credentials remain inside the existing runtime. Never return its environment.
     const runtime = createRequire(path.join(process.cwd(), 'package.json'));
@@ -75,10 +121,6 @@ async function worker(request) {
             .findOneByOrFail({ channelId: channel.id });
         assert.equal(settings.enabled, true, 'MOYAO blog disabled');
         if (request.mode === 'inspect') {
-            const rows = await connection.getRepository(ctx, plugin.BlogArticle).find({
-                where: { channelId: channel.id, publishedCategory: 'skills' },
-                order: { publishedAt: 'DESC' },
-            });
             return {
                 schemaVersion: 1,
                 channelCode: channel.code,
@@ -90,26 +132,10 @@ async function worker(request) {
                     skillEditorialMode,
                     coverMode,
                 }))(app.get(plugin.BlogService).config(settings)),
-                articles: rows
-                    .filter(x => x.publishedJson)
-                    .map(x => ({
-                        id: String(x.id),
-                        slug: x.slug,
-                        version: x.version,
-                        state: x.state,
-                        title: JSON.parse(x.publishedJson).title,
-                        skill: (({
-                            name,
-                            identity,
-                            repository,
-                            repositoryId,
-                            directoryUrl,
-                            sourceCommit,
-                        }) => ({ name, identity, repository, repositoryId, directoryUrl, sourceCommit }))(
-                            JSON.parse(x.publishedJson).skill,
-                        ),
-                        hasProfile: Boolean(JSON.parse(x.publishedJson).skillProfile),
-                    })),
+                articles: await inspectSkillArticles(
+                    connection.getRepository(ctx, plugin.BlogArticle),
+                    channel.id,
+                ),
             };
         }
         const backupDirectory = '/var/www/kaiyuangouwu/backups/news-blog-editorial';
@@ -156,7 +182,8 @@ async function main() {
     const request = decodeRequest(readFileSync(0, 'utf8'));
     if (process.argv.includes('--runtime-worker')) {
         const result = await worker(request);
-        process.stdout.write('NEWS_BLOG_EDITORIAL_RESULT ' + JSON.stringify(result) + '\n');
+        const receipt = request.mode === 'inspect' ? encodeInspection(result) : JSON.stringify(result);
+        process.stdout.write('NEWS_BLOG_EDITORIAL_RESULT ' + receipt + '\n');
         return;
     }
     const retention = require('./systemd/vendure-production-release-retention.cjs');
@@ -181,7 +208,7 @@ async function main() {
     assert.ok(receipt, 'Missing content publication receipt');
     process.stdout.write(receipt + '\n');
 }
-module.exports = { decodeRequest, assertRuntime, importEditorial };
+module.exports = { decodeRequest, assertRuntime, importEditorial, inspectSkillArticles, encodeInspection };
 if (require.main === module)
     main().catch(error => {
         process.stderr.write(error.message + '\n');
