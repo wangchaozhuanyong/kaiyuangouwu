@@ -791,14 +791,6 @@ export function CategoryPage() {
                         </button>
                     </nav>
 
-                    <CategoryIntro
-                        description={
-                            children.find(child => child.id === activeChildId)?.description ||
-                            primary?.description
-                        }
-                        language={language}
-                    />
-
                     <CategoryClientPluginSlot
                         block={clientPluginBlock}
                         placement="BEFORE_PRODUCT_LIST"
@@ -915,6 +907,15 @@ export function CategoryPage() {
                             compact
                         />
                     )}
+
+                    <CategoryIntro
+                        key={`${language}-${selectedCollectionId}`}
+                        description={
+                            children.find(child => child.id === activeChildId)?.description ||
+                            primary?.description
+                        }
+                        language={language}
+                    />
 
                     <CategoryClientPluginSlot
                         block={clientPluginBlock}

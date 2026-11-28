@@ -45,18 +45,17 @@ describe('category overview', () => {
         );
     });
 
-    it('renders a trailing FAQ section as a definition list beside the intro', () => {
+    it('renders a trailing FAQ section as collapsed disclosures with answers in the initial HTML', () => {
         const doc = render(
             '正文说明。\n\n## 常见问题\n### 可以买一个月吗？\n可以。\n### 怎么交付？\n人工核对后开通。',
         );
         const faq = doc.querySelector('.category-faq');
         if (!faq) throw new Error('FAQ block was not rendered');
         expect(faq.querySelector('h2')?.textContent).toBe('常见问题');
-        expect(Array.from(faq.querySelectorAll('dt')).map(node => node.textContent)).toEqual([
-            '可以买一个月吗？',
-            '怎么交付？',
-        ]);
-        expect(Array.from(faq.querySelectorAll('dd')).map(node => node.textContent)).toEqual([
+        expect(
+            Array.from(faq.querySelectorAll('details:not([open]) > summary')).map(node => node.textContent),
+        ).toEqual(['可以买一个月吗？', '怎么交付？']);
+        expect(Array.from(faq.querySelectorAll('details > p')).map(node => node.textContent)).toEqual([
             '可以。',
             '人工核对后开通。',
         ]);
@@ -75,6 +74,6 @@ describe('category overview', () => {
     it('never renders markup from an FAQ answer', () => {
         const doc = render('## 常见问题\n### 问题？\n<script>alert(1)</script>');
         expect(doc.querySelector('.category-faq script')).toBeNull();
-        expect(doc.querySelector('.category-faq dd')?.textContent).toBe('<script>alert(1)</script>');
+        expect(doc.querySelector('.category-faq details > p')?.textContent).toBe('<script>alert(1)</script>');
     });
 });
