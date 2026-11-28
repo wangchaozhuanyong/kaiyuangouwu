@@ -95,7 +95,7 @@ curl -s "https://moyaoai.com/zh/category?collectionId=2" | grep -o '"@type":"FAQ
 
 - 打开 `/zh/p/codex-go-1month`：页面正常，地址栏在短暂加载后变成 `/zh/product?id=6257`。
 - 打开 `/zh/guides/<任一已发布 slug>`：价格表是表格、标题分层正常、窄屏可横向滚动。
-- 打开 `/zh/category?collectionId=2`：正文 + 常见问题列表显示，手机与电脑都看一遍。
+- 打开 `/zh/category?collectionId=2`：商品列表和分页之后显示分类说明，手机和电脑都能展开常见问题。
 
 ---
 
@@ -103,7 +103,7 @@ curl -s "https://moyaoai.com/zh/category?collectionId=2" | grep -o '"@type":"FAQ
 
 顺序建议：分类描述 → 分类 SEO → 指南 → 博客下线。
 
-1. **8 个分类描述**：把第四节正文 + 第四之二节 FAQ 追加到描述末尾。
+1. **8 个分类描述**：使用第四节正文，在其末尾接上第四之二节对应语言的 FAQ。已有描述先与现稿对照，替换旧报价及相关问答，保留商家后来编辑的内容，避免追加重复正文。商城代码发布后，后台保存的旧文案仍需单独更新。
    分类 ID：2 Codex、8 Claude、11 Gemini、39 Grok、13 苹果ID、14 谷歌账号、240 GPT成品、15 中转站充值。
 2. **8 个分类 SEO 记录**：目标类型 `COLLECTION`，标题/描述按第二节。
 3. **8 篇指南**（目标类型 `ARTICLE`，语言 `zh_Hans`）：

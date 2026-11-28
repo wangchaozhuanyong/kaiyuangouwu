@@ -181,6 +181,11 @@ describe('anonymous shared public component server render', () => {
                     page.catalog?.items.length,
                 );
                 expect(html.match(/class="page category-page /gu)).toHaveLength(1);
+                const lastCard = html.lastIndexOf('class="product-card is-responsive-row"');
+                const pagination = html.indexOf('class="category-pagination-status"');
+                expect(lastCard).toBeGreaterThan(-1);
+                expect(pagination).toBeGreaterThan(lastCard);
+                expect(html.indexOf('class="category-intro"')).toBeGreaterThan(pagination);
             } else {
                 expect(html.match(/class="desktop-product-purchase"/gu)).toHaveLength(1);
                 expect(html.match(/class="detail-summary"/gu)).toHaveLength(1);
