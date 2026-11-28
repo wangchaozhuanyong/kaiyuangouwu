@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { MdacSubmissionService, MdacSubmissionView } from './mdac-submission';
 
+import { type MdacSubmissionService, type MdacSubmissionView } from './mdac-submission';
 import { MdacSubmitPanel } from './submit-panel';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
