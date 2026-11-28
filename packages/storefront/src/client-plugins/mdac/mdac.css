@@ -1251,3 +1251,47 @@
         grid-template-columns: minmax(0, 1fr);
     }
 }
+
+.mdac-submit {
+    display: grid;
+    gap: 10px;
+}
+
+.mdac-submit-list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.mdac-submit-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 12px;
+    align-items: baseline;
+}
+
+.mdac-submit-state {
+    color: var(--mdac-muted);
+}
+
+.mdac-submit-row .mdac-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    justify-self: end;
+}
+
+.mdac-submit-error {
+    grid-column: 1 / -1;
+    color: var(--danger);
+}
+
+.mdac-submit-note {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    color: var(--mdac-muted);
+}

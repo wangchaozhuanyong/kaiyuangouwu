@@ -1194,6 +1194,11 @@ export class StorefrontContentService {
         );
     }
 
+    /** The submission entry shares the published MDAC entry gate with flight lookup. */
+    async canSubmitMdac(ctx: RequestContext): Promise<boolean> {
+        return this.canLookupMdacFlights(ctx);
+    }
+
     async availableClientPluginCodes(ctx: RequestContext): Promise<string[]> {
         const allowed = await this.isMdacChannel(ctx);
         return storefrontClientPluginCodes.filter(code => code !== 'mdac-entry' || allowed);
