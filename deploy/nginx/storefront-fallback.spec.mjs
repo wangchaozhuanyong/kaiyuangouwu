@@ -71,6 +71,27 @@ test('private recharge progress uses the bounded unbuffered realtime route', () 
     ])
         assert.ok(route.includes(expected), expected);
 });
+test('the ID visitor report is proxied only by the Console HTTPS virtual host', () => {
+    const consoleHost = source.lastIndexOf('server {', source.indexOf('server_name console.moyaoai.com;'));
+    const label = 'location = /api/storefront/visitors';
+    const consoleServer = block('server', consoleHost);
+    assert.equal(source.split(label).length, 2);
+    assert.match(consoleServer, /listen 443 ssl http2;/);
+    assert.match(consoleServer, /if \(\$trusted_cloudflare_origin = 0\) \{ return 444; \}/);
+    const route = block(label, consoleHost);
+    assert.ok(consoleServer.includes(route));
+    for (const directive of [
+        'if ($request_method != GET) { return 405; }',
+        'proxy_pass http://vendure_backend;',
+        'proxy_set_header X-ID-Storefront-Authorization $http_authorization;',
+        'proxy_pass_request_headers off;',
+        'proxy_pass_request_body off;',
+        'proxy_cache off;',
+        'add_header Cache-Control "private, no-store" always;',
+    ]) {
+        assert.ok(route.includes(directive), directive);
+    }
+});
 const fallbackMap = block('map $request_uri $storefront_legacy_fallback');
 const coopMap = block('map "$request_method|$sent_http_content_type|$http_user_agent" $storefront_html_coop');
 const addressHost = 'address.moyaoai.com';

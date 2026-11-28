@@ -252,6 +252,7 @@ import {
     StorefrontTrafficShopResolver,
 } from './traffic/storefront-traffic.resolver';
 import { StorefrontTrafficService } from './traffic/storefront-traffic.service';
+import { StorefrontVisitorReportController } from './traffic/storefront-visitor-report.controller';
 import { StorefrontPromotionPluginOptions } from './types';
 // eslint-disable-next-line import/order -- organize-imports sorts this sibling file before the usdt directory.
 import { UsdtOtcRateService } from './usdt-otc-rate.service';
@@ -341,6 +342,7 @@ import {
         StorefrontRealtimeController,
         StorefrontLcpPreloadController,
         StorefrontPublicPageController,
+        StorefrontVisitorReportController,
     ],
     providers: [
         EnvironmentMonitorService,

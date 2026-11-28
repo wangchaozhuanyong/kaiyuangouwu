@@ -79,6 +79,7 @@ describe('storefront traffic persistence', () => {
         service = new StorefrontTrafficService(
             {
                 getRepository: () => db.getRepository(StorefrontPageView),
+                rawConnection: db,
             } as unknown as TransactionalConnection,
             {
                 findOneByUserId: (_ctx: RequestContext, id: string) =>
@@ -97,6 +98,57 @@ describe('storefront traffic persistence', () => {
             await manager.destroy();
             manager = undefined;
         }
+    });
+
+    it('counts stable visitors across UTC days and preserves per-day coverage gaps', async () => {
+        const storeView = (channel: number, dateTime: string, stableKey: string | null) =>
+            db.query(
+                'INSERT INTO storefront_page_view (channelId, createdAt, businessDate, eventId, visitorKeyHash, attributionKeyHash) VALUES (?, ?, ?, ?, ?, ?)',
+                [channel, dateTime, '2026-11-13', randomUUID(), randomUUID(), stableKey],
+            );
+        const a = 'a'.repeat(64);
+        const b = 'b'.repeat(64);
+        const outside = 'c'.repeat(64);
+        await storeView(1, '2026-11-11 23:59:59', outside);
+        await storeView(1, '2026-11-12 00:00:00', a);
+        await storeView(1, '2026-11-12 23:59:59', a);
+        await storeView(1, '2026-11-13 00:00:00', a);
+        await storeView(1, '2026-11-13 00:00:01', b);
+        await storeView(2, '2026-11-13 00:00:01', outside);
+        await storeView(1, '2026-11-14 05:00:00', null);
+        await storeView(1, '2026-11-15 12:00:00', outside);
+        await storeView(1, '2026-11-16 00:00:00', outside);
+
+        const range = {
+            start: Date.parse('2026-11-12T00:00:00Z'),
+            days: 4,
+            cutoff: Date.parse('2026-11-15T12:00:00Z'),
+        };
+        await expect(service.reportVisitors(1, range)).resolves.toEqual({
+            visitors: 2,
+            daily: [
+                { date: '2026-11-12', visitors: 1 },
+                { date: '2026-11-13', visitors: 2 },
+                { date: '2026-11-14', visitors: null },
+                { date: '2026-11-15', visitors: null },
+            ],
+            hasUnidentifiedViews: true,
+        });
+        await expect(service.reportVisitors(2, range)).resolves.toMatchObject({
+            visitors: 1,
+            hasUnidentifiedViews: false,
+        });
+        await expect(
+            service.reportVisitors(1, {
+                start: Date.parse('2026-11-14T00:00:00Z'),
+                days: 1,
+                cutoff: Date.parse('2026-11-15T00:00:00Z'),
+            }),
+        ).resolves.toEqual({
+            visitors: null,
+            daily: [{ date: '2026-11-14', visitors: null }],
+            hasUnidentifiedViews: true,
+        });
     });
 
     it('forwards a recorded public page view only with the existing analytics consent', async () => {
