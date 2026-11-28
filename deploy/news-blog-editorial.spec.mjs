@@ -4,15 +4,98 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from '
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { test } from 'node:test';
+import { gunzipSync } from 'node:zlib';
 
-const { decodeRequest, assertRuntime, importEditorial } = createRequire(import.meta.url)(
-    './news-blog-editorial.cjs',
-);
+const { decodeRequest, assertRuntime, importEditorial, inspectSkillArticles, encodeInspection } =
+    createRequire(import.meta.url)('./news-blog-editorial.cjs');
 const request = {
     mode: 'publish',
     expectedRuntimeSha: 'a'.repeat(40),
     payload: { requestKey: 'codex-skill:2026-11-03:verified' },
 };
+test('inspect includes withdrawn Skill identities and observes only this store', async () => {
+    const publishedAt = new Date('2026-11-18T01:09:42.763Z');
+    const skill = {
+        name: 'style-sampling',
+        identity: 'a'.repeat(64),
+        repository: 'owner/repo',
+        repositoryId: '42',
+        directoryUrl: 'https://github.com/owner/repo/tree/' + 'b'.repeat(40) + '/skills/style-sampling',
+        sourceCommit: 'b'.repeat(40),
+    };
+    const snapshot = JSON.stringify({
+        category: 'skills',
+        title: 'Skill 用途',
+        skill,
+        skillProfile: { domain: 'media' },
+        body: 'Editorial body',
+    });
+    const draft = JSON.stringify({ ...JSON.parse(snapshot), title: 'Unpublished draft title' });
+    const row = { channelId: '2', slug: 'style-sampling', version: 3, publishedAt, draftJson: draft };
+    const fixtures = [
+        { ...row, id: 125, state: 'WITHDRAWN', publishedCategory: '', publishedJson: null },
+        { ...row, id: 124, state: 'DRAFT', publishedCategory: 'skills', publishedJson: snapshot },
+        { ...row, id: 123, state: 'DRAFT', publishedAt: null, publishedCategory: '', publishedJson: null },
+        {
+            ...row,
+            id: 122,
+            state: 'WITHDRAWN',
+            publishedCategory: '',
+            publishedJson: null,
+            draftJson: JSON.stringify({ category: 'claude' }),
+        },
+        { ...row, id: 121, channelId: '3', publishedCategory: 'skills', publishedJson: snapshot },
+    ];
+    const articles = await inspectSkillArticles(
+        {
+            async find({ where }) {
+                return fixtures.filter(candidate =>
+                    where.some(clause =>
+                        Object.entries(clause).every(([key, value]) => candidate[key] === value),
+                    ),
+                );
+            },
+        },
+        '2',
+    );
+    assert.deepEqual(
+        articles.map(x => x.id),
+        ['125', '124', '123'],
+    );
+    assert.equal(articles[0].state, 'WITHDRAWN');
+    assert.equal(articles[0].publishedAt, publishedAt.toISOString());
+    assert.deepEqual(articles[0].skill, skill);
+    assert.equal(articles[1].title, 'Skill 用途');
+    assert.equal(articles[2].publishedAt, null);
+    assert.ok(!JSON.stringify(articles).includes('Unpublished draft title'));
+    assert.ok(!JSON.stringify(articles).includes('Editorial body'));
+});
+test('a realistic history fits within the SSM receipt and round-trips losslessly', () => {
+    const inspection = {
+        schemaVersion: 1,
+        channelCode: 'moyao-ai',
+        articles: Array.from({ length: 70 }, (_, index) => ({
+            id: String(index),
+            title: '格式示例测试文章'.repeat(6) + index,
+            state: 'WITHDRAWN',
+            publishedAt: '2026-11-18T01:09:42.763Z',
+            skill: {
+                name: 'example-' + index,
+                identity: String(index).padStart(64, '0'),
+                directoryUrl: 'https://github.com/owner/repo/tree/' + 'a'.repeat(40) + '/skills/' + index,
+                sourceCommit: 'a'.repeat(40),
+            },
+        })),
+    };
+    assert.ok(Buffer.byteLength(JSON.stringify(inspection), 'utf8') > 24000);
+    const encoded = encodeInspection(inspection);
+    assert.ok(Buffer.byteLength('NEWS_BLOG_EDITORIAL_RESULT ' + encoded + '\n', 'utf8') < 24000);
+    const envelope = JSON.parse(encoded);
+    assert.equal(envelope.encoding, 'gzip-base64');
+    const unpacked = gunzipSync(Buffer.from(envelope.data, 'base64')).toString('utf8');
+    assert.deepEqual(JSON.parse(unpacked), inspection);
+});
+
 test('a content receipt waits for the store shared revision before the worker can close', async () => {
     const receipt = { articleId: '4', version: 3 };
     let releaseCache;

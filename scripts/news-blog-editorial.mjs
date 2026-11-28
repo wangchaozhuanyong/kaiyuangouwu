@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { gunzipSync } from 'node:zlib';
 
 const root = realpathSync(execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim());
 const args = process.argv.slice(2);
@@ -97,10 +98,16 @@ gh([
 const result = JSON.parse(readFileSync(path.join(directory, 'editorial-result.json'), 'utf8'));
 const line = result.Output.split('\n').find(x => x.startsWith('NEWS_BLOG_EDITORIAL_RESULT '));
 assert.ok(line, 'Missing runtime receipt');
-const receipt = {
-    ...JSON.parse(line.slice('NEWS_BLOG_EDITORIAL_RESULT '.length)),
-    workflowRunId: run.databaseId,
-};
+const envelope = JSON.parse(line.slice('NEWS_BLOG_EDITORIAL_RESULT '.length));
+const content =
+    envelope.encoding === 'gzip-base64'
+        ? JSON.parse(
+              gunzipSync(Buffer.from(envelope.data, 'base64'), { maxOutputLength: 2 * 1024 * 1024 }).toString(
+                  'utf8',
+              ),
+          )
+        : envelope;
+const receipt = { ...content, workflowRunId: run.databaseId };
 assert.equal(receipt.channelCode, 'moyao-ai');
 writeFileSync(out, JSON.stringify(receipt, null, 2) + '\n', { mode: 0o600 });
 assert.equal(
