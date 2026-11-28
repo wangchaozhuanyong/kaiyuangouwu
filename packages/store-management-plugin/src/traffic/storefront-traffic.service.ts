@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { CustomerService, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
+import { CustomerService, ID, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { createHmac } from 'node:crypto';
 import { isIP } from 'node:net';
 import { IsNull } from 'typeorm';
@@ -7,6 +7,7 @@ import { IsNull } from 'typeorm';
 import { STOREFRONT_PROMOTION_OPTIONS } from '../constants';
 import { StorefrontPageView } from '../entities/storefront-page-view.entity';
 import { marketingAttributionKey } from '../marketing-attribution.service';
+import { utcDatabaseTimestamp } from '../referral/referral-view-helpers';
 import {
     normalizeStorefrontVisitorId,
     resolveStorefrontVisitorIdentity,
@@ -175,6 +176,45 @@ export class StorefrontTrafficService {
             firstRecordedAt: utcDatabaseDate(bounds?.firstRecordedAt),
             lastRecordedAt: utcDatabaseDate(bounds?.lastRecordedAt),
             days: summarizeTraffic(dates, visitors, ips),
+        };
+    }
+
+    async reportVisitors(channelId: ID, range: { start: number; days: number; cutoff: number }) {
+        const dayMs = 86_400_000;
+        const { start, days, cutoff } = range;
+        const dates = trafficDateRange(days, new Date(start + (days - 1) * dayMs).toISOString().slice(0, 10));
+        const midnight = (date: string) => date + ' 00:00:00';
+        const query = this.connection.rawConnection
+            .getRepository(StorefrontPageView)
+            .createQueryBuilder('view')
+            .select('COUNT(DISTINCT view.attributionKeyHash)', 'visitors')
+            .addSelect('COUNT(*) - COUNT(view.attributionKeyHash)', 'unidentified')
+            .where('view.channelId = :channelId', { channelId })
+            .andWhere('view.createdAt >= :start AND view.createdAt < :cutoff', {
+                start: midnight(dates[0]),
+                cutoff: utcDatabaseTimestamp(new Date(cutoff)).replace(/\.000$/u, ''),
+            });
+        // One statement gives the interval and daily counts the same database snapshot.
+        // Explicit UTC boundaries work with both datetime and timestamp-without-time-zone columns.
+        dates.forEach((date, index) => {
+            const nextDate = new Date(start + (index + 1) * dayMs).toISOString().slice(0, 10);
+            query
+                .addSelect(
+                    `COUNT(DISTINCT CASE WHEN view.createdAt >= :dayStart${index} AND view.createdAt < :dayEnd${index} THEN view.attributionKeyHash END)`,
+                    `day${index}`,
+                )
+                .setParameters({
+                    [`dayStart${index}`]: midnight(date),
+                    [`dayEnd${index}`]: midnight(nextDate),
+                });
+        });
+        const counts = await query.getRawOne<Record<string, string | number>>();
+        if (!counts) throw new Error('Missing visitor report aggregate');
+        const identified = (value: string | number) => (Number(value) === 0 ? null : Number(value));
+        return {
+            visitors: identified(counts.visitors),
+            daily: dates.map((date, index) => ({ date, visitors: identified(counts[`day${index}`]) })),
+            hasUnidentifiedViews: Number(counts.unidentified) > 0,
         };
     }
 }
