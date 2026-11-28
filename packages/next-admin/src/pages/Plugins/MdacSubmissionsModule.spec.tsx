@@ -92,7 +92,7 @@ describe('MDAC submission queue', () => {
         });
         expect(host.textContent).toContain('ZHANG SAN');
         expect(host.textContent).toContain('MDAC998877');
-        expect(host.textContent).toContain('captcha: slider did not verify');
+        expect(host.textContent).toContain('官方人机校验未通过');
     });
 
     it('only offers retry on failed tasks and cancels queued ones', async () => {

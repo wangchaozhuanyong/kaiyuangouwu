@@ -1,7 +1,7 @@
+import type { Fields } from './model';
+import type { StorefrontLanguage } from '../../types';
 import { CircleAlert, Download, Send, ShieldCheck } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { StorefrontLanguage } from '../../types';
-import type { Fields } from './model';
 
 import { storefrontErrorMessage } from '../../storefront-errors';
 
@@ -192,6 +192,32 @@ export function MdacSubmitPanel({
         return t('未成功', 'Not submitted');
     };
 
+    /** Reviewed local copy only; the stored reason is matched, never rendered. */
+    const failureHint = (view: MdacSubmissionView) => {
+        const reason = view.lastError ?? '';
+        if (view.status === 'MANUAL')
+            return t('官方受理结果需要人工核对，客服会跟进。', 'Support will confirm the official result.');
+        if (/captcha|slider/iu.test(reason))
+            return t(
+                '官方人机校验未通过，正在自动重试。',
+                'The official check did not pass; retrying automatically.',
+            );
+        if (/validation|please|sila|rejected/iu.test(reason))
+            return t(
+                '官方表单拒绝了部分资料，请核对后重新提交。',
+                'Some details were rejected. Check them and submit again.',
+            );
+        if (/network|timeout|connect/iu.test(reason))
+            return t(
+                '连接官方站点失败，正在自动重试。',
+                'The official site could not be reached; retrying automatically.',
+            );
+        return t(
+            '本次提交未成功，可稍后重试或使用官方入口。',
+            'This submission did not complete. Retry later or use the official form.',
+        );
+    };
+
     if (!service)
         return (
             <p className="mdac-message type-helper" role="status">
@@ -250,8 +276,8 @@ export function MdacSubmitPanel({
                                     {t('下载回执', 'Receipt')}
                                 </button>
                             )}
-                            {item.view.lastError && item.view.status !== 'DONE' && (
-                                <span className="mdac-submit-error type-helper">{item.view.lastError}</span>
+                            {item.view.status !== 'DONE' && item.view.lastError && (
+                                <span className="mdac-submit-error type-helper">{failureHint(item.view)}</span>
                             )}
                         </li>
                     ))}

@@ -21,7 +21,7 @@ const readArg = name => {
 
 const payloadPath = readArg('--payload');
 if (!payloadPath) {
-    console.error('usage: node scripts/mdac-submit.mjs --payload traveler.json [--submit] [--headful]');
+    process.stderr.write('usage: node scripts/mdac-submit.mjs --payload traveler.json [--submit] [--headful]\n');
     process.exit(2);
 }
 
@@ -47,7 +47,8 @@ const printable = {
     screenshot: outcome.screenshot ? 'written to mdac-last-run.jpg' : undefined,
     log: outcome.log,
 };
-console.log(JSON.stringify(printable, null, 2));
+process.stdout.write(`${JSON.stringify(printable, null, 2)}\n`);
+
 if (outcome.screenshot) {
     const base64 = outcome.screenshot.replace(/^data:image\/jpeg;base64,/, '');
     await writeFile('mdac-last-run.jpg', Buffer.from(base64, 'base64'));

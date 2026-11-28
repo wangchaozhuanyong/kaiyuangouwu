@@ -26,6 +26,18 @@ const secondaryButton =
     'border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50';
 const primaryButton = 'bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50';
 
+/** Reviewed operators copy; the stored reason is matched, never rendered raw. */
+function failureReason(item: MdacAdminSubmission) {
+    const reason = item.lastError ?? '';
+    if (/cancelled by an administrator/iu.test(reason)) return '已由管理员终止';
+    if (item.status === 'MANUAL') return '官方受理页无法确认，需要人工核对截图';
+    if (/captcha|slider/iu.test(reason)) return '官方人机校验未通过';
+    if (/validation|please|sila|rejected/iu.test(reason)) return '官网拒绝资料，需要客户核对';
+    if (/network|timeout|connect/iu.test(reason)) return '连接官网失败';
+    if (/dry run/iu.test(reason)) return '干跑模式：已填表并解滑块，未提交';
+    return reason ? '提交未完成，可重新排队' : '—';
+}
+
 export function MdacSubmissionsModule() {
     const [filter, setFilter] = useState<MdacAdminSubmission['status']>();
     const [message, setMessage] = useState('');
@@ -127,7 +139,7 @@ export function MdacSubmissionsModule() {
                                     </td>
                                     <td className="py-2 pr-3">{item.referenceNo ?? '—'}</td>
                                     <td className="py-2 pr-3">{item.attempts}</td>
-                                    <td className="py-2 pr-3 text-slate-500">{item.lastError ?? '—'}</td>
+                                    <td className="py-2 pr-3 text-slate-500">{failureReason(item)}</td>
                                     <td className="py-2">
                                         {(item.status === 'FAILED' || item.status === 'MANUAL') && (
                                             <AdminButton

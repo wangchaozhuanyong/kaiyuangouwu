@@ -10,8 +10,8 @@ import { StorefrontContentItem } from './entities/storefront-content-item.entity
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
 import { MdacFlightLookupShopResolver } from './mdac-flight-lookup.resolver';
 import { MdacFlightLookupService } from './mdac-flight-lookup.service';
-import { MdacSubmissionShopResolver } from './mdac-submission/mdac-submission.resolver';
 import { MdacSubmissionAdminResolver } from './mdac-submission/mdac-submission.admin-resolver';
+import { MdacSubmissionShopResolver } from './mdac-submission/mdac-submission.resolver';
 import { MdacSubmissionService } from './mdac-submission/mdac-submission.service';
 import { accountRecommendationSettingsError } from './shared/account-recommendation-settings';
 import {
